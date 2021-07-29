@@ -1,4 +1,4 @@
-import equinox as eqx
+import equinox
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
@@ -27,12 +27,12 @@ def dataloader(arrays, key, batch_size):
             end = start + batch_size
 
 
-def main(dataset_size=10000, batch_size=256, learning_rate=3e-3, steps=200, width_size=8, depth=1, seed=56789,):
+def main(dataset_size=10000, batch_size=256, learning_rate=3e-3, steps=1000, width_size=8, depth=1, seed=5678):
     data_key, loader_key, model_key = jrandom.split(jrandom.PRNGKey(seed), 3)
     data = get_data(dataset_size, key=data_key)
     data = dataloader(data, batch_size=batch_size, key=loader_key)
 
-    model = eqx.MLP(in_size=1, out_size=1, width_size=depth, depth=depth, key=model_key)
+    model = equinox.nn.MLP(in_size=1, out_size=1, width_size=depth, depth=depth, key=model_key)
 
     @jax.jit
     @jax.value_and_grad

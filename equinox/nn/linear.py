@@ -2,8 +2,8 @@ import jax.random as jrandom
 import math
 from typing import Optional
 
-from .custom_types import Array
-from .module import Module
+from ..custom_types import Array
+from ..module import Module
 
 
 class Linear(Module):
@@ -20,7 +20,7 @@ class Linear(Module):
         else:
             self.bias = None
 
-    def forward(self, x, *, key=None):
+    def __call__(self, x, *, key=None):
         x = self.weight @ x
         if self.bias is not None:
             x = x + self.bias
@@ -32,5 +32,5 @@ class Identity(Module):
         # Ignores args and kwargs
         super().__init__()
 
-    def forward(self, x, *, key=None):
+    def __call__(self, x, *, key=None):
         return x

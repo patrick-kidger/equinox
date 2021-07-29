@@ -1,26 +1,29 @@
+import jax.nn as jnn
 import jax.random as jrandom
 from typing import List
 
-from .activations import ReLU
-from .linear import Identity, Linear
-from .module import Module
+from ..module import Module
+from .linear import Linear
 
 
 class MLP(Module):
     layers: List[Linear]
-    activation: Module
-    final_activation: Module
+    activation: callable
+    final_activation: callable
 
     def __init__(
-        self, in_size, out_size, width_size, depth, activation=ReLU(), final_activation=Identity(), *, key, **kwargs
+        self, in_size, out_size, width_size, depth, activation=jnn.relu, final_activation=lambda x: x, *, key, **kwargs
     ):
         super().__init__(**kwargs)
         keys = jrandom.split(key, depth + 1)
         layers = []
-        layers.append(Linear(in_size, width_size, key=keys[0]))
-        for i in range(depth - 1):
-            layers.append(Linear(width_size, width_size, key=keys[i + 1]))
-        layers.append(Linear(width_size, out_size, key=keys[-1]))
+        if depth == 0:
+            layers.append(Linear(in_size, out_size, key=keys[0]))
+        else:
+            layers.append(Linear(in_size, width_size, key=keys[0]))
+            for i in range(depth - 1):
+                layers.append(Linear(width_size, width_size, key=keys[i + 1]))
+            layers.append(Linear(width_size, out_size, key=keys[-1]))
         self.layers = layers
         self.activation = activation
         self.final_activation = final_activation
@@ -35,7 +38,7 @@ class MLP(Module):
 
 
 class Sequential(Module):
-    layers: List
+    layers: List[Module]
 
     def __call__(self, x, *, key=None):
         keys = jrandom.split(key, len(self.layers))

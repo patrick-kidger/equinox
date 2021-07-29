@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 import functools as ft
 import jax
-import jax.numpy as jnp
 from typing import Any
+
+from .helpers import is_inexact_array
 
 
 @ft.lru_cache(maxsize=4096)
@@ -23,14 +24,13 @@ class _UnPyTreeAble:
 _marker_sentinel = object()
 
 
-def autojit(f, static_argnums=None, static_argnames=None, donate_argnums=(), **jitkwargs):
-    """JIT with some bells and whistles:
-    - Automatically sets whether arguments are static or not: if they can be traced they will be, and will only be
-      static if they have to be. The static_argnums can still be used to specify any extra static arguments, e.g.
-      to dispatch on boolean conditionals.
-    - If passed a PyTree of mixed static-able/non-static-able quantities, then these will be auto-detected as above.
-      In particular this means that PyTree arguments with non-static-able quantities (e.g. functions) can still have
-      tracing performed with respect to all their other quantities.
+def autojit(f, static_argnums=None, static_argnames=None, donate_argnums=(), filter_fn=is_inexact_array, **jitkwargs):
+    """
+    A jax.jit that automatically sets whether arguments are static or not, according to `filter_fn`. By default all
+    floating-point arrays will be traced, and all other argments will be static. The static_argnums can still be used
+    to additionally specify any extra static arguments.
+
+    The above applies recursively inside PyTrees, e.g. some parts of the PyTree can be static and some can be traced.
     """
     if isinstance(static_argnums, int):
         static_argnums = (static_argnums,)
@@ -56,9 +56,7 @@ def autojit(f, static_argnums=None, static_argnames=None, donate_argnums=(), **j
         args_flat, args_treedef = jax.tree_flatten(args)
         new_static_argnums = []
         for i, arg in enumerate(args_flat):
-            try:
-                jnp.array(arg)
-            except TypeError:
+            if not filter_fn(arg):
                 new_static_argnums.append(i)
         new_static_argnums = tuple(new_static_argnums)
         if static_argnums is not None:

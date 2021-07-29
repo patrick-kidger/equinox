@@ -5,3 +5,8 @@ from typing import Any
 class Array:
     def __class_getitem__(cls, item):
         return Any
+
+
+PyTree = Any
+
+TreeDef = Any

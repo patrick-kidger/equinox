@@ -1,6 +1,7 @@
-import abc
 from dataclasses import dataclass, fields
 import jax
+
+from .helpers import is_inexact_array, split, merge
 
 
 # dataclasses.astuple operates recursively, which destroys information about
@@ -9,10 +10,7 @@ def _dataclass_astuple(datacls):
     return tuple(getattr(datacls, field.name) for field in fields(datacls))
 
 
-# Inherits from ABCMeta as a convenience for anyone wanting to create abstract modules,
-# to avoid the metaclass conflict.
-# We don't use the ABC-ness of it ourselves.
-class ModuleMeta(abc.ABCMeta):
+class ModuleMeta(type):
     def __new__(mcs, name, bases, dict_):
         try:
             user_provided_init = dict_['__init__']
@@ -24,6 +22,7 @@ class ModuleMeta(abc.ABCMeta):
         cls = super().__new__(mcs, name, bases, dict_)
         cls = dataclass(eq=False, frozen=True)(cls)
 
+        assert '__dataclass_init__' not in cls.__dict__
         assert '__dataclass_setattr__' not in cls.__dict__
         cls.__dataclass_init__ = cls.__init__
         cls.__dataclass_setattr__ = cls.__setattr__
@@ -31,12 +30,26 @@ class ModuleMeta(abc.ABCMeta):
             cls.__init__ = user_provided_init
 
         def flatten(self):
-            return _dataclass_astuple(self), None
+            fields = _dataclass_astuple(self)
+            flat, treedef = jax.tree_flatten(fields)
+            inexact, not_inexact, which, flat_treedef = split(flat, is_inexact_array)
+            return inexact, (not_inexact, which, flat_treedef, treedef)
 
-        def unflatten(_, fields):
+        def unflatten(aux, inexact):
+            not_inexact, which, flat_treedef, treedef = aux
+            flat = merge(inexact, not_inexact, which, flat_treedef)
+            fields = jax.tree_unflatten(treedef, flat)
             self = cls.__new__(cls, *fields)
             cls.__dataclass_init__(self, *fields)
             return self
+
+        # def flatten(self):
+        #     return _dataclass_astuple(self), None
+
+        # def unflatten(_, fields):
+        #     self = cls.__new__(cls, *fields)
+        #     cls.__dataclass_init__(self, *fields)
+        #     return self
 
         jax.tree_util.register_pytree_node(cls, flatten, unflatten)
         return cls
@@ -51,6 +64,4 @@ class ModuleMeta(abc.ABCMeta):
 
 
 class Module(metaclass=ModuleMeta):
-    # Exists purely to match the PyTorch API, for those who prefer it.
-    def __call__(self, *args, **kwargs):
-        return self.forward(*args, **kwargs)
+    pass
