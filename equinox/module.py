@@ -1,8 +1,6 @@
 from dataclasses import dataclass, fields
 import jax
 
-from .helpers import is_inexact_array, split, merge
-
 
 # dataclasses.astuple operates recursively, which destroys information about
 # nested tree_dataclasses. In contrast this is just a shallow tuplification.
@@ -30,26 +28,12 @@ class ModuleMeta(type):
             cls.__init__ = user_provided_init
 
         def flatten(self):
-            fields = _dataclass_astuple(self)
-            flat, treedef = jax.tree_flatten(fields)
-            inexact, not_inexact, which, flat_treedef = split(flat, is_inexact_array)
-            return inexact, (not_inexact, which, flat_treedef, treedef)
+            return _dataclass_astuple(self), None
 
-        def unflatten(aux, inexact):
-            not_inexact, which, flat_treedef, treedef = aux
-            flat = merge(inexact, not_inexact, which, flat_treedef)
-            fields = jax.tree_unflatten(treedef, flat)
+        def unflatten(_, fields):
             self = cls.__new__(cls, *fields)
             cls.__dataclass_init__(self, *fields)
             return self
-
-        # def flatten(self):
-        #     return _dataclass_astuple(self), None
-
-        # def unflatten(_, fields):
-        #     self = cls.__new__(cls, *fields)
-        #     cls.__dataclass_init__(self, *fields)
-        #     return self
 
         jax.tree_util.register_pytree_node(cls, flatten, unflatten)
         return cls

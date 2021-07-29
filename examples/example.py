@@ -1,4 +1,5 @@
-import equinox
+import functools as ft
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
@@ -32,10 +33,10 @@ def main(dataset_size=10000, batch_size=256, learning_rate=3e-3, steps=1000, wid
     data = get_data(dataset_size, key=data_key)
     data = dataloader(data, batch_size=batch_size, key=loader_key)
 
-    model = equinox.nn.MLP(in_size=1, out_size=1, width_size=depth, depth=depth, key=model_key)
+    model = eqx.nn.MLP(in_size=1, out_size=1, width_size=depth, depth=depth, key=model_key)
 
-    @jax.jit
-    @jax.value_and_grad
+    @ft.partial(eqx.jitf, filter_fn=eqx.is_inexact_array)
+    @ft.partial(eqx.value_and_grad_f, filter_fn=eqx.is_inexact_array)
     def loss(model, x, y):
         pred_y = jax.vmap(model)(x)
         return jnp.mean((y - pred_y)**2)
@@ -45,7 +46,7 @@ def main(dataset_size=10000, batch_size=256, learning_rate=3e-3, steps=1000, wid
     for step, (x, y) in zip(range(steps), data):
         value, grads = loss(model, x, y)
         updates, opt_state = optim.update(grads, opt_state)
-        model = optax.apply_updates(model, updates)
+        model = eqx.apply_updates(model, updates)
         print(step, value)
 
 

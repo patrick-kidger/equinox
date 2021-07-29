@@ -1,11 +1,10 @@
 import functools as ft
 import jax
-import jax.numpy as jnp
 
-from .helpers import is_inexact_array, split, merge
+from .filters import split, merge
 
 
-def auto_value_and_grad(fun, *, argnums=0, filter_fn=is_inexact_array, **gradkwargs):
+def value_and_grad_f(fun, *, filter_fn, argnums=0, **gradkwargs):
     if isinstance(argnums, int):
         unwrap = True
         argnums = (argnums,)
@@ -35,7 +34,7 @@ def auto_value_and_grad(fun, *, argnums=0, filter_fn=is_inexact_array, **gradkwa
         for j, i in enumerate(argnums):
             g = grad[j]
             arg_nograd, which, treedef = notes[i]
-            zero = [jnp.zeros_like(x) for x in arg_nograd]
+            zero = [0 for _ in arg_nograd]
             grad[j] = merge(g, zero, which, treedef)
         if unwrap:
             grad, = grad
@@ -44,8 +43,8 @@ def auto_value_and_grad(fun, *, argnums=0, filter_fn=is_inexact_array, **gradkwa
     return f_value_and_grad_wrapper
 
 
-def autograd(fun, *, has_aux=False, **gradkwargs):
-    f_value_and_grad = auto_value_and_grad(fun, **gradkwargs)
+def gradf(fun, *, has_aux=False, **gradkwargs):
+    f_value_and_grad = value_and_grad_f(fun, **gradkwargs)
 
     def f_grad(*args, **kwargs):
         value, grad = f_value_and_grad(*args, **kwargs)

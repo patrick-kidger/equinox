@@ -3,11 +3,9 @@ import functools as ft
 import jax
 from typing import Any
 
-from .helpers import is_inexact_array
-
 
 @ft.lru_cache(maxsize=4096)
-def _autojit_cache(f, args_treedef, **jitkwargs):
+def _jitf_cache(f, args_treedef, **jitkwargs):
     @ft.partial(jax.jit, **jitkwargs)
     def f_wrapped(*args):
         args = jax.tree_unflatten(args_treedef, args)
@@ -24,7 +22,7 @@ class _UnPyTreeAble:
 _marker_sentinel = object()
 
 
-def autojit(f, static_argnums=None, static_argnames=None, donate_argnums=(), filter_fn=is_inexact_array, **jitkwargs):
+def jitf(fun, *, filter_fn, static_argnums=None, static_argnames=None, donate_argnums=(), **jitkwargs):
     """
     A jax.jit that automatically sets whether arguments are static or not, according to `filter_fn`. By default all
     floating-point arrays will be traced, and all other argments will be static. The static_argnums can still be used
@@ -39,7 +37,7 @@ def autojit(f, static_argnums=None, static_argnames=None, donate_argnums=(), fil
     if isinstance(donate_argnums, int):
         donate_argnums = (donate_argnums,)
 
-    @ft.wraps(f)
+    @ft.wraps(fun)
     def f_wrapper(*args):
         if donate_argnums != ():
             marker_args = list(args)
@@ -61,8 +59,8 @@ def autojit(f, static_argnums=None, static_argnames=None, donate_argnums=(), fil
         new_static_argnums = tuple(new_static_argnums)
         if static_argnums is not None:
             args_flat = [arg.value if isinstance(arg, _UnPyTreeAble) else arg]
-        f_jitted = _autojit_cache(
-            f, args_treedef, static_argnums=new_static_argnums, donate_argnums=new_donate_argnums, **jitkwargs
+        f_jitted = _jitf_cache(
+            fun, args_treedef, static_argnums=new_static_argnums, donate_argnums=new_donate_argnums, **jitkwargs
         )
         return f_jitted(*args_flat)
 
