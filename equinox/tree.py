@@ -8,9 +8,9 @@ _sentinel = object()
 
 
 def tree_at(
-    where: Callable[[PyTree], Union[Any, Tuple[Any]]],
+    where: Callable[[PyTree], Union[Any, Tuple[Any, ...]]],
     pytree: PyTree,
-    replace: Optional[Union[Any, Tuple[Any]]] = _sentinel,
+    replace: Optional[Union[Any, Tuple[Any, ...]]] = _sentinel,
     replace_fn: Optional[Callable[[Any], Any]] = _sentinel
 ) -> PyTree:
 
@@ -51,7 +51,8 @@ def tree_equal(*pytrees: PyTree) -> bool:
         for elem, elem_ in zip(flat, flat_):
             if isinstance(elem, array_types):
                 if isinstance(elem_, array_types):
-                    if (type(elem) != type(elem_)) or (elem != elem_).any():
+                    if (type(elem) != type(elem_)) or (elem.shape != elem_.shape) or (elem.dtype != elem_.dtype) or (
+                            elem != elem_).any():
                         return False
                 else:
                     return False

@@ -38,8 +38,6 @@ def jitf(
     """
     if isinstance(static_argnums, int):
         static_argnums = (static_argnums,)
-        if filter_tree is not None:
-            filter_tree = (filter_tree,)
     if static_argnames is not None:
         raise NotImplementedError("jitf does not yet support `static_argnames`. use static_argnums instead.")
     if donate_argnums != ():
@@ -51,15 +49,20 @@ def jitf(
         if len(kwargs):
             raise NotImplementedError("jitf does not yet support keyword arguments. Use positional arguments instead.")
 
+        if len(args) - len(static_argnums) == 1 and filter_tree is not None:
+            new_filter_tree = (filter_tree,)
+        else:
+            new_filter_tree = filter_tree
+
         # Mark the arguments that have been explicitly declared static via `static_argnums`
         if static_argnums is not None:
             args = list(args)
             for index in static_argnums:
                 args[index] = _UnPyTreeAble(args[index])
             if filter_tree is not None:
-                new_filter_tree = list(filter_tree)
+                new_filter_tree = list(new_filter_tree)
                 for index in static_argnums:
-                    new_filter_tree[index] = _UnPyTreeAble(filter_tree[index])
+                    new_filter_tree.insert(index, _UnPyTreeAble(None))
 
         # Flatten everything else
         args_flat, args_treedef = jax.tree_flatten(args)

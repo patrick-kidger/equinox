@@ -41,7 +41,10 @@ class Sequential(Module):
     layers: List[Module]
 
     def __call__(self, x, *, key=None):
-        keys = jrandom.split(key, len(self.layers))
+        if key is None:
+            keys = [None] * len(self.layers)
+        else:
+            keys = jrandom.split(key, len(self.layers))
         for layer, key in zip(self.layers, keys):
             x = layer(x, key=key)
         return x

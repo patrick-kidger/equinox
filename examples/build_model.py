@@ -1,44 +1,38 @@
 #############
 #
-# In this example, we look at how to use Equinox's concept of Modules.
+# In this example, we look at Modules.
 #
 # Now I know what you're thinking! Every deep learning library out there has a class called Module. There's
 # haiku.Module, flax.linen.Module, objax.Module etc.
 #
 # And each time you have to sit down and read the documentation and understand what "Module" means for each library.
-# A lot of these quite heavyweight, and come with a lot of baggage - introducing extra notions of variables,
-# parameters, module names, etc. For example there's `haiku.transform` or `objax.VarCollection`, that you need to
-# understand to use these libraries.
+# A lot of these also have custom notions of variables, transforms, scopes, etc. For example there's `haiku.transform`
+# or `objax.VarCollection`.
 #
-# Equinox aims to be different; to be simple. (If you want look up the source code for `equinox.Module` -- it's only
-# about 50 lines long.) It's JAX like you're used to, and doesn't introduce any extra concepts at the same time.
+# In constrast, Equinox introduces no new abstractions. An Equinox Module is just a nice way to create a PyTree,
+# really. If you want, look up the source code for `equinox.Module` -- it's only about 70 lines long.
 #
 #############
 #
 # Now that we've finished complaining about the competition ;) let's see how it works.
 #
-# It's very simple: (subclasses of) Modules are PyTrees. This means you can stack them and work with them like in
-# normal JAX. Any attributes of the Module are also part of the same PyTree. (For example, the parameters of the
-# network as jnp.arrays, or a boolean flag dictating how the model should behave, or even arbitrary Python objects
-# like a function e.g. specifying the activation function.)
+# It's very simple: `Module`, and its subclasses, are PyTrees. Any attributes of the Module are also part of the
+# same PyTree. (Your whole model is just one big PyTree.) This means you can use the model in the normal way in
+# JAX, with vmap/grad/jit etc.
 #
-# But because they're classes, we can also define a __call__ method. That is, we can associate a function with our
-# PyTree of data.
-# (In fact we can define any method we like; none of them are special-cased. __call__ means that we can do `model()`
-# rather than `model.method()`, but do whatever you prefer. If you want multiple functions associated with your data
-# then go ahead and define multiple methods.)
+# These attributes can be JAX arrays, but they can also be arbitrary Python objects. Crucially: because of the
+# filtering provided `equinox.jitf` and `equinox.gradf`, it's possible to elegantly select just those elements of the
+# PyTree that you'd like any given transformation to interact with. This can mean excluding anything that isn't a JAX
+# array. If you want it can also be used to freeze a layer, and not compute gradients with respect to some parameters.
 #
-# This means that there is *no distinction between model and parameters*. You just have a single thing -- a model --
-# which is both a PyTree of data and some functions parameterised by that data. And the PyTree of data can include
-# both jnp.arrays and arbitrary Python objects, no special-casing between them.
+# Now because a `Module` is also a class, we can define methods on it. The `self` parameter -- which is a PyTree,
+# remember! -- means that this is just a function that takes PyTrees as inputs, like any other function. No method
+# is special cased. If you want you can group several related functions under different methods. If you just want
+# to define a single forward pass, then the __call__ method is a convenient choice.
 #
 #############
 #
-# The trick we have up our sleeve that makes this so useful, of course, is `equinox.gradf` and `equinox.jitf`. This
-# allows us to grad and JIT (and vmap; `jax.vmap` is usually enough already) the forward passes of our models without
-# any headaches about the complicated PyTrees we're passing around as models.
-#
-# In this example, we'll demonstrate how to use `equinox.Module` to create simple MLP.
+# In this example, we'll demonstrate how to use `equinox.Module` to create a simple MLP.
 
 import equinox as eqx
 import functools as ft

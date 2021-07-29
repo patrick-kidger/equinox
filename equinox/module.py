@@ -52,10 +52,14 @@ class ModuleMeta(type):
 
     def __call__(cls, *args, **kwargs):
         self = cls.__new__(cls, *args, **kwargs)
-        # Defreeze it during __init__
-        cls.__setattr__ = _allow_setattr([field.name for field in fields(cls)])
+        # Defreeze it during __init__. TODO: this isn't thread-safe.
+        field_names = [field.name for field in fields(cls)]
+        cls.__setattr__ = _allow_setattr(field_names)
         cls.__init__(self, *args, **kwargs)
         cls.__setattr__ = cls.__dataclass_setattr__
+        missing_names = {name for name in field_names if name not in dir(self)}
+        if len(missing_names):
+            raise ValueError(f"The following fields were not initialised during __init__: {missing_names}")
         return self
 
 
