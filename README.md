@@ -1,10 +1,31 @@
 <h1 align='center'>Equinox</h1>
-<h2 align='center'>Filtered JIT/grad transformations in JAX => neural networks</h2>
+<h2 align='center'>Callable PyTrees and filtered JIT/grad transformations => neural networks in JAX</h2>
 
 Equinox brings more power to your JAX workflow.
 - Filtered JIT and grad;
 - Specifying models as callable PyTrees;
 - Integrates smoothly with JAX: Equinox is a library, not a framework.
+
+### In brief
+
+Equinox synergises two main ideas: *callable PyTrees* and *filtered transformations*.
+
+**Callable PyTrees**<br>
+Most neural networks in JAX represent the model's parameters as a PyTree. In Equinox, we introduce `Module` as a class that is also a PyTree; JAX allows you to turn classes into PyTrees. This means that the `self` parameter to each method is now a PyTree, and so each method is now a function acting on PyTrees.
+
+In this way the class (and its methods) are a *callable PyTree*: we have models that (a) fit the JAX functional programming paradigm, **and** (b) use a familiar class-based syntax for building models. Simple, right?
+
+Well: models can be complicated. We can have the parameters of the model, but we can also have boolean flags indicating special behaviour, or arbitrary Python objects doing special things, or maybe even some JAX arrays that aren't parameters at all. This mean we want to JIT and autodifferentiate with respect to only *part* of the `self` argument -- usually those arrays representing parameters -- recall that `self` is a PyTree with parameters (and everything else) inside it.
+
+This problem is probably the reason that this "simple apprach" isn't the beginning and end of every JAX-based neural network library.
+
+**Filtered transformations**<br>
+Now for the real trick. Enter *filtered transformations*: `jitf` and `gradf`. These are thin wrappers around `jax.jit` and `jax.grad`, that unpack PyTree arguments, examine every leaf with a filter function that specifies what should be JIT'd or autodifferentiated, and then passes them on to `jax.jit` and `jax.grad`.
+
+This gives a powerful fine-grained way to control JIT and autodifferentiation. Build a complex model as a PyTree parameterised by anything you like. Then during its forward pass, simply filter which pieces are static/traced in the JIT compiler, or which pieces are differentiable/nondifferentiable in the autodifferentiation. For example you can statically compile with respect to boolean flags or arbitrary Python objects embedded inside the model Pytree; or you can mark some parameters of a model as being nondifferentiable and therefore frozen.
+
+**Integrates smoothly with JAX**<br>
+Equinox is a library and not a framework. It integrates directly with existing JAX. Its callable PyTree abstraction is just a convenient way to create PyTrees and functions together, but you can do it any other way as well. Its filtered transformations are general-purpose tools you can use on any JAX function you like.
 
 ### Installation
 
@@ -12,23 +33,6 @@ Equinox brings more power to your JAX workflow.
 pip install git+https://github.com/patrick-kidger/equinox.git
 ```
 Requires JAX 0.2.18+.
-
-### In brief
-
-Equinox synergises two main ideas: *callable PyTrees* and *filtered transformations*.
-
-**Callable PyTrees**<br>
-In JAX, we're used to representing a model's parameters as a PyTree. We're going to take this a step further by using a class as a PyTree -- JAX allows you to turn classes into PyTrees -- so that the `self` parameter to each method is now a PyTree. As such, the methods of the class are now just functions acting on PyTrees: business as usual for JAX, including `jax.jit` and `jax.vmap`. In this way we have a *callable PyTree*, which is both functional programming *and* a familiar class-based syntax for building models.
-
-Now, models can be complicated. We have the parameters of the model -- but we can also have boolean flags indicating special behaviour, or arbitrary Python objects doing special things, or maybe even some JAX arrays that aren't parameters at all. This mean we want to JIT and autodifferentiate with respect to only *part* of the `self` parameter -- usually those arrays representing parameters.
-
-**Filtered transformations**<br>
-Enter *filtered transformations*: `jitf` and `gradf`. These are thin wrappers around `jax.jit` and `jax.grad`, that unpack PyTree arguments, examine every leaf with a filter function that specifies what should be JIT'd or autodifferentiated, and then passes them on to `jax.jit` and `jax.grad`.
-
-This gives a powerful fine-grained way to control JIT and autodifferentiation. Build a complex model as a PyTree parameterised by anything you like. Then during its forward pass, simply filter which pieces are static/traced in the JIT compiler, or which pieces are differentiable/nondifferentiable in the autodifferentiation. For example statically compile with respect to boolean flags or arbitrary Python objects, or mark some parameters of a model as being frozen.
-
-**Integrates smoothly with JAX**<br>
-Equinox is a library and not a framework. It integrates directly with existing JAX. Its callable PyTree abstraction -- named `Module`, of course -- is just a convenient way to create PyTrees and functions together, but you can do it any other way as well. Its filtered transformations are general-purpose tools you can use on any JAX function you like.
 
 ## Examples
 
