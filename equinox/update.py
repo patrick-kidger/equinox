@@ -14,5 +14,5 @@ def _apply_update(p, u):
         return p + u
 
 
-def apply_updates(params: PyTree, updates: PyTree) -> PyTree:
-    return jax.tree_map(_apply_update, params, updates)
+def apply_updates(model: PyTree, updates: PyTree) -> PyTree:
+    return jax.tree_map(_apply_update, model, updates)
