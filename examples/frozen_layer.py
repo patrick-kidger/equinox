@@ -16,14 +16,13 @@ def main(dataset_size=10000, batch_size=256, learning_rate=3e-3, steps=1000, wid
 
     model = eqx.nn.MLP(in_size=1, out_size=1, width_size=depth, depth=depth, key=model_key)
     # Let's train just the final layer of the MLP, and leave the others frozen.
-    eqx.set_annotation(model.layers[-1].weight, "trainable")
-    eqx.set_annotation(model.layers[-1].bias, "trainable")
-
-    def filter_fn(obj):
-        return eqx.get_annotation(obj, default=None) == "trainable"
+    filter_tree = jax.tree_map(lambda _: False, model)
+    filter_tree = eqx.tree_at(
+        lambda tree: (tree.layers[-1].weight, tree.layers[-1].bias), filter_tree, replace=(True, True)
+    )
 
     @ft.partial(eqx.jitf, filter_fn=eqx.is_inexact_array)  # We can still JIT with respect to the other parameters
-    @ft.partial(eqx.value_and_grad_f, filter_fn=filter_fn)
+    @ft.partial(eqx.value_and_grad_f, filter_tree=filter_tree)
     def loss(model, x, y):
         pred_y = jax.vmap(model)(x)
         return jnp.mean((y - pred_y)**2)

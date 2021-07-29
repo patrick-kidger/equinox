@@ -41,7 +41,10 @@
 # In this example, we'll demonstrate how to use `equinox.Module` to create simple MLP.
 
 import equinox as eqx
+import functools as ft
+import jax
 import jax.nn as jnn
+import jax.numpy as jnp
 import jax.random as jrandom
 from typing import Any, List
 
@@ -106,13 +109,36 @@ class MLP(eqx.Module):
 
 
 # Which we can now use:
-key = jrandom.PRNGKey(5678)
-model_key, data_key = jrandom.split(key, 2)
-model = MLP(in_size=2, out_size=2, width_size=8, depth=2, key=model_key)
-model(jrandom.normal(data_key, (2,)))  # Calls __call__
+def main():
+    key = jrandom.PRNGKey(5678)
+    model_key, data_key = jrandom.split(key, 2)
+    model = MLP(in_size=2, out_size=2, width_size=8, depth=2, key=model_key)
+    data = jrandom.normal(data_key, (2,))
+    model(data)  # Calls __call__
 
-# Because `model` is a PyTree we can use it with normal JAX: vmap, grad, jit etc.
-# The equinox.jitf and equinox.gradf utilities can also be helpful to filter on what you do and don't want to
-# include.
-# Have a look at "frozen_layer.py" for an example on this filtering.
-# Have a look at the "train_mlp.py" for an example on how to train the above MLP in the normal JAX way.
+    # Because `model` is a PyTree we can use it with normal JAX: vmap, grad, jit etc.
+    # The equinox.jitf and equinox.gradf utilities can also be helpful to filter on what you do and don't want to
+    # include.
+
+    @ft.partial(eqx.jitf, filter_fn=eqx.is_inexact_array)
+    def example_jit(model, data):
+        model(data)
+
+    @ft.partial(eqx.gradf, filter_fn=eqx.is_inexact_array)
+    def example_grad(model, data):
+        return jnp.sum(model(data))  # return a scalar
+
+    @ft.partial(jax.vmap, in_axes=(None, 0))
+    def example_vmap(model, data):
+        return model(data)
+
+    # (Note that eqx.jitf(model, ...), jax.jit(model, ...), eqx.gradf(model, ...), etc. would be wrong.
+    #  The function argument to these operations must always be a pure function.)
+
+    example_jit(model, data)
+    example_grad(model, data)
+    example_vmap(model, jnp.stack([data, data]))
+
+
+if __name__ == "__main__":
+    main()

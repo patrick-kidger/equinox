@@ -7,8 +7,8 @@ from ..module import Module
 
 
 class Linear(Module):
-    weight: Array["out_features", "in_features"]  # noqa: F821
-    bias: Optional[Array["out_features"]]  # noqa: F821
+    weight: Array
+    bias: Optional[Array]
 
     def __init__(self, in_features, out_features, use_bias=True, *, key):
         super().__init__()

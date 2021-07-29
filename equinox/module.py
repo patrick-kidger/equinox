@@ -1,6 +1,8 @@
 from dataclasses import dataclass, fields
 import jax
 
+from .tree import tree_equal
+
 
 # dataclasses.astuple operates recursively, which destroys information about
 # nested tree_dataclasses. In contrast this is just a shallow tuplification.
@@ -58,4 +60,5 @@ class ModuleMeta(type):
 
 
 class Module(metaclass=ModuleMeta):
-    pass
+    def __eq__(self, other):
+        return tree_equal(self, other)

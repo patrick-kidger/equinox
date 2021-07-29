@@ -1,15 +1,15 @@
 import jax
-from typing import Any, Callable, Optional, Tuple, Union
+from typing import Any, Callable, get_args, Optional, Tuple, Union
 
-from .custom_types import PyTree
+from .custom_types import Array, PyTree
 
 
 _sentinel = object()
 
 
 def tree_at(
-    pytree: PyTree,
     where: Callable[[PyTree], Union[Any, Tuple[Any]]],
+    pytree: PyTree,
     replace: Optional[Union[Any, Tuple[Any]]] = _sentinel,
     replace_fn: Optional[Callable[[Any], Any]] = _sentinel
 ) -> PyTree:
@@ -39,3 +39,26 @@ def tree_at(
         flat[i] = replacer(j, i)
 
     return jax.tree_unflatten(treedef, flat)
+
+
+def tree_equal(*pytrees: PyTree) -> bool:
+    flat, treedef = jax.tree_flatten(pytrees[0])
+    array_types = get_args(Array)
+    for pytree in pytrees[1:]:
+        flat_, treedef_ = jax.tree_flatten(pytree)
+        if treedef_ != treedef:
+            return False
+        for elem, elem_ in zip(flat, flat_):
+            if isinstance(elem, array_types):
+                if isinstance(elem_, array_types):
+                    if (type(elem) != type(elem_)) or (elem != elem_).any():
+                        return False
+                else:
+                    return False
+            else:
+                if isinstance(elem_, array_types):
+                    return False
+                else:
+                    if elem != elem_:
+                        return False
+    return True

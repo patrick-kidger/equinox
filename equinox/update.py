@@ -1,7 +1,6 @@
 import jax
 import jax.numpy as jnp
 
-from .annotations import get_annotation, set_annotation
 from .custom_types import PyTree
 
 
@@ -12,15 +11,7 @@ def _apply_update(p, u):
     else:
         p = jnp.asarray(p)
         u = u.astype(p.dtype)
-        out = p + u
-        # Propagate annotations for convenience
-        try:
-            annotation = get_annotation(p)
-        except KeyError:
-            pass
-        else:
-            set_annotation(out, annotation)
-        return out
+        return p + u
 
 
 def apply_updates(params: PyTree, updates: PyTree) -> PyTree:

@@ -1,11 +1,10 @@
-from typing import Any
+import jax
+import jaxlib
+import numpy as np
+from typing import Any, Union
 
 
-# The [...] argument is used for documentation purposes to state the size of the array.
-class Array:
-    def __class_getitem__(cls, item):
-        return Any
-
+Array = Union[jax.core.Tracer, jaxlib.xla_extension.DeviceArray, np.ndarray]
 
 PyTree = Any
 

@@ -1,15 +1,19 @@
 import functools as ft
 import jax
 
-from .filters import split, merge
+from .filters import split, split_tree, merge, validate_filters
 
 
-def value_and_grad_f(fun, *, filter_fn, argnums=0, **gradkwargs):
+def value_and_grad_f(fun, *, filter_fn=None, filter_tree=None, argnums=0, **gradkwargs):
     if isinstance(argnums, int):
         unwrap = True
         argnums = (argnums,)
+        if filter_tree is not None:
+            filter_tree = (filter_tree,)
     else:
         unwrap = False
+
+    validate_filters("value_and_grad_f", filter_fn, filter_tree)
 
     @ft.partial(jax.value_and_grad, argnums=argnums, **gradkwargs)
     def f_value_and_grad(*args, **kwargs):
@@ -24,9 +28,13 @@ def value_and_grad_f(fun, *, filter_fn, argnums=0, **gradkwargs):
     def f_value_and_grad_wrapper(*args, **kwargs):
         args = list(args)
         notes = {}
-        for i in argnums:
+        for j, i in enumerate(argnums):
             arg = args[i]
-            arg_grad, arg_nograd, which, treedef = split(arg, filter_fn)
+            if filter_fn is None:
+                # implies filter_tree is not None
+                arg_grad, arg_nograd, which, treedef = split_tree(arg, filter_tree[j])
+            else:
+                arg_grad, arg_nograd, which, treedef = split(arg, filter_fn)
             args[i] = arg_grad
             notes[i] = (arg_nograd, which, treedef)
         value, grad = f_value_and_grad(*args, notes, **kwargs)
