@@ -44,12 +44,17 @@ def jitf(
         raise NotImplementedError("jitf does not ye support `donate_argnums`.")
     validate_filters("jitf", filter_fn, filter_tree)
 
+    if static_argnums is None:
+        len_static_argnums = 0
+    else:
+        len_static_argnums = len(static_argnums)
+
     @ft.wraps(fun)
     def f_wrapper(*args, **kwargs):
         if len(kwargs):
             raise NotImplementedError("jitf does not yet support keyword arguments. Use positional arguments instead.")
 
-        if len(args) - len(static_argnums) == 1 and filter_tree is not None:
+        if len(args) - len_static_argnums == 1 and filter_tree is not None:
             new_filter_tree = (filter_tree,)
         else:
             new_filter_tree = filter_tree
