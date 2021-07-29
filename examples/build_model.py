@@ -112,7 +112,7 @@ class MLP(eqx.Module):
 def main():
     key = jrandom.PRNGKey(5678)
     model_key, data_key = jrandom.split(key, 2)
-    model = MLP(in_size=2, out_size=2, width_size=8, depth=2, key=model_key)
+    model = MLP(in_size=2, out_size=3, width_size=8, depth=2, key=model_key)
     data = jrandom.normal(data_key, (2,))
     model(data)  # Calls __call__
 

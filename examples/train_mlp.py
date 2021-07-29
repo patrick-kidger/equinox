@@ -51,7 +51,9 @@ def main(dataset_size=10000, batch_size=256, learning_rate=3e-3, steps=1000, wid
     model = eqx.nn.MLP(in_size=1, out_size=1, width_size=depth, depth=depth, key=model_key)
 
     # `jitf` and `value_and_grad_f` are thin wrappers around the usual `jax` functions; they just flatten the
-    # input PyTrees and filter them according to their filter functions.
+    # input PyTrees and filter them according to their filter functions. In this case we're asking to only
+    # JIT/optimise with respect to arrays of floating point numbers, i.e. the parameters of our model. (So that
+    # for example we will statically JIT-compile with respect to any boolean flags.)
     @ft.partial(eqx.jitf, filter_fn=eqx.is_inexact_array)
     @ft.partial(eqx.value_and_grad_f, filter_fn=eqx.is_inexact_array)
     def loss(model, x, y):
