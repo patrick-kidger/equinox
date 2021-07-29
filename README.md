@@ -1,5 +1,5 @@
 <h1 align='center'>Equinox</h1>
-<h2 align='center'>Callable PyTrees and filtered JIT/grad transformations => neural networks in JAX</h2>
+<h2 align='center'>Callable PyTrees and filtered JIT/grad transformations<br>=> neural networks in JAX</h2>
 
 Equinox brings more power to your JAX workflow.
 - Filtered JIT and grad;
@@ -11,11 +11,11 @@ Equinox brings more power to your JAX workflow.
 Equinox synergises two main ideas: *callable PyTrees* and *filtered transformations*.
 
 **Callable PyTrees**<br>
-Most neural networks in JAX represent the model's parameters as a PyTree. In Equinox, we introduce `Module` as a class that is also a PyTree; JAX allows you to turn classes into PyTrees. This means that the `self` parameter to each method is now a PyTree, and so each method is now a function acting on PyTrees.
+Most neural networks in JAX represent the model's parameters as a PyTree. In a similar vein, Equinox provides `Module` as a class that is also a PyTree. (JAX allows you to turn classes into PyTrees.) Its subtrees are parameters and other modules, ... and arbitary Python objects; more on that later. As the class is a PyTree, then the `self` parameter to its method is now a PyTree. And so each method is now a function acting on PyTrees.
 
-In this way the class (and its methods) are a *callable PyTree*: we have models that (a) fit the JAX functional programming paradigm, **and** (b) use a familiar class-based syntax for building models. Simple, right?
+In this way the class (with its methods) are a *callable PyTree*. It has data in the PyTree structure, and can define functions (like a forward pass through a model) via its methods. Thus, we have models that (a) fit the JAX functional programming paradigm, **and** (b) use a familiar class-based syntax for building models. Simple, right?
 
-Well: models can be complicated. We can have the parameters of the model, but we can also have boolean flags indicating special behaviour, or arbitrary Python objects doing special things, or maybe even some JAX arrays that aren't parameters at all. This mean we want to JIT and autodifferentiate with respect to only *part* of the `self` argument -- usually those arrays representing parameters -- recall that `self` is a PyTree with parameters (and everything else) inside it.
+Well: models can be complicated. We can have the parameters of the model, sure ... but we can also have boolean flags indicating special behaviour, or arbitrary Python objects doing special things, or maybe even some JAX arrays that aren't parameters at all. This mean we want to JIT and autodifferentiate with respect to only *part* of the `self` argument -- usually those arrays representing parameters -- recall that `self` is a PyTree with parameters (and everything else) inside it.
 
 This problem is probably the reason that this "simple apprach" isn't the beginning and end of every JAX-based neural network library.
 
