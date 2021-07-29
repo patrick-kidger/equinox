@@ -4,8 +4,18 @@ import jax
 
 # dataclasses.astuple operates recursively, which destroys information about
 # nested tree_dataclasses. In contrast this is just a shallow tuplification.
-def _dataclass_astuple(datacls):
-    return tuple(getattr(datacls, field.name) for field in fields(datacls))
+def _dataclass_astuple(cls):
+    return tuple(getattr(cls, field.name) for field in fields(cls))
+
+
+def _allow_setattr(fields):
+    def __setattr__(self, name, value):
+        if name in fields:
+            object.__setattr__(self, name, value)
+        else:
+            raise AttributeError(f"Cannot set attribute {name}")
+
+    return __setattr__
 
 
 class ModuleMeta(type):
@@ -41,7 +51,7 @@ class ModuleMeta(type):
     def __call__(cls, *args, **kwargs):
         self = cls.__new__(cls, *args, **kwargs)
         # Defreeze it during __init__
-        cls.__setattr__ = object.__setattr__
+        cls.__setattr__ = _allow_setattr([field.name for field in fields(cls)])
         cls.__init__(self, *args, **kwargs)
         cls.__setattr__ = cls.__dataclass_setattr__
         return self

@@ -1,3 +1,4 @@
+import jax
 import weakref
 
 # So this is a bit of black magic.
@@ -16,6 +17,10 @@ import weakref
 
 
 class _WeakIdDict(dict):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.num_gets = 0
+
     def __setitem__(self, key, value):
         super().__setitem__(id(key), (weakref.ref(key), value))
 
@@ -25,6 +30,14 @@ class _WeakIdDict(dict):
             # key happens to have the same `id` as a previous object that has since been deleted.
             del self[key]
             raise KeyError("Key not in dictionary.")
+        self.num_gets += 1
+        # Simple heuristic to clean out old data. Probably there's better ways of doing it by comparing
+        # number of gets to length or number of sets and figuring out how densely the entires are being queried.
+        if self.num_gets >= 1000:
+            self.num_gets = 0
+            for id_key, (weakref, value) in super().items():
+                if weakref() is None:
+                    super().__delitem__(id_key)
         return value
 
     def __delitem__(self, item):
@@ -33,13 +46,28 @@ class _WeakIdDict(dict):
 
 _annotations = _WeakIdDict()
 
+_single_leaf_treedef = jax.tree_structure(True)
+
 
 def set_annotation(obj, annotation):
+    # Not necessary for technical reasons. However only PyTree leaves will be iterated over and have the filter
+    # functions applied, so this prevents an easy class of error.
+    if jax.tree_structure(obj) != _single_leaf_treedef:
+        raise ValueError("Only PyTree leaves can be annotated.")
     _annotations[obj] = annotation
 
 
-def get_annotation(obj):
-    return _annotations[obj]
+_sentinel = object()
+
+
+def get_annotation(obj, default=_sentinel):
+    try:
+        return _annotations[obj]
+    except KeyError:
+        if default is _sentinel:
+            raise
+        else:
+            return _sentinel
 
 
 def del_annotation(obj):

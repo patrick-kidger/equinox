@@ -1,3 +1,13 @@
+##############
+#
+# This example demonstrates the basics of using `equinox.jitf` and `equinox.gradf`.
+#
+# Here we'll use them to facilitate training a simple MLP: to automatically take gradients and jit with respect to
+# all the jnp.arrays constituting the parameters. (But not with respect to anything else, like the choice of activation
+# function -- as that isn't something we can differentiate/JIT anyway!)
+#
+#############
+
 import functools as ft
 import equinox as eqx
 import jax
@@ -6,12 +16,14 @@ import jax.random as jrandom
 import optax
 
 
+# Toy data
 def get_data(dataset_size, *, key):
     x = jrandom.normal(key, (dataset_size, 1))
     y = 5 * x - 2
     return x, y
 
 
+# Simple dataloader
 def dataloader(arrays, key, batch_size):
     dataset_size = arrays[0].shape[0]
     assert all(array.shape[0] == dataset_size for array in arrays)
@@ -33,8 +45,13 @@ def main(dataset_size=10000, batch_size=256, learning_rate=3e-3, steps=1000, wid
     data = get_data(dataset_size, key=data_key)
     data = dataloader(data, batch_size=batch_size, key=loader_key)
 
+    # We happen to be using an Equinox model here, but that *is not important*.
+    # `equinox.jitf` and `equinox.gradf` will work just fine on any PyTree you like.
+    # (Here, `model` is actually a PyTree -- have a look at the `build_model.py` example for more on that.)
     model = eqx.nn.MLP(in_size=1, out_size=1, width_size=depth, depth=depth, key=model_key)
 
+    # `jitf` and `value_and_grad_f` are thin wrappers around the usual `jax` functions; they just flatten the
+    # input PyTrees and filter them according to their filter functions.
     @ft.partial(eqx.jitf, filter_fn=eqx.is_inexact_array)
     @ft.partial(eqx.value_and_grad_f, filter_fn=eqx.is_inexact_array)
     def loss(model, x, y):
@@ -46,8 +63,13 @@ def main(dataset_size=10000, batch_size=256, learning_rate=3e-3, steps=1000, wid
     for step, (x, y) in zip(range(steps), data):
         value, grads = loss(model, x, y)
         updates, opt_state = optim.update(grads, opt_state)
+        # Essentially equivalent to optax.apply_updates, it just doesn't try to update anything with a zero gradient.
+        # Anything we filtered out above will have a zero gradient. But in general some of the things we filtered out
+        # might not even be jnp.arrays, and might not even have a notion of addition. We don't want to try adding zero
+        # to arbitrary Python objects.
         model = eqx.apply_updates(model, updates)
         print(step, value)
+    return value  # Final loss
 
 
 if __name__ == '__main__':
