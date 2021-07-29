@@ -1,3 +1,4 @@
+from .annotations import del_annotation, get_annotation, set_annotation
 from .filters import is_inexact_array, is_array_like
 from .gradf import gradf, value_and_grad_f
 from .jitf import jitf
