@@ -54,10 +54,11 @@ def jitf(
         if len(kwargs):
             raise NotImplementedError("jitf does not yet support keyword arguments. Use positional arguments instead.")
 
-        if len(args) - len_static_argnums == 1 and filter_tree is not None:
-            new_filter_tree = (filter_tree,)
-        else:
-            new_filter_tree = filter_tree
+        if filter_tree is not None:
+            if len(args) - len_static_argnums == 1:
+                new_filter_tree = (filter_tree,)
+            else:
+                new_filter_tree = tuple(filter_tree)
 
         # Mark the arguments that have been explicitly declared static via `static_argnums`
         if static_argnums is not None:
@@ -89,7 +90,7 @@ def jitf(
                     new_static_argnums.append(i)
         new_static_argnums = tuple(new_static_argnums)
         if static_argnums is not None:
-            args_flat = [arg.value if isinstance(arg, _UnPyTreeAble) else arg]
+            args_flat = [arg.value if isinstance(arg, _UnPyTreeAble) else arg for arg in args_flat]
 
         f_jitted = _jitf_cache(fun, args_treedef, static_argnums=new_static_argnums, **jitkwargs)
         return f_jitted(*args_flat)
