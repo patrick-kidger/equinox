@@ -107,4 +107,75 @@ def test_gradf_filter_fn(getkey):
 
 
 def test_gradf_filter_tree(getkey):
-    jrandom.normal(getkey(), (2, 3))
+    a = jrandom.normal(getkey(), (2, 3))
+    b = jrandom.normal(getkey(), (1, 2))
+    c = jrandom.normal(getkey(), ())
+
+    @ft.partial(eqx.gradf, filter_tree=[True, False])
+    def f(x):
+        return jnp.sum(x[0]) + jnp.sum(x[1])
+
+    ga, gb = f([a, b])
+    assert jnp.all(ga == 1)
+    assert gb == 0
+
+    @ft.partial(eqx.gradf, argnums=(0, 1), filter_tree=[True, False])
+    def g(x, y):
+        return jnp.sum(x) + jnp.sum(y)
+
+    ga, gb = g(a, b)
+    assert jnp.all(ga == 1)
+    assert gb == 0
+
+    @ft.partial(eqx.gradf, argnums=0, filter_tree={"a": True, "b": False})
+    def h1(x, y):
+        return jnp.sum(x["a"]) * jnp.sum(x["b"]) * y
+
+    @ft.partial(eqx.gradf, argnums=1, filter_tree={"a": True, "b": False})
+    def h2(x, y):
+        return jnp.sum(y["a"]) * jnp.sum(y["b"]) * x
+
+    grad = h1({"a": a, "b": b}, c)
+    assert jnp.allclose(grad["a"], jnp.sum(b) * c)
+    assert grad["b"] == 0
+
+    grad = h2(c, {"a": a, "b": b})
+    assert jnp.allclose(grad["a"], jnp.sum(b) * c)
+    assert grad["b"] == 0
+
+    with pytest.raises(ValueError):
+        grad = h1(c, {"a": a, "b": b})
+    with pytest.raises(ValueError):
+        grad = h2({"a": a, "b": b}, c)
+
+    @ft.partial(eqx.gradf, argnums=(2, 0), filter_tree=(True,))
+    def i(x, y, z):
+        return jnp.sum(x) * jnp.sum(y) * jnp.sum(z)
+
+    with pytest.raises(IndexError):
+        i(a, b, c)
+
+    @ft.partial(eqx.gradf, argnums=(2, 0), filter_tree=(True, {"a": True, "b": False}))
+    def j(x, y, z):
+        return jnp.sum(x["a"]) * jnp.sum(x["b"]) * jnp.sum(y) * jnp.sum(z)
+
+    gradc, graddict = j({"a": a, "b": b}, 2., c)
+    assert jnp.allclose(gradc, jnp.sum(a) * jnp.sum(b) * 2)
+    assert jnp.allclose(graddict["a"], jnp.sum(b) * jnp.sum(c) * 2)
+    assert graddict["b"] == 0
+
+
+def test_both_filter():
+    with pytest.raises(ValueError):
+
+        @ft.partial(eqx.gradf, filter_tree=True, filter_fn=lambda _: True)
+        def f(x):
+            return x
+
+
+def test_no_filter():
+    with pytest.raises(ValueError):
+
+        @eqx.gradf
+        def f(x):
+            return x
