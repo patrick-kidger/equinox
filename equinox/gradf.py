@@ -52,7 +52,7 @@ def value_and_grad_f(fun, *, filter_fn=None, filter_tree=None, argnums=0, **grad
 
 
 def gradf(fun, *, has_aux=False, **gradkwargs):
-    f_value_and_grad = value_and_grad_f(fun, **gradkwargs)
+    f_value_and_grad = value_and_grad_f(fun, has_aux=has_aux, **gradkwargs)
 
     def f_grad(*args, **kwargs):
         value, grad = f_value_and_grad(*args, **kwargs)

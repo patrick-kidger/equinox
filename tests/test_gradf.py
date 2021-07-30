@@ -179,3 +179,37 @@ def test_no_filter():
         @eqx.gradf
         def f(x):
             return x
+
+
+# TODO: more comprehensive tests on this.
+def test_value_and_grad_f(getkey):
+    a = jrandom.normal(getkey(), (2, 3))
+
+    @ft.partial(eqx.value_and_grad_f, filter_fn=eqx.is_inexact_array)
+    def f(x):
+        return jnp.sum(x)
+
+    val, grad = f(a)
+    assert val == jnp.sum(a)
+    assert jnp.all(grad == 1)
+
+
+def test_aux(getkey):
+    a = jrandom.normal(getkey(), (2, 3))
+
+    @ft.partial(eqx.gradf, has_aux=True, filter_fn=eqx.is_inexact_array)
+    def f(x):
+        return jnp.sum(x), "hi"
+
+    aux, grad = f(a)
+    assert aux == "hi"
+    assert jnp.all(grad == 1)
+
+    @ft.partial(eqx.value_and_grad_f, has_aux=True, filter_fn=eqx.is_inexact_array)
+    def f(x):
+        return jnp.sum(x), "hi"
+
+    (value, aux), grad = f(a)
+    assert value == jnp.sum(a)
+    assert aux == "hi"
+    assert jnp.all(grad == 1)
