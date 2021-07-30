@@ -209,7 +209,7 @@ Equinox includes a small neural network library, mostly as a tech demo for how t
 ```python
 equinox.nn.Linear(in_features, out_features, bias=True, *, key)(input)
 equinox.nn.Identity(*args, **kwargs)(input)  # args and kwargs are ignored
-equinox.nn.Dropout(p=0.5, deterministic=False)(input, *, key, deterministic=None)
+equinox.nn.Dropout(p=0.5, deterministic=False)(input, *, key=None, deterministic=None)
 equinox.nn.GRUCell(input_size, hidden_size, bias=True, *, key)(input, hidden)
 equinox.nn.LSTMCell(input_size, hidden_size, bias=True, *, key)(input, hidden)
 equinox.nn.Sequential(layers)(input, *, key=None)

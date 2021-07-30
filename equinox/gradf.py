@@ -42,7 +42,7 @@ def value_and_grad_f(fun, *, filter_fn=None, filter_tree=None, argnums=0, **grad
         for j, i in enumerate(argnums):
             g = grad[j]
             arg_nograd, which, treedef = notes[i]
-            zero = [0 for _ in arg_nograd]
+            zero = [0. for _ in arg_nograd]
             grad[j] = merge(g, zero, which, treedef)
         if unwrap:
             grad, = grad

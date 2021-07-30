@@ -50,13 +50,13 @@ class LSTMCell(Module):
     bias: Optional[Array]
 
     def __init__(self, input_size, hidden_size, bias=True, *, key, **kwargs):
-        super().__init(**kwargs)
+        super().__init__(**kwargs)
 
         ihkey, hhkey, bkey = jrandom.split(key, 3)
         lim = math.sqrt(1 / hidden_size)
 
         self.weight_ih = jrandom.uniform(ihkey, (4 * hidden_size, input_size), minval=-lim, maxval=lim)
-        self.weight_hh = jrandom.uniform(hhkey, (4 * hidden_size, input_size), minval=-lim, maxval=lim)
+        self.weight_hh = jrandom.uniform(hhkey, (4 * hidden_size, hidden_size), minval=-lim, maxval=lim)
         if bias is None:
             self.bias = jrandom.uniform(bkey, (4 * hidden_size,), minval=-lim, maxval=lim)
         else:
