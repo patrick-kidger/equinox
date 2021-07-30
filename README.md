@@ -30,7 +30,7 @@ jax.register_pytree_node(Example, ...)
 
 Now for the first trick. As dataclasses are classes as well as PyTrees, we can also define methods on them. As the `self` parameter is an instance of a dataclass-that-is-a-PyTree, then *each of these methods is now a pure function acting on PyTrees*. And pure functions on PyTrees are exactly what JAX uses! We can hold data in the PyTree structure, and use methods to define operation parameterised by that data -- for example, the forward pass through a model.
 
-```
+```python
 @dataclasses.dataclass
 class Example:
     weight: typing.Any
@@ -43,7 +43,7 @@ jax.register_pytree_node(Example, ...)
 
 We have obtained a *callable PyTree*, which (a) fits the JAX functional programming paradigm, **and** (b) can be used to offer a familiar (PyTorch-like) class-based syntax for building models. In practice, we can now tidy up the details into a base class and get a familiar-looking:
 
-```
+```python
 class Example(equinox.Module):
     weight: typing.Any
 
