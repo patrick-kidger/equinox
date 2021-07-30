@@ -6,40 +6,68 @@ Equinox brings more power to your [JAX](https://github.com/google/jax) model-bui
 - Specifying models as callable PyTrees;
 - Integrates smoothly with JAX: Equinox is a library, not a framework.
 
+This is half tech-demo, half neural network library.
+
 ### Equinox in brief
 
-We're going to discuss how to design a neural network libary from scratch. Our conditions are going to be that it must be:
-- (a) as minimal as possible;
-- (b) of functional style, working with existing JAX operations like `jax.jit` without difficulty,
-- (c) whilst *also* using a PyTorch-like class-based syntax to build models.
+How might we design a neural network libary from scratch? Our conditions are going to be that it must be:
+- as minimal as possible;
+- of functional style, working with existing JAX operations like `jax.jit` without difficulty,
+- whilst *also* using a PyTorch-like class-based syntax to build models.
 
 Equinox accomplishes these goals by synergising two main ideas: *callable PyTrees* and *filtered transformations*. In isolation neither of them mean much. But put together, they're very powerful.
 
 **Callable PyTrees**<br>
-Most neural network libraries in JAX represent a model's parameters as a PyTree. This is a sensible thing to do. Now, we're going to let this PyTree use [dataclasses](https://docs.python.org/3/library/dataclasses.html) as PyTree nodes. Dataclasses are a popular way to specify a typed data structure, for example the kind of parameters each network layer uses.
+Most neural network libraries in JAX represent a model's parameters as a PyTree. This is a sensible thing to do. Now, we're going to let this PyTree use [dataclasses](https://docs.python.org/3/library/dataclasses.html) as PyTree nodes. Dataclasses are a popular way to specify a typed data structure -- for example to store the parameters each network layer uses.
 
-Now for the first trick. As dataclasses are classes as well as PyTrees, we can *also* define methods on them. As the `self` parameter to such a method is of a dataclass-that-is-a-PyTree, then *each of these methods is now a pure function acting on PyTrees*. This is exactly what JAX uses! Data is held in the PyTree structure, and each method defines operations parameterised by that data -- for example, the forward pass through a model.
+```python
+@dataclasses.dataclass
+class Example:
+    weight: typing.Any
 
-We have obtained a *callable PyTree*, which (a) fits the JAX functional programming paradigm, **and** (b) can be used to offer a familiar (PyTorch-like) class-based syntax for building models.
+jax.register_pytree_node(Example, ...)
+```
 
-There's one small problem. We have the parameters of the model held in the PyTree structure, sure ... but we might also need to store boolean flags indicating special behaviour, or some JAX arrays that aren't parameters, or even arbitrary Python objects capable of doing anything at all. We need to be able to JIT/autodifferentiate only *part* of our PyTree structure. (The part of the model holding the parameters.) JAX doesn't offer anything capable of doing this at all.
+Now for the first trick. As dataclasses are classes as well as PyTrees, we can also define methods on them. As the `self` parameter is an instance of a dataclass-that-is-a-PyTree, then *each of these methods is now a pure function acting on PyTrees*. And pure functions on PyTrees are exactly what JAX uses! We can hold data in the PyTree structure, and use methods to define operation parameterised by that data -- for example, the forward pass through a model.
+
+```
+@dataclasses.dataclass
+class Example:
+    weight: typing.Any
+    
+    def __call__(self, x):  # pure function of self and x
+        return jnp.dot(self.weight, x)
+
+jax.register_pytree_node(Example, ...)
+```
+
+We have obtained a *callable PyTree*, which (a) fits the JAX functional programming paradigm, **and** (b) can be used to offer a familiar (PyTorch-like) class-based syntax for building models. In practice, we can now tidy up the details into a base class and get a familiar-looking:
+
+```
+class Example(equinox.Module):
+    weight: typing.Any
+
+    def __call__(self, x):
+        return jnp.dot(self.weight, x)
+```
+
+There's one small problem. We have the parameters of the model held in the PyTree structure, sure ... but we might also need to store boolean flags indicating special behaviour, or some JAX arrays that aren't parameters, or even arbitrary Python objects capable of doing anything at all. We need to be able to JIT/autodifferentiate our forward method with respect to only *part* of our input PyTree `self`. And JAX doesn't offer this capability.
 
 **Filtered transformations**<br>
 Now for the second trick. Enter *filtered transformations*: `jitf` and `gradf`. These are thin wrappers around `jax.jit` and `jax.grad`, that
-- unpacks PyTree arguments;
-- examines every leaf with a user-specified filter to determine what should be JIT'd or autodifferentiated;
-- passes the results to `jax.jit` or `jax.grad`;
-- and finally interprets the answer back into a PyTree.
+- unpack PyTree arguments;
+- examine every leaf with a user-specified filter to determine what should be JIT'd or autodifferentiated;
+- pass the results to `jax.jit` or `jax.grad`;
+- and finally interpret the answer back into a PyTree.
 
-Filtered transformations give a fine-grained way to control JIT and autodifferentiation. Build a complex model as a PyTree parameterised by anything you like, arbitrary Python objects included. Then during its forward pass, filter which pieces are static/traced in the JIT compiler, or which pieces are differentiable/nondifferentiable in the autodifferentiation.
+Filtered transformations give a powerful fine-grained way to control JIT and autodifferentiation. Build a complex model as a PyTree parameterised by anything you like, arbitrary Python objects included. Then during its forward pass, filter which pieces are static/traced in the JIT compiler, or which pieces are differentiable/nondifferentiable in the autodifferentiation.
 
-- For example, you could statically compile with respect to boolean flags or arbitrary Python objects embedded inside the model Pytree, whilst still JIT-tracing with respect to the parameters and model inputs.
-- As another example, you could mark some parameters of a model as being nondifferentiable, and therefore frozen.
+For example, you could statically compile with respect to boolean flags or arbitrary Python objects embedded inside the model Pytree, whilst still JIT-tracing with respect to the parameters and model inputs. As another example, you could mark some parameters of a model as being nondifferentiable, and therefore frozen.
 
 **Integrates smoothly with JAX**<br>
 Together, these two pieces allow us to specify complex models in JAX-friendly ways.
 
-Best of all, there's no magic here. No frameworks, no class-to-functional transforms, no complicated collections of variables and states being passed around.
+Best of all, there's no magic here. The code is simple and nothing is hidden behind the scenes. There's no framework, no class-to-functional transforms, and no complicated collections of variables and states being passed around.
 
 As far as JAX is concerned, there is nothing special about the dataclasses we use as PyTree nodes. (And they will integrate just fine with any larger PyTree you put them in.) Meanwhile `jitf` and `gradf` are just general purpose-functions. 
 
