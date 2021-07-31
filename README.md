@@ -128,7 +128,7 @@ Precisely one of `filter_fn` or `filter_tree` must be passed.<br>
 See also `equinox.is_inexact_array` as usually a good choice of `filter_fn`: this will differentiate all floating-point arrays.<br>
 See also `equinox.tree_at` for an easy way to create the `filter_tree` argument.
 
-Note that as the returned gradients must have the same structure as the inputs, then all nondifferentiable components of the input PyTrees will have gradient `0`. If the nondifferentiable component is an arbitrary Python object then doing a simple `jax.tree_map(lambda m, g: m - lr * g, model, grad)` may fail. As such Equinox provides `equinox.apply_updates` as a convenience: it will only tree to apply the update if the gradient is nonzero. See below.
+Note that as the returned gradients must have the same structure as the inputs, then all nondifferentiable components of the input PyTrees will have gradient `0`. If the nondifferentiable component is an arbitrary Python object that does not support addition, then doing a simple `jax.tree_map(lambda m, g: m - lr * g, model, grad)` may fail. As such Equinox provides `equinox.apply_updates` as a simple convenience: it will only apply the update if the gradient is nonzero. See below.
 
 ```python
 equinox.value_and_grad_f(fun, *, filter_fn=None, filter_tree=None, **kwargs)
