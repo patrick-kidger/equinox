@@ -98,6 +98,22 @@ Requires JAX 0.2.18+.
 
 ## API
 
+### Full API list
+```python
+# Filtered transformations       # Filters
+equinox.jitf                     equinox.is_inexact_array
+equinox.gradf                    equinox.is_array_like
+equinox.value_and_grad_f
+                                 # Neural networks
+# Module                         equinox.nn.Linear
+equinox.Module                   equinox.nn.Identity
+                                 equinox.nn.Dropout
+# Utilities                      equinox.nn.GRUCell
+equinox.apply_updates            equinox.nn.LSTMCell
+equinox.tree_at                  equinox.nn.Sequential
+equinox.tree_equal               equinox.nn.MLP
+```
+
 ### Filtered transformations
 
 ```python
