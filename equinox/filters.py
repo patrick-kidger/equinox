@@ -1,16 +1,15 @@
 import jax
 import jax.numpy as jnp
 import jaxlib
-from typing import Any, Callable, List, Tuple
+from typing import Any, Callable, get_args, List, Tuple
 
-from .custom_types import PyTree, TreeDef
+from .custom_types import Array, PyTree, TreeDef
 
 
 # TODO: not sure if this is the best way to do this? In light of:
 # https://github.com/google/jax/commit/258ae44303b1539eff6253263694ec768b8803f0#diff-de759f969102e9d64b54a299d11d5f0e75cfe3052dc17ffbcd2d43b250719fb0
 def is_inexact_array(element: Any) -> bool:
-    return isinstance(element, (jax.core.Tracer,
-                                jaxlib.xla_extension.DeviceArray)) and jnp.issubdtype(element.dtype, jnp.inexact)
+    return isinstance(element, get_args(Array)) and jnp.issubdtype(element.dtype, jnp.inexact)
 
 
 def is_array_like(element: Any) -> bool:
