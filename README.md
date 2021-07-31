@@ -111,8 +111,8 @@ Wraps `jax.jit`.
 - `**kwargs` are the usual other arguments to `jax.jit`, like `static_argnums`. In particular, a leaf will be marked static if either (a) it is filtered as being so, *or* (b) it is part of a PyTree that is marked through `static_argnums`.
 
 Precisely one of `filter_fn` or `filter_tree` must be passed.<br>
-See `equinox.is_array_like`, below, as usually a good choice of `filter_fn`: this will trace everything that can possible be traced, with everything else static.
-See `equinox.tree_at`, below, for an easy way to create the `filter_tree` argument.
+See also `equinox.is_array_like` as usually a good choice of `filter_fn`: this will trace everything that can possible be traced, with everything else static.<br>
+See also `equinox.tree_at` for an easy way to create the `filter_tree` argument.
 
 ```python
 equinox.gradf(fun, *, filter_fn=None, filter_tree=None, **kwargs)
@@ -125,8 +125,8 @@ Wraps `jax.grad`.
 - `**kwargs` are the usual other argments to `jax.grad`, like `argnums`. In particular, a leaf will only be differentiated if (a) it is filtered as being so, *and* (b) it is part of a PyTree that is marked through `argnums`.
 
 Precisely one of `filter_fn` or `filter_tree` must be passed.<br>
-See `equinox.is_inexact_array`, below, as usually a good choice of `filter_fn`: this will differentiate all floating-point arrays.
-See `equinox.tree_at`, below, for an easy way to create the `filter_tree` argument.
+See also `equinox.is_inexact_array` as usually a good choice of `filter_fn`: this will differentiate all floating-point arrays.<br>
+See also `equinox.tree_at` for an easy way to create the `filter_tree` argument.
 
 Note that as the returned gradients must have the same structure as the inputs, then all nondifferentiable components of the input PyTrees will have gradient `0`. If the nondifferentiable component is an arbitrary Python object then doing a simple `jax.tree_map(lambda m, g: m - lr * g, model, grad)` may fail. As such Equinox provides `equinox.apply_updates` as a convenience: it will only tree to apply the update if the gradient is nonzero. See below.
 
