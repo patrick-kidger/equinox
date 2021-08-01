@@ -1,3 +1,4 @@
+import abc
 from dataclasses import dataclass, fields
 import jax
 
@@ -20,7 +21,9 @@ def _allow_setattr(fields):
     return __setattr__
 
 
-class ModuleMeta(type):
+# Inherits from abc.ABCMeta as a convenience for a common use-case.
+# It's not a feature we use ourselve.
+class _ModuleMeta(abc.ABCMeta):
     def __new__(mcs, name, bases, dict_):
         try:
             user_provided_init = dict_['__init__']
@@ -29,6 +32,7 @@ class ModuleMeta(type):
         else:
             reinstate_init = True
             del dict_['__init__']
+
         cls = super().__new__(mcs, name, bases, dict_)
         cls = dataclass(eq=False, frozen=True)(cls)
 
@@ -36,6 +40,13 @@ class ModuleMeta(type):
         assert '__dataclass_setattr__' not in cls.__dict__
         cls.__dataclass_init__ = cls.__init__
         cls.__dataclass_setattr__ = cls.__setattr__
+        if not reinstate_init:
+            # Override the default dataclass init if our parent has an init
+            for kls in cls.__mro__[1:-1]:
+                if isinstance(kls, _ModuleMeta) and kls.__init__ is not kls.__dataclass_init__:
+                    reinstate_init = True
+                    user_provided_init = kls.__init__
+                    break
         if reinstate_init:
             cls.__init__ = user_provided_init
 
@@ -52,8 +63,8 @@ class ModuleMeta(type):
 
     def __call__(cls, *args, **kwargs):
         self = cls.__new__(cls, *args, **kwargs)
-        # Defreeze it during __init__. TODO: this isn't thread-safe.
-        field_names = [field.name for field in fields(cls)]
+        # Defreeze it during __init__. TODO: this isn't thread/recursion-safe.
+        field_names = {field.name for field in fields(cls)}
         cls.__setattr__ = _allow_setattr(field_names)
         cls.__init__(self, *args, **kwargs)
         cls.__setattr__ = cls.__dataclass_setattr__
@@ -63,6 +74,6 @@ class ModuleMeta(type):
         return self
 
 
-class Module(metaclass=ModuleMeta):
+class Module(metaclass=_ModuleMeta):
     def __eq__(self, other):
         return tree_equal(self, other)
