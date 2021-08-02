@@ -238,6 +238,7 @@ equinox.apply_updates(model, updates)
 Performs a training update to a model.
 - `model` must be a PyTree;
 - `updates` must be a PyTree with the same structure.
+
 It essentially performs `jax.tree_map(lambda m, u: m + u, modelm updates)`. However anywhere `updates` is zero then no update is made at all, so as to handle nondifferentiable parts of `model` that may not have addition defined (e.g. activation functions).
 
 The returned value is the updated model. (`model` is *not* mutated in place, as is usual in JAX and functional programming.)
