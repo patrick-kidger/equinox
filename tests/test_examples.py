@@ -1,6 +1,7 @@
-import jax.numpy as jnp
 import pathlib
 import sys
+
+import jax.numpy as jnp
 
 
 _here = pathlib.Path(__file__).resolve().parent

@@ -1,7 +1,8 @@
-import equinox as eqx
 import jax.numpy as jnp
 import jax.random as jrandom
 import pytest
+
+import equinox as eqx
 
 
 def test_custom_init():
@@ -88,9 +89,13 @@ def test_lstm_cell(getkey):
 
 
 def test_sequential(getkey):
-    seq = eqx.nn.Sequential([
-        eqx.nn.Linear(2, 4, key=getkey()), eqx.nn.Linear(4, 1, key=getkey()), eqx.nn.Linear(1, 3, key=getkey())
-    ])
+    seq = eqx.nn.Sequential(
+        [
+            eqx.nn.Linear(2, 4, key=getkey()),
+            eqx.nn.Linear(4, 1, key=getkey()),
+            eqx.nn.Linear(1, 3, key=getkey()),
+        ]
+    )
     x = jrandom.normal(getkey(), (2,))
     assert seq(x).shape == (3,)
 

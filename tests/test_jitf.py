@@ -1,9 +1,11 @@
-import equinox as eqx
 import functools as ft
+
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 import pytest
+
+import equinox as eqx
 
 
 def _eq(a, b):
@@ -14,7 +16,14 @@ def test_jitf_filter_fn(getkey):
     a = jrandom.normal(getkey(), (2, 3))
     b = jrandom.normal(getkey(), (3,))
     c = jrandom.normal(getkey(), (1, 4))
-    general_tree = [1, True, object(), {"a": a, "tuple": (2.0, b)}, c, eqx.nn.MLP(2, 2, 2, 2, key=getkey())]
+    general_tree = [
+        1,
+        True,
+        object(),
+        {"a": a, "tuple": (2.0, b)},
+        c,
+        eqx.nn.MLP(2, 2, 2, 2, key=getkey()),
+    ]
     array_tree = [{"a": a, "b": b}, (c,)]
     _mlp = jax.tree_map(lambda u: u if eqx.is_array_like(u) else None, general_tree[-1])
 
@@ -86,11 +95,28 @@ def test_jitf_filter_tree(getkey):
     a = jrandom.normal(getkey(), (2, 3))
     b = jrandom.normal(getkey(), (3,))
     c = jrandom.normal(getkey(), (1, 4))
-    general_tree = [1, True, object(), {"a": a, "tuple": (2.0, b)}, c, eqx.nn.MLP(2, 2, 2, 2, key=getkey())]
+    general_tree = [
+        1,
+        True,
+        object(),
+        {"a": a, "tuple": (2.0, b)},
+        c,
+        eqx.nn.MLP(2, 2, 2, 2, key=getkey()),
+    ]
     _mlp = jax.tree_map(lambda u: u if eqx.is_array_like(u) else None, general_tree[-1])
     _filter_mlp = jax.tree_map(eqx.is_inexact_array, general_tree[-1])
 
-    @ft.partial(eqx.jitf, filter_tree=[True, True, False, {"a": True, "tuple": (False, True)}, True, _filter_mlp])
+    @ft.partial(
+        eqx.jitf,
+        filter_tree=[
+            True,
+            True,
+            False,
+            {"a": True, "tuple": (False, True)},
+            True,
+            _filter_mlp,
+        ],
+    )
     def f(x):
         return jax.tree_map(lambda u: u if eqx.is_array_like(u) else None, x)
 
@@ -164,7 +190,9 @@ def test_num_traces():
 
     num_traces = 0
 
-    @ft.partial(eqx.jitf, static_argnums=(0, 2), filter_tree=[{"a": True, "b": False}, False])
+    @ft.partial(
+        eqx.jitf, static_argnums=(0, 2), filter_tree=[{"a": True, "b": False}, False]
+    )
     def h(x, y, z, w):
         nonlocal num_traces
         num_traces += 1

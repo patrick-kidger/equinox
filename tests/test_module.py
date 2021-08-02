@@ -1,6 +1,8 @@
-import equinox as eqx
-import pytest
 from typing import Any
+
+import pytest
+
+import equinox as eqx
 
 
 def test_module_not_enough_attributes():

@@ -1,7 +1,9 @@
-import jax
-from typing import Any, Callable, get_args, Optional, Tuple, Union
+from typing import Any, Callable, Optional, Tuple, Union
+from typing_extensions import get_args
 
-from .custom_types import Array, PyTree
+import jax
+
+from .custom_types import MoreArrays, PyTree
 
 
 _sentinel = object()
@@ -11,11 +13,15 @@ def tree_at(
     where: Callable[[PyTree], Union[Any, Tuple[Any, ...]]],
     pytree: PyTree,
     replace: Optional[Union[Any, Tuple[Any, ...]]] = _sentinel,
-    replace_fn: Optional[Callable[[Any], Any]] = _sentinel
+    replace_fn: Optional[Callable[[Any], Any]] = _sentinel,
 ) -> PyTree:
 
-    if (replace is _sentinel and replace_fn is _sentinel) or (replace is not _sentinel and replace_fn is not _sentinel):
-        raise ValueError("Precisely one of `replace` and `replace_fn` must be specified.")
+    if (replace is _sentinel and replace_fn is _sentinel) or (
+        replace is not _sentinel and replace_fn is not _sentinel
+    ):
+        raise ValueError(
+            "Precisely one of `replace` and `replace_fn` must be specified."
+        )
     elif replace is _sentinel:
         replace_passed = False
         replacer = lambda j, i: replace_fn(flat[i])
@@ -43,7 +49,7 @@ def tree_at(
 
 def tree_equal(*pytrees: PyTree) -> bool:
     flat, treedef = jax.tree_flatten(pytrees[0])
-    array_types = get_args(Array)
+    array_types = get_args(MoreArrays)
     for pytree in pytrees[1:]:
         flat_, treedef_ = jax.tree_flatten(pytree)
         if treedef_ != treedef:
@@ -51,8 +57,12 @@ def tree_equal(*pytrees: PyTree) -> bool:
         for elem, elem_ in zip(flat, flat_):
             if isinstance(elem, array_types):
                 if isinstance(elem_, array_types):
-                    if (type(elem) != type(elem_)) or (elem.shape != elem_.shape) or (elem.dtype != elem_.dtype) or (
-                            elem != elem_).any():
+                    if (
+                        (type(elem) != type(elem_))
+                        or (elem.shape != elem_.shape)
+                        or (elem.dtype != elem_.dtype)
+                        or (elem != elem_).any()
+                    ):
                         return False
                 else:
                     return False

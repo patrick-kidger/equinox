@@ -1,6 +1,7 @@
+from typing import List
+
 import jax.nn as jnn
 import jax.random as jrandom
-from typing import List
 
 from ..module import Module
 from .linear import Linear
@@ -12,7 +13,16 @@ class MLP(Module):
     final_activation: callable
 
     def __init__(
-        self, in_size, out_size, width_size, depth, activation=jnn.relu, final_activation=lambda x: x, *, key, **kwargs
+        self,
+        in_size,
+        out_size,
+        width_size,
+        depth,
+        activation=jnn.relu,
+        final_activation=lambda x: x,
+        *,
+        key,
+        **kwargs
     ):
         super().__init__(**kwargs)
         keys = jrandom.split(key, depth + 1)

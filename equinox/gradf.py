@@ -1,7 +1,8 @@
 import functools as ft
+
 import jax
 
-from .filters import split, split_tree, merge, validate_filters
+from .filters import merge, split, split_tree, validate_filters
 
 
 def value_and_grad_f(fun, *, filter_fn=None, filter_tree=None, argnums=0, **gradkwargs):
@@ -42,10 +43,10 @@ def value_and_grad_f(fun, *, filter_fn=None, filter_tree=None, argnums=0, **grad
         for j, i in enumerate(argnums):
             g = grad[j]
             arg_nograd, which, treedef = notes[i]
-            zero = [0. for _ in arg_nograd]
+            zero = [0.0 for _ in arg_nograd]
             grad[j] = merge(g, zero, which, treedef)
         if unwrap:
-            grad, = grad
+            (grad,) = grad
         return value, grad
 
     return f_value_and_grad_wrapper

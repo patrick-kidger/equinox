@@ -88,7 +88,7 @@ Equinox is its design principles; it is not just another neural network framewor
 ```
 pip install git+https://github.com/patrick-kidger/equinox.git
 ```
-Requires JAX 0.2.18+.
+Requires Python 3.7+ and JAX 0.2.18+.
 
 ## Examples
 

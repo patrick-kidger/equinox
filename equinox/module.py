@@ -1,5 +1,6 @@
 import abc
 from dataclasses import dataclass, fields
+
 import jax
 
 from .tree import tree_equal
@@ -26,24 +27,27 @@ def _allow_setattr(fields):
 class _ModuleMeta(abc.ABCMeta):
     def __new__(mcs, name, bases, dict_):
         try:
-            user_provided_init = dict_['__init__']
+            user_provided_init = dict_["__init__"]
         except KeyError:
             reinstate_init = False
         else:
             reinstate_init = True
-            del dict_['__init__']
+            del dict_["__init__"]
 
         cls = super().__new__(mcs, name, bases, dict_)
         cls = dataclass(eq=False, frozen=True)(cls)
 
-        assert '__dataclass_init__' not in cls.__dict__
-        assert '__dataclass_setattr__' not in cls.__dict__
+        assert "__dataclass_init__" not in cls.__dict__
+        assert "__dataclass_setattr__" not in cls.__dict__
         cls.__dataclass_init__ = cls.__init__
         cls.__dataclass_setattr__ = cls.__setattr__
         if not reinstate_init:
             # Override the default dataclass init if our parent has an init
             for kls in cls.__mro__[1:-1]:
-                if isinstance(kls, _ModuleMeta) and kls.__init__ is not kls.__dataclass_init__:
+                if (
+                    isinstance(kls, _ModuleMeta)
+                    and kls.__init__ is not kls.__dataclass_init__
+                ):
                     reinstate_init = True
                     user_provided_init = kls.__init__
                     break
@@ -70,7 +74,9 @@ class _ModuleMeta(abc.ABCMeta):
         cls.__setattr__ = cls.__dataclass_setattr__
         missing_names = {name for name in field_names if name not in dir(self)}
         if len(missing_names):
-            raise ValueError(f"The following fields were not initialised during __init__: {missing_names}")
+            raise ValueError(
+                f"The following fields were not initialised during __init__: {missing_names}"
+            )
         return self
 
 

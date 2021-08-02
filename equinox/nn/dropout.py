@@ -14,7 +14,9 @@ class Dropout(Module):
         if deterministic:
             return x
         elif key is None:
-            raise RuntimeError("Dropout requires a key when running in non-deterministic mode.")
+            raise RuntimeError(
+                "Dropout requires a key when running in non-deterministic mode."
+            )
         else:
             q = 1 - self.p
             mask = jrandom.bernoulli(key, q, x.shape)

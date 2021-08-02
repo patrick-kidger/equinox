@@ -1,8 +1,9 @@
+import math
+from typing import Optional
+
 import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
-import math
-from typing import Optional
 
 from ..custom_types import Array
 from ..module import Module
@@ -20,11 +21,19 @@ class GRUCell(Module):
         ihkey, hhkey, bkey, bkey2 = jrandom.split(key, 4)
         lim = math.sqrt(1 / hidden_size)
 
-        self.weight_ih = jrandom.uniform(ihkey, (3 * hidden_size, input_size), minval=-lim, maxval=lim)
-        self.weight_hh = jrandom.uniform(hhkey, (3 * hidden_size, hidden_size), minval=-lim, maxval=lim)
+        self.weight_ih = jrandom.uniform(
+            ihkey, (3 * hidden_size, input_size), minval=-lim, maxval=lim
+        )
+        self.weight_hh = jrandom.uniform(
+            hhkey, (3 * hidden_size, hidden_size), minval=-lim, maxval=lim
+        )
         if bias:
-            self.bias = jrandom.uniform(bkey, (3 * hidden_size,), minval=-lim, maxval=lim)
-            self.bias_n = jrandom.uniform(bkey2, (hidden_size,), minval=-lim, maxval=lim)
+            self.bias = jrandom.uniform(
+                bkey, (3 * hidden_size,), minval=-lim, maxval=lim
+            )
+            self.bias_n = jrandom.uniform(
+                bkey2, (hidden_size,), minval=-lim, maxval=lim
+            )
         else:
             self.bias = None
             self.bias_n = None
@@ -55,10 +64,16 @@ class LSTMCell(Module):
         ihkey, hhkey, bkey = jrandom.split(key, 3)
         lim = math.sqrt(1 / hidden_size)
 
-        self.weight_ih = jrandom.uniform(ihkey, (4 * hidden_size, input_size), minval=-lim, maxval=lim)
-        self.weight_hh = jrandom.uniform(hhkey, (4 * hidden_size, hidden_size), minval=-lim, maxval=lim)
+        self.weight_ih = jrandom.uniform(
+            ihkey, (4 * hidden_size, input_size), minval=-lim, maxval=lim
+        )
+        self.weight_hh = jrandom.uniform(
+            hhkey, (4 * hidden_size, hidden_size), minval=-lim, maxval=lim
+        )
         if bias is None:
-            self.bias = jrandom.uniform(bkey, (4 * hidden_size,), minval=-lim, maxval=lim)
+            self.bias = jrandom.uniform(
+                bkey, (4 * hidden_size,), minval=-lim, maxval=lim
+            )
         else:
             self.bias = None
 

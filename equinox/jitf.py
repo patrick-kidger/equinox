@@ -1,7 +1,8 @@
-from dataclasses import dataclass
 import functools as ft
-import jax
+from dataclasses import dataclass
 from typing import Any
+
+import jax
 
 from .filters import validate_filters
 
@@ -28,7 +29,14 @@ _marker_sentinel = object()
 
 
 def jitf(
-    fun, *, filter_fn=None, filter_tree=None, static_argnums=None, static_argnames=None, donate_argnums=(), **jitkwargs
+    fun,
+    *,
+    filter_fn=None,
+    filter_tree=None,
+    static_argnums=None,
+    static_argnames=None,
+    donate_argnums=(),
+    **jitkwargs
 ):
     """
     A jax.jit that automatically sets whether arguments are static or not, according to either `filter_fn` or
@@ -39,7 +47,9 @@ def jitf(
     if isinstance(static_argnums, int):
         static_argnums = (static_argnums,)
     if static_argnames is not None:
-        raise NotImplementedError("jitf does not yet support `static_argnames`. use static_argnums instead.")
+        raise NotImplementedError(
+            "jitf does not yet support `static_argnames`. use static_argnums instead."
+        )
     if donate_argnums != ():
         raise NotImplementedError("jitf does not ye support `donate_argnums`.")
     validate_filters("jitf", filter_fn, filter_tree)
@@ -52,7 +62,9 @@ def jitf(
     @ft.wraps(fun)
     def f_wrapper(*args, **kwargs):
         if len(kwargs):
-            raise NotImplementedError("jitf does not yet support keyword arguments. Use positional arguments instead.")
+            raise NotImplementedError(
+                "jitf does not yet support keyword arguments. Use positional arguments instead."
+            )
 
         if filter_tree is not None:
             if len(args) - len_static_argnums == 1:
@@ -75,7 +87,9 @@ def jitf(
         if filter_tree is not None:
             filter_flat, flat_treedef = jax.tree_flatten(new_filter_tree)
             if flat_treedef != args_treedef:
-                raise ValueError("The tree stucture for the filters and the arguments must be the same.")
+                raise ValueError(
+                    "The tree stucture for the filters and the arguments must be the same."
+                )
 
         # Figure out static argnums with respect to this new flattened structure.
         new_static_argnums = []
@@ -90,9 +104,14 @@ def jitf(
                     new_static_argnums.append(i)
         new_static_argnums = tuple(new_static_argnums)
         if static_argnums is not None:
-            args_flat = [arg.value if isinstance(arg, _UnPyTreeAble) else arg for arg in args_flat]
+            args_flat = [
+                arg.value if isinstance(arg, _UnPyTreeAble) else arg
+                for arg in args_flat
+            ]
 
-        f_jitted = _jitf_cache(fun, args_treedef, static_argnums=new_static_argnums, **jitkwargs)
+        f_jitted = _jitf_cache(
+            fun, args_treedef, static_argnums=new_static_argnums, **jitkwargs
+        )
         return f_jitted(*args_flat)
 
     return f_wrapper

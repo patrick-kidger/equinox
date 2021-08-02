@@ -34,13 +34,15 @@
 #
 # In this example, we'll demonstrate how to use `equinox.Module` to create a simple MLP.
 
-import equinox as eqx
 import functools as ft
+from typing import Any, List
+
 import jax
 import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
-from typing import Any, List
+
+import equinox as eqx
 
 
 # First pass at creating a Linear layer. `Linear1` will be a PyTree node, with `weight` and `bias` as its children.

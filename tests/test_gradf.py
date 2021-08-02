@@ -1,10 +1,12 @@
-import equinox as eqx
 import functools as ft
+
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 import numpy as np
 import pytest
+
+import equinox as eqx
 
 
 def test_gradf_filter_fn(getkey):
@@ -69,7 +71,14 @@ def test_gradf_filter_fn(getkey):
     assert gobject == 0
     assert jnp.all(ga == 1)
 
-    gtrue, gdict, (g5, g1), gnp = j([True, {"hi": eqx.nn.Linear(1, 1, key=getkey())}, (5, 1.), np.array([2., 3.])])
+    gtrue, gdict, (g5, g1), gnp = j(
+        [
+            True,
+            {"hi": eqx.nn.Linear(1, 1, key=getkey())},
+            (5, 1.0),
+            np.array([2.0, 3.0]),
+        ]
+    )
     assert gtrue == 0
     assert list(gdict.keys()) == ["hi"]
     assert isinstance(gdict["hi"], eqx.nn.Linear)
@@ -96,7 +105,9 @@ def test_gradf_filter_fn(getkey):
     assert gobject == 0
     assert jnp.all(ga == 1)
 
-    gdict, (g1,), gnp = k([{"hi": eqx.nn.Linear(1, 1, key=getkey())}, (1.,), np.array([2., 3.])])
+    gdict, (g1,), gnp = k(
+        [{"hi": eqx.nn.Linear(1, 1, key=getkey())}, (1.0,), np.array([2.0, 3.0])]
+    )
     assert list(gdict.keys()) == ["hi"]
     assert isinstance(gdict["hi"], eqx.nn.Linear)
     assert jnp.all(gdict["hi"].weight == 1)
@@ -159,7 +170,7 @@ def test_gradf_filter_tree(getkey):
     def j(x, y, z):
         return jnp.sum(x["a"]) * jnp.sum(x["b"]) * jnp.sum(y) * jnp.sum(z)
 
-    gradc, graddict = j({"a": a, "b": b}, 2., c)
+    gradc, graddict = j({"a": a, "b": b}, 2.0, c)
     assert jnp.allclose(gradc, jnp.sum(a) * jnp.sum(b) * 2)
     assert jnp.allclose(graddict["a"], jnp.sum(b) * jnp.sum(c) * 2)
     assert graddict["b"] == 0
