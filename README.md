@@ -21,7 +21,7 @@ The elegance of Equinox is its selling point in a world that already has [Haiku]
 
 Equinox represents *parameterised functions as data*. That is, you can represent your whole model (parameters, buffers, forward pass, etc.) as a [PyTree](https://jax.readthedocs.io/en/latest/pytrees.html). Parameterised functions can be passed in and out of higher-order functions -- like passing models to `jax.vmap`, vmap'd functions to loss functions, or loss functions to JIT and grad.
 
-Equinox offers thin wrappers around `jax.jit`/`jax.grad` that understand the PyTree structure of their inputs: you can JIT/differentiate a single leaf, not just a whole argument. (We don't offer this for `jax.vmap` because interestingly `jax.vmap` offers this already.)
+Equinox additionally offers thin wrappers around `jax.jit`/`jax.grad` that understand the PyTree structure of their inputs: you can JIT/differentiate a single leaf, not just a whole argument. (We don't offer this for `jax.vmap` because interestingly `jax.vmap` offers this already.)
 
 There's some similarities to existing libraries (like the [structs of flax.linen](https://flax.readthedocs.io/en/latest/flax.struct.html) or the [functors of Flux.jl](https://fluxml.ai/Flux.jl/stable/models/advanced/#Customising-Parameter-Collection-for-a-Model)), but to the best of my knowledge Equinox offers something genuinely new to the JAX framework.
 
