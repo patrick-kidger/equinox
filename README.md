@@ -250,7 +250,7 @@ equinox.tree_at(where, pytree, replace=_sentinel, replace_fn=_sentinel)
 ```
 Modifies an existing tree, and returns the modified tree. (Like `.at` for "in place modifications" of JAX arrays.)
 
-- `where` is a callable `PyTree -> Leaf` or `PyTree -> Tuple[Leaf, ...]`. It should consume a PyTree of the same shape as `pytree`, and return the leaf or leaves that should be replaced. For example `where=lambda p: p[-1].linear.weight`.
+- `where` is a callable `PyTree -> Leaf` or `PyTree -> Tuple[Leaf, ...]`. It should consume a PyTree of the same shape as `pytree`, and return the leaf or leaves that should be replaced. For example `where=lambda mlp: mlp.layers[-1].linear.weight`.
 - `pytree` is the existing PyTree to modify.
 - `replace` should either be a single element, or a tuple of the same length as returned by `where`. This specifies the replacements to make at the locations specified by `where`. Mutually exclusive with `replace_fn`.
 - `replace_fn` should be a function `Leaf -> Any`. It will be called on every leaf replaced using `where`. The return value from `replace_fn` will be used in its place. Mutually exclusive with `replace`.
