@@ -21,7 +21,7 @@ pip install pre-commit
 pre-commit install
 ```
 
-These hooks use `yapf` to format the code and `flake8` to lint it.
+These hooks use Black and isort to format the code, and flake8 to lint it.
 
 Now make your changes. Make sure to include additional tests if necessary.
 
