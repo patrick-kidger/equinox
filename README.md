@@ -200,7 +200,7 @@ class MyModule(equinox.Module):
     submodule: Module
 ```
 
-A default `__init__` method is provided, which just fills in these attributes with the argments passed: `MyModule(weight, bias, submodule)` or `MyModule(weight=weight, bias=bias, submodule=submodule)`. Alternatively you can provide an `__init__` method yourself. (For example to specify dimension sizes instead of raw weights.) By the end of `__init__`, every attribute must have been assigned.
+In this case a default `__init__` method is provided, which just fills in these attributes with the argments passed: `MyModule(weight, bias, submodule)` or `MyModule(weight=weight, bias=bias, submodule=submodule)`. Alternatively you can provide an `__init__` method yourself. (For example to specify dimension sizes instead of raw weights.) By the end of `__init__`, every attribute must have been assigned.
 
 ```python
 class AnotherModule(equinox.Module):
@@ -210,7 +210,7 @@ class AnotherModule(equinox.Module):
         self.weight = jax.random.normal(key, (output_size, input_size))
 ```
 
-After initialisation then attributes cannot be modified.
+After initialisation then attributes cannot be modified: models are immutable as per functional programming. (Parameter updates are made by creating a new model, not by mutating parameters in-place; see for example [`train_mlp.py`](./examples/train_mlp.py).
 
 It is typical to also create some methods on the class. As `self` will be an input parameter -- treated as a PyTree -- then these methods will get access to the attributes of the instance. Defining `__call__` gives an easy way to define a forward pass for a model:
 
@@ -239,6 +239,8 @@ Performs a training update to a model.
 - `model` must be a PyTree;
 - `updates` must be a PyTree with the same structure.
 It essentially performs `jax.tree_map(lambda m, u: m + u, modelm updates)`. However anywhere `updates` is zero then no update is made at all, so as to handle nondifferentiable parts of `model` that may not have addition defined (e.g. activation functions).
+
+The returned value is the updated model. (`model` is *not* mutated in place, as is usual in JAX and functional programming.)
 
 To produce `updates`, it is typical to take the gradients from the loss function, and then adjust them according to any standard optimiser; for example [Optax](https://github.com/deepmind/optax) provides `optax.sgd` or `optax.adam`.
 
