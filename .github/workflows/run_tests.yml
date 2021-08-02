@@ -1,0 +1,73 @@
+name: Run tests
+
+on:
+  pull_request:
+  schedule:
+    - cron: "0 2 * * 6"
+
+jobs:
+  check_version:
+    strategy:
+      matrix:
+        python-version: [ 3.8 ]
+        os: [ ubuntu-latest ]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        if: (github.event_name == 'pull_request' && github.base_ref == 'master')
+        uses: actions/checkout@v2
+
+      - name: Set up Python ${{ matrix.python-version }}
+        if: (github.event_name == 'pull_request' && github.base_ref == 'master')
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Check version
+        if: (github.event_name == 'pull_request' && github.base_ref == 'master')
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install git+https://github.com/patrick-kidger/equinox.git
+          master_info=$(pip list | grep equinox)
+          master_version=$(echo ${master_info} | cut -d " " -f2)
+          python -m pip uninstall -y equinox
+          python setup.py install
+          pr_info=$(pip list | grep equinox)
+          pr_version=$(echo ${pr_info} | cut -d " " -f2)
+          python -c "import itertools as it
+          import sys
+          _, master_version, pr_version = sys.argv
+          master_version_ = [int(i) for i in master_version.split('.')]
+          pr_version_ = [int(i) for i in pr_version.split('.')]
+          master_version__ = tuple(m for p, m in it.zip_longest(pr_version_, master_version_, fillvalue=0))
+          pr_version__ = tuple(p for p, m in it.zip_longest(pr_version_, master_version_, fillvalue=0))
+          sys.exit(pr_version__ < master_version__)" ${master_version} ${pr_version}
+  build:
+    needs: [ check_version ]
+    strategy:
+      matrix:
+        python-version: [ 3.7, 3.8, 3.9 ]
+        os: [ ubuntu-latest, macOS-latest ]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install flake8 pytest optax
+
+      - name: Checks with pre-commit
+        uses: pre-commit/action@v2.0.3
+
+      - name: Test with pytest
+        run: |
+          python setup.py install
+          python -m pytest
