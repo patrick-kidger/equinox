@@ -1,7 +1,8 @@
 <h1 align='center'>Equinox</h1>
 <h2 align='center'>Callable PyTrees and filtered JIT/grad transformations<br>=> neural networks in JAX</h2>
 
-Equinox brings more power to your model building in [JAX](https://github.com/google/jax). Represent *parameterised functions as data*, and use *filtered transformations* for powerful fine-grained control of the model-building process.
+Equinox brings more power to your model building in [JAX](https://github.com/google/jax).<br>
+Represent *parameterised functions as data*, and use *filtered transformations* for powerful fine-grained control of the model-building process.
 
 Equinox is half tech-demo, half neural network library.
 
@@ -37,11 +38,12 @@ Requires Python 3.7+ and JAX 0.2.18+.
 import equinox as eqx
 import functools as ft, jax, jax.numpy as jnp, jax.random as jrandom
 
-# PyTorch-like way to define models. `Module` is a PyTree node. The instance of our model will be a PyTree.
-# The PyTree structure can hold arbitrary Python objects -- you're not restricted to just JAX arrays.
+# Define our model. `Module` subclasses are both functions and data, so we can pass them into higher
+# order functions like vmap/jit/grad, or our loss function later.
+# There's no magic in `Module`. Pretty much all it does is just register your class as PyTree node.
 class LinearOrIdentity(eqx.Module):
-    weight: jnp.ndarray  # we want to differentiate and JIT-trace this
-    flag: bool           # we want to JIT-static this
+    weight: jnp.ndarray
+    flag: bool
 
     def __init__(self, in_features, out_features, flag, key):
         self.weight = jrandom.normal(key, (out_features, in_features))
@@ -52,9 +54,12 @@ class LinearOrIdentity(eqx.Module):
             return x
         return self.weight @ x
 
-# We pass in a `model` argument to the loss. Remember that `model` is a PyTree. As a convenience, we now
-# use *filtered transformations* to unpack it as a PyTree, and select just the leaves we want to
-# JIT+differentiate. (In this simple case all floating-point JAX arrays -- i.e. `weight` but not `flag`.)
+# We use the fact that our model is data, by passing it in as an argument to the loss.
+# There's no magic here: `model` is a PyTree like any other.
+#
+# We use filtered transformations to unpack its data and select just the leaves we want to 
+# JIT+differentiate. (In this case, all floating-point JAX arrays -- `weight` but not `flag`.)
+# There's no magic here: filtered transformations act on any kind of PyTree.
 #
 # Equinox is JAX-friendly. If you want to differentiate everything, just use `jax.jit` and `jax.grad`.
 @ft.partial(eqx.jitf, filter_fn=eqx.is_inexact_array)
