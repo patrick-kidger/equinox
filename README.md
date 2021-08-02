@@ -258,7 +258,7 @@ Modifies an existing tree, and returns the modified tree. (Like `.at` for "in pl
 For example this can be used to specify the weights of a model to train or not train:
 ```python
 trainable = jax.tree_map(lambda _: False, model)
-trainable = equinox.tree_at(lambda p: p[-1].linear.weight, model, replace=True)
+trainable = equinox.tree_at(lambda mlp: mlp.layers[-1].linear.weight, model, replace=True)
 equinox.gradf(..., filter_tree=trainable)
 ```
 
