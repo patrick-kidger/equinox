@@ -115,6 +115,8 @@ Equinox is all just regular JAX -- PyTrees and transformations! Together, these 
 
 - [`build_model.py`](./examples/build_model.py) demonstrates how to build parameterised-functions-as-data using `equinox.Module`. In particular we'll construct an MLP from scratch, and then pass it into higher-order functions like JIT and grad in order to train it. This allows us to produce models using a familiar class-based syntax, that are also functional and integrate directly with JAX's JIT/autograd.
 
+- [`train_rnn.py`](./examples/train_rnn.py) trains an RNN on a toy clockwise/anticlockwise spiral classification problem. This demonstrates the use of `jax.lax.scan` with Equinox. (It just works, no tricks required.)
+
 ## API
 
 ### Full API list
