@@ -77,10 +77,7 @@ def main(
     for step, (x, y) in zip(range(steps), data):
         value, grads = loss(model, x, y)
         updates, opt_state = optim.update(grads, opt_state)
-        # Essentially equivalent to optax.apply_updates, it just doesn't try to update anything with a zero gradient.
-        # Anything we filtered out above will have a zero gradient. But in general some of the things we filtered out
-        # might not even be jnp.arrays, and might not even have a notion of addition. We don't want to try adding zero
-        # to arbitrary Python objects.
+        # Essentially equivalent to optax.apply_updates, it just doesn't try to update anything with a `None` gradient.
         model = eqx.apply_updates(model, updates)
         print(step, value)
     return value  # Final loss

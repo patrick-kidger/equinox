@@ -1,5 +1,4 @@
 import jax
-import jax.numpy as jnp
 
 from .custom_types import PyTree
 
