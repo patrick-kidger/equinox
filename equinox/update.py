@@ -1,16 +1,12 @@
 import jax
-import jax.numpy as jnp
 
 from .custom_types import PyTree
 
 
 def _apply_update(p, u):
-    u = jnp.asarray(u)
-    if jnp.count_nonzero(u) == 0:
+    if u is None:
         return p
     else:
-        p = jnp.asarray(p)
-        u = u.astype(p.dtype)
         return p + u
 
 
