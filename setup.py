@@ -64,5 +64,5 @@ setuptools.setup(
     zip_safe=False,
     python_requires=python_requires,
     install_requires=install_requires,
-    packages=[name],
+    packages=setuptools.find_packages(exclude=["examples", "tests"]),
 )
