@@ -30,7 +30,7 @@ def main(
     # Let's train just the final layer of the MLP, and leave the others frozen.
     filter_tree = jax.tree_map(lambda _: False, model)
     filter_tree = eqx.tree_at(
-        lambda tree: (tree.layers[-1].weight, tree.layers[-1].bias),
+        lambda tree: (tree.layers[-1].weight.value, tree.layers[-1].bias.value),
         filter_tree,
         replace=(True, True),
     )

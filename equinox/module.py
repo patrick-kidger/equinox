@@ -2,6 +2,7 @@ import abc
 from dataclasses import dataclass, fields
 
 import jax
+import jax.numpy as jnp
 
 from equinox.custom_types import Array
 
@@ -98,6 +99,15 @@ class Module(metaclass=_ModuleMeta):
         ans = cls.__new__(cls, *mask)
         cls.__dataclass_init__(ans, *mask)
         return ans
+
+    def remove_unjitable_fields(self):
+        """remove all fields of type int, float, str, etc."""
+        def filter_fn(x): return x if isinstance(x, (jnp.DeviceArray, jax.core.Tracer)) else None
+        return jax.tree_map(filter_fn, self)
+
+    def update(self, updates):
+        """update non-None components"""
+        return jax.tree_multimap(lambda s, u: s if u is None else u, self, updates)
 
 
 class Parameter(Module):

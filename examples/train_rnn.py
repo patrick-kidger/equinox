@@ -21,6 +21,7 @@ import optax
 from train_mlp import dataloader
 
 import equinox as eqx
+from equinox.module import Module
 
 
 # Toy data of spirals.
@@ -81,25 +82,21 @@ def main(
         # Trains with respect to binary cross-entropy
         return -jnp.mean(y * jnp.log(pred_y) + (1 - y) * jnp.log(1 - pred_y))
 
-    # import pdb; pdb.set_trace()
     vag = eqx.value_and_grad_f(loss, filter_tree=model.parameters())
 
     optim = optax.adam(learning_rate)
     opt_state = optim.init(model)
 
     @ft.partial(eqx.jitf, filter_fn=lambda x: isinstance(x, jnp.DeviceArray))
-    def update_fn(model, opt_state, x, y):
+    def update_fn(model: Module, opt_state, x, y):
         value, grads = vag(model, x, y)
         updates, opt_state = optim.update(grads, opt_state)
         model = eqx.apply_updates(model, updates)
-        # replace int values by None to prevent jax.jit converting them to array
-        model = jax.tree_map(lambda x: None if isinstance(x, int) else x, model)
-        return value, (model, opt_state)
+        return value, (model.remove_unjitable_fields(), opt_state)
 
     for step, (x, y) in zip(range(steps), data):
-        value, (new_model, opt_state) = update_fn(model, opt_state, x, y)
-        # restore int values in model due to None trick
-        model = jax.tree_multimap(lambda x, y: x if y is None else y, model, new_model)
+        value, (model_updates, opt_state) = update_fn(model, opt_state, x, y)
+        model = model.update(model_updates)
         print(step, value)
     return value
 
