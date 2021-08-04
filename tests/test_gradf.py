@@ -33,8 +33,8 @@ def test_gradf_filter_fn(getkey):
         return jnp.sum(x)
 
     grad_g2a, grad_g2b = g2(a, b)
-    assert jnp.all(grad_g2a == 0)
-    assert jnp.all(grad_g2b == 0)
+    assert grad_g2a is None
+    assert grad_g2b is None
 
     @ft.partial(eqx.gradf, argnums=1, filter_fn=lambda _: True)
     def h(x, y):
@@ -66,9 +66,9 @@ def test_gradf_filter_fn(getkey):
     assert jnp.all(gb == 1)
 
     gtrue, ghi, gobject, ga = j([True, "hi", object(), a])
-    assert gtrue == 0
-    assert ghi == 0
-    assert gobject == 0
+    assert gtrue is None
+    assert ghi is None
+    assert gobject is None
     assert jnp.all(ga == 1)
 
     gtrue, gdict, (g5, g1), gnp = j(
@@ -79,14 +79,14 @@ def test_gradf_filter_fn(getkey):
             np.array([2.0, 3.0]),
         ]
     )
-    assert gtrue == 0
+    assert gtrue is None
     assert list(gdict.keys()) == ["hi"]
     assert isinstance(gdict["hi"], eqx.nn.Linear)
     assert jnp.all(gdict["hi"].weight == 1)
     assert jnp.all(gdict["hi"].bias == 1)
-    assert g5 == 0
-    assert g1 == 0
-    assert gnp == 0
+    assert g5 is None
+    assert g1 is None
+    assert gnp is None
 
     @ft.partial(eqx.gradf, filter_fn=eqx.is_array_like)
     def k(x):
@@ -101,8 +101,8 @@ def test_gradf_filter_fn(getkey):
     assert jnp.all(gb == 1)
 
     ghi, gobject, ga = k(["hi", object(), a])
-    assert ghi == 0
-    assert gobject == 0
+    assert ghi is None
+    assert gobject is None
     assert jnp.all(ga == 1)
 
     gdict, (g1,), gnp = k(
@@ -128,7 +128,7 @@ def test_gradf_filter_tree(getkey):
 
     ga, gb = f([a, b])
     assert jnp.all(ga == 1)
-    assert gb == 0
+    assert gb is None
 
     @ft.partial(eqx.gradf, argnums=(0, 1), filter_tree=[True, False])
     def g(x, y):
@@ -136,7 +136,7 @@ def test_gradf_filter_tree(getkey):
 
     ga, gb = g(a, b)
     assert jnp.all(ga == 1)
-    assert gb == 0
+    assert gb is None
 
     @ft.partial(eqx.gradf, argnums=0, filter_tree={"a": True, "b": False})
     def h1(x, y):
@@ -148,11 +148,11 @@ def test_gradf_filter_tree(getkey):
 
     grad = h1({"a": a, "b": b}, c)
     assert jnp.allclose(grad["a"], jnp.sum(b) * c)
-    assert grad["b"] == 0
+    assert grad["b"] is None
 
     grad = h2(c, {"a": a, "b": b})
     assert jnp.allclose(grad["a"], jnp.sum(b) * c)
-    assert grad["b"] == 0
+    assert grad["b"] is None
 
     with pytest.raises(ValueError):
         grad = h1(c, {"a": a, "b": b})
@@ -173,7 +173,7 @@ def test_gradf_filter_tree(getkey):
     gradc, graddict = j({"a": a, "b": b}, 2.0, c)
     assert jnp.allclose(gradc, jnp.sum(a) * jnp.sum(b) * 2)
     assert jnp.allclose(graddict["a"], jnp.sum(b) * jnp.sum(c) * 2)
-    assert graddict["b"] == 0
+    assert graddict["b"] is None
 
 
 def test_both_filter():
