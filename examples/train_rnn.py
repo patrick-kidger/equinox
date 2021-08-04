@@ -81,6 +81,7 @@ def main(
         # Trains with respect to binary cross-entropy
         return -jnp.mean(y * jnp.log(pred_y) + (1 - y) * jnp.log(1 - pred_y))
 
+    # import pdb; pdb.set_trace()
     vag = eqx.value_and_grad_f(loss, filter_tree=model.parameters())
 
     optim = optax.adam(learning_rate)

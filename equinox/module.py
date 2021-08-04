@@ -3,6 +3,8 @@ from dataclasses import dataclass, fields
 
 import jax
 
+from equinox.custom_types import Array
+
 from .tree import tree_equal
 
 
@@ -91,10 +93,15 @@ class Module(metaclass=_ModuleMeta):
             f = getattr(self, field.name)
             if isinstance(f, Module):
                 mask.append(f.parameters())
-            elif field.name.startswith('_'):
-                mask.append(False)
             else:
-                mask.append(True)
+                mask.append(False)
         ans = cls.__new__(cls, *mask)
         cls.__dataclass_init__(ans, *mask)
         return ans
+
+
+class Parameter(Module):
+    value: Array
+
+    def parameters(self):
+        return Parameter(True)
