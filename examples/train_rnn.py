@@ -41,18 +41,18 @@ def get_data(dataset_size, *, key):
 
 
 class RNN(eqx.Module):
-    hidden_size: int
+    _hidden_size: int
     cell: eqx.Module
     linear: eqx.nn.Linear
 
     def __init__(self, in_size, out_size, hidden_size, *, key):
         ckey, lkey = jrandom.split(key)
-        self.hidden_size = hidden_size
+        self._hidden_size = hidden_size
         self.cell = eqx.nn.GRUCell(in_size, hidden_size, key=ckey)
         self.linear = eqx.nn.Linear(hidden_size, out_size, key=lkey)
 
     def __call__(self, input):
-        hidden = jnp.zeros((self.hidden_size,))
+        hidden = jnp.zeros((self._hidden_size,))
 
         def f(carry, inp):
             return self.cell(inp, carry), None
@@ -76,19 +76,29 @@ def main(
 
     model = RNN(in_size=2, out_size=1, hidden_size=hidden_size, key=model_key)
 
-    @ft.partial(eqx.jitf, filter_fn=eqx.is_inexact_array)
-    @ft.partial(eqx.value_and_grad_f, filter_fn=eqx.is_inexact_array)
     def loss(model, x, y):
         pred_y = jax.vmap(model)(x)
         # Trains with respect to binary cross-entropy
         return -jnp.mean(y * jnp.log(pred_y) + (1 - y) * jnp.log(1 - pred_y))
 
+    vag = eqx.value_and_grad_f(loss, filter_tree=model.parameters())
+
     optim = optax.adam(learning_rate)
     opt_state = optim.init(model)
-    for step, (x, y) in zip(range(steps), data):
-        value, grads = loss(model, x, y)
+
+    @ft.partial(eqx.jitf, filter_fn=lambda x: isinstance(x, jnp.DeviceArray))
+    def update_fn(model, opt_state, x, y):
+        value, grads = vag(model, x, y)
         updates, opt_state = optim.update(grads, opt_state)
         model = eqx.apply_updates(model, updates)
+        # replace int values by None to prevent jax.jit converting them to array
+        model = jax.tree_map(lambda x: None if isinstance(x, int) else x, model)
+        return value, (model, opt_state)
+
+    for step, (x, y) in zip(range(steps), data):
+        value, (new_model, opt_state) = update_fn(model, opt_state, x, y)
+        # restore int values in model due to None trick
+        model = jax.tree_multimap(lambda x, y: x if y is None else y, model, new_model)
         print(step, value)
     return value
 

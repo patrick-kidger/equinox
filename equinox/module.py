@@ -83,3 +83,18 @@ class _ModuleMeta(abc.ABCMeta):
 class Module(metaclass=_ModuleMeta):
     def __eq__(self, other):
         return tree_equal(self, other)
+
+    def parameters(self):
+        cls = self.__class__
+        mask = []
+        for field in fields(cls):
+            f = getattr(self, field.name)
+            if isinstance(f, Module):
+                mask.append(f.parameters())
+            elif field.name.startswith('_'):
+                mask.append(False)
+            else:
+                mask.append(True)
+        ans = cls.__new__(cls, *mask)
+        cls.__dataclass_init__(ans, *mask)
+        return ans
