@@ -77,7 +77,8 @@ def main(
     for step, (x, y) in zip(range(steps), data):
         value, grads = loss(model, x, y)
         updates, opt_state = optim.update(grads, opt_state)
-        # Essentially equivalent to optax.apply_updates, it just doesn't try to update anything with a `None` gradient.
+        # Essentially equivalent to optax.apply_updates, it just doesn't try to update anything with a gradient
+        # of `None` (which is the gradient produced for anything we filtered out above).
         model = eqx.apply_updates(model, updates)
         print(step, value)
     return value  # Final loss
