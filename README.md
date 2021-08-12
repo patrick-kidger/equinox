@@ -28,7 +28,7 @@ There's some similarities to existing libraries (like the [structs of flax.linen
 ### Installation
 
 ```
-pip install git+https://github.com/patrick-kidger/equinox.git
+pip install equinox
 ```
 Requires Python 3.7+ and JAX 0.2.18+.
 
