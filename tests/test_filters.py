@@ -37,7 +37,7 @@ def test_is_array_like(getkey):
         assert eqx.is_array_like(o) == r
 
 
-def test_split_and_merge(getkey):
+def test_splitfn_and_merge(getkey):
     filter_fn = lambda x: isinstance(x, int)
     for pytree in (
         [
@@ -51,13 +51,13 @@ def test_split_and_merge(getkey):
         ],
         [1, 1, 1, 1, "hi"],
     ):  # has repeated elements
-        int_args, notint_args, which, treedef = eqx.filters.split(pytree, filter_fn)
+        int_args, notint_args, which, treedef = eqx.split(pytree, filter_fn=filter_fn)
         for arg in int_args:
             assert isinstance(arg, int)
         for arg in notint_args:
             assert not isinstance(arg, int)
         assert sum(which) == 4
-        re_pytree = eqx.filters.merge(int_args, notint_args, which, treedef)
+        re_pytree = eqx.merge(int_args, notint_args, which, treedef)
         assert re_pytree == pytree
 
 
@@ -75,8 +75,8 @@ def test_splittree_and_merge(getkey):
             [1, 1, [1, 1, {"a": 1, "b": 1, "c": linear}]],
         )
     ):  # has repeated elements
-        keep_args, notkeep_args, which, treedef = eqx.filters.split_tree(
-            pytree, filter_tree
+        keep_args, notkeep_args, which, treedef = eqx.split(
+            pytree, filter_tree=filter_tree
         )
         if i == 0:
             assert set(notkeep_args) == {2, 3, True, 4}
@@ -84,10 +84,10 @@ def test_splittree_and_merge(getkey):
             assert notkeep_args == [1, 1, 1, 1]
         assert sum(which) == 4
 
-        re_pytree = eqx.filters.merge(keep_args, notkeep_args, which, treedef)
+        re_pytree = eqx.merge(keep_args, notkeep_args, which, treedef)
         assert re_pytree == pytree
 
     filter_tree = [True, [False, False]]
     pytree = [True, None]
     with pytest.raises(ValueError):
-        eqx.filters.split_tree(pytree, filter_tree)
+        eqx.split(pytree, filter_tree=filter_tree)

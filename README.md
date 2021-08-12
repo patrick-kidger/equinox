@@ -121,18 +121,19 @@ Equinox is all just regular JAX -- PyTrees and transformations! Together, these 
 
 ### Full API list
 ```python
-# Filtered transformations       # Filters
-equinox.jitf                     equinox.is_inexact_array
-equinox.gradf                    equinox.is_array_like
-equinox.value_and_grad_f
-                                 # Neural networks
-# Module                         equinox.nn.Linear
-equinox.Module                   equinox.nn.Identity
-                                 equinox.nn.Dropout
-# Utilities                      equinox.nn.GRUCell
-equinox.apply_updates            equinox.nn.LSTMCell
-equinox.tree_at                  equinox.nn.Sequential
-equinox.tree_equal               equinox.nn.MLP
+# Filtered transformations       # Utilities          
+equinox.jitf                     equinox.apply_updates
+equinox.gradf                    equinox.tree_at      
+equinox.value_and_grad_f         equinox.tree_equal   
+
+# Filters                        # Neural networks
+equinox.is_inexact_array         equinox.nn.Linear
+equinox.is_array_like            equinox.nn.Identity
+equinox.split                    equinox.nn.Dropout
+equinox.merge                    equinox.nn.GRUCell
+                                 equinox.nn.LSTMCell
+# Module                         equinox.nn.Sequential
+equinox.Module                   equinox.nn.MLP
 ```
 
 ### Filtered transformations
@@ -187,6 +188,38 @@ Returns `True` if `element` is a floating point JAX array (but not a NumPy array
 equinox.is_array_like(element)
 ```
 Returns `True` if `element` can be interpreted as a JAX array. (i.e. does `jax.numpy.array` throw an exception or not.)
+
+### Splitting/merging
+
+Filters can also be used to organise the contents of PyTrees, if needed.
+
+```python
+equinox.split(pytree, filter_fn=None, filter_tree=None)
+```
+Partitions the leaves of a PyTree into two groups.
+
+- `pytree` is any PyTree
+- `filter_fn` is any function `Leaf -> bool` to call on each of its leaves.
+- `filter_tree` is a PyTree with the same structure as `pytree`, with every leaf either `True` or `False`.
+
+Precisely one of `filter_fn` or `filter_tree` may be passed.
+
+Returns a 4-tuple of `(flat_true, flat_false, which, treedef)`.
+
+- `flat_true` will be a list of leaves for which `filter_fn`/`filter_tree` was `True`.
+- `flat_false` will be a list of leaves for which `filter_fn`/`filter_tree` was `False`.
+- `which` and `treedef` specify the input PyTree. `treedef` is a `PyTreeDef` (like `jax.tree_flatten` returns). `which` is a list of `True`/`False` specifying which leaves were truthy or falsey.
+
+See also `equinox.merge` to reconstitute the PyTree again.
+
+This function is useful when working with JAX libraries that only support PyTrees of trainable parameters, and not more general PyTrees: the model can be split into its trainable and nontrainable components and passed into the library that way. See the example [`modules_to_initapply`](./examples/modules_to_initapply.py).
+
+```python
+equinox.merge(flat_true, flat_false, which, treedef)
+```
+
+The inverse of `equinox.split`.
+
 
 ### Module
 
