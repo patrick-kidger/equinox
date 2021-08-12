@@ -1,4 +1,4 @@
-from typing import Any, Callable, List, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 from typing_extensions import get_args
 
 import jax
@@ -25,36 +25,37 @@ def is_array_like(element: Any) -> bool:
 
 
 def split(
-    pytree: PyTree, filter_fn: Callable[[Any], bool]
+    pytree: PyTree,
+    filter_fn: Optional[Callable[[Any], bool]] = None,
+    filter_tree: Optional[PyTree] = None,
 ) -> Tuple[List[Any], List[Any], List[bool], TreeDef]:
+
+    validate_filters("split", filter_fn, filter_tree)
     flat, treedef = jax.tree_flatten(pytree)
     flat_true = []
     flat_false = []
-    which = []
-    for f in flat:
-        if filter_fn(f):
-            flat_true.append(f)
-            which.append(True)
-        else:
-            flat_false.append(f)
-            which.append(False)
-    return flat_true, flat_false, which, treedef
 
+    if filter_fn is None:
+        which, treedef_filter = jax.tree_flatten(filter_tree)
+        if treedef != treedef_filter:
+            raise ValueError(
+                "filter_tree must have the same tree structure as the PyTree being split."
+            )
+        for f, w in zip(flat, which):
+            if w:
+                flat_true.append(f)
+            else:
+                flat_false.append(f)
+    else:
+        which = []
+        for f in flat:
+            if filter_fn(f):
+                flat_true.append(f)
+                which.append(True)
+            else:
+                flat_false.append(f)
+                which.append(False)
 
-def split_tree(pytree: PyTree, filter_tree: PyTree):
-    flat, treedef = jax.tree_flatten(pytree)
-    which, treedef_filter = jax.tree_flatten(filter_tree)
-    if treedef != treedef_filter:
-        raise ValueError(
-            "filter_tree must have the same tree structure as the PyTree being split."
-        )
-    flat_true = []
-    flat_false = []
-    for f, w in zip(flat, which):
-        if w:
-            flat_true.append(f)
-        else:
-            flat_false.append(f)
     return flat_true, flat_false, which, treedef
 
 

@@ -9,7 +9,7 @@ from .tree import tree_equal
 # dataclasses.astuple operates recursively, which destroys information about
 # nested tree_dataclasses. In contrast this is just a shallow tuplification.
 def _dataclass_astuple(cls):
-    return tuple(getattr(cls, field.name) for field in fields(cls))
+    return tuple(getattr(cls, field.name) for field in fields(cls) if field.init)
 
 
 def _allow_setattr(fields):

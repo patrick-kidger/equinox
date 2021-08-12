@@ -2,7 +2,7 @@ import functools as ft
 
 import jax
 
-from .filters import merge, split, split_tree, validate_filters
+from .filters import merge, split, validate_filters
 
 
 def value_and_grad_f(fun, *, filter_fn=None, filter_tree=None, argnums=0, **gradkwargs):
@@ -33,9 +33,11 @@ def value_and_grad_f(fun, *, filter_fn=None, filter_tree=None, argnums=0, **grad
             arg = args[i]
             if filter_fn is None:
                 # implies filter_tree is not None
-                arg_grad, arg_nograd, which, treedef = split_tree(arg, filter_tree[j])
+                arg_grad, arg_nograd, which, treedef = split(
+                    arg, filter_tree=filter_tree[j]
+                )
             else:
-                arg_grad, arg_nograd, which, treedef = split(arg, filter_fn)
+                arg_grad, arg_nograd, which, treedef = split(arg, filter_fn=filter_fn)
             args[i] = arg_grad
             notes[i] = (arg_nograd, which, treedef)
         value, grad = f_value_and_grad(*args, notes, **kwargs)
