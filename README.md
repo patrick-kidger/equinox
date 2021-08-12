@@ -212,7 +212,7 @@ Returns a 4-tuple of `(flat_true, flat_false, which, treedef)`.
 
 See also `equinox.merge` to reconstitute the PyTree again.
 
-This function is useful when working with JAX libraries that only support PyTrees of trainable parameters, and not more general PyTrees: the model can be split into its trainable and nontrainable components and passed into the library that way. See the example [`modules_to_initapply`](./examples/modules_to_initapply.py).
+This function is useful when working with JAX libraries that only support PyTrees of trainable parameters, and not more general PyTrees: the model can be split into its trainable and nontrainable components and passed into the library that way. See the example [`modules_to_initapply.py`](./examples/modules_to_initapply.py).
 
 ```python
 equinox.merge(flat_true, flat_false, which, treedef)

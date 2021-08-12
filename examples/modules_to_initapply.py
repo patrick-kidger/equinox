@@ -3,15 +3,13 @@
 # Existing JAX neural network libraries have sometimes followed the "init/apply"
 # approach, in which the parameters of a network are initialised with `init`, and then
 # the forward pass through a model is specified with `apply`. For example Stax follows
-# this approach
+# this approach.
 #
 # As a corollary, the parameters returned from `init` are sometimes assumed to all be
 # JIT-able or grad-able, e.g. by third-party libraries.
 # (In contrast Equinox is more general: it (a) doesn't assume that you necessarily
 # want to take gradients with respect to all your parameters, and (b) doesn't even
 # mandate that all your parameters are JAX arrays.)
-# For example this typically means that activation functions are hardcoded inside the
-# `apply` function rather than being a parameter that can be changed.
 #
 # If need be -- e.g. third party library compatibility -- then Equinox can be made to
 # fit this style very easily, like so.
