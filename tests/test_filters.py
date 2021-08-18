@@ -1,11 +1,12 @@
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 import equinox as eqx
 
 
-def test_is_inexact_array(getkey):
+def test_is_array(getkey):
     objs = [
         1,
         2.0,
@@ -14,11 +15,13 @@ def test_is_inexact_array(getkey):
         object(),
         jnp.array([1]),
         jnp.array(1.0),
+        np.array(1.0),
+        np.array(1),
         eqx.nn.Linear(1, 1, key=getkey()),
     ]
-    results = [False, False, False, False, False, False, True, False]
+    results = [False, False, False, False, False, True, True, False, False, False]
     for o, r in zip(objs, results):
-        assert eqx.is_inexact_array(o) == r
+        assert eqx.is_array(o) == r
 
 
 def test_is_array_like(getkey):
@@ -30,11 +33,49 @@ def test_is_array_like(getkey):
         object(),
         jnp.array([1]),
         jnp.array(1.0),
+        np.array(1.0),
+        np.array(1),
         eqx.nn.Linear(1, 1, key=getkey()),
     ]
-    results = [True, True, True, True, False, True, True, False]
+    results = [True, True, False, True, False, True, True, True, True, False]
     for o, r in zip(objs, results):
         assert eqx.is_array_like(o) == r
+
+
+def test_is_inexact_array(getkey):
+    objs = [
+        1,
+        2.0,
+        [2.0],
+        True,
+        object(),
+        jnp.array([1]),
+        jnp.array(1.0),
+        np.array(1.0),
+        np.array(1),
+        eqx.nn.Linear(1, 1, key=getkey()),
+    ]
+    results = [False, False, False, False, False, False, True, False, False, False]
+    for o, r in zip(objs, results):
+        assert eqx.is_inexact_array(o) == r
+
+
+def test_is_inexact_array_like(getkey):
+    objs = [
+        1,
+        2.0,
+        [2.0],
+        True,
+        object(),
+        jnp.array([1]),
+        jnp.array(1.0),
+        np.array(1.0),
+        np.array(1),
+        eqx.nn.Linear(1, 1, key=getkey()),
+    ]
+    results = [False, True, False, False, False, False, True, True, False, False]
+    for o, r in zip(objs, results):
+        assert eqx.is_inexact_array_like(o) == r
 
 
 def test_splitfn_and_merge(getkey):
