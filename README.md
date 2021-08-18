@@ -127,13 +127,15 @@ equinox.gradf                    equinox.tree_at
 equinox.value_and_grad_f         equinox.tree_equal   
 
 # Filters                        # Neural networks
-equinox.is_inexact_array         equinox.nn.Linear
+equinox.is_array                 equinox.nn.Linear
 equinox.is_array_like            equinox.nn.Identity
-equinox.split                    equinox.nn.Dropout
-equinox.merge                    equinox.nn.GRUCell
-                                 equinox.nn.LSTMCell
-# Module                         equinox.nn.Sequential
-equinox.Module                   equinox.nn.MLP
+equinox.is_inexact_array         equinox.nn.Dropout
+equinox.is_inexact_array_like    equinox.nn.GRUCell
+equinox.split                    equinox.nn.LSTMCell
+equinox.merge                    equinox.nn.Sequential
+                                 equinox.nn.MLP
+# Module
+equinox.Module
 ```
 
 ### Filtered transformations
@@ -180,14 +182,24 @@ Wraps `jax.value_and_grad`. Arguments are as `equinox.gradf`.
 Any function `Any -> bool` can be used as a filter. We provide some convenient common choices.
 
 ```python
+equinox.is_array(element)
+```
+Returns `True` if `element` is a JAX array (not but a NumPy array).
+
+```python
+equinox.is_array_like(element)
+```
+Returns `True` if `element` is a JAX array, NumPy array, or a Python float/int/bool/complex.
+
+```python
 equinox.is_inexact_array(element)
 ```
 Returns `True` if `element` is a floating point JAX array (but not a NumPy array).
 
 ```python
-equinox.is_array_like(element)
+equinox.is_inexact_array_like(element)
 ```
-Returns `True` if `element` can be interpreted as a JAX array. (i.e. does `jax.numpy.array` throw an exception or not.)
+Returns `True` if `element` is a floating point JAX array, floating point NumPy array, or a Python float or complex.
 
 ### Splitting/merging
 
