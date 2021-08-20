@@ -321,7 +321,7 @@ Returns `True` if all PyTrees in the list are equal. All arrays must have the sa
 Equinox includes a small neural network library, mostly as a tech demo for how the rest of the library can be used. Its API is modelled after PyTorch.
 
 ```python
-equinox.nn.Linear(in_features, out_features, bias=True, *, key)(input)
+equinox.nn.Linear(in_features, out_features, use_bias=True, *, key)(input)
 equinox.nn.Identity(*args, **kwargs)(input)  # args and kwargs are ignored
 equinox.nn.Dropout(p=0.5, deterministic=False)(input, *, key=None, deterministic=None)
 equinox.nn.GRUCell(input_size, hidden_size, bias=True, *, key)(input, hidden)
