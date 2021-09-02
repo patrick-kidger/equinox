@@ -25,7 +25,7 @@ def main(
     data = dataloader(data, batch_size=batch_size, key=loader_key)
 
     model = eqx.nn.MLP(
-        in_size=1, out_size=1, width_size=depth, depth=depth, key=model_key
+        in_size=1, out_size=1, width_size=width_size, depth=depth, key=model_key
     )
     # Let's train just the final layer of the MLP, and leave the others frozen.
     filter_tree = jax.tree_map(lambda _: False, model)
