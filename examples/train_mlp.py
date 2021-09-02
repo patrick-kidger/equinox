@@ -59,7 +59,7 @@ def main(
     # `equinox.jitf` and `equinox.gradf` will work just fine on any PyTree you like.
     # (Here, `model` is actually a PyTree -- have a look at the `build_model.py` example for more on that.)
     model = eqx.nn.MLP(
-        in_size=1, out_size=1, width_size=depth, depth=depth, key=model_key
+        in_size=1, out_size=1, width_size=width_size, depth=depth, key=model_key
     )
 
     # `jitf` and `value_and_grad_f` are thin wrappers around the usual `jax` functions; they just flatten the
