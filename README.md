@@ -75,31 +75,6 @@ x, y = jrandom.normal(xkey, (100, 2)), jrandom.normal(ykey, (100, 3))
 grads = loss(model, x, y)
 ```
 
-This quick example exposes you to the two main concepts in Equinox: *callable PyTrees* and *filtered transformations*. Together, they're very powerful.
-
-### Callable PyTrees
-
-This is just some methods attached to a PyTree. (In this case it's the `__call__` method of a `Module` subclass.) All subclassing `Module` really does is just automatically register your class with JAX as a custom PyTree node; there's no magic here.
-
-The PyTree structure holds the data (parameters, buffers, submodules, boolean flags, even arbitrary Python objects). The methods on the class define operations parameterised by that data -- in this case and in particular, the forward pass through a model.
-
-This gives a way to represent *parameterised functions as data*: and as such, they're suitable for passing in and out of JAX functions. This is what we do when passing the `model` instance to the loss function.
-
-Footnote: callable PyTrees actually aren't anything special -- the build-in Python methods on lists and dictionaries are another example of callable PyTrees.
-
-### Filtered transformations
-
-The one issue with putting everything about a model into a single PyTree is that this might not contain just trainable parameters. The above example includes a boolean `flag`, for example. We certainly can't differentiate this, and we may or may not wish to JIT trace/static this.<br>
-In general we might have arbitrary Python objects, or perhaps JAX arrays that are buffers rather than trainable parameters.
-
-Enter *filtered transformations*. These are `equinox.jitf` and `equinox.gradf`, which are very thin wrappers around `jax.jit` and `jax.grad`. Instead of specifying `argnums` to JIT/differentiate, we instead pass a *filter* that determines which *PyTree leaves* -- not just whole arguments -- to JIT/differentiate.
-
-These aren't "a way to make JIT/grad work with model states" like many libraries have. They are general operations on PyTrees, and nothing about `Module` is special-cased.
-- For one thing, we don't need to special-case anything: `Module` is just a PyTree like any other.
-- For another, if you don't want to filter out anything at all, then don't: use `jax.jit` and `jax.grad` directly and they'll work just fine.
-
-This gives a powerful fine-grained way control JIT and autodifferentiation.
-
 ### Integrates smoothly with JAX
 
 There's nothing special about Equinox modules. They're just PyTrees.
@@ -107,6 +82,8 @@ There's nothing special about Equinox modules. They're just PyTrees.
 There's nothing special about filtered transformations. They just operate on PyTrees.
 
 Equinox is all just regular JAX -- PyTrees and transformations! Together, these two pieces allow us to specify complex models in JAX-friendly ways.
+
+In particular note that `equinox.jitf` and `equinox.gradf` are *not* "a way to make JIT/grad work with Modules" like many libraries have. They are general operations on PyTrees, and nothing about `Module` is special-cased. (And indeed `Module` itself is just a PyTree like any other.)
 
 ## Examples
 
@@ -116,27 +93,78 @@ Equinox is all just regular JAX -- PyTrees and transformations! Together, these 
 
 - [`build_model.py`](./examples/build_model.py) demonstrates how to build parameterised-functions-as-data using `equinox.Module`. In particular we'll construct an MLP from scratch, and then pass it into higher-order functions like JIT and grad in order to train it. This allows us to produce models using a familiar class-based syntax, that are also functional and integrate directly with JAX's JIT/autograd.
 
-- [`train_rnn.py`](./examples/train_rnn.py) trains an RNN on a toy clockwise/anticlockwise spiral classification problem. This demonstrates the use of `jax.lax.scan` with Equinox. (It just works, no tricks required.)
+- [`train_rnn.py`](./examples/train_rnn.py) trains an RNN on a toy clockwise/anticlockwise spiral classification problem.
+
+- [`modules_to_initapply.py`](./examples/modules_to_initapply.py) demonstrates how to use Equinox in an init/apply-style way, which some JAX libraries have been built around. (e.g. Stax)
 
 ## API
 
 ### Full API list
 ```python
-# Filtered transformations       # Utilities          
-equinox.jitf                     equinox.apply_updates
-equinox.gradf                    equinox.tree_at      
-equinox.value_and_grad_f         equinox.tree_equal   
+# Module                         # Utilities        
+equinox.Module                   equinox.apply_updates
+                                 equinox.tree_at      
+# Filtered transformations       equinox.tree_equal   
+equinox.jitf                     
+equinox.gradf                    # Neural networks
+equinox.value_and_grad_f         equinox.nn.Linear
+                                 equinox.nn.Identity
+# Filters                        equinox.nn.Dropout
+equinox.is_array                 equinox.nn.GRUCell
+equinox.is_array_like            equinox.nn.LSTMCell
+equinox.is_inexact_array         equinox.nn.Sequential
+equinox.is_inexact_array_like    equinox.nn.MLP
 
-# Filters                        # Neural networks
-equinox.is_array                 equinox.nn.Linear
-equinox.is_array_like            equinox.nn.Identity
-equinox.is_inexact_array         equinox.nn.Dropout
-equinox.is_inexact_array_like    equinox.nn.GRUCell
-equinox.split                    equinox.nn.LSTMCell
-equinox.merge                    equinox.nn.Sequential
-                                 equinox.nn.MLP
-# Module
+# Splitting/merging
+equinox.split                    
+equinox.merge                    
+                                 
+```
+
+### Module
+
+```python
 equinox.Module
+```
+Base class; create your model by inheriting from this.
+
+Specify all its attributes at the class level (identical to [dataclasses](https://docs.python.org/3/library/dataclasses.html)). This defines its children in the PyTree.
+
+```python
+class MyModule(equinox.Module):
+    weight: typing.Any
+    bias: typing.Any
+    submodule: Module
+```
+
+In this case a default `__init__` method is provided, which just fills in these attributes with the argments passed: `MyModule(weight, bias, submodule)`. Alternatively you can provide an `__init__` method yourself. (For example to specify dimension sizes instead of raw weights.) By the end of `__init__`, every attribute must have been assigned.
+
+```python
+class AnotherModule(equinox.Module):
+    weight: Any
+
+    def __init__(self, input_size, output_size, key):
+        self.weight = jax.random.normal(key, (output_size, input_size))
+```
+
+After initialisation then attributes cannot be modified: models are immutable as per functional programming. (Parameter updates are made by creating a new model, not by mutating parameters in-place; see for example [`train_mlp.py`](./examples/train_mlp.py).)
+
+It is typical to also create some methods on the class. As `self` will be an input parameter -- treated as a PyTree -- then these methods will get access to the attributes of the instance. Defining `__call__` gives an easy way to define a forward pass for a model (although any method can be used, and no methods are special-cased):
+
+```python
+class LinearWithoutBias(equinox.Module):
+    weight: Any
+
+    def __call__(self, x):
+        return self.weight @ x
+```
+
+If defining a method `meth`, then take care not to write `instance = MyModule(...); jax.jit(instance.meth)(...)`. (Or similarly with `jax.grad`, `equinox.jitf` etc.) This is because `instance.meth` is not a pure function as it already has the `self` parameter passed implicitly. Instead do
+```python
+@jax.jit
+def func(instance, args):
+    instance.meth(args)
+    # Also use this pattern with instance(args) if you defined `__call__` instead of `meth`.
 ```
 
 ### Filtered transformations
@@ -232,53 +260,6 @@ equinox.merge(flat_true, flat_false, which, treedef)
 ```
 
 The inverse of `equinox.split`.
-
-
-### Module
-
-```python
-equinox.Module
-```
-Base class; create your model by inheriting from this.
-
-Specify all its attributes at the class level (identical to [dataclasses](https://docs.python.org/3/library/dataclasses.html)). This defines its children in the PyTree.
-
-```python
-class MyModule(equinox.Module):
-    weight: typing.Any
-    bias: typing.Any
-    submodule: Module
-```
-
-In this case a default `__init__` method is provided, which just fills in these attributes with the argments passed: `MyModule(weight, bias, submodule)`. Alternatively you can provide an `__init__` method yourself. (For example to specify dimension sizes instead of raw weights.) By the end of `__init__`, every attribute must have been assigned.
-
-```python
-class AnotherModule(equinox.Module):
-    weight: Any
-
-    def __init__(self, input_size, output_size, key):
-        self.weight = jax.random.normal(key, (output_size, input_size))
-```
-
-After initialisation then attributes cannot be modified: models are immutable as per functional programming. (Parameter updates are made by creating a new model, not by mutating parameters in-place; see for example [`train_mlp.py`](./examples/train_mlp.py).)
-
-It is typical to also create some methods on the class. As `self` will be an input parameter -- treated as a PyTree -- then these methods will get access to the attributes of the instance. Defining `__call__` gives an easy way to define a forward pass for a model (although any method can be used, and no methods are special-cased):
-
-```python
-class LinearWithoutBias(equinox.Module):
-    weight: Any
-
-    def __call__(self, x):
-        return self.weight @ x
-```
-
-If defining a method `meth`, then take care not to write `instance = MyModule(...); jax.jit(instance.meth)(...)`. (Or similarly with `jax.grad`, `equinox.jitf` etc.) This is because `instance.meth` is not a pure function as it already has the `self` parameter passed implicitly. Instead do
-```python
-@jax.jit
-def func(instance, args):
-    instance.meth(args)
-    # Also use this pattern with instance(args) if you defined `__call__` instead of `meth`.
-```
 
 ### Utilities
 
