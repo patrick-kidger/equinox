@@ -12,22 +12,21 @@ Equinox is half tech-demo, half neural network library.
 
 Build models using a PyTorch-like class based API *without* sacrificing JAX-like functional programming.
 
-In particular, *without* extra complexity like class-to-functional transformations, custom notions of parameter groups, or specially wrapped `library.jit`s and `library.grad`s, like many libraries have.
+In particular, *without* extra complexity like class-to-functional transformations, or custom notions of parameter groups.
 
 Equinox is a tiny library -- no behind-the-scenes magic, guaranteed.
 The elegance of Equinox is its selling point in a world that already has [Haiku](https://github.com/deepmind/dm-haiku), [Flax](https://github.com/google/flax) etc.
 
 ### Technical contributions
 
-1. Equinox represents *parameterised functions as data*. (For example a neural network is a function parameterised by its weights, biases, etc.) And by "data", we mean a [PyTree](https://jax.readthedocs.io/en/latest/pytrees.html) -- just like JAX is used to. This is done through `equinox.Module`. The key point here is that this now works with higher-order functions -- like a loss function, that evalutes a model on data. For example, you can `jax.jit` or `jax.grad` your loss function with respect to your model, *because the model is a PyTree*.
-2. Equinox additionally offers thin wrappers around `jax.jit`/`jax.grad`, namely `equinox.jitf` and `equinox.gradf`, that allow you to JIT/differentiate just some of the leaves of a PyTree -- not just a whole argument.
+1. Equinox represents *parameterised functions as [PyTrees](https://jax.readthedocs.io/en/latest/pytrees.html)*. This is done by subclassing `equinox.Module`. (For example a neural network is a function parameterised by its weights, biases, etc.) They key point is that you can now JIT/grad a higher-order function (like a loss function) with respect to a parameterised function as its input (like a model).
+2. Equinox provides *filtered transformations*. These allow you to JIT/grad just some of the leaves of a PyTree -- not just a whole argument. This is provided by `equinox.jitf` and `equinox.gradf`.
 
-These two points are independent of each other, but they synergise very nicely!
+Point 1 allows you to represent models as PyTrees. (No separate passing around of parameters and forward passes.)<br>
+Point 2 is a more fine-grained way to JIT/grad PyTrees.<br>
+They are completely independent of each other -- but synergise very nicely.
 - If your model-as-a-PyTree only consists of things you want to JIT/differentiate, then just use `jax.jit` or `jax.grad` as normal. Equinox is JAX-friendly.
-- If you parameterise your model by something that isn't JIT/grad-able, then use `equinox.jitf` or `equinox.gradf`.
-- More generally you can use `equinox.jitf`, `equinox.gradf` with any function acting on PyTrees. Nothing about `equinox.Module` is special-cased.
-
-The canonical example is the activation function of a neural network. If you bake this into your forward pass, you can use `jax.jit` or `jax.grad`. If you parameterise your model by it (e.g. so you can try different activation functions without typing out the same code several times), then `equinox.jitf` and `equinox.gradf` can be used to filter out these non-JAX-types.
+- If you parameterise your model by something that isn't JIT/grad-able, then use `equinox.jitf` or `equinox.gradf`. For example you might want to store an arbitrary Python function as an activation function.
 
 ### Installation
 
@@ -43,8 +42,8 @@ import equinox as eqx
 import functools as ft, jax, jax.numpy as jnp, jax.random as jrandom
 
 # Define our model. `Module` subclasses are both functions and data, so we can pass them into higher
-# order functions like vmap/jit/grad, or our loss function later.
-# There's no magic in `Module`. Pretty much all it does is just register your class as PyTree node.
+# order functions like vmap/jit/grad or a loss function.
+# There's no magic here. `Module` just registers your class as a PyTree node.
 class LinearOrIdentity(eqx.Module):
     weight: jnp.ndarray
     flag: bool
@@ -59,13 +58,11 @@ class LinearOrIdentity(eqx.Module):
         return self.weight @ x
 
 # We use the fact that our model is data, by passing it in as an argument to the loss.
-# There's no magic here: `model` is a PyTree like any other.
+# There's no magic here. `model` is a PyTree like any other; nothing about it being a `Module` is
+# special-cased.
 #
 # We use filtered transformations to unpack its data and select just the leaves we want to 
 # JIT+differentiate. (In this case, all JAX arrays -- so `weight` but not `flag`.)
-# There's no magic here: filtered transformations act on any kind of PyTree.
-#
-# Equinox is JAX-friendly. If you want to differentiate everything, just use `jax.jit` and `jax.grad`.
 @ft.partial(eqx.jitf, filter_fn=eqx.is_array)
 @ft.partial(eqx.gradf, filter_fn=eqx.is_array)
 def loss(model, x, y):
