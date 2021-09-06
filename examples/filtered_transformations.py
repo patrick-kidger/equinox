@@ -1,6 +1,6 @@
 ##############
 #
-# This example demonstrates the basics of using `equinox.jitf` and `equinox.gradf`.
+# This example demonstrates how to use `equinox.filter_jit` and `equinox.filter_grad`.
 #
 # Here we'll use them to facilitate training a simple MLP: to automatically take gradients and jit with respect to
 # all the jnp.arrays constituting the parameters. (But not with respect to anything else, like the choice of activation
@@ -56,18 +56,17 @@ def main(
     data = dataloader(data, batch_size=batch_size, key=loader_key)
 
     # We happen to be using an Equinox model here, but that *is not important*.
-    # `equinox.jitf` and `equinox.gradf` will work just fine on any PyTree you like.
+    # `equinox.filter_jit` and `equinox.filter_grad` will work just fine on any PyTree you like.
     # (Here, `model` is actually a PyTree -- have a look at the `build_model.py` example for more on that.)
     model = eqx.nn.MLP(
         in_size=1, out_size=1, width_size=width_size, depth=depth, key=model_key
     )
 
-    # `jitf` and `value_and_grad_f` are thin wrappers around the usual `jax` functions; they just flatten the
-    # input PyTrees and filter them according to their filter functions. In this case we're asking to only
-    # JIT/optimise with respect to arrays of floating point numbers, i.e. the parameters of our model. (So that
-    # for example we will statically JIT-compile with respect to any boolean flags.)
-    @ft.partial(eqx.jitf, filter_fn=eqx.is_inexact_array)
-    @ft.partial(eqx.value_and_grad_f, filter_fn=eqx.is_inexact_array)
+    # `filter_jit` and `filter_value_and_grad_` are thin wrappers around the usual `jax` functions.
+    # In this case we're asking to JIT with respect to all JAX arrays, and differentiate with respect to all floating
+    # point JAX arrays, i.e. the parameters of our model.
+    @ft.partial(eqx.filter_jit, filter_spec=eqx.is_array)
+    @ft.partial(eqx.filter_value_and_grad, filter_spec=eqx.is_inexact_array)
     def loss(model, x, y):
         pred_y = jax.vmap(model)(x)
         return jnp.mean((y - pred_y) ** 2)

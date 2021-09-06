@@ -1,11 +1,16 @@
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple, Union
 from typing_extensions import get_args
 
 import jax
 import jax.numpy as jnp
 
 from .custom_types import Array, MoreArrays, PyTree, TreeDef
+from .deprecated import deprecated
 
+
+#
+# Filter functions
+#
 
 _array_types = get_args(Array)
 _morearray_types = get_args(MoreArrays)
@@ -34,12 +39,67 @@ def is_inexact_array_like(element: Any) -> bool:
     ) or isinstance(element, (float, complex))
 
 
+#
+# Filtering/combining
+#
+
+
+def _make_filter_tree(mask: Union[bool, Callable[[Any], bool]], arg: Any) -> bool:
+    if isinstance(mask, bool):
+        return mask
+    elif callable(mask):
+        return jax.tree_map(mask, arg)
+    else:
+        raise ValueError("`filter_spec` must consist of booleans and callables only.")
+
+
+def filter(
+    pytree: PyTree, filter_spec: PyTree, inverse: bool = False, replace: Any = None
+) -> PyTree:
+
+    inverse = bool(inverse)  # just in case, to make the != trick below work reliably
+    filter_tree = jax.tree_map(_make_filter_tree, filter_spec, pytree)
+    return jax.tree_map(
+        lambda mask, x: x if bool(mask) != inverse else replace, filter_tree, pytree
+    )
+
+
+def partition(pytree: PyTree, filter_spec: PyTree, replace: Any = None) -> PyTree:
+
+    filter_tree = jax.tree_map(_make_filter_tree, filter_spec, pytree)
+    left = jax.tree_map(lambda mask, x: x if mask else replace, filter_tree, pytree)
+    right = jax.tree_map(lambda mask, x: replace if mask else x, filter_tree, pytree)
+    return left, right
+
+
+_sentinel = object()
+
+
+def _combine(*args):
+    for arg in args:
+        if arg is not _sentinel:
+            return arg
+    return None
+
+
+def combine(*pytrees: PyTree):
+    pytrees = [
+        jax._src.tree_util._replace_nones(_sentinel, pytree) for pytree in pytrees
+    ]
+    return jax.tree_map(_combine, *pytrees)
+
+
+#
+# Deprecated
+#
+
+
+@deprecated(in_favour_of=filter)
 def split(
     pytree: PyTree,
     filter_fn: Optional[Callable[[Any], bool]] = None,
     filter_tree: Optional[PyTree] = None,
 ) -> Tuple[List[Any], List[Any], List[bool], TreeDef]:
-
     validate_filters("split", filter_fn, filter_tree)
     flat, treedef = jax.tree_flatten(pytree)
     flat_true = []
@@ -69,6 +129,7 @@ def split(
     return flat_true, flat_false, which, treedef
 
 
+@deprecated(in_favour_of=combine)
 def merge(
     flat_true: List[Any], flat_false: List[Any], which: List[bool], treedef: TreeDef
 ):
@@ -83,6 +144,7 @@ def merge(
     return jax.tree_unflatten(treedef, flat)
 
 
+# Internal and only used by deprecated functions
 def validate_filters(fn_name, filter_fn, filter_tree):
     if (filter_fn is None and filter_tree is None) or (
         filter_fn is not None and filter_tree is not None

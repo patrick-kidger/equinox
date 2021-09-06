@@ -7,9 +7,10 @@
 #
 # As a corollary, the parameters returned from `init` are sometimes assumed to all be
 # JIT-able or grad-able, e.g. by third-party libraries.
-# (In contrast Equinox is more general: it (a) doesn't assume that you necessarily
+#
+# In contrast Equinox is more general: it (a) doesn't assume that you necessarily
 # want to take gradients with respect to all your parameters, and (b) doesn't even
-# mandate that all your parameters are JAX arrays.)
+# mandate that all your parameters are JAX arrays.
 #
 # If need be -- e.g. third party library compatibility -- then Equinox can be made to
 # fit this style very easily, like so.
@@ -23,18 +24,15 @@ import jax.random as jrandom
 import equinox as eqx
 
 
-# Made to look a bit like a Stax model.
 def make_mlp(in_size, out_size, width_size, depth, *, key):
     mlp = eqx.nn.MLP(in_size, out_size, width_size, depth, key=key)
-    grad_params, nongrad_params, which, treedef = eqx.split(
-        mlp, filter_fn=eqx.is_inexact_array
-    )
+    params, static = eqx.partition(mlp, eqx.is_inexact_array)
 
     def init_fn():
-        return grad_params
+        return params
 
     def apply_fn(params, x):
-        model = eqx.merge(params, nongrad_params, which, treedef)
+        model = eqx.combine(params, static)
         return model(x)
 
     return init_fn, apply_fn
