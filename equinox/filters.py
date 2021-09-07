@@ -72,21 +72,19 @@ def partition(pytree: PyTree, filter_spec: PyTree, replace: Any = None) -> PyTre
     return left, right
 
 
-_sentinel = object()
-
-
 def _combine(*args):
     for arg in args:
-        if arg is not _sentinel:
+        if arg is not None:
             return arg
     return None
 
 
+def _is_none(x):
+    return x is None
+
+
 def combine(*pytrees: PyTree):
-    pytrees = [
-        jax._src.tree_util._replace_nones(_sentinel, pytree) for pytree in pytrees
-    ]
-    return jax.tree_map(_combine, *pytrees)
+    return jax.tree_map(_combine, *pytrees, is_leaf=_is_none)
 
 
 #
