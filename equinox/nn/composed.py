@@ -3,7 +3,7 @@ from typing import List
 import jax.nn as jnn
 import jax.random as jrandom
 
-from ..module import Module
+from ..module import Module, static_field
 from .linear import Linear
 
 
@@ -11,6 +11,10 @@ class MLP(Module):
     layers: List[Linear]
     activation: callable
     final_activation: callable
+    in_size: int = static_field()
+    out_size: int = static_field()
+    width_size: int = static_field()
+    depth: int = static_field()
 
     def __init__(
         self,
@@ -35,6 +39,10 @@ class MLP(Module):
                 layers.append(Linear(width_size, width_size, key=keys[i + 1]))
             layers.append(Linear(width_size, out_size, key=keys[-1]))
         self.layers = layers
+        self.in_size = in_size
+        self.out_size = out_size
+        self.width_size = width_size
+        self.depth = depth
         self.activation = activation
         self.final_activation = final_activation
 

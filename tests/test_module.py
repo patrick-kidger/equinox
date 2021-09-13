@@ -3,6 +3,7 @@ from typing import Any
 import pytest
 
 import equinox as eqx
+import jax
 
 
 def test_module_not_enough_attributes():
@@ -131,3 +132,19 @@ def test_inheritance():
     m = MyModule7(value4=1, value7=2)
     assert m.weight4 == 1
     assert m.weight7 == 2
+
+
+def test_static_field():
+    class MyModule(eqx.Module):
+        field1: int
+        field2: int = eqx.static_field()
+        field3: int = eqx.static_field(default=3)
+
+    m = MyModule(1, 2)
+    flat, treedef = jax.tree_flatten(m)
+    assert len(flat) == 1
+    assert flat[0] == 1
+    rm = jax.tree_unflatten(treedef, flat)
+    assert rm.field1 == 1
+    assert rm.field2 == 2
+    assert rm.field3 == 3

@@ -12,9 +12,9 @@ from .filters import (
 )
 from .gradf import filter_grad, filter_value_and_grad, gradf, value_and_grad_f
 from .jitf import filter_jit, jitf
-from .module import Module
+from .module import Module, static_field
 from .tree import tree_at, tree_equal
 from .update import apply_updates
 
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

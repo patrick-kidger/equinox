@@ -1,10 +1,21 @@
 import abc
 import functools as ft
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, field
 
 import jax
 
 from .tree import tree_equal
+
+
+def static_field(**kwargs):
+    try:
+        metadata = dict(kwargs['metadata'])
+    except KeyError:
+        metadata = kwargs['metadata'] = {}
+    if 'static' in metadata:
+        raise ValueError("Cannot use metadata with `static` already set.")
+    metadata['static'] = True
+    return field(**kwargs)
 
 
 @ft.lru_cache(maxsize=128)
@@ -65,21 +76,30 @@ class Module(metaclass=_ModuleMeta):
         return tree_equal(self, other)
 
     def tree_flatten(self):
-        field_names = []
-        field_values = []
+        dynamic_field_names = []
+        dynamic_field_values = []
+        static_field_names = []
+        static_field_values = []
         for field in fields(self):
             name = field.name
             try:
                 value = self.__dict__[name]
             except KeyError:
                 continue
-            field_names.append(name)
-            field_values.append(value)
-        return tuple(field_values), tuple(field_names)
+            if field.metadata.get('static', False):
+                static_field_names.append(name)
+                static_field_values.append(value)
+            else:
+                dynamic_field_names.append(name)
+                dynamic_field_values.append(value)
+        return tuple(dynamic_field_values), (tuple(dynamic_field_names), tuple(static_field_names), tuple(static_field_values))
 
     @classmethod
-    def tree_unflatten(cls, field_names, field_values):
+    def tree_unflatten(cls, aux, dynamic_field_values):
         self = cls.__new__(cls)
-        for name, value in zip(field_names, field_values):
+        dynamic_field_names, static_field_names, static_field_values = aux
+        for name, value in zip(dynamic_field_names, dynamic_field_values):
+            object.__setattr__(self, name, value)
+        for name, value in zip(static_field_names, static_field_values):
             object.__setattr__(self, name, value)
         return self
