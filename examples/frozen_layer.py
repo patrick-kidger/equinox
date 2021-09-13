@@ -39,7 +39,7 @@ def main(
     )
 
     # We'll still JIT with respect to every array.
-    @ft.partial(eqx.filter_jit, filter_spec=eqx.is_array)
+    @eqx.filter_jit
     @ft.partial(eqx.filter_value_and_grad, filter_spec=filter_spec)
     def loss(model, x, y):
         pred_y = jax.vmap(model)(x)
