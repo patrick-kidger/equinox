@@ -88,7 +88,7 @@ class MLP(eqx.Module):
     activation: callable
 
     def __init__(self, in_size, out_size, width_size, depth, key, activation=jnn.relu):
-        super().__init__()  # Once again not necessary but good Python practice
+        super().__init__()  # Once again not necessary but good practice in Python
         keys = jrandom.split(key, depth + 1)
         self.layers = []
         self.layers.append(Linear2(in_size, width_size, keys[0]))
@@ -98,6 +98,8 @@ class MLP(eqx.Module):
         self.activation = activation
 
     def __call__(self, x):
+        # Incidentally if you want to JIT/grad/whatever in here you can; it's completely safe to do so, unlike some
+        # other libraries.
         for layer in self.layers[:-1]:
             x = layer(x)
             x = self.activation(x)
@@ -113,27 +115,41 @@ def main():
     model(data)  # Calls __call__
 
     # Because `model` is a PyTree we can use it with normal JAX: vmap, grad, jit etc.
-    # The equinox.jitf and equinox.gradf utilities can also be helpful to filter on what you do and don't want to
-    # include.
+    # However note that `model.activation` is some arbitrary Python function, defaulting to a ReLU.
+    # JAX has no idea how to JIT/differentiate that! We need to separate the things we want to JIT/grad from the rest.
+    params = eqx.filter(model, eqx.is_array)
+    static = eqx.filter(model, eqx.is_array, inverse=True)
 
-    @ft.partial(eqx.jitf, filter_fn=eqx.is_inexact_array)
-    def example_jit(model, data):
+    @ft.partial(jax.jit, static_argnums=1)
+    def example_jit(params, static, data):
+        model = eqx.combine(params, static)
         model(data)
 
-    @ft.partial(eqx.gradf, filter_fn=eqx.is_inexact_array)
-    def example_grad(model, data):
+    @jax.grad
+    def example_grad(params, static, data):
+        model = eqx.combine(params, static)
         return jnp.sum(model(data))  # return a scalar
 
-    @ft.partial(jax.vmap, in_axes=(None, 0))
-    def example_vmap(model, data):
+    @ft.partial(jax.vmap, in_axes=(None, None, 0))
+    def example_vmap(params, static, data):
+        model = eqx.combine(params, static)
         return model(data)
 
     # (Note that eqx.jitf(model, ...), jax.jit(model, ...), eqx.gradf(model, ...), etc. would be wrong.
     #  The function argument to these operations must always be a pure function.)
 
-    example_jit(model, data)
-    example_grad(model, data)
-    example_vmap(model, jnp.stack([data, data]))
+    example_jit(params, static, data)
+    example_grad(params, static, data)
+    example_vmap(params, static, jnp.stack([data, data]))
+
+    # Now that you've seen how to build a model, you're all set!
+    # This is literally everything you need to know to use Equinox. Like the README promises, it's a really simple way
+    # to build models, and you don't need to learn any new abstractions -- it's all just PyTrees.
+    #
+    # If you're comfortable with a little more automation, it is possible to combine JIT/grad with the filtering
+    # automatically, so you can just do fn(model) rather than fn(params, static).
+    # Have a look at filtered_transformations.py
+    # (That's not necessary though. :) )
 
 
 if __name__ == "__main__":

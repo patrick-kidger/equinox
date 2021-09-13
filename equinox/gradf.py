@@ -2,9 +2,48 @@ import functools as ft
 
 import jax
 
-from .filters import merge, split, validate_filters
+from .deprecated import deprecated
+from .filters import combine, merge, partition, split, validate_filters
 
 
+def filter_value_and_grad(fun, *, filter_spec, argnums=None, **gradkwargs):
+    if argnums is not None:
+        raise ValueError("`argnums` should not be passed; use a filter instead.")
+
+    @ft.partial(jax.value_and_grad, argnums=0, **gradkwargs)
+    def fun_value_and_grad(diff_x, nondiff_x, *args, **kwargs):
+        x = combine(diff_x, nondiff_x)
+        return fun(x, *args, **kwargs)
+
+    def fun_value_and_grad_wrapper(x, *args, **kwargs):
+        diff_x, nondiff_x = partition(x, filter_spec)
+        return fun_value_and_grad(diff_x, nondiff_x, *args, **kwargs)
+
+    return fun_value_and_grad_wrapper
+
+
+def filter_grad(fun, *, filter_spec, has_aux=False, **gradkwargs):
+    fun_value_and_grad = filter_value_and_grad(
+        fun, filter_spec=filter_spec, has_aux=has_aux, **gradkwargs
+    )
+
+    def fun_grad(*args, **kwargs):
+        value, grad = fun_value_and_grad(*args, **kwargs)
+        if has_aux:
+            value, aux = value
+            return aux, grad
+        else:
+            return grad
+
+    return fun_grad
+
+
+#
+# Deprecated
+#
+
+
+@deprecated(in_favour_of=filter_value_and_grad)
 def value_and_grad_f(fun, *, filter_fn=None, filter_tree=None, argnums=0, **gradkwargs):
     if isinstance(argnums, int):
         unwrap = True
@@ -54,6 +93,7 @@ def value_and_grad_f(fun, *, filter_fn=None, filter_tree=None, argnums=0, **grad
     return f_value_and_grad_wrapper
 
 
+@deprecated(in_favour_of=filter_grad)
 def gradf(fun, *, has_aux=False, **gradkwargs):
     f_value_and_grad = value_and_grad_f(fun, has_aux=has_aux, **gradkwargs)
 

@@ -2,32 +2,14 @@
 <h2 align='center'>Callable PyTrees and filtered JIT/grad transformations<br>=> neural networks in JAX</h2>
 
 Equinox brings more power to your model building in [JAX](https://github.com/google/jax).<br>
-Represent *parameterised functions as data*, and use *filtered transformations* for powerful fine-grained control of the model-building process.
+Represent *parameterised functions as data* and use *filtered transformations* for powerful fine-grained control of the model-building process. Equinox demonstrates how to use a PyTorch-like class-based API without compromising on JAX-like functional programming.
 
-Equinox is half tech-demo, half neural network library.
+Equinox is half tech-demo, half neural network library, and comes with no behind-the-scenes magic, guaranteed.
 
-## Equinox in brief
+The elegance of Equinox is its selling point in a world that already has [Haiku](https://github.com/deepmind/dm-haiku), [Flax](https://github.com/google/flax) and so on.
 
-### Building neural networks
 
-Build models using a PyTorch-like class based API *without* sacrificing JAX-like functional programming.
-
-In particular, *without* extra complexity like class-to-functional transformations, or custom notions of parameter groups.
-
-Equinox is a tiny library -- no behind-the-scenes magic, guaranteed.
-The elegance of Equinox is its selling point in a world that already has [Haiku](https://github.com/deepmind/dm-haiku), [Flax](https://github.com/google/flax) etc.
-
-### Technical contributions
-
-1. Equinox represents *parameterised functions as [PyTrees](https://jax.readthedocs.io/en/latest/pytrees.html)*. This is done by subclassing `equinox.Module`. (For example a neural network is a function parameterised by its weights, biases, etc.) They key point is that you can now JIT/grad a higher-order function (like a loss function) with respect to a parameterised function as its input (like a model).
-2. Equinox provides *filtered transformations*. These allow you to JIT/grad just some of the leaves of a PyTree -- not just a whole argument. This is provided by `equinox.jitf` and `equinox.gradf`.
-
-Point 1 allows you to represent models as PyTrees. (No separate passing around of parameters and forward passes.)<br>
-Point 2 is a more fine-grained way to JIT/grad PyTrees.<br>
-They are completely independent of each other -- but synergise very nicely.
-- If your model-as-a-PyTree only consists of things you want to JIT/differentiate, then just use `jax.jit` or `jax.grad` as normal. Equinox is JAX-friendly.
-- If you parameterise your model by something that isn't JIT/grad-able, then use `equinox.jitf` or `equinox.gradf`. For example you might want to store an arbitrary Python function as an activation function.
-
+## Quick start
 ### Installation
 
 ```
@@ -35,63 +17,128 @@ pip install equinox
 ```
 Requires Python 3.7+ and JAX 0.2.18+.
 
-### Quick example
+### Parameterised functions as data
+
+Equinox represents *parameterised functions as [PyTrees](https://jax.readthedocs.io/en/latest/pytrees.html)*. (For example a neural network is a function parameterised by its weights, biases, etc.) Now you can JIT/grad/etc. a higher-order function (like a loss function) with respect to a parameterised function as its input (like a model).
+
+Previous libraries have introduced a lot of extra complexity to make this work. e.g. custom notions of parameter groups, class-to-functional transformations, or specially-wrapped `library.jit` or `library.grad` to be compatible with JAX's JIT/grad/etc.
+
+In contrast, Equinox makes it elegant:
 
 ```python
 import equinox as eqx
-import functools as ft, jax, jax.numpy as jnp, jax.random as jrandom
+import jax
+import jax.nn as jnn
+import jax.numpy as jnp
+import jax.random as jrandom
 
-# Define our model. `Module` subclasses are both functions and data, so we can pass them into higher
-# order functions like vmap/jit/grad or a loss function.
-# There's no magic here. `Module` just registers your class as a PyTree node.
-class LinearOrIdentity(eqx.Module):
-    weight: jnp.ndarray
-    flag: bool
+class MyModule(eqx.Module):
+    # Specify the module's attributes;
+    layers: list
+    bias: jnp.ndarray
+    
+    # And how to initialise them;
+    def __init__(self, key):
+        key1, key2 = jrandom.split(key)
+        self.layers = [eqx.nn.Linear(2, 8, key=key1),
+                       eqx.nn.Linear(8, 2, key=key2)]
+        self.bias = jnp.ones(2)
 
-    def __init__(self, in_features, out_features, flag, key):
-        self.weight = jrandom.normal(key, (out_features, in_features))
-        self.flag = flag
-
+    # And the forward pass of the model.
     def __call__(self, x):
-        if self.flag:
-            return x
-        return self.weight @ x
+        for layer in self.layers[:-1]:
+            x = jnn.relu(layer(x))
+        return self.layers[-1](x) + self.bias
 
-# We use the fact that our model is data, by passing it in as an argument to the loss.
-# There's no magic here. `model` is a PyTree like any other; nothing about it being a `Module` is
-# special-cased.
-#
-# We use filtered transformations to unpack its data and select just the leaves we want to 
-# JIT+differentiate. (In this case, all JAX arrays -- so `weight` but not `flag`.)
-@ft.partial(eqx.jitf, filter_fn=eqx.is_array)
-@ft.partial(eqx.gradf, filter_fn=eqx.is_array)
+@jax.jit
+@jax.grad
 def loss(model, x, y):
     pred_y = jax.vmap(model)(x)
     return jnp.mean((y - pred_y) ** 2)
 
-modelkey, xkey, ykey = jrandom.split(jrandom.PRNGKey(0), 3)
-model = LinearOrIdentity(2, 3, flag=False, key=modelkey)
-x, y = jrandom.normal(xkey, (100, 2)), jrandom.normal(ykey, (100, 3))
+x_key, y_key, model_key = jrandom.split(jrandom.PRNGKey(0), 3)
+x, y = jrandom.normal(x_key, (100, 2)), jrandom.normal(y_key, (100, 2))
+model = MyModule(model_key)
 grads = loss(model, x, y)
 ```
 
+    And there's no magic there! All `eqx.Module` really does is register your class with JAX as a PyTree node.<br>
+(In fact the source code for `eqx.Module` is only about 100 lines long.)
+
+### Filtering
+
+In the previous example, all of the model attributes were Modules and JAX arrays.
+
+Arbitrary Python objects are fine too! We just need to handle them appropriately around `jax.jit` and `jax.grad`.
+
+```python
+import equinox as eqx
+import functools as ft
+import jax
+import jax.nn as jnn
+import jax.numpy as jnp
+import jax.random as jrandom
+
+class AnotherModule(eqx.Module):
+    layers: list
+
+    def __init__(self, key):
+        key1, key2 = jrandom.split(key)
+        # Model now has `jnn.relu` -- a Python function -- as part of its PyTree.
+        self.layers = [eqx.nn.Linear(2, 8, key=key1),
+                       jnn.relu,
+                       eqx.nn.Linear(8, 2, key=key2)]
+
+    def __call__(self, x):
+        for layer in self.layers:
+            x = layer(x)
+        return x
+
+x_key, y_key, model_key = jrandom.split(jrandom.PRNGKey(0), 3)
+x, y = jrandom.normal(x_key, (100, 2)), jrandom.normal(y_key, (100, 2))
+model = AnotherModule(model_key)
+
+# Option 1: explicitly filter out anything that isn't JIT/grad-able.
+
+@ft.partial(jax.jit, static_argnums=1)
+@jax.grad
+def loss(params, static, x, y):
+    model = eqx.combine(params, static)
+    pred_y = jax.vmap(model)(x)
+    return jnp.mean((y - pred_y) ** 2)
+
+params, static = eqx.partition(model, eqx.is_array)
+loss(params, static, x, y)
+
+# Option 2: use filtered transformations, which automates the above process for you.
+# (Can be handy if you want to JIT/grad with respect to different things!)
+
+@ft.partial(eqx.filter_jit, filter_spec=eqx.is_array)
+@ft.partial(eqx.filter_grad, filter_spec=eqx.is_array)
+def loss(model, x, y):
+    pred_y = jax.vmap(model)(x)
+    return jnp.mean((y - pred_y) ** 2)
+
+loss(model, x, y)
+```
+
+Here, `params` and `static` are actually both instances of `AnotherModule`. `params` keeps just the attributes that are JAX arrays, and `static` keeps everything else. Then `combine` just merges the two PyTrees back together afterwards.
+
 ### Integrates smoothly with JAX
 
-There's nothing special about Equinox modules. They're just PyTrees.
+And that's it! That's pretty much all of Equinox.
 
-There's nothing special about filtered transformations. They just operate on PyTrees.
+Equinox introduces a powerful yet straightforward way to build neural networks, without introducing lots of new notions or tieing you into a framework.
 
-Equinox is all just regular JAX -- PyTrees and transformations! Together, these two pieces allow us to specify complex models in JAX-friendly ways.
-
-In particular note that `equinox.jitf` and `equinox.gradf` are *not* "a way to make JIT/grad work with Modules" like many libraries have. They are general operations on PyTrees, and nothing about `Module` is special-cased. (And indeed `Module` itself is just a PyTree like any other.)
+Equinox is all just regular JAX -- PyTrees and transformations. Together, these two pieces allow us to specify complex models in JAX-friendly ways.
 
 ## Examples
 
-- [`train_mlp.py`](./examples/train_mlp.py) gives a short example that introduces `equinox.jitf` and `equinox.gradf`. These will be used to select the parameters of an MLP and train them.
+- [`build_model.py`](./examples/build_model.py) builds an MLP from scratch, demonstrating the easy parameterised-functions-as-data approach that Equinox introduces. We'll then pass it into higher-order functions like JIT and grad. Overall we produce models using a familiar class-based syntax, that are also functional and integrate directly with JAX's JIT/autograd.
+
+- [`filtered_transformations.py`](./examples/filtered_transformations.py) introduces `equinox.filter_jit` and `equinox.filter_grad`. These will be used to select the parameters of an MLP and train them.
  
 - [`frozen_layer.py`](./examples/frozen_layer.py) demonstrates how this approach really shines: some of the parameters will be trained, some of them will be frozen, but *all* of them will be efficiently JIT-traced.
-
-- [`build_model.py`](./examples/build_model.py) demonstrates how to build parameterised-functions-as-data using `equinox.Module`. In particular we'll construct an MLP from scratch, and then pass it into higher-order functions like JIT and grad in order to train it. This allows us to produce models using a familiar class-based syntax, that are also functional and integrate directly with JAX's JIT/autograd.
 
 - [`train_rnn.py`](./examples/train_rnn.py) trains an RNN on a toy clockwise/anticlockwise spiral classification problem.
 
@@ -100,25 +147,26 @@ In particular note that `equinox.jitf` and `equinox.gradf` are *not* "a way to m
 ## API
 
 ### Full API list
-```python
-# Module                         # Utilities        
-equinox.Module                   equinox.apply_updates
-                                 equinox.tree_at      
-# Filtered transformations       equinox.tree_equal   
-equinox.jitf                     
-equinox.gradf                    # Neural networks
-equinox.value_and_grad_f         equinox.nn.Linear
-                                 equinox.nn.Identity
-# Filters                        equinox.nn.Dropout
-equinox.is_array                 equinox.nn.GRUCell
-equinox.is_array_like            equinox.nn.LSTMCell
-equinox.is_inexact_array         equinox.nn.Sequential
-equinox.is_inexact_array_like    equinox.nn.MLP
 
-# Splitting/merging
-equinox.split                    
-equinox.merge                    
-                                 
+```python
+# Module                         # Neural networks
+equinox.Module                   equinox.nn.Linear
+                                 equinox.nn.Identity
+# Filtering/combining            equinox.nn.Dropout
+equinox.filter                   equinox.nn.GRUCell
+equinox.partition                equinox.nn.LSTMCell
+equinox.combine                  equinox.nn.Sequential
+                                 equinox.nn.MLP
+# Filtered transformations       
+equinox.filter_jit               # Utilities
+equinox.filter_grad              equinox.apply_updates
+equinox.filter_value_and_grad    equinox.tree_at
+                                 equinox.tree_equal
+# Filters                        
+equinox.is_array                 
+equinox.is_array_like            
+equinox.is_inexact_array         
+equinox.is_inexact_array_like    
 ```
 
 ### Module
@@ -147,7 +195,7 @@ class AnotherModule(equinox.Module):
         self.weight = jax.random.normal(key, (output_size, input_size))
 ```
 
-After initialisation then attributes cannot be modified: models are immutable as per functional programming. (Parameter updates are made by creating a new model, not by mutating parameters in-place; see for example [`train_mlp.py`](./examples/train_mlp.py).)
+After initialisation then attributes cannot be modified: models are immutable as per functional programming. (Parameter updates are made by creating a new model, not by mutating parameters in-place; see for example [`train_rnn.py`](./examples/train_rnn.py).)
 
 It is typical to also create some methods on the class. As `self` will be an input parameter -- treated as a PyTree -- then these methods will get access to the attributes of the instance. Defining `__call__` gives an easy way to define a forward pass for a model (although any method can be used, and no methods are special-cased):
 
@@ -159,7 +207,7 @@ class LinearWithoutBias(equinox.Module):
         return self.weight @ x
 ```
 
-If defining a method `meth`, then take care not to write `instance = MyModule(...); jax.jit(instance.meth)(...)`. (Or similarly with `jax.grad`, `equinox.jitf` etc.) This is because `instance.meth` is not a pure function as it already has the `self` parameter passed implicitly. Instead do
+If defining a method `meth`, then take care not to write `instance = MyModule(...); jax.jit(instance.meth)(...)`. (Or similarly with `jax.grad`, `equinox.filter_jit` etc.) This is because `instance.meth` is not a pure function as it already has the `self` parameter passed implicitly. Instead do
 ```python
 @jax.jit
 def func(instance, args):
@@ -167,44 +215,77 @@ def func(instance, args):
     # Also use this pattern with instance(args) if you defined `__call__` instead of `meth`.
 ```
 
-### Filtered transformations
+### Filtering/combining
+
+Filtering can be used to organise the contents of PyTrees.
 
 ```python
-equinox.jitf(fun, *, filter_fn=None, filter_tree=None, **kwargs)
+equinox.filter(pytree, filter_spec, inverse=False, replace=None)
+```
+Filters out the leaves of a PyTree not satisfying a condition. Those not satisfying the condition are replaced with `replace`.
+
+- `pytree` is any PyTree
+- `filter_spec` is a PyTree whose structure should be a prefix of the structure of `pytree`. Each of its leaves should either be:
+  - `True`, in which case the leaf or subtree is kept;
+  - `False`, in which case the leaf or subtree is replaced with `replace`;
+  - a callable `Leaf -> bool`, in which case this is evaluted on the leaf or mapped over the subtree, and the leaf kept or replaced as appropriate.
+- `inverse` switches the truthy/falsey behaviour: falsey results are kept and truthy results are replaced.
+- `replace` is what to replace any falsey leaves with. Defaults to `None`.
+
+Returns a PyTree of the same structure as `pytree`.
+
+An important special case is something like `equinox.filter(pytree, equinox.is_array)`. Then `equinox.is_array` is evaluted on all of `pytree`'s leaves, and each leaf then kept or replaced.
+
+See also `equinox.combine` to reconstitute the PyTree again.
+
+```python
+equinox.partition(pytree, filter_spec, replace=None)
+```
+Equivalent to `filter(...), filter(..., inverse=True)`, but slightly more efficient.
+
+```python
+equinox.combine(*pytrees)
+```
+
+Every element of `pytrees` must be a PyTree of the same structure. The return value is also a PyTree of the same structure. Each leaf will be the first non-`None` leaf found in the corresponding leaves of `pytrees`, as they are iterated over. The intention is that this be used to undo a call to `equinox.filter` or `equinox.partition`.
+
+### Filtered transformations
+
+It's very common to need to filter just to handle JAX transformations. Equinox provides the following convenience wrappers.<br>
+They're not designed to handle every edge case -- they're just a way to streamline the common cases. Use separate `equinox.filter`+`jax.jit` etc. if you need finer control.
+
+```python
+equinox.filter_jit(fun, *, filter_spec, **kwargs)
 ```
 Wraps `jax.jit`.
 
 - `fun` is a pure function to JIT compile.
-- `filter_fn` is a callable `Any -> bool`. It will be called on every leaf of every PyTree that is inputted to `fun`. If it returns `True`, the leaf will be traced. It returns `False`, the leaf with be treated as static. Mutually exclusive with `filter_tree`.
-- `filter_tree` is a tree, or tuple of trees, of the same length as the number of inputs. (Or if `static_argnums` is passed, the number of inputs not already marked static via `static_argnums`.) It must have the exact same tree structure as the inputs. Every leaf must be either `True` or `False`. Each leaf of `filter_tree` is matched up against the corresponding input: if it is `True` the leaf will be traced; it it is `False` the leaf will be treated as static. Mutually exclusive with `filter_tree`.
-- `**kwargs` are the usual other arguments to `jax.jit`, like `static_argnums`. In particular, a leaf will be marked static if either (a) it is filtered as being so, *or* (b) it is part of a PyTree that is marked through `static_argnums`.
+- `filter_spec` is a PyTree whose structure should be a prefix of the structure of the inputs to `fun`. Each of its leaves should either be `True`, `False`, or a callable `Leaf -> bool`. It behaves exactly as the `filter_spec` argument to `equinox.filter`. Truthy values will be traced; falsey values will be held static. Specifically, if calling `fun(*args, **kwargs)`, then `filter_spec` must have a structure which is a prefix for `(args, kwargs)`.
+- `**kwargs` are any other arguments to `jax.jit`.
 
-Precisely one of `filter_fn` or `filter_tree` must be passed.<br>
-See also `equinox.is_array`, which is usually a good choice of `filter_fn`. This will trace every JAX array, and make the rest static.<br>
-See also `equinox.tree_at` for an easy way to create the `filter_tree` argument.
+An important special case is to pass a function as `filter_spec`, which will be applied to every leaf of every input. For example, `equinox.filter_jit(fun, equinox.is_array)`.
+
+See also `equinox.is_array`, which is usually a good choice of `filter_spec`. This will trace every JAX array, and make every other argument static.
 
 ```python
-equinox.gradf(fun, *, filter_fn=None, filter_tree=None, **kwargs)
+equinox.filter_grad(fun, *, filter_spec, **kwargs)
 ```
 Wraps `jax.grad`.
 
-- `fun` is a pure function to JIT compile.
-- `filter_fn` is a callable `Any -> bool`. It will be called on every leaf of every PyTree that is marked as potentially requiring gradient via `argnums`. If it returns `True`, the leaf will be differentiated. If it returns `False`, the leaf will not be differentiated. Mutually exclusive with `filter_tree`.
-- `filter_tree` is a tree, or tuple of trees, of the same length as the number of inputs marked as potentially requiring gradient via `argnums`. It must have the exact same tree structure as the inputs. Every leaf must be either `True` or `False`. Each leaf of `filter_tree` is matched up against the corresponding input: if it is `True` the leaf will be differentiated; if it is `False` the leaf will not be differentiated. Mutually exclusive with `filter_fn`.
-- `**kwargs` are the usual other argments to `jax.grad`, like `argnums`. In particular, a leaf will only be differentiated if (a) it is filtered as being so, *and* (b) it is part of a PyTree that is marked through `argnums`.
+- `fun` is a pure function to differentiate.
+- `filter_spec` is a PyTree whose structure should be a prefix of the structure of the **first** input to `fun`. Each of its leaves should either be `True`, `False`, or a callable `Leaf -> bool`. It behaves exactly as the `filter_spec` argument to `equinox.filter`. Truthy values will be differentiated; falsey values will not. Specifically, if calling `fun(x, *args, **kwargs)`, then `filter_spec` must have a structure which is a prefix for the structure of `x`.
+- `**kwargs` are any other arguments to `jax.grad`.
 
-Precisely one of `filter_fn` or `filter_tree` must be passed.<br>
-See also `equinox.is_inexact_array`, which is usually a good choice of `filter_fn`. This will differentiate all floating-point JAX arrays.<br>
-See also `equinox.tree_at` for an easy way to create the `filter_tree` argument.
+An important special case is to pass a function as `filter_spec`, which will be applied to every leaf of the first input. For example, `equinox.filter_grad(fun, equinox.is_inexact_array)`.<br>
 
-Note that as the returned gradients must have the same structure as the inputs, then all nondifferentiable components of the input PyTrees will have gradient `None`. 
-Doing a simple `jax.tree_map(lambda m, g: m - lr * g, model, grad)` will fail. 
-As such Equinox provides `equinox.apply_updates` as a simple convenience: it will only apply the update if the gradient is not `None`. See below.
+See also `equinox.is_inexact_array`, which is usually a good choice of `filter_spec`. This will differentiate all floating-point JAX arrays.
+
+Note that as the returned gradients must have the same structure as the inputs, then all nondifferentiable components of the input PyTree will have gradient `None`. See `equinox.apply_updates` for a convenience to only apply non-`None` updates.
 
 ```python
-equinox.value_and_grad_f(fun, *, filter_fn=None, filter_tree=None, **kwargs)
+equinox.filter_value_and_grad(fun, *, filter_spec, **kwargs)
 ```
-Wraps `jax.value_and_grad`. Arguments are as `equinox.gradf`.
+Wraps `jax.value_and_grad`. Arguments are as `equinox.filter_grad`.
 
 ### Filters
 
@@ -230,37 +311,6 @@ equinox.is_inexact_array_like(element)
 ```
 Returns `True` if `element` is a floating point JAX array, floating point NumPy array, or a Python float or complex.
 
-### Splitting/merging
-
-Filters can also be used to organise the contents of PyTrees, if needed.
-
-```python
-equinox.split(pytree, filter_fn=None, filter_tree=None)
-```
-Partitions the leaves of a PyTree into two groups.
-
-- `pytree` is any PyTree
-- `filter_fn` is any function `Leaf -> bool` to call on each of its leaves.
-- `filter_tree` is a PyTree with the same structure as `pytree`, with every leaf either `True` or `False`.
-
-Precisely one of `filter_fn` or `filter_tree` may be passed.
-
-Returns a 4-tuple of `(flat_true, flat_false, which, treedef)`.
-
-- `flat_true` will be a list of leaves for which `filter_fn`/`filter_tree` was `True`.
-- `flat_false` will be a list of leaves for which `filter_fn`/`filter_tree` was `False`.
-- `which` and `treedef` specify the input PyTree. `treedef` is a `PyTreeDef` (like `jax.tree_flatten` returns). `which` is a list of `True`/`False` specifying which leaves were truthy or falsey.
-
-See also `equinox.merge` to reconstitute the PyTree again.
-
-This function is useful when working with JAX libraries that only support PyTrees of trainable parameters, and not more general PyTrees: the model can be split into its trainable and nontrainable components and passed into the library that way. See the example [`modules_to_initapply.py`](./examples/modules_to_initapply.py).
-
-```python
-equinox.merge(flat_true, flat_false, which, treedef)
-```
-
-The inverse of `equinox.split`.
-
 ### Utilities
 
 ```python
@@ -270,9 +320,9 @@ Performs a training update to a model.
 - `model` must be a PyTree;
 - `updates` must be a PyTree with the same structure.
 
-It essentially performs `jax.tree_map(lambda m, u: m + u, model, updates)`. However anywhere `updates` is `None` then no update is made at all, so as to handle nondifferentiable parts of `model`.
+It essentially performs `jax.tree_map(lambda m, u: m + u, model, updates)` (or `optax.apply_upates(model, updates)`). However anywhere `updates` is `None` then no update is made at all, so as to handle nondifferentiable parts of `model`.
 
-The returned value is the updated model. (`model` is *not* mutated in place, as is usual in JAX and functional programming.)
+The returned value is the updated model. (`model` is not mutated in place, as is usual in JAX and functional programming.)
 
 To produce `updates`, it is typical to take the gradients from the loss function, and then adjust them according to any standard optimiser; for example [Optax](https://github.com/deepmind/optax) provides `optax.sgd` or `optax.adam`.
 
@@ -286,11 +336,11 @@ Modifies an existing tree, and returns the modified tree. (Like `.at` for "in pl
 - `replace` should either be a single element, or a tuple of the same length as returned by `where`. This specifies the replacements to make at the locations specified by `where`. Mutually exclusive with `replace_fn`.
 - `replace_fn` should be a function `Leaf -> Any`. It will be called on every leaf replaced using `where`. The return value from `replace_fn` will be used in its place. Mutually exclusive with `replace`.
 
-For example this can be used to specify the weights of a model to train or not train:
+For example this can be used to help specify the weights of a model to train or not train:
 ```python
 trainable = jax.tree_map(lambda _: False, model)
 trainable = equinox.tree_at(lambda mlp: mlp.layers[-1].linear.weight, model, replace=True)
-equinox.gradf(..., filter_tree=trainable)
+equinox.filter_grad(..., filter_spec=trainable)
 ```
 
 ```python
@@ -300,7 +350,7 @@ Returns `True` if all PyTrees in the list are equal. All arrays must have the sa
 
 ### Neural network library
 
-Equinox includes a small neural network library, mostly as a tech demo for how the rest of the library can be used. Its API is modelled after PyTorch.
+Equinox includes a small neural network library, mostly as a tech demo for how the rest of the library can be used. Its API is broadly modelled after PyTorch.
 
 ```python
 equinox.nn.Linear(in_features, out_features, use_bias=True, *, key)(input)

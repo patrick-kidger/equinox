@@ -6,7 +6,7 @@ import jax.random as jrandom
 import optax
 
 # Steal these utilities from the previous example
-from train_mlp import dataloader, get_data
+from filtered_transformations import dataloader, get_data
 
 import equinox as eqx
 
@@ -24,21 +24,23 @@ def main(
     data = get_data(dataset_size, key=data_key)
     data = dataloader(data, batch_size=batch_size, key=loader_key)
 
+    # Let's train just the final layer of the MLP, and leave the others frozen.
+
     model = eqx.nn.MLP(
         in_size=1, out_size=1, width_size=width_size, depth=depth, key=model_key
     )
-    # Let's train just the final layer of the MLP, and leave the others frozen.
-    filter_tree = jax.tree_map(lambda _: False, model)
-    filter_tree = eqx.tree_at(
+    # A PyTree (of type MLP) with False on every leaf.
+    filter_spec = jax.tree_map(lambda _: False, model)
+    # Set the leaves of the final layer to True.
+    filter_spec = eqx.tree_at(
         lambda tree: (tree.layers[-1].weight, tree.layers[-1].bias),
-        filter_tree,
+        filter_spec,
         replace=(True, True),
     )
 
-    @ft.partial(
-        eqx.jitf, filter_fn=eqx.is_inexact_array
-    )  # We can still JIT with respect to the other parameters
-    @ft.partial(eqx.value_and_grad_f, filter_tree=filter_tree)
+    # We'll still JIT with respect to every array.
+    @ft.partial(eqx.filter_jit, filter_spec=eqx.is_array)
+    @ft.partial(eqx.filter_value_and_grad, filter_spec=filter_spec)
     def loss(model, x, y):
         pred_y = jax.vmap(model)(x)
         return jnp.mean((y - pred_y) ** 2)

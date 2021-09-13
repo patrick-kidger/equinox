@@ -78,6 +78,69 @@ def test_is_inexact_array_like(getkey):
         assert eqx.is_inexact_array_like(o) == r
 
 
+def test_filter(getkey):
+    filter_fn = lambda x: isinstance(x, int)
+    for pytree in (
+        [
+            1,
+            2,
+            [
+                3,
+                "hi",
+                {"a": jnp.array(1), "b": 4, "c": eqx.nn.MLP(2, 2, 2, 2, key=getkey())},
+            ],
+        ],
+        [1, 1, 1, 1, "hi"],
+    ):
+        filtered = eqx.filter(pytree, filter_spec=filter_fn)
+        for arg in jax.tree_leaves(filtered):
+            assert isinstance(arg, int)
+        num_int_leaves = sum(
+            1 for leaf in jax.tree_leaves(filtered) if isinstance(leaf, int)
+        )
+        assert len(jax.tree_leaves(filtered)) == num_int_leaves
+
+    filter_spec = [False, True, [filter_fn, True]]
+    sentinel = object()
+    pytree = [
+        eqx.nn.Linear(1, 1, key=getkey()),
+        eqx.nn.Linear(1, 1, key=getkey()),
+        [eqx.nn.Linear(1, 1, key=getkey()), sentinel],
+    ]
+    filtered = eqx.filter(pytree, filter_spec=filter_spec)
+    none_linear = jax.tree_map(lambda _: None, eqx.nn.Linear(1, 1, key=getkey()))
+    assert filtered[0] is None
+    assert filtered[1] == pytree[1]
+    assert filtered[2][0] == none_linear
+    assert filtered[2][1] is sentinel
+
+    with pytest.raises(ValueError):
+        eqx.filter(pytree, filter_spec=filter_spec[1:])
+
+
+def test_partition_and_combine(getkey):
+    filter_fn = lambda x: isinstance(x, int)
+    for pytree in (
+        [
+            1,
+            2,
+            [
+                3,
+                "hi",
+                {"a": jnp.array(1), "b": 4, "c": eqx.nn.MLP(2, 2, 2, 2, key=getkey())},
+            ],
+        ],
+        [1, 1, 1, 1, "hi"],
+    ):
+        filtered, unfiltered = eqx.partition(pytree, filter_spec=filter_fn)
+        for arg in jax.tree_leaves(filtered):
+            assert isinstance(arg, int)
+        for arg in jax.tree_leaves(unfiltered):
+            assert not isinstance(arg, int)
+        assert eqx.combine(filtered, unfiltered) == pytree
+        assert eqx.combine(unfiltered, filtered) == pytree
+
+
 def test_splitfn_and_merge(getkey):
     filter_fn = lambda x: isinstance(x, int)
     for pytree in (
@@ -91,7 +154,7 @@ def test_splitfn_and_merge(getkey):
             ],
         ],
         [1, 1, 1, 1, "hi"],
-    ):  # has repeated elements
+    ):
         int_args, notint_args, which, treedef = eqx.split(pytree, filter_fn=filter_fn)
         for arg in int_args:
             assert isinstance(arg, int)
@@ -115,7 +178,7 @@ def test_splittree_and_merge(getkey):
             [1, 2, [3, True, {"a": jnp.array(1), "b": 4, "c": linear}]],
             [1, 1, [1, 1, {"a": 1, "b": 1, "c": linear}]],
         )
-    ):  # has repeated elements
+    ):
         keep_args, notkeep_args, which, treedef = eqx.split(
             pytree, filter_tree=filter_tree
         )

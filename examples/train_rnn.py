@@ -1,10 +1,6 @@
 ##############
 #
-# This example has a similar structure to `train_mlp.py`, except that we now train
-# an RNN.
-#
-# In particular this demonstrates the use of Modules alongside jax.lax.scan. (They just
-# work, no tricks required.)
+# This example trains an RNN to classify clockwise versus anticlockwise spirals.
 #
 #############
 
@@ -18,7 +14,7 @@ import jax.random as jrandom
 import optax
 
 # Borrow dataloader from other example
-from train_mlp import dataloader
+from filtered_transformations import dataloader
 
 import equinox as eqx
 
@@ -65,7 +61,7 @@ def main(
     dataset_size=10000,
     batch_size=32,
     learning_rate=3e-3,
-    steps=500,
+    steps=200,
     hidden_size=16,
     depth=1,
     seed=5678,
@@ -76,8 +72,8 @@ def main(
 
     model = RNN(in_size=2, out_size=1, hidden_size=hidden_size, key=model_key)
 
-    @ft.partial(eqx.jitf, filter_fn=eqx.is_inexact_array)
-    @ft.partial(eqx.value_and_grad_f, filter_fn=eqx.is_inexact_array)
+    @ft.partial(eqx.filter_jit, filter_spec=eqx.is_array)
+    @ft.partial(eqx.filter_value_and_grad, filter_spec=eqx.is_inexact_array)
     def loss(model, x, y):
         pred_y = jax.vmap(model)(x)
         # Trains with respect to binary cross-entropy

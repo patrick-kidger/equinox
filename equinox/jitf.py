@@ -4,7 +4,69 @@ from typing import Any
 
 import jax
 
-from .filters import validate_filters
+from .deprecated import deprecated
+from .filters import combine, partition, validate_filters
+
+
+@ft.lru_cache(maxsize=4096)
+def _filter_jit_cache(f, **jitkwargs):
+    @ft.partial(jax.jit, static_argnums=(0, 1), **jitkwargs)
+    def f_wrapped(static_leaves, static_treedef, dynamic_args, dynamic_kwargs):
+        static_args, static_kwargs = jax.tree_unflatten(static_treedef, static_leaves)
+        args = combine(dynamic_args, static_args)
+        kwargs = combine(dynamic_kwargs, static_kwargs)
+        return f(*args, **kwargs)
+
+    return f_wrapped
+
+
+def filter_jit(
+    fun,
+    *,
+    filter_spec,
+    static_argnums=None,
+    static_argnames=None,
+    donate_argnums=None,
+    **jitkwargs
+):
+
+    if static_argnums is not None:
+        raise ValueError("`static_argnums` should not be passed; use a filter instead.")
+    if static_argnames is not None:
+        raise ValueError(
+            "`static_argnames` should not be passed; use a filter instead."
+        )
+    if donate_argnums is not None:
+        raise NotImplementedError(
+            "`donate_argnums` is not implemented for filter_jit. Manually combine "
+            "`equinox.filter` and `jax.jit` instead.."
+        )
+
+    # We choose not to make a distinction between ([arg, ... ,arg], kwargs) and ((arg, ... ,arg), kwargs)
+    if (
+        isinstance(filter_spec, tuple)
+        and len(filter_spec) == 2
+        and isinstance(filter_spec[0], list)
+    ):
+        filter_spec = (tuple(filter_spec[0]), filter_spec[1])
+
+    @ft.wraps(fun)
+    def fun_wrapper(*args, **kwargs):
+        (dynamic_args, dynamic_kwargs), (static_args, static_kwargs) = partition(
+            (args, kwargs), filter_spec
+        )
+        static_leaves, static_treedef = jax.tree_flatten((static_args, static_kwargs))
+        static_leaves = tuple(static_leaves)
+        return _filter_jit_cache(fun, **jitkwargs)(
+            static_leaves, static_treedef, dynamic_args, dynamic_kwargs
+        )
+
+    return fun_wrapper
+
+
+#
+# Deprecated
+#
 
 
 @ft.lru_cache(maxsize=4096)
@@ -28,6 +90,7 @@ class _UnPyTreeAble:
 _marker_sentinel = object()
 
 
+@deprecated(in_favour_of=filter_jit)
 def jitf(
     fun,
     *,
@@ -38,12 +101,6 @@ def jitf(
     donate_argnums=(),
     **jitkwargs
 ):
-    """
-    A jax.jit that automatically sets whether arguments are static or not, according to either `filter_fn` or
-    `filter_tree`. The `static_argnums` argument can still be used to additionally specify any extra static arguments.
-
-    The above applies recursively inside PyTrees, e.g. some parts of the PyTree can be static and some can be traced.
-    """
     if isinstance(static_argnums, int):
         static_argnums = (static_argnums,)
     if static_argnames is not None:
