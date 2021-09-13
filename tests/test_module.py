@@ -113,7 +113,8 @@ def test_inheritance():
         m = MyModule5(value4=1, weight5=2)
 
     class MyModule6(MyModule4):
-        pass
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
 
     m = MyModule6(value4=1)
     assert m.weight4 == 1

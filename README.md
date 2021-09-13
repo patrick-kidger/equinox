@@ -62,7 +62,7 @@ model = MyModule(model_key)
 grads = loss(model, x, y)
 ```
 
-And there's no magic there! All `eqx.Module` really does is register your class with JAX as a PyTree node.<br>
+    And there's no magic there! All `eqx.Module` really does is register your class with JAX as a PyTree node.<br>
 (In fact the source code for `eqx.Module` is only about 100 lines long.)
 
 ### Filtering
@@ -126,7 +126,10 @@ Here, `params` and `static` are actually both instances of `AnotherModule`. `par
 
 ### Integrates smoothly with JAX
 
-And that's it! That's pretty much all of Equinox.<br>
+And that's it! That's pretty much all of Equinox.
+
+Equinox introduces a powerful yet straightforward way to build neural networks, without introducing lots of new notions or tieing you into a framework.
+
 Equinox is all just regular JAX -- PyTrees and transformations. Together, these two pieces allow us to specify complex models in JAX-friendly ways.
 
 ## Examples
