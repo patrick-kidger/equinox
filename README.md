@@ -62,8 +62,7 @@ model = MyModule(model_key)
 grads = loss(model, x, y)
 ```
 
-    And there's no magic there! All `eqx.Module` really does is register your class with JAX as a PyTree node.<br>
-(In fact the source code for `eqx.Module` is only about 100 lines long.)
+And there's no magic there! All `eqx.Module` really does is register your class with JAX as a PyTree node. (In fact the source code for `eqx.Module` is only about 100 lines long.)
 
 ### Filtering
 
