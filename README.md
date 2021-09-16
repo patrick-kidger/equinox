@@ -328,15 +328,15 @@ To produce `updates`, it is typical to take the gradients from the loss function
 ```python
 equinox.static_field(**kwargs)
 ```
-This is a relatively advanced feature. Use it to mark one of the fields of a `Module` as being "static": that is, never differentiated, and always a `static_argnum` to JIT. Best used only if you control whatever will be assigned to that field. For example `equinox.nn.MLP` does *not* use this for its activation function, as in principle a learnt activation functino could be passed.
+This is a relatively advanced feature. Use it to mark one of the fields of a `Module` as being "static": that is, never differentiated, and always a `static_argnum` to JIT. Best used only if you control whatever will be assigned to that field. For example `equinox.nn.MLP` does *not* use this for its activation function, as in principle a learnt activation function could be passed.
 
 Example:
 ```python
 class MyModule(equinox.Module):
-    value: equinox.static_field()
+    value: list = equinox.static_field()
 ```
 
-If any `**kwargs` are passed, then they will be forwarded on to `dataclasses.field`.
+If any `**kwargs` are passed, then they will be forwarded on to `dataclasses.field`. (Recall that Equinox uses dataclasses as its modules, so general `dataclasses` behaviour should work as normal.)
 
 ```python
 equinox.tree_at(where, pytree, replace=_sentinel, replace_fn=_sentinel)
