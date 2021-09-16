@@ -147,3 +147,18 @@ def test_static_field():
     assert rm.field1 == 1
     assert rm.field2 == 2
     assert rm.field3 == 3
+
+
+def test_wrap_method():
+    class MyModule(eqx.Module):
+        a: int
+
+        def f(self, b):
+            return self.a + b
+
+    m = MyModule(13)
+    assert isinstance(m.f, jax.tree_util.Partial)
+    flat, treedef = jax.tree_flatten(m.f)
+    assert len(flat) == 1
+    assert flat[0] == 13
+    assert jax.tree_unflatten(treedef, flat)(2) == 15

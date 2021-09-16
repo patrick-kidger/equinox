@@ -1,6 +1,7 @@
 import abc
-import functools as ft
 from dataclasses import dataclass, field, fields
+import functools as ft
+import inspect
 
 import jax
 
@@ -16,6 +17,16 @@ def static_field(**kwargs):
         raise ValueError("Cannot use metadata with `static` already set.")
     metadata["static"] = True
     return field(**kwargs)
+
+
+class _wrap_method:
+    def __init__(self, method):
+        self.method = method
+
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self.method
+        return jax.tree_util.Partial(self.method, instance)
 
 
 @ft.lru_cache(maxsize=128)
@@ -48,6 +59,7 @@ def _has_dataclass_init(cls):
 # It's not a feature we use ourselve.
 class _ModuleMeta(abc.ABCMeta):
     def __new__(mcs, name, bases, dict_):
+        dict_ = {k: _wrap_method(v) if inspect.isfunction(v) else v for k, v in dict_.items()}
         cls = super().__new__(mcs, name, bases, dict_)
         # Do override subclasses' dataclass-__init__-s. (None of which call super, so
         # they must be overriden.)
