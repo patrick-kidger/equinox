@@ -1,7 +1,7 @@
 import abc
-from dataclasses import dataclass, field, fields
 import functools as ft
 import inspect
+from dataclasses import dataclass, field, fields
 
 import jax
 
@@ -59,7 +59,9 @@ def _has_dataclass_init(cls):
 # It's not a feature we use ourselve.
 class _ModuleMeta(abc.ABCMeta):
     def __new__(mcs, name, bases, dict_):
-        dict_ = {k: _wrap_method(v) if inspect.isfunction(v) else v for k, v in dict_.items()}
+        dict_ = {
+            k: _wrap_method(v) if inspect.isfunction(v) else v for k, v in dict_.items()
+        }
         cls = super().__new__(mcs, name, bases, dict_)
         # Do override subclasses' dataclass-__init__-s. (None of which call super, so
         # they must be overriden.)
