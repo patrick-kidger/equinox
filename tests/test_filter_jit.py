@@ -103,7 +103,7 @@ def test_filter_jit2(getkey):
                     False,
                     {"a": True, "tuple": (False, True)},
                     True,
-                    eqx.is_inexact_array
+                    eqx.is_inexact_array,
                 ],
             ),
             {},

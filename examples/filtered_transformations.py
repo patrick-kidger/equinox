@@ -8,8 +8,6 @@
 #
 #############
 
-import functools as ft
-
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom

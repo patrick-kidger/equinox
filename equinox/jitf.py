@@ -5,7 +5,7 @@ from typing import Any
 import jax
 
 from .deprecated import deprecated
-from .filters import combine, partition, validate_filters, is_array
+from .filters import combine, is_array, partition, validate_filters
 from .module import Module, static_field
 
 
@@ -16,13 +16,16 @@ class _Static(Module):
 @ft.lru_cache(maxsize=4096)
 def _filter_jit_cache(f, **jitkwargs):
     @ft.partial(jax.jit, static_argnums=(0, 1, 4), **jitkwargs)
-    def f_wrapped(static_leaves, static_treedef, dynamic_args, dynamic_kwargs, filter_spec_return):
+    def f_wrapped(
+        static_leaves, static_treedef, dynamic_args, dynamic_kwargs, filter_spec_return
+    ):
         static_args, static_kwargs = jax.tree_unflatten(static_treedef, static_leaves)
         args = combine(dynamic_args, static_args)
         kwargs = combine(dynamic_kwargs, static_kwargs)
         out = f(*args, **kwargs)
         dynamic_out, static_out = partition(out, filter_spec_return)
         return dynamic_out, _Static(static_out)
+
     return f_wrapped
 
 
@@ -65,9 +68,14 @@ def filter_jit(
         static_leaves, static_treedef = jax.tree_flatten((static_args, static_kwargs))
         static_leaves = tuple(static_leaves)
         dynamic_out, static_out = _filter_jit_cache(fun, **jitkwargs)(
-            static_leaves, static_treedef, dynamic_args, dynamic_kwargs, filter_spec_return
+            static_leaves,
+            static_treedef,
+            dynamic_args,
+            dynamic_kwargs,
+            filter_spec_return,
         )
         return combine(dynamic_out, static_out.value)
+
     return fun_wrapper
 
 

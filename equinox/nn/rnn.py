@@ -1,4 +1,5 @@
 import math
+import warnings
 from typing import Optional
 
 import jax.nn as jnn
@@ -18,7 +19,9 @@ class GRUCell(Module):
     hidden_size: int = static_field()
     use_bias: bool = static_field()
 
-    def __init__(self, input_size, hidden_size, use_bias=True, bias=None, *, key, **kwargs):
+    def __init__(
+        self, input_size, hidden_size, use_bias=True, bias=None, *, key, **kwargs
+    ):
         super().__init__(**kwargs)
         if bias is not None:
             warnings.warn("`bias` is deprecated in favour of `use_bias`.")
@@ -71,7 +74,9 @@ class LSTMCell(Module):
     hidden_size: int = static_field()
     use_bias: bool = static_field()
 
-    def __init__(self, input_size, hidden_size, use_bias=True, bias=None, *, key, **kwargs):
+    def __init__(
+        self, input_size, hidden_size, use_bias=True, bias=None, *, key, **kwargs
+    ):
         super().__init__(**kwargs)
         if bias is not None:
             warnings.warn("`bias` is deprecated in favour of `use_bias`.")

@@ -4,7 +4,6 @@
 #
 #############
 
-import functools as ft
 import math
 
 import jax
