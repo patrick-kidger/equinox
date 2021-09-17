@@ -1,4 +1,5 @@
 import math
+import warnings
 from typing import Optional
 
 import jax.nn as jnn
@@ -6,7 +7,7 @@ import jax.numpy as jnp
 import jax.random as jrandom
 
 from ..custom_types import Array
-from ..module import Module
+from ..module import Module, static_field
 
 
 class GRUCell(Module):
@@ -14,9 +15,17 @@ class GRUCell(Module):
     weight_hh: Array
     bias: Optional[Array]
     bias_n: Optional[Array]
+    input_size: int = static_field()
+    hidden_size: int = static_field()
+    use_bias: bool = static_field()
 
-    def __init__(self, input_size, hidden_size, bias=True, *, key, **kwargs):
+    def __init__(
+        self, input_size, hidden_size, use_bias=True, bias=None, *, key, **kwargs
+    ):
         super().__init__(**kwargs)
+        if bias is not None:
+            warnings.warn("`bias` is deprecated in favour of `use_bias`.")
+            use_bias = bias
 
         ihkey, hhkey, bkey, bkey2 = jrandom.split(key, 4)
         lim = math.sqrt(1 / hidden_size)
@@ -27,7 +36,7 @@ class GRUCell(Module):
         self.weight_hh = jrandom.uniform(
             hhkey, (3 * hidden_size, hidden_size), minval=-lim, maxval=lim
         )
-        if bias:
+        if use_bias:
             self.bias = jrandom.uniform(
                 bkey, (3 * hidden_size,), minval=-lim, maxval=lim
             )
@@ -37,6 +46,10 @@ class GRUCell(Module):
         else:
             self.bias = None
             self.bias_n = None
+
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.use_bias = use_bias
 
     def __call__(self, input, hidden, *, key=None):
         if self.bias is None:
@@ -57,9 +70,17 @@ class LSTMCell(Module):
     weight_ih: Array
     weight_hh: Array
     bias: Optional[Array]
+    input_size: int = static_field()
+    hidden_size: int = static_field()
+    use_bias: bool = static_field()
 
-    def __init__(self, input_size, hidden_size, bias=True, *, key, **kwargs):
+    def __init__(
+        self, input_size, hidden_size, use_bias=True, bias=None, *, key, **kwargs
+    ):
         super().__init__(**kwargs)
+        if bias is not None:
+            warnings.warn("`bias` is deprecated in favour of `use_bias`.")
+            use_bias = bias
 
         ihkey, hhkey, bkey = jrandom.split(key, 3)
         lim = math.sqrt(1 / hidden_size)
@@ -76,6 +97,10 @@ class LSTMCell(Module):
             )
         else:
             self.bias = None
+
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.use_bias = use_bias
 
     def __call__(self, input, hidden, *, key=None):
         h, c = hidden

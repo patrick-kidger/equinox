@@ -50,11 +50,11 @@ def test_filter_jit1(getkey):
     assert jnp.all(g1[0]["b"] == b)
     assert jnp.all(g1[1][0] == c)
     g2 = g(general_tree)
-    assert _eq(g2[0], jnp.array(1))
-    assert _eq(g2[1], jnp.array(True))
+    assert _eq(g2[0], 1)
+    assert _eq(g2[1], True)
     assert _eq(g2[2], None)
     assert jnp.all(g2[3]["a"] == a)
-    assert _eq(g2[3]["tuple"][0], jnp.array(2.0))
+    assert _eq(g2[3]["tuple"][0], 2.0)
     assert jnp.all(g2[3]["tuple"][1] == b)
     assert jnp.all(g2[4] == c)
     assert _eq(g2[5], _mlp)
@@ -73,10 +73,10 @@ def test_filter_jit1(getkey):
     assert _eq(h2[1], jnp.array(True))
     assert _eq(h2[2], None)
     assert jnp.all(h2[3]["a"] == a)
-    assert _eq(g2[3]["tuple"][0], jnp.array(2.0))
-    assert jnp.all(g2[3]["tuple"][1] == b)
-    assert jnp.all(g2[4] == c)
-    assert _eq(g2[5], _mlp)
+    assert _eq(h2[3]["tuple"][0], jnp.array(2.0))
+    assert jnp.all(h2[3]["tuple"][1] == b)
+    assert jnp.all(h2[4] == c)
+    assert _eq(h2[5], _mlp)
 
 
 def test_filter_jit2(getkey):
@@ -92,7 +92,6 @@ def test_filter_jit2(getkey):
         eqx.nn.MLP(2, 2, 2, 2, key=getkey()),
     ]
     _mlp = jax.tree_map(lambda u: u if eqx.is_array_like(u) else None, general_tree[-1])
-    _filter_mlp = jax.tree_map(eqx.is_inexact_array, general_tree[-1])
 
     @ft.partial(
         eqx.filter_jit,
@@ -104,7 +103,7 @@ def test_filter_jit2(getkey):
                     False,
                     {"a": True, "tuple": (False, True)},
                     True,
-                    _filter_mlp,
+                    eqx.is_inexact_array,
                 ],
             ),
             {},
@@ -118,7 +117,7 @@ def test_filter_jit2(getkey):
     assert _eq(f1[1], jnp.array(True))
     assert _eq(f1[2], None)
     assert jnp.all(f1[3]["a"] == a)
-    assert _eq(f1[3]["tuple"][0], jnp.array(2.0))
+    assert _eq(f1[3]["tuple"][0], 2.0)
     assert jnp.all(f1[3]["tuple"][1] == b)
     assert jnp.all(f1[4] == c)
     assert _eq(f1[5], _mlp)

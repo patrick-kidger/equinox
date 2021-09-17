@@ -112,8 +112,8 @@ loss(params, static, x, y)
 # Option 2: use filtered transformations, which automates the above process for you.
 # (Can be handy if you want to JIT/grad with respect to different things!)
 
-@ft.partial(eqx.filter_jit, filter_spec=eqx.is_array)
-@ft.partial(eqx.filter_grad, filter_spec=eqx.is_array)
+@eqx.filter_jit
+@eqx.filter_grad
 def loss(model, x, y):
     pred_y = jax.vmap(model)(x)
     return jnp.mean((y - pred_y) ** 2)
@@ -159,9 +159,9 @@ equinox.combine                  equinox.nn.Sequential
 # Filtered transformations       
 equinox.filter_jit               # Utilities
 equinox.filter_grad              equinox.apply_updates
-equinox.filter_value_and_grad    equinox.tree_at
-                                 equinox.tree_equal
-# Filters                        
+equinox.filter_value_and_grad    equinox.static_field
+                                 equinox.tree_at
+# Filters                        equinox.tree_equal
 equinox.is_array                 
 equinox.is_array_like            
 equinox.is_inexact_array         
@@ -254,7 +254,7 @@ It's very common to need to filter just to handle JAX transformations. Equinox p
 They're not designed to handle every edge case -- they're just a way to streamline the common cases. Use separate `equinox.filter`+`jax.jit` etc. if you need finer control.
 
 ```python
-equinox.filter_jit(fun, *, filter_spec, **kwargs)
+equinox.filter_jit(fun, *, filter_spec=is_array, **kwargs)
 ```
 Wraps `jax.jit`.
 
@@ -264,10 +264,10 @@ Wraps `jax.jit`.
 
 An important special case is to pass a function as `filter_spec`, which will be applied to every leaf of every input. For example, `equinox.filter_jit(fun, equinox.is_array)`.
 
-See also `equinox.is_array`, which is usually a good choice of `filter_spec`. This will trace every JAX array, and make every other argument static.
+See also `equinox.is_array`, which is the default choice of `filter_spec`. This will trace every JAX array, and make every other argument static.
 
 ```python
-equinox.filter_grad(fun, *, filter_spec, **kwargs)
+equinox.filter_grad(fun, *, filter_spec=is_inexact_array, **kwargs)
 ```
 Wraps `jax.grad`.
 
@@ -277,12 +277,12 @@ Wraps `jax.grad`.
 
 An important special case is to pass a function as `filter_spec`, which will be applied to every leaf of the first input. For example, `equinox.filter_grad(fun, equinox.is_inexact_array)`.<br>
 
-See also `equinox.is_inexact_array`, which is usually a good choice of `filter_spec`. This will differentiate all floating-point JAX arrays.
+See also `equinox.is_inexact_array`, which is the default choice of `filter_spec`. This will differentiate all floating-point JAX arrays.
 
 Note that as the returned gradients must have the same structure as the inputs, then all nondifferentiable components of the input PyTree will have gradient `None`. See `equinox.apply_updates` for a convenience to only apply non-`None` updates.
 
 ```python
-equinox.filter_value_and_grad(fun, *, filter_spec, **kwargs)
+equinox.filter_value_and_grad(fun, *, filter_spec=is_inexact_array, **kwargs)
 ```
 Wraps `jax.value_and_grad`. Arguments are as `equinox.filter_grad`.
 
@@ -326,6 +326,19 @@ The returned value is the updated model. (`model` is not mutated in place, as is
 To produce `updates`, it is typical to take the gradients from the loss function, and then adjust them according to any standard optimiser; for example [Optax](https://github.com/deepmind/optax) provides `optax.sgd` or `optax.adam`.
 
 ```python
+equinox.static_field(**kwargs)
+```
+This is a relatively advanced feature. Use it to mark one of the fields of a `Module` as being "static": that is, never differentiated, and always a `static_argnum` to JIT. Best used only if you control whatever will be assigned to that field. For example `equinox.nn.MLP` does *not* use this for its activation function, as in principle a learnt activation function could be passed.
+
+Example:
+```python
+class MyModule(equinox.Module):
+    value: list = equinox.static_field()
+```
+
+If any `**kwargs` are passed, then they will be forwarded on to `dataclasses.field`. (Recall that Equinox uses dataclasses as its modules, so general `dataclasses` behaviour should work as normal.)
+
+```python
 equinox.tree_at(where, pytree, replace=_sentinel, replace_fn=_sentinel)
 ```
 Modifies an existing tree, and returns the modified tree. (Like `.at` for "in place modifications" of JAX arrays.)
@@ -355,8 +368,8 @@ Equinox includes a small neural network library, mostly as a tech demo for how t
 equinox.nn.Linear(in_features, out_features, use_bias=True, *, key)(input)
 equinox.nn.Identity(*args, **kwargs)(input)  # args and kwargs are ignored
 equinox.nn.Dropout(p=0.5, deterministic=False)(input, *, key=None, deterministic=None)
-equinox.nn.GRUCell(input_size, hidden_size, bias=True, *, key)(input, hidden)
-equinox.nn.LSTMCell(input_size, hidden_size, bias=True, *, key)(input, hidden)
+equinox.nn.GRUCell(input_size, hidden_size, use_bias=True, *, key)(input, hidden)
+equinox.nn.LSTMCell(input_size, hidden_size, use_bias=True, *, key)(input, hidden)
 equinox.nn.Sequential(layers)(input, *, key=None)
 equinox.nn.MLP(in_size, out_size, width_size, depth,
                activation=jax.nn.relu, final_activation=lambda x: x, *, key)(input)

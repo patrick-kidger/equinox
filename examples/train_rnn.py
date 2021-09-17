@@ -4,7 +4,6 @@
 #
 #############
 
-import functools as ft
 import math
 
 import jax
@@ -72,8 +71,8 @@ def main(
 
     model = RNN(in_size=2, out_size=1, hidden_size=hidden_size, key=model_key)
 
-    @ft.partial(eqx.filter_jit, filter_spec=eqx.is_array)
-    @ft.partial(eqx.filter_value_and_grad, filter_spec=eqx.is_inexact_array)
+    @eqx.filter_jit
+    @eqx.filter_value_and_grad
     def loss(model, x, y):
         pred_y = jax.vmap(model)(x)
         # Trains with respect to binary cross-entropy

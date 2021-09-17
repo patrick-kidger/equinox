@@ -8,8 +8,6 @@
 #
 #############
 
-import functools as ft
-
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
@@ -62,11 +60,11 @@ def main(
         in_size=1, out_size=1, width_size=width_size, depth=depth, key=model_key
     )
 
-    # `filter_jit` and `filter_value_and_grad_` are thin wrappers around the usual `jax` functions.
-    # In this case we're asking to JIT with respect to all JAX arrays, and differentiate with respect to all floating
-    # point JAX arrays, i.e. the parameters of our model.
-    @ft.partial(eqx.filter_jit, filter_spec=eqx.is_array)
-    @ft.partial(eqx.filter_value_and_grad, filter_spec=eqx.is_inexact_array)
+    # `filter_jit` and `filter_value_and_grad` are thin wrappers around the usual `jax` functions, that automatically
+    # inspect the arguments of the function, JIT with respect to all JAX arrays, and differentiate with respect to all
+    # floating point JAX arrays (i.e. the parameters of the model).
+    @eqx.filter_jit
+    @eqx.filter_value_and_grad
     def loss(model, x, y):
         pred_y = jax.vmap(model)(x)
         return jnp.mean((y - pred_y) ** 2)

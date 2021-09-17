@@ -3,12 +3,25 @@ import functools as ft
 import jax
 
 from .deprecated import deprecated
-from .filters import combine, merge, partition, split, validate_filters
+from .filters import (
+    combine,
+    is_inexact_array,
+    merge,
+    partition,
+    split,
+    validate_filters,
+)
 
 
-def filter_value_and_grad(fun, *, filter_spec, argnums=None, **gradkwargs):
+def filter_value_and_grad(
+    fun, *, filter_spec=is_inexact_array, argnums=None, **gradkwargs
+):
     if argnums is not None:
-        raise ValueError("`argnums` should not be passed; use a filter instead.")
+        raise ValueError(
+            "`argnums` should not be passed. If you need to differentiate "
+            "multiple objects then collect them into a tuple and pass that "
+            "as the first argument."
+        )
 
     @ft.partial(jax.value_and_grad, argnums=0, **gradkwargs)
     def fun_value_and_grad(diff_x, nondiff_x, *args, **kwargs):
@@ -22,7 +35,7 @@ def filter_value_and_grad(fun, *, filter_spec, argnums=None, **gradkwargs):
     return fun_value_and_grad_wrapper
 
 
-def filter_grad(fun, *, filter_spec, has_aux=False, **gradkwargs):
+def filter_grad(fun, *, filter_spec=is_inexact_array, has_aux=False, **gradkwargs):
     fun_value_and_grad = filter_value_and_grad(
         fun, filter_spec=filter_spec, has_aux=has_aux, **gradkwargs
     )

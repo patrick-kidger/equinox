@@ -5,6 +5,7 @@ from ..module import Module
 
 
 class Dropout(Module):
+    # Not static_fields as it makes sense to want to modify them via equinox.tree_at.
     p: float = 0.5
     deterministic: bool = False
 
