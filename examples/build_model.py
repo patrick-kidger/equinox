@@ -132,9 +132,6 @@ def main():
         model = eqx.combine(params, static)
         return model(data)
 
-    # (Note that eqx.jitf(model, ...), jax.jit(model, ...), eqx.gradf(model, ...), etc. would be wrong.
-    #  The function argument to these operations must always be a pure function.)
-
     example_jit(params, static, data)
     example_grad(params, static, data)
     example_vmap(params, static, jnp.stack([data, data]))
@@ -144,9 +141,8 @@ def main():
     # to build models, and you don't need to learn any new abstractions -- it's all just PyTrees.
     #
     # If you're comfortable with a little more automation, it is possible to combine JIT/grad with the filtering
-    # automatically, so you can just do fn(model) rather than fn(params, static).
-    # Have a look at filtered_transformations.py
-    # (That's not necessary though. :) )
+    # automatically, so you can just do fn(model) rather than fn(params, static). Have a look at
+    # filtered_transformations.py.
 
 
 if __name__ == "__main__":
