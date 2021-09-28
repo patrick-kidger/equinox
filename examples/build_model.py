@@ -10,7 +10,7 @@
 # or `objax.VarCollection`.
 #
 # In constrast, Equinox introduces no new abstractions. An Equinox Module is just a nice way to create a PyTree,
-# really. If you want, look up the source code for `equinox.Module` -- it's only about 70 lines long.
+# really. If you want, look up the source code for `equinox.Module` -- it's only about 100 lines long.
 #
 #############
 #
@@ -19,11 +19,6 @@
 # It's very simple: `Module`, and its subclasses, are PyTrees. Any attributes of the Module are also part of the
 # same PyTree. (Your whole model is just one big PyTree.) This means you can use the model in the normal way in
 # JAX, with vmap/grad/jit etc.
-#
-# These attributes can be JAX arrays, but they can also be arbitrary Python objects. Crucially: because of the
-# filtering provided `equinox.jitf` and `equinox.gradf`, it's possible to elegantly select just those elements of the
-# PyTree that you'd like any given transformation to interact with. This can mean excluding anything that isn't a JAX
-# array. If you want it can also be used to freeze a layer, and not compute gradients with respect to some parameters.
 #
 # Now because a `Module` is also a class, we can define methods on it. The `self` parameter -- which is a PyTree,
 # remember! -- means that this is just a function that takes PyTrees as inputs, like any other function. No method
