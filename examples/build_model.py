@@ -64,7 +64,9 @@ class Linear2(eqx.Module):
     bias: Any
 
     def __init__(self, in_features, out_features, key):
-        super().__init__()  # Not actually necessary here, but good practice.
+        # The super-init call isn't actually necessary here, but is good practice in Python (for
+        # co-operative multiple inheritance).
+        super().__init__()
         wkey, bkey = jrandom.split(key)
         weight = jrandom.normal(key, (out_features, in_features))
         bias = jrandom.normal(key, (out_features,))
@@ -83,7 +85,7 @@ class MLP(eqx.Module):
     activation: callable
 
     def __init__(self, in_size, out_size, width_size, depth, key, activation=jnn.relu):
-        super().__init__()  # Once again not necessary but good practice in Python
+        super().__init__()  # Once again not necessary but is good practice
         keys = jrandom.split(key, depth + 1)
         self.layers = []
         self.layers.append(Linear2(in_size, width_size, keys[0]))
