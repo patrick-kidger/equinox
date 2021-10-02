@@ -162,3 +162,17 @@ def test_wrap_method():
     assert len(flat) == 1
     assert flat[0] == 13
     assert jax.tree_unflatten(treedef, flat)(2) == 15
+
+
+def test_init_subclass():
+    ran = []
+
+    class MyModule(eqx.Module):
+        def __init_subclass__(cls, **kwargs):
+            super().__init_subclass__(**kwargs)
+            ran.append(True)
+
+    class AnotherModule(MyModule):
+        pass
+
+    assert ran == [True]

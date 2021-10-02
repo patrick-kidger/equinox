@@ -55,12 +55,17 @@ def _has_dataclass_init(cls):
     return cls._has_dataclass_init
 
 
+def _not_magic(k):
+    return not (k.startswith("__") and k.endswith("__"))
+
+
 # Inherits from abc.ABCMeta as a convenience for a common use-case.
 # It's not a feature we use ourselve.
 class _ModuleMeta(abc.ABCMeta):
     def __new__(mcs, name, bases, dict_):
         dict_ = {
-            k: _wrap_method(v) if inspect.isfunction(v) else v for k, v in dict_.items()
+            k: _wrap_method(v) if _not_magic(k) and inspect.isfunction(v) else v
+            for k, v in dict_.items()
         }
         cls = super().__new__(mcs, name, bases, dict_)
         # Do override subclasses' dataclass-__init__-s. (None of which call super, so
