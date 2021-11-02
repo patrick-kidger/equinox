@@ -143,6 +143,18 @@ Equinox is all just regular JAX -- PyTrees and transformations. Together, these 
 
 - [`modules_to_initapply.py`](./examples/modules_to_initapply.py) demonstrates how to use Equinox in an init/apply-style way, which some JAX libraries have been built around. (e.g. Stax)
 
+## Citation
+
+If you find Equinox useful in academic work then please consider a citation:
+```bibtex
+@article{kidger2021equinox,
+    author={Patrick Kidger and Cristian Garcia},
+    title={{E}quinox: neural networks in {JAX} via callable {P}y{T}rees and filtered transformations},
+    year={2021},
+    journal={Differentiable Programming workshop at Neural Information Processing Systems 2021}
+}
+```
+
 ## API
 
 ### Full API list
