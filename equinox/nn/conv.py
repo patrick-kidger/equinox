@@ -56,7 +56,7 @@ class Conv(Module):
         self.out_channels = out_channels
         self.kernel_size = parse(kernel_size)
         self.use_bias = use_bias
-        lim = 1 / jnp.sqrt(self.in_channels * jnp.prod(jnp.array(self.kernel_size))).item()
+        lim = 1 / jnp.sqrt(self.in_channels * jnp.prod(jnp.array(self.kernel_size)))
 
         self.weight = jrandom.uniform(
             wkey,
