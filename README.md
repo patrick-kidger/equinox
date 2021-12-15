@@ -385,6 +385,12 @@ equinox.nn.LSTMCell(input_size, hidden_size, use_bias=True, *, key)(input, hidde
 equinox.nn.Sequential(layers)(input, *, key=None)
 equinox.nn.MLP(in_size, out_size, width_size, depth,
                activation=jax.nn.relu, final_activation=lambda x: x, *, key)(input)
+equinox.nn.Conv1d(in_channels, out_channels, kernel_size, stride=1, 
+               padding=1, dilation=1, use_bias=True, * key)(input)
+equinox.nn.Conv2d(in_channels, out_channels, kernel_size, stride=1, 
+               padding=1, dilation=1, use_bias=True, * key)(input)
+equinox.nn.Conv3d(in_channels, out_channels, kernel_size, stride=1, 
+               padding=1, dilation=1, use_bias=True, * key)(input)
 ```
 These all behave in the way you expect. The `key` arguments are used to generate the random initial weights, or to generate randomness on the forward pass of stochastic layers like `Dropout`.
 
