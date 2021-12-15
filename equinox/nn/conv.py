@@ -1,14 +1,15 @@
-import math
-from typing import Optional, Sequence, Union
 import collections
+import math
 from itertools import repeat
+from typing import Optional, Sequence, Union
 
+import jax.numpy as jnp
 import jax.random as jrandom
 from jax.lax import conv_general_dilated
-import jax.numpy as jnp
 
 from ..custom_types import Array
 from ..module import Module, static_field
+
 
 def _ntuple(n):
     def parse(x):
@@ -17,6 +18,7 @@ def _ntuple(n):
         return tuple(repeat(x, n))
 
     return parse
+
 
 class Conv(Module):
     num_spatial_dims: int = static_field()
@@ -42,7 +44,7 @@ class Conv(Module):
         use_bias=True,
         *,
         key,
-        **kwargs
+        **kwargs,
     ):
         super().__init__()
         self.num_spatial_dims = num_spatial_dims
@@ -56,22 +58,37 @@ class Conv(Module):
 
         self.weight = jrandom.uniform(
             wkey,
-            (self.out_channels, self.in_channels,) + self.kernel_size,
+            (
+                self.out_channels,
+                self.in_channels,
+            )
+            + self.kernel_size,
             minval=-lim,
-            maxval=lim
+            maxval=lim,
         )
         if self.use_bias:
-            self.bias = jrandom.uniform(bkey, (self.out_channels,) + (1,) * self.num_spatial_dims, minval=-lim, maxval=lim)
+            self.bias = jrandom.uniform(
+                bkey,
+                (self.out_channels,) + (1,) * self.num_spatial_dims,
+                minval=-lim,
+                maxval=lim,
+            )
         else:
             self.bias = None
 
         self.stride = parse(stride)
         if type(padding) == tuple and len(padding) == self.num_spatial_dims:
-            self.padding = tuple([parse(padding[i]) for i in range(self.num_spatial_dims)])
+            self.padding = tuple(
+                [parse(padding[i]) for i in range(self.num_spatial_dims)]
+            )
         elif type(padding) == int:
-            self.padding = tuple([(padding, padding) for _ in range(self.num_spatial_dims)])
+            self.padding = tuple(
+                [(padding, padding) for _ in range(self.num_spatial_dims)]
+            )
         else:
-            raise ValueError(f"Padding must either be int or tuple of length {self.num_spatial_dims}")
+            raise ValueError(
+                f"Padding must either be int or tuple of length {self.num_spatial_dims}"
+            )
         self.dilation = parse(dilation)
 
     def __call__(self, x, *, key=None):
@@ -80,7 +97,7 @@ class Conv(Module):
         if x.ndim not in allowed_ranks:
             raise ValueError(
                 f"Input to Conv needs to have rank in {allowed_ranks},",
-                f" but input has shape {x.shape}."
+                f" but input has shape {x.shape}.",
             )
         unbatched = x.ndim == unbatched_rank
         if unbatched:
@@ -90,13 +107,14 @@ class Conv(Module):
             rhs=self.weight,
             window_strides=self.stride,
             padding=self.padding,
-            rhs_dilation=self.dilation
+            rhs_dilation=self.dilation,
         )
         if self.bias is not None:
             x += jnp.broadcast_to(self.bias, x.shape)
         if unbatched:
             x = jnp.squeeze(x, axis=0)
         return x
+
 
 class Conv1d(Conv):
     weight: Array
@@ -120,7 +138,7 @@ class Conv1d(Conv):
         use_bias=True,
         *,
         key,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(
             num_spatial_dims=1,
@@ -131,8 +149,9 @@ class Conv1d(Conv):
             padding=padding,
             dilation=dilation,
             use_bias=use_bias,
-            key=key
+            key=key,
         )
+
 
 class Conv2d(Conv):
     weight: Array
@@ -150,13 +169,13 @@ class Conv2d(Conv):
         in_channels,
         out_channels,
         kernel_size,
-        stride=1,
-        padding=0,
-        dilation=1,
+        stride=(1, 1),
+        padding=(0, 0),
+        dilation=(1, 1),
         use_bias=True,
         *,
         key,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(
             num_spatial_dims=2,
@@ -167,8 +186,9 @@ class Conv2d(Conv):
             padding=padding,
             dilation=dilation,
             use_bias=use_bias,
-            key=key
+            key=key,
         )
+
 
 class Conv3d(Conv):
     weight: Array
@@ -186,13 +206,13 @@ class Conv3d(Conv):
         in_channels,
         out_channels,
         kernel_size,
-        stride=1,
-        padding=0,
-        dilation=1,
+        stride=(1, 1, 1),
+        padding=(0, 0, 0),
+        dilation=(1, 1, 1),
         use_bias=True,
         *,
         key,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(
             num_spatial_dims=3,
@@ -203,5 +223,5 @@ class Conv3d(Conv):
             padding=padding,
             dilation=dilation,
             use_bias=use_bias,
-            key=key
+            key=key,
         )
