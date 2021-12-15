@@ -168,15 +168,15 @@ equinox.filter                   equinox.nn.GRUCell
 equinox.partition                equinox.nn.LSTMCell
 equinox.combine                  equinox.nn.Sequential
                                  equinox.nn.MLP
-# Filtered transformations       
-equinox.filter_jit               # Utilities
-equinox.filter_grad              equinox.apply_updates
-equinox.filter_value_and_grad    equinox.static_field
-                                 equinox.tree_at
-# Filters                        equinox.tree_equal
-equinox.is_array                 
-equinox.is_array_like            
-equinox.is_inexact_array         
+# Filtered transformations       equinox.nn.Conv1d
+equinox.filter_jit               equinox.nn.Conv2d
+equinox.filter_grad              equinox.nn.Conv3d
+equinox.filter_value_and_grad    
+                                 # Utilities
+# Filters                        equinox.apply_updates
+equinox.is_array                 equinox.static_field
+equinox.is_array_like            equinox.tree_at
+equinox.is_inexact_array         equinox.tree_equal
 equinox.is_inexact_array_like    
 ```
 
