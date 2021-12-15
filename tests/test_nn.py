@@ -108,3 +108,75 @@ def test_mlp(getkey):
     mlp = eqx.nn.MLP(in_size=2, out_size=3, width_size=8, depth=2, key=getkey())
     x = jrandom.normal(getkey(), (2,))
     assert mlp(x).shape == (3,)
+    
+
+def test_conv1d(getkey):
+    # Positional arguments
+    conv = eqx.nn.Conv1d(1, 3, 3, key=getkey())
+    x = jrandom.normal(getkey(), (1, 32))
+    assert conv(x).shape == (3, 30)
+
+    # Some keyword arguments
+    conv = eqn.nn.Conv1d(1, out_channels=3, kernel_size=(3,), key=getkey())
+    x = jrandom.normal(getkey(), (1, 32))
+    assert conv(x).shape == (3, 30)
+
+    # All keyword arguments
+    conv = eqn.nn.Conv1d(in_channels=1, out_channels=3, kernel_size=(3,), padding=1, use_bias=False, key=getkey()
+    x = jrandom.normal(getkey(), (1, 32))
+    assert conv(x).shape == (3, 32)
+
+    # Test strides
+    conv = eqn.nn.Conv1d(in_channels=3, out_channels=1, kernel_size=(3,), stride=2, padding=1, use_bias=True, key=getkey()
+    x = jrandom.normal(getkey(), (3, 32))
+    assert conv(x).shape == (1, 16)  
+
+
+def test_conv2d(getkey):
+    # Positional arguments
+    conv = eqx.nn.Conv2d(1, 3, 3, key=getkey())
+    x = jrandom.normal(getkey(), (1, 32, 32))
+    assert = conv(x).shape == (3, 30, 30)
+
+    # Some keyword arguments                     
+    conv = eqn.nn.Conv2d(1, out_channels=3, kernel_size=(3, 3), key=getkey())
+    x = jrandom.normal(getkey(), (1, 32, 32))
+    assert conv(x).shape == (3, 30, 30)
+
+    # All keyword arguments
+    conv = eqn.nn.Conv2d(in_channels=1, out_channels=3, kernel_size=(3, 3), padding=1, use_bias=False, key=getkey()
+    x = jrandom.normal(getkey(), (1, 32, 32))
+    assert conv(x).shape == (3, 32, 32)
+
+    # Test strides                     
+    conv = eqn.nn.Conv2d(in_channels=3, out_channels=1, kernel_size=(3, 3), stride=2, padding=1, use_bias=True, key=getkey()
+    x = jrandom.normal(getkey(), (3, 32, 32))
+    assert conv(x).shape == (1, 16, 16)
+
+
+def test_conv3d(getkey):
+    # Positional arguments
+    conv = eqx.nn.Conv3d(1, 3, 3, key=getkey())
+    x = jrandom.normal(getkey(), (1, 3, 32, 32))
+    assert = conv(x).shape == (3, 1, 30, 30)
+
+    # Some keyword arguments                     
+    conv = eqn.nn.Conv3d(1, out_channels=3, kernel_size=(3, 3, 3), key=getkey())
+    x = jrandom.normal(getkey(), (1, 3, 32, 32))
+    assert conv(x).shape == (3, 1, 30, 30)
+
+    # All keyword arguments
+    conv = eqn.nn.Conv3d(in_channels=1, out_channels=3, kernel_size=(3, 3, 3), padding=1, use_bias=False, key=getkey()
+    x = jrandom.normal(getkey(), (1, 3, 32, 32))
+    assert conv(x).shape == (3, 3, 32, 32)
+
+    # Test strides                     
+    conv = eqn.nn.Conv3d(in_channels=3, out_channels=1, kernel_size=(3, 3, 3), stride=2, padding=1, use_bias=True, key=getkey()
+    x = jrandom.normal(getkey(), (3, 3, 32, 32))
+    assert conv(x).shape == (1, 2, 16, 16)
+
+
+def test_conv(getkey):
+    test_conv1d(getkey)
+    test_conv2d(getkey)
+    test_conv2d(getkey)
