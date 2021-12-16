@@ -16,7 +16,9 @@ def _ntuple(n):
             if len(x) == n:
                 return tuple(x)
             else:
-                raise ValueError(f"Length of {x} (length = {len(x)}) is not equal to {n}")
+                raise ValueError(
+                    f"Length of {x} (length = {len(x)}) is not equal to {n}"
+                )
         return tuple(repeat(x, n))
 
     return parse
@@ -81,7 +83,7 @@ class Conv(Module):
         self.stride = parse(stride)
         if type(padding) == tuple and len(padding) == self.num_spatial_dims:
             self.padding = tuple(
-                parse(padding[i]) for i in range(self.num_spatial_dims)
+                (padding[i], padding[i]) for i in range(self.num_spatial_dims)
             )
         elif type(padding) == int:
             self.padding = tuple(
@@ -138,7 +140,7 @@ class Conv1d(Conv):
             dilation=dilation,
             use_bias=use_bias,
             key=key,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -166,7 +168,7 @@ class Conv2d(Conv):
             dilation=dilation,
             use_bias=use_bias,
             key=key,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -194,5 +196,5 @@ class Conv3d(Conv):
             dilation=dilation,
             use_bias=use_bias,
             key=key,
-            **kwargs
+            **kwargs,
         )
