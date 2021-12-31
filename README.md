@@ -168,16 +168,16 @@ equinox.filter                   equinox.nn.GRUCell
 equinox.partition                equinox.nn.LSTMCell
 equinox.combine                  equinox.nn.Sequential
                                  equinox.nn.MLP
-# Filtered transformations       
-equinox.filter_jit               # Utilities
-equinox.filter_grad              equinox.apply_updates
-equinox.filter_value_and_grad    equinox.static_field
-                                 equinox.tree_at
-# Filters                        equinox.tree_equal
-equinox.is_array                 
-equinox.is_array_like            
-equinox.is_inexact_array         
-equinox.is_inexact_array_like    
+# Filtered transformations       equinox.nn.Conv
+equinox.filter_jit               equinox.nn.Conv1d
+equinox.filter_grad              equinox.nn.Conv2d
+equinox.filter_value_and_grad    equinox.nn.Conv3d
+                                 
+# Filters                        # Utilities
+equinox.is_array                 equinox.apply_updates
+equinox.is_array_like            equinox.static_field
+equinox.is_inexact_array         equinox.tree_at
+equinox.is_inexact_array_like    equinox.tree_equal
 ```
 
 ### Module
@@ -385,6 +385,14 @@ equinox.nn.LSTMCell(input_size, hidden_size, use_bias=True, *, key)(input, hidde
 equinox.nn.Sequential(layers)(input, *, key=None)
 equinox.nn.MLP(in_size, out_size, width_size, depth,
                activation=jax.nn.relu, final_activation=lambda x: x, *, key)(input)
+equinox.nn.Conv(num_spatial_dims, in_channels, out_channels, kernel_size, stride=1,
+                padding=0, dilation=1, use_bias=True, *, key)(input)
+equinox.nn.Conv1d(in_channels, out_channels, kernel_size, stride=1, 
+                  padding=0, dilation=1, use_bias=True, * key)(input)
+equinox.nn.Conv2d(in_channels, out_channels, kernel_size, stride=1, 
+                  padding=0, dilation=1, use_bias=True, * key)(input)
+equinox.nn.Conv3d(in_channels, out_channels, kernel_size, stride=1, 
+                  padding=0, dilation=1, use_bias=True, * key)(input)
 ```
 These all behave in the way you expect. The `key` arguments are used to generate the random initial weights, or to generate randomness on the forward pass of stochastic layers like `Dropout`.
 
