@@ -82,17 +82,16 @@ class Conv(Module):
             self.bias = None
 
         self.stride = parse(stride)
-        if type(padding) == tuple and len(padding) == self.num_spatial_dims:
-            self.padding = tuple(
-                (padding[i], padding[i]) for i in range(self.num_spatial_dims)
-            )
-        elif type(padding) == int:
+        if isinstance(padding, int):
             self.padding = tuple(
                 (padding, padding) for _ in range(self.num_spatial_dims)
             )
+        elif isinstance(padding, Sequence) and len(padding) == self.num_spatial_dims:
+            self.padding = tuple((p, p) for p in padding)
         else:
             raise ValueError(
-                f"Padding must either be int or tuple of length {self.num_spatial_dims}"
+                "`padding` must either be an int or tuple of length "
+                f"{self.num_spatial_dims}."
             )
         self.dilation = parse(dilation)
 
@@ -100,7 +99,7 @@ class Conv(Module):
         unbatched_rank = self.num_spatial_dims + 1
         if x.ndim != unbatched_rank:
             raise ValueError(
-                f"Input to Conv needs to have rank {unbatched_rank},",
+                f"Input to `Conv` needs to have rank {unbatched_rank},",
                 f" but input has shape {x.shape}.",
             )
         x = jnp.expand_dims(x, axis=0)
@@ -111,7 +110,7 @@ class Conv(Module):
             padding=self.padding,
             rhs_dilation=self.dilation,
         )
-        if self.bias is not None:
+        if self.use_bias:
             x += jnp.broadcast_to(self.bias, x.shape)
         x = jnp.squeeze(x, axis=0)
         return x
