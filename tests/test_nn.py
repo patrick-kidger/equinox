@@ -146,6 +146,20 @@ def test_conv1d(getkey):
     x = jrandom.normal(getkey(), (3, 32))
     assert conv(x).shape == (1, 16)
 
+    # Test value value matches
+    conv = eqx.nn.Conv1d(1, 3, kernel_size=3, padding=1, key=getkey())
+    new_weight = jnp.array(range(9)).reshape(3, 1, 3)
+    new_bias = jnp.array([1, 2, 3]).reshape(3, 1)
+    data = jnp.array([range(-3, 3)]).reshape(1, -1)
+    assert new_weight.shape == conv.weight.shape
+    assert new_bias.shape == conv.bias.shape
+    conv = eqx.tree_at(lambda x: x.weight, conv, new_weight)
+    conv = eqx.tree_at(lambda x: x.bias, conv, new_bias)
+    answer = jnp.array(
+        [-6, -3, 0, 3, 6, 3, -20, -20, -8, 4, 16, 13, -34, -37, -16, 5, 26, 23]
+    ).reshape(3, 6)
+    assert jnp.allclose(conv(data), answer)
+
 
 def test_conv2d(getkey):
     # Positional arguments
@@ -182,6 +196,18 @@ def test_conv2d(getkey):
     )
     x = jrandom.normal(getkey(), (3, 32, 32))
     assert conv(x).shape == (1, 16, 16)
+
+    # Test value value matches
+    conv = eqx.nn.Conv2d(1, 1, kernel_size=3, padding=1, key=getkey())
+    new_weight = jnp.array(range(9)).reshape(1, 1, 3, 3)
+    new_bias = jnp.array([1]).reshape(1, 1, 1)
+    data = jnp.array([range(-4, 5)]).reshape(1, 3, 3)
+    assert new_weight.shape == conv.weight.shape
+    assert new_bias.shape == conv.bias.shape
+    conv = eqx.tree_at(lambda x: x.weight, conv, new_weight)
+    conv = eqx.tree_at(lambda x: x.bias, conv, new_bias)
+    answer = jnp.array([-37, -31, -9, 25, 61, 49, 23, 41, 27]).reshape(1, 3, 3)
+    assert jnp.allclose(conv(data), answer)
 
 
 def test_conv3d(getkey):
@@ -220,8 +246,14 @@ def test_conv3d(getkey):
     x = jrandom.normal(getkey(), (3, 3, 32, 32))
     assert conv(x).shape == (1, 2, 16, 16)
 
-
-def test_conv(getkey):
-    test_conv1d(getkey)
-    test_conv2d(getkey)
-    test_conv2d(getkey)
+    # Test value value matches
+    conv = eqx.nn.Conv3d(1, 1, kernel_size=(2, 1, 1), padding=(1, 0, 0), key=getkey())
+    new_weight = jnp.array(range(2)).reshape(1, 1, 2, 1, 1)
+    new_bias = jnp.array([1]).reshape(1, 1, 1, 1)
+    data = jnp.array([range(-4, 4)]).reshape(1, 2, 2, 2)
+    assert new_weight.shape == conv.weight.shape
+    assert new_bias.shape == conv.bias.shape
+    conv = eqx.tree_at(lambda x: x.weight, conv, new_weight)
+    conv = eqx.tree_at(lambda x: x.bias, conv, new_bias)
+    answer = jnp.array([-3, -2, -1, 0, 1, 2, 3, 4, 1, 1, 1, 1]).reshape(1, 3, 2, 2)
+    assert jnp.allclose(conv(data), answer)

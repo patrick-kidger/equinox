@@ -4,6 +4,7 @@ from typing import Optional, Sequence, Union
 
 import jax.numpy as jnp
 import jax.random as jrandom
+import numpy as np
 from jax.lax import conv_general_dilated
 
 from ..custom_types import Array
@@ -58,7 +59,7 @@ class Conv(Module):
         self.out_channels = out_channels
         self.kernel_size = parse(kernel_size)
         self.use_bias = use_bias
-        lim = 1 / jnp.sqrt(self.in_channels * jnp.prod(jnp.array(self.kernel_size)))
+        lim = 1 / np.sqrt(self.in_channels * np.prod(self.kernel_size))
 
         self.weight = jrandom.uniform(
             wkey,
