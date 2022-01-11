@@ -15,7 +15,7 @@ The elegance of Equinox is its selling point in a world that already has [Haiku]
 ```
 pip install equinox
 ```
-Requires Python 3.7+ and JAX 0.2.18+.
+Requires Python 3.7+ and JAX 0.2.26+.
 
 ### Parameterised functions as data
 
@@ -351,16 +351,17 @@ class MyModule(equinox.Module):
 If any `**kwargs` are passed, then they will be forwarded on to `dataclasses.field`. (Recall that Equinox uses dataclasses as its modules, so general `dataclasses` behaviour should work as normal.)
 
 ```python
-equinox.tree_at(where, pytree, replace=_sentinel, replace_fn=_sentinel)
+equinox.tree_at(where, pytree, replace=_sentinel, replace_fn=_sentinel, is_leaf=None)
 ```
 Modifies an existing tree, and returns the modified tree. (Like `.at` for "in place modifications" of JAX arrays.)
 
-- `where` is a callable `PyTree -> Leaf` or `PyTree -> Tuple[Leaf, ...]`. It should consume a PyTree of the same shape as `pytree`, and return the leaf or leaves that should be replaced. For example `where=lambda mlp: mlp.layers[-1].linear.weight`.
+- `where` is a callable `PyTree -> Leaf` or `PyTree -> Sequence[Leaf]`. It should consume a PyTree of the same shape as `pytree`, and return the leaf or leaves that should be replaced. For example `where=lambda mlp: mlp.layers[-1].linear.weight`.
 - `pytree` is the existing PyTree to modify.
-- `replace` should either be a single element, or a tuple of the same length as returned by `where`. This specifies the replacements to make at the locations specified by `where`. Mutually exclusive with `replace_fn`.
+- `replace` should either be a single element, or a sequence of the same length as returned by `where`. This specifies the replacements to make at the locations specified by `where`. Mutually exclusive with `replace_fn`.
 - `replace_fn` should be a function `Leaf -> Any`. It will be called on every leaf replaced using `where`. The return value from `replace_fn` will be used in its place. Mutually exclusive with `replace`.
+- `is_leaf` is as in `jax.tree_flatten`: all of the values returned by `where` must be leaves as returned by `jax.tree_flatten(pytree, is_leaf)`.
 
-For example this can be used to help specify the weights of a model to train or not train:
+For example `equinox.tree_at` can be used to help specify the weights of a model to train or not train:
 ```python
 trainable = jax.tree_map(lambda _: False, model)
 trainable = equinox.tree_at(lambda mlp: mlp.layers[-1].linear.weight, model, replace=True)

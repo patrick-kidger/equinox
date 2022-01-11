@@ -5,6 +5,7 @@ import jax
 from .deprecated import deprecated
 from .filters import (
     combine,
+    is_array,
     is_inexact_array,
     merge,
     partition,
@@ -49,6 +50,48 @@ def filter_grad(fun, *, filter_spec=is_inexact_array, has_aux=False, **gradkwarg
             return grad
 
     return fun_grad
+
+
+class filter_custom_vjp:
+    def __init__(self, fn):
+        self.fn = fn
+        self.fn_wrapped = None
+
+    def defvjp(self, fn_fwd, fn_bwd):
+        def fn_wrapped(
+            nonarray_vjp_arg, nonarray_args_kwargs, array_vjp_arg, array_args_kwargs
+        ):
+            vjp_arg = combine(nonarray_vjp_arg, array_vjp_arg)
+            args, kwargs = combine(nonarray_args_kwargs, array_args_kwargs)
+            return self.fn(vjp_arg, *args, **kwargs)
+
+        def fn_fwd_wrapped(
+            nonarray_vjp_arg, nonarray_args_kwargs, array_vjp_arg, array_args_kwargs
+        ):
+            vjp_arg = combine(nonarray_vjp_arg, array_vjp_arg)
+            args, kwargs = combine(nonarray_args_kwargs, array_args_kwargs)
+            out, residuals = fn_fwd(vjp_arg, *args, **kwargs)
+            return out, (residuals, array_vjp_arg, array_args_kwargs)
+
+        def fn_bwd_wrapped(nonarray_vjp_arg, nonarray_args_kwargs, residuals, grad_out):
+            residuals, array_vjp_arg, array_args_kwargs = residuals
+            vjp_arg = combine(nonarray_vjp_arg, array_vjp_arg)
+            args, kwargs = combine(nonarray_args_kwargs, array_args_kwargs)
+            out = fn_bwd(residuals, grad_out, vjp_arg, *args, **kwargs)
+            return out, None  # None is the gradient through array_args_kwargs
+
+        fn_wrapped = jax.custom_vjp(fn_wrapped, nondiff_argnums=(0, 1))
+        fn_wrapped.defvjp(fn_fwd_wrapped, fn_bwd_wrapped)
+        self.fn_wrapped = fn_wrapped
+
+    def __call__(self, vjp_arg, /, *args, **kwargs):
+        if self.fn_wrapped is None:
+            raise RuntimeError(f"defvjp not yet called for {self.fn.__name__}")
+        array_vjp_arg, nonarray_vjp_arg = partition(vjp_arg, is_array)
+        array_args_kwargs, nonarray_args_kwargs = partition((args, kwargs), is_array)
+        return self.fn_wrapped(
+            nonarray_vjp_arg, nonarray_args_kwargs, array_vjp_arg, array_args_kwargs
+        )
 
 
 #

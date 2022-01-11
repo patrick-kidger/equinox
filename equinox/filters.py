@@ -1,10 +1,10 @@
 from typing import Any, Callable, List, Optional, Tuple, Union
-from typing_extensions import get_args
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
-from .custom_types import Array, MoreArrays, PyTree, TreeDef
+from .custom_types import PyTree, TreeDef
 from .deprecated import deprecated
 
 
@@ -12,20 +12,18 @@ from .deprecated import deprecated
 # Filter functions
 #
 
-_array_types = get_args(Array)
-_morearray_types = get_args(MoreArrays)
-_arraylike_types = _morearray_types + (int, float, complex, bool)
 
-
-# TODO: not sure if this is the best way to do this? In light of:
-# https://github.com/google/jax/commit/258ae44303b1539eff6253263694ec768b8803f0#diff-de759f969102e9d64b54a299d11d5f0e75cfe3052dc17ffbcd2d43b250719fb0
 def is_array(element: Any) -> bool:
-    return isinstance(element, _array_types)
+    return isinstance(element, jnp.ndarray)
 
 
 # Does _not_ do a try/except on jnp.asarray(element) because that's very slow.
+# Chosen to match
+# https://github.com/google/jax/blob/4a17c78605e7fc69a69a999e2f6298db79d3837a/jax/_src/numpy/lax_numpy.py#L542  # noqa: E501
 def is_array_like(element: Any) -> bool:
-    return isinstance(element, _arraylike_types)
+    return isinstance(
+        element, (jnp.ndarray, np.ndarray, float, complex, bool, int)
+    ) or hasattr(element, "__jax_array__")
 
 
 def is_inexact_array(element: Any) -> bool:
@@ -33,8 +31,10 @@ def is_inexact_array(element: Any) -> bool:
 
 
 def is_inexact_array_like(element: Any) -> bool:
+    if hasattr(element, "__jax_array__"):
+        element = element.__jax_array__()
     return (
-        isinstance(element, _morearray_types)
+        isinstance(element, (jnp.ndarray, np.ndarray))
         and jnp.issubdtype(element.dtype, jnp.inexact)
     ) or isinstance(element, (float, complex))
 

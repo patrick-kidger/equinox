@@ -1,19 +1,23 @@
-from typing import Any, Callable, Optional, Tuple, Union
-from typing_extensions import get_args
+from typing import Any, Callable, Sequence, Union
 
 import jax
+import jax.numpy as jnp
+import numpy as np
 
-from .custom_types import MoreArrays, PyTree
+from .custom_types import PyTree
 
 
 _sentinel = object()
 
+_Leaf = Any
+
 
 def tree_at(
-    where: Callable[[PyTree], Union[Any, Tuple[Any, ...]]],
+    where: Callable[[PyTree], Union[_Leaf, Sequence[_Leaf]]],
     pytree: PyTree,
-    replace: Optional[Union[Any, Tuple[Any, ...]]] = _sentinel,
-    replace_fn: Optional[Callable[[Any], Any]] = _sentinel,
+    replace: Union[_Leaf, Sequence[_Leaf]] = _sentinel,
+    replace_fn: Callable[[_Leaf], _Leaf] = _sentinel,
+    is_leaf: Callable[[_Leaf], bool] = None,
 ) -> PyTree:
 
     if (replace is _sentinel and replace_fn is _sentinel) or (
@@ -30,17 +34,32 @@ def tree_at(
         replacer = lambda j, i: replace[j]
 
     # TODO: is there a neater way of accomplishing this?
-    flat, treedef = jax.tree_flatten(pytree)
+    flat, treedef = jax.tree_flatten(pytree, is_leaf=is_leaf)
     flat_indices = list(range(len(flat)))
     index_pytree = jax.tree_unflatten(treedef, flat_indices)
     index = where(index_pytree)
-    # where can return either a single entry, or a tuple.
+    # where can return either a single entry, or a sequence
     if isinstance(index, int):
         index = (index,)
         replace = (replace,)
+    elif isinstance(index, Sequence):
+        for i in index:
+            if not isinstance(i, int):
+                raise ValueError(
+                    r"""`where` must return a sequence of only leaves; not some subtree.
+
+                    If you want to replace all of a subtree, you can do so by replacing
+                    >>> eqx.tree_at(lambda t: t.subtree, tree, new_subtree)  # buggy
+                    with
+                    >>> eqx.tree_at(lambda t: jax.tree_leaves(tree.subtree), tree, 
+                    ...             jax.tree_leaves(new_subtree))  # fixed
+                    """
+                )
 
     if replace_passed and len(index) != len(replace):
-        raise ValueError("`where` must return a tuple of the same length as `replace`.")
+        raise ValueError(
+            "`where` must return a sequence of leaves of the same length as `replace`."
+        )
     for j, i in enumerate(index):
         flat[i] = replacer(j, i)
 
@@ -49,7 +68,7 @@ def tree_at(
 
 def tree_equal(*pytrees: PyTree) -> bool:
     flat, treedef = jax.tree_flatten(pytrees[0])
-    array_types = get_args(MoreArrays)
+    array_types = (jnp.ndarray, np.ndarray)
     for pytree in pytrees[1:]:
         flat_, treedef_ = jax.tree_flatten(pytree)
         if treedef_ != treedef:

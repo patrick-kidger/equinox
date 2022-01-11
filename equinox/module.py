@@ -22,6 +22,8 @@ def static_field(**kwargs):
 class _wrap_method:
     def __init__(self, method):
         self.method = method
+        if getattr(self.method, "__isabstractmethod__", False):
+            self.__isabstractmethod__ = self.method.__isabstractmethod__
 
     def __get__(self, instance, owner):
         if instance is None:
