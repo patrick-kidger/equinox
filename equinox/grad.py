@@ -59,26 +59,57 @@ class filter_custom_vjp:
 
     def defvjp(self, fn_fwd, fn_bwd):
         def fn_wrapped(
-            nonarray_vjp_arg, nonarray_args_kwargs, array_vjp_arg, array_args_kwargs
+            nonarray_vjp_arg,
+            nonarray_args_kwargs,
+            diff_array_vjp_arg,
+            nondiff_array_vjp_arg,
+            array_args_kwargs,
         ):
-            vjp_arg = combine(nonarray_vjp_arg, array_vjp_arg)
+            vjp_arg = combine(
+                nonarray_vjp_arg, diff_array_vjp_arg, nondiff_array_vjp_arg
+            )
             args, kwargs = combine(nonarray_args_kwargs, array_args_kwargs)
             return self.fn(vjp_arg, *args, **kwargs)
 
         def fn_fwd_wrapped(
-            nonarray_vjp_arg, nonarray_args_kwargs, array_vjp_arg, array_args_kwargs
+            nonarray_vjp_arg,
+            nonarray_args_kwargs,
+            diff_array_vjp_arg,
+            nondiff_array_vjp_arg,
+            array_args_kwargs,
         ):
-            vjp_arg = combine(nonarray_vjp_arg, array_vjp_arg)
+            vjp_arg = combine(
+                nonarray_vjp_arg, diff_array_vjp_arg, nondiff_array_vjp_arg
+            )
             args, kwargs = combine(nonarray_args_kwargs, array_args_kwargs)
             out, residuals = fn_fwd(vjp_arg, *args, **kwargs)
-            return out, (residuals, array_vjp_arg, array_args_kwargs)
+            return out, (
+                residuals,
+                diff_array_vjp_arg,
+                nondiff_array_vjp_arg,
+                array_args_kwargs,
+            )
 
         def fn_bwd_wrapped(nonarray_vjp_arg, nonarray_args_kwargs, residuals, grad_out):
-            residuals, array_vjp_arg, array_args_kwargs = residuals
-            vjp_arg = combine(nonarray_vjp_arg, array_vjp_arg)
+            (
+                residuals,
+                diff_array_vjp_arg,
+                nondiff_array_vjp_arg,
+                array_args_kwargs,
+            ) = residuals
+            vjp_arg = combine(
+                nonarray_vjp_arg, diff_array_vjp_arg, nondiff_array_vjp_arg
+            )
             args, kwargs = combine(nonarray_args_kwargs, array_args_kwargs)
             out = fn_bwd(residuals, grad_out, vjp_arg, *args, **kwargs)
-            return out, None  # None is the gradient through array_args_kwargs
+            if jax.tree_structure(out) != jax.tree_structure(diff_array_vjp_arg):
+                raise RuntimeError(
+                    "custom_vjp gradients must have the same structure as "
+                    "`equinox.filter(vjp_arg, equinox.is_inexact_array)`, where "
+                    "`vjp_arg` is the first argument used in the forward pass."
+                )
+            # None is the gradient through nondiff_array_vjp_arg and array_args_kwargs
+            return out, None, None
 
         fn_wrapped = jax.custom_vjp(fn_wrapped, nondiff_argnums=(0, 1))
         fn_wrapped.defvjp(fn_fwd_wrapped, fn_bwd_wrapped)
@@ -88,9 +119,16 @@ class filter_custom_vjp:
         if self.fn_wrapped is None:
             raise RuntimeError(f"defvjp not yet called for {self.fn.__name__}")
         array_vjp_arg, nonarray_vjp_arg = partition(vjp_arg, is_array)
+        diff_array_vjp_arg, nondiff_array_vjp_arg = partition(
+            array_vjp_arg, is_inexact_array
+        )
         array_args_kwargs, nonarray_args_kwargs = partition((args, kwargs), is_array)
         return self.fn_wrapped(
-            nonarray_vjp_arg, nonarray_args_kwargs, array_vjp_arg, array_args_kwargs
+            nonarray_vjp_arg,
+            nonarray_args_kwargs,
+            diff_array_vjp_arg,
+            nondiff_array_vjp_arg,
+            array_args_kwargs,
         )
 
 
