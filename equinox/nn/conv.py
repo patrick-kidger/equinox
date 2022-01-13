@@ -1,7 +1,8 @@
 import collections
 from itertools import repeat
-from typing import Optional, Sequence, Union
+from typing import Any, Optional, Sequence, Tuple, Union
 
+import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 import numpy as np
@@ -11,8 +12,8 @@ from ..custom_types import Array
 from ..module import Module, static_field
 
 
-def _ntuple(n):
-    def parse(x):
+def _ntuple(n: int) -> callable:
+    def parse(x: Any) -> tuple:
         if isinstance(x, collections.abc.Iterable):
             if len(x) == n:
                 return tuple(x)
@@ -26,31 +27,58 @@ def _ntuple(n):
 
 
 class Conv(Module):
+    """General N-dimensional convolution."""
+
     num_spatial_dims: int = static_field()
     weight: Array
     bias: Optional[Array]
     in_channels: int = static_field()
     out_channels: int = static_field()
-    kernel_size: Union[int, Sequence[int]] = static_field()
-    stride: Union[int, Sequence[int]] = static_field()
-    padding: Union[int, Sequence[int]] = static_field()
-    dilation: Union[int, Sequence[int]] = static_field()
+    kernel_size: Tuple[int] = static_field()
+    stride: Tuple[int] = static_field()
+    padding: Tuple[int] = static_field()
+    dilation: Tuple[int] = static_field()
     use_bias: bool = static_field()
 
     def __init__(
         self,
-        num_spatial_dims,
-        in_channels,
-        out_channels,
-        kernel_size,
-        stride=1,
-        padding=0,
-        dilation=1,
-        use_bias=True,
+        num_spatial_dims: int,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: Union[int, Sequence[int]],
+        stride: Union[int, Sequence[int]] = 1,
+        padding: Union[int, Sequence[int]] = 0,
+        dilation: Union[int, Sequence[int]] = 1,
+        use_bias: bool = True,
         *,
-        key,
+        key: "jax.random.PRNGKey",
         **kwargs,
     ):
+        """**Arguments:**
+
+        - `num_spatial_dims`: The number of spatial dimensions. For example traditional
+            convolutions for image processing have this set to `2`.
+        - `in_channels`: The number of input channels.
+        - `out_channels`: The number of output channels.
+        - `kernel_size`: The size of the convolutional kernel.
+        - `stride`: The stride of the convolution.
+        - `padding`: The amount of padding to apply before and after each spatial
+            dimension. The same amount of padding is applied both before and after.
+        - `dilation`: The dilation of the convolution.
+        - `use_bias`: Whether to add on a bias after the convolution.
+        - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
+            initialisation. (Keyword only argument.)
+
+        !!! info
+
+            All of `kernel_size`, `stride`, `padding`, `dilation` can be either an
+            integer or a sequence of integers. If they are a sequence then the sequence
+            should be of length equal to `num_spatial_dims`, and specify the value of
+            each property down each spatial dimension in turn.. If they are an integer
+            then the same kernel size / stride / padding / dilation will be used along
+            every spatial dimension.
+
+        """
         super().__init__(**kwargs)
         self.num_spatial_dims = num_spatial_dims
         parse = _ntuple(self.num_spatial_dims)
@@ -95,7 +123,21 @@ class Conv(Module):
             )
         self.dilation = parse(dilation)
 
-    def __call__(self, x, *, key=None):
+    def __call__(
+        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
+    ) -> Array:
+        """**Arguments:**
+
+        - `x`: The input. Should be a JAX array of shape `(in_channels, dim_1, ..., dim_N)`, where
+            `N = num_spatial_dims`.
+        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
+            (Keyword only argument.)
+
+        **Returns:**
+
+        A JAX array of shape `(out_channels, new_dim_1, ..., new_dim_N)`.
+        """
+
         unbatched_rank = self.num_spatial_dims + 1
         if x.ndim != unbatched_rank:
             raise ValueError(
@@ -117,6 +159,8 @@ class Conv(Module):
 
 
 class Conv1d(Conv):
+    """As [`equinox.nn.Conv`][] with `num_spatial_dims=1`."""
+
     def __init__(
         self,
         in_channels,
@@ -145,6 +189,8 @@ class Conv1d(Conv):
 
 
 class Conv2d(Conv):
+    """As [`equinox.nn.Conv`][] with `num_spatial_dims=2`."""
+
     def __init__(
         self,
         in_channels,
@@ -173,6 +219,8 @@ class Conv2d(Conv):
 
 
 class Conv3d(Conv):
+    """As [`equinox.nn.Conv`][] with `num_spatial_dims=3`."""
+
     def __init__(
         self,
         in_channels,

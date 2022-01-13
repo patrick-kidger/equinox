@@ -1,10 +1,14 @@
+import typing
 from typing import Any
 
 import jax
 import jax.numpy as jnp
 
 
-Array = jnp.ndarray
+if getattr(typing, "GENERATING_DOCUMENTATION", True):
+    Array = "jax.numpy.ndarray"
+else:
+    Array = jnp.ndarray
 
 PyTree = Any
 

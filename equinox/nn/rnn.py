@@ -2,6 +2,7 @@ import math
 import warnings
 from typing import Optional
 
+import jax
 import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
@@ -11,6 +12,27 @@ from ..module import Module, static_field
 
 
 class GRUCell(Module):
+    """A single step of a Gated Recurrent Unit (GRU).
+
+    !!! example
+
+        This is often used by wrapping it into a `jax.lax.scan`. For example:
+
+        ```python
+        class Model(Module):
+            cell: GRUCell
+
+            def __init__(self, ...):
+                self.cell = GRUCell(...)
+
+            def __call__(self, xs):
+                scan_fn = lambda state, input: (cell(input, state), None)
+                init_state = jnp.zeros(self.cell.hidden_size)
+                final_state, _ = jax.lax.scan(scan_fn init_state, xs)
+                return final_state
+        ```
+    """
+
     weight_ih: Array
     weight_hh: Array
     bias: Optional[Array]
@@ -20,8 +42,24 @@ class GRUCell(Module):
     use_bias: bool = static_field()
 
     def __init__(
-        self, input_size, hidden_size, use_bias=True, bias=None, *, key, **kwargs
+        self,
+        input_size: int,
+        hidden_size: int,
+        use_bias: bool = True,
+        bias=None,
+        *,
+        key: Optional["jax.random.PRNGKey"],
+        **kwargs
     ):
+        """**Arguments:**
+
+        - `input_size`: The dimensionality of the input vector at each time step.
+        - `hidden_size`: The dimensionality of the hidden state passed along between
+            time steps.
+        - `use_bias`: Whether to add on a bias after each update.
+        - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
+            initialisation. (Keyword only argument.)
+        """
         super().__init__(**kwargs)
         if bias is not None:
             warnings.warn("`bias` is deprecated in favour of `use_bias`.")
@@ -51,7 +89,21 @@ class GRUCell(Module):
         self.hidden_size = hidden_size
         self.use_bias = use_bias
 
-    def __call__(self, input, hidden, *, key=None):
+    def __call__(
+        self, input: Array, hidden: Array, *, key: Optional["jax.random.PRNGKey"] = None
+    ):
+        """**Arguments:**
+
+        - `input`: The input, which should be a JAX array of shape `(input_size,)`.
+        - `hidden`: The hidden state, which should be a JAX array of shape
+            `(hidden_size,)`.
+        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
+            (Keyword only argument.)
+
+        **Returns:**
+
+        The updated hidden state, which is a JAX array of shape `(hidden_size,)`.
+        """
         if self.bias is None:
             bias = 0
             bias_n = 0
@@ -67,6 +119,28 @@ class GRUCell(Module):
 
 
 class LSTMCell(Module):
+    """A single step of a Long-Short Term Memory unit (LSTM).
+
+    !!! example
+
+        This is often used by wrapping it into a `jax.lax.scan`. For example:
+
+        ```python
+        class Model(Module):
+            cell: LSTMCell
+
+            def __init__(self, ...):
+                self.cell = LSTMCell(...)
+
+            def __call__(self, xs):
+                scan_fn = lambda state, input: (cell(input, state), None)
+                init_state = (jnp.zeros(self.cell.hidden_size),
+                              jnp.zeros(self.cell.hidden_size))
+                final_state, _ = jax.lax.scan(scan_fn init_state, xs)
+                return final_state
+        ```
+    """
+
     weight_ih: Array
     weight_hh: Array
     bias: Optional[Array]
@@ -75,8 +149,24 @@ class LSTMCell(Module):
     use_bias: bool = static_field()
 
     def __init__(
-        self, input_size, hidden_size, use_bias=True, bias=None, *, key, **kwargs
+        self,
+        input_size: int,
+        hidden_size: int,
+        use_bias: bool = True,
+        bias=None,
+        *,
+        key: "jax.random.PRNGKey",
+        **kwargs
     ):
+        """**Arguments:**
+
+        - `input_size`: The dimensionality of the input vector at each time step.
+        - `hidden_size`: The dimensionality of the hidden state passed along between
+            time steps.
+        - `use_bias`: Whether to add on a bias after each update.
+        - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
+            initialisation. (Keyword only argument.)
+        """
         super().__init__(**kwargs)
         if bias is not None:
             warnings.warn("`bias` is deprecated in favour of `use_bias`.")
@@ -103,6 +193,19 @@ class LSTMCell(Module):
         self.use_bias = use_bias
 
     def __call__(self, input, hidden, *, key=None):
+        """**Arguments:**
+
+        - `input`: The input, which should be a JAX array of shape `(input_size,)`.
+        - `hidden`: The hidden state, which should be a 2-tuple of JAX arrays, each of
+            shape `(hidden_size,)`.
+        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
+            (Keyword only argument.)
+
+        **Returns:**
+
+        The updated hidden state, which is a 2-tuple of JAX arrays, each of shape
+        `(hidden_size,)`.
+        """
         h, c = hidden
         lin = self.weight_ih @ input + self.weight_hh @ h
         if self.bias is not None:

@@ -2,3 +2,4 @@
 *.egg-info/
 build/
 dist/
+.all_objects.cache

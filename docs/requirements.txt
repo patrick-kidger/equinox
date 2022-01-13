@@ -1,0 +1,11 @@
+# Latest versions at time of writing.
+mkdocs==1.2.3            # Main documentation generator.
+mkdocs-material==7.3.6   # Theme
+pymdown-extensions==9.0  # Markdown extensions e.g. to handle LaTeX.
+mkdocstrings==0.16.2     # Autogenerate documentation from docstrings.
+mknotebooks==0.7.1       # Turn Jupyter Lab notebooks into webpages.
+pytkdocs_tweaks==0.0.1   # Tweaks mkdocstrings to improve various aspects
+
+# Dependencies of Equinox itself.
+# Always use most up-to-date versions.
+jax[cpu]

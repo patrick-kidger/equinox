@@ -1,4 +1,5 @@
 import functools as ft
+import typing
 
 import jax
 
@@ -17,6 +18,9 @@ from .filters import (
 def filter_value_and_grad(
     fun, *, filter_spec=is_inexact_array, argnums=None, **gradkwargs
 ):
+    """As [`equinox.filter_grad`][], except that it is `jax.value_and_grad` that is
+    wrapped.
+    """
     if argnums is not None:
         raise ValueError(
             "`argnums` should not be passed. If you need to differentiate "
@@ -36,9 +40,53 @@ def filter_value_and_grad(
     return fun_value_and_grad_wrapper
 
 
-def filter_grad(fun, *, filter_spec=is_inexact_array, has_aux=False, **gradkwargs):
+def filter_grad(fun, *, filter_spec=is_inexact_array, **gradkwargs):
+    """Wraps together [`equinox.partition`][] and `jax.grad`.
+
+    **Arguments:**
+
+    - `fun` is a pure function to JIT compile.
+    - `filter_spec` is a PyTree whose structure should be a prefix of the structure of
+        the **first** argument to `fun`. It behaves as the `filter_spec` argument to
+        [`equinox.filter`][]. Truthy values will be differentiated; falsey values will
+        not.
+    - `**gradkwargs` are any other keyword arguments to `jax.grad`.
+
+    **Returns:**
+
+    A function computing the derivative of `fun` with respect to its first input. Any
+    nondifferentiable leaves will have `None` as the gradient. See
+    `equinox.apply_updates` for a convenience function that will only attempt to apply
+    non-`None` updates.
+
+    !!! info
+
+        A very important special case is to trace all inexact (i.e. floating point)
+        JAX arrays and treat all other objects as nondifferentiable.
+
+        This is accomplished with `filter_spec=equinox.is_inexact_array`, which is the
+        default.
+
+    !!! tip
+
+        If you need to differentiate multiple objects, then put them together into a
+        tuple and pass that through the first argument:
+        ```python
+        # We want to differentiate `func` with respect to both `x` and `y`.
+        def func(x, y):
+            ...
+
+        @equinox.filter_grad
+        def grad_func(x__y):
+            x, y = x__y
+            return func(x, y)
+        ```
+    """
+
+    has_aux = gradkwargs.get("has_aux", False)
+
     fun_value_and_grad = filter_value_and_grad(
-        fun, filter_spec=filter_spec, has_aux=has_aux, **gradkwargs
+        fun, filter_spec=filter_spec, **gradkwargs
     )
 
     def fun_grad(*args, **kwargs):
@@ -53,6 +101,51 @@ def filter_grad(fun, *, filter_spec=is_inexact_array, has_aux=False, **gradkwarg
 
 
 class filter_custom_vjp:
+    """Provides an easier API for `jax.custom_vjp`, by using filtering.
+
+    Usage is:
+    ```python
+    @equinox.filter_custom_vjp
+    def fn(vjp_arg, *args, **kwargs):
+        # vjp_arg is some PyTree of arbitrary Python objects.
+        # args, kwargs contain arbitrary Python objects.
+        ...
+        return obj  # some PyTree of arbitrary Python objects.
+
+    def fn_fwd(vjp_arg, *args, **kwargs):
+        ...
+        # Should return `obj` as before. `residuals` can be any collection of JAX
+        # arrays you want to keep around for the backward pass.
+        return obj, residuals
+
+    def fn_bwd(residuals, grad_obj, vjp_arg, *args, **kwargs):
+        # grad_obj will have `None` as the gradient for any leaves of `obj` that were
+        # not JAX arrays
+        ...
+        # grad_vjp_arg should have `None` as the gradient for any leaves of `vjp_arg`
+        # that were not JAX arrays.
+        return grad_vjp_arg
+
+    fn.defvjp(fn_fwd, fn_bwd)
+    ```
+
+    The key differences to `jax.custom_vjp` are that:
+
+    - Only the gradient of the first argument, `vjp_arg`, should be computed on the
+        backward pass. Everything else will automatically have zero gradient.
+    - You do not need to distinguish differentiable from nondifferentiable manually.
+        Instead you should return gradients for all inexact JAX arrays in the first
+        argument. (And just put `None` on every other leaf of the PyTree.)
+    - As a convenience, all of the inputs from the forward pass are additionally made
+        available to you on the backward pass.
+
+    !!! tip
+
+        If you need gradients with respect to multiple arguments, then just pack them
+        together as a tuple via the first argument `vjp_arg`. (See also
+        [`equinox.filter_grad`][] for a similar trick.)
+    """
+
     def __init__(self, fn):
         self.fn = fn
         self.fn_wrapped = None
@@ -130,6 +223,15 @@ class filter_custom_vjp:
             nondiff_array_vjp_arg,
             array_args_kwargs,
         )
+
+
+if getattr(typing, "GENERATING_DOCUMENTATION", True):
+    _filter_custom_vjp_doc = filter_custom_vjp.__doc__
+
+    def filter_custom_vjp(fn):
+        pass
+
+    filter_custom_vjp.__doc__ = _filter_custom_vjp_doc
 
 
 #
