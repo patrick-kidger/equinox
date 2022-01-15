@@ -87,6 +87,10 @@ plugins:
 nav:
     - 'index.md'
     - 'all-of-equinox.md'
+    - Examples:
+        - Train RNN: 'examples/train_rnn.ipynb'
+        - Freezing parameters: 'examples/frozen_layer.ipynb'
+        - Compatibility with init-apply libraries: 'examples/init_apply.ipynb'
     - Full API:
         - 'api/module.md'
         - Neural networks:

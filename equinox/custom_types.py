@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 
 
-if getattr(typing, "GENERATING_DOCUMENTATION", True):
+if getattr(typing, "GENERATING_DOCUMENTATION", False):
     Array = "jax.numpy.ndarray"
 else:
     Array = jnp.ndarray

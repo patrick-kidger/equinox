@@ -14,7 +14,7 @@ def _identity(x):
     return x
 
 
-if getattr(typing, "GENERATING_DOCUMENTATION", True):
+if getattr(typing, "GENERATING_DOCUMENTATION", False):
 
     def relu(_):
         pass

@@ -17,10 +17,3 @@ repos:
     rev: 3.9.2
     hooks:
     - id: flake8
-  - repo: local
-    hooks:
-    - id: jupyter-nb-clear-output
-      name: jupyter-nb-clear-output
-      files: \.ipynb$
-      language: system
-      entry: jupyter nbconvert --ClearOutputPreprocessor.enabled=True --inplace

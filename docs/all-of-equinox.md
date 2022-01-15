@@ -25,7 +25,7 @@ class MyModule(eqx.Module):
     bias: jax.numpy.ndarray
     
     def __init__(self, key):
-        key1, key2 = jax.random.split(key)
+        key1, key2, key3 = jax.random.split(key, 3)
         self.layers = [eqx.nn.Linear(2, 8, key=key1),
                        eqx.nn.Linear(8, 8, key=key2),
                        eqx.nn.Linear(8, 2, key=key3)]
@@ -89,8 +89,8 @@ class AnotherModule(eqx.Module):
             x = layer(x)
         return x
 
-x_key, y_key, model_key = jrandom.split(jrandom.PRNGKey(0), 3)
-x, y = jrandom.normal(x_key, (100, 2)), jrandom.normal(y_key, (100, 2))
+x_key, y_key, model_key = jax.random.split(jax.random.PRNGKey(0), 3)
+x, y = jax.random.normal(x_key, (100, 2)), jax.random.normal(y_key, (100, 2))
 model = AnotherModule(model_key)
 
 # Option 1: manually filter out anything that isn't JIT/grad-able.
@@ -100,7 +100,7 @@ model = AnotherModule(model_key)
 def loss(params, static, x, y):
     model = eqx.combine(params, static)
     pred_y = jax.vmap(model)(x)
-    return jnp.mean((y - pred_y) ** 2)
+    return jax.numpy.mean((y - pred_y) ** 2)
 
 params, static = eqx.partition(model, eqx.is_array)
 loss(params, static, x, y)
@@ -111,7 +111,7 @@ loss(params, static, x, y)
 @eqx.filter_grad
 def loss(model, x, y):
     pred_y = jax.vmap(model)(x)
-    return jnp.mean((y - pred_y) ** 2)
+    return jax.numpy.mean((y - pred_y) ** 2)
 
 loss(model, x, y)
 ```
@@ -124,11 +124,13 @@ As a convenience, `eqx.filter_jit` and `eqx.filter_grad` just wrap filtering and
 
 ## Integrates smoothly with JAX
 
-And that's it! That's pretty much everything you need to know about Equinox. Everything you've seen so far should be enough to get started with using the library.
-
 Equinox introduces a powerful yet straightforward way to build neural networks, without introducing lots of new notions or tieing you into a framework.
 
 Equinox is all just regular JAX -- PyTrees and transformations. Together, these two pieces allow us to specify complex models in JAX-friendly ways.
+
+## Next steps
+
+And that's it! That's pretty much everything you need to know about Equinox. Everything you've seen so far should be enough to get started with using the library. Also see the [Train RNN](./examples/train_rnn.ipynb) example for a fully worked example.
 
 ## Summary
 

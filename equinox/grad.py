@@ -225,7 +225,7 @@ class filter_custom_vjp:
         )
 
 
-if getattr(typing, "GENERATING_DOCUMENTATION", True):
+if getattr(typing, "GENERATING_DOCUMENTATION", False):
     _filter_custom_vjp_doc = filter_custom_vjp.__doc__
 
     def filter_custom_vjp(fn):
