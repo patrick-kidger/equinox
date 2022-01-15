@@ -3,6 +3,12 @@ repos:
     rev: stable
     hooks:
     - id: black
+  - repo: https://github.com/nbQA-dev/nbQA
+    rev: 1.1.1
+    hooks:
+    - id: nbqa-black
+    - id: nbqa-isort 
+    - id: nbqa-flake8
   - repo: https://github.com/PyCQA/isort
     rev: 5.9.3
     hooks:
@@ -11,3 +17,10 @@ repos:
     rev: 3.9.2
     hooks:
     - id: flake8
+  - repo: local
+    hooks:
+    - id: jupyter-nb-clear-output
+      name: jupyter-nb-clear-output
+      files: \.ipynb$
+      language: system
+      entry: jupyter nbconvert --ClearOutputPreprocessor.enabled=True --inplace
