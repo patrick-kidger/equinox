@@ -1,4 +1,4 @@
-<h1 align='center'>Equinox</h1>
+# Getting started
 
 Equinox is a JAX library based around a simple idea: **represent parameterised functions (such as neural networks) as PyTrees.**
 
@@ -18,11 +18,7 @@ _(In other words, why should you care? Because Equinox is really simple to learn
 pip install equinox
 ```
 
-Requires Python 3.8+ and JAX 0.2.18+.
-
-## Documentation
-
-Available at [https://docs.kidger.site/equinox](https://docs.kidger.site/equinox).
+Requires Python 3.7+ and JAX 0.2.18+.
 
 ## Quick example
 
@@ -63,17 +59,10 @@ grads = loss_fn(model, x, y)
 
 Finally, there's no magic behind the scenes. All `eqx.Module` does is register your class as a PyTree. From that point onwards, JAX already knows how to work with PyTrees.
 
+## Next steps
+
+If this quick start has got you interested, then have a read of [All of Equinox](./all-of-equinox.md), which introduces you to basically everything in Equinox. (Doesn't take very long! Equinox is simple because everything is a PyTree.)
+
 ## Citation
 
-If you found this library to be useful in academic work, then please cite:
-
-```bibtex
-@article{kidger2021equinox,
-    author={Patrick Kidger and Cristian Garcia},
-    title={{E}quinox: neural networks in {JAX} via callable {P}y{T}rees and filtered transformations},
-    year={2021},
-    journal={Differentiable Programming workshop at Neural Information Processing Systems 2021}
-}
-```
-
-(Also consider starring the project on GitHub.)
+--8<-- ".citation.md"

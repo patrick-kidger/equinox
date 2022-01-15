@@ -1,4 +1,7 @@
 **/__pycache__
+**/.ipynb_checkpoints
 *.egg-info/
 build/
 dist/
+site/
+.all_objects.cache

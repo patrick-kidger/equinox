@@ -29,30 +29,50 @@ def _filter_jit_cache(f, **jitkwargs):
     return f_wrapped
 
 
-def filter_jit(
-    fun,
-    *,
-    filter_spec=is_array,
-    filter_spec_return=is_array,
-    static_argnums=None,
-    static_argnames=None,
-    donate_argnums=None,
-    **jitkwargs
-):
+def filter_jit(fun, *, filter_spec=is_array, filter_spec_return=is_array, **jitkwargs):
+    """Wraps together [`equinox.partition`][] and `jax.jit`.
 
-    if static_argnums is not None:
-        raise ValueError("`static_argnums` should not be passed; use a filter instead.")
-    if static_argnames is not None:
+    **Arguments:**
+
+    - `fun` is a pure function to JIT compile.
+    - `filter_spec` is a PyTree whose structure should be a prefix of the structure of
+        the inputs to `fun`. It behaves as the `filter_spec` argument to
+        [`equinox.filter`][]. Truthy values will be traced; falsey values will be held
+        static.
+    - `filter_spec_return` is a PyTree whose structure should be a prefix of the
+        structure of the outputs of `fun`. It behaves as the `filter_spec` argument to
+        [`equinox.filter`][]. Truthy values should be tracers; falsely values are any
+        (non-tracer) auxiliary information to return.
+    - `**jitkwargs` are any other keyword arguments to `jax.jit`.
+
+        !!! info
+
+            Specifically, if calling `fun(*args, **kwargs)`, then `filter_spec` must
+            have a structure which is a prefix for `(args, kwrgs)`.
+
+    **Returns:**
+
+    The JIT'd version of `fun`.
+
+    !!! info
+
+        A very important special case is to trace all JAX arrays and treat all other
+        objects as static.
+
+        This is accomplished with `filter_spec=equinox.is_array`,
+        `filter_spec_return=equinox.is_array` -- which are the defaults. (It is
+        unusual to need different behaviour to this.)
+    """
+
+    if any(
+        x in jitkwargs for x in ("static_argnums", "static_argnames", "donate_argnums")
+    ):
         raise ValueError(
-            "`static_argnames` should not be passed; use a filter instead."
-        )
-    if donate_argnums is not None:
-        raise NotImplementedError(
-            "`donate_argnums` is not implemented for filter_jit. Manually combine "
-            "`equinox.filter` and `jax.jit` instead.."
+            "`jitkwargs` cannot contain 'static_argnums', 'static_argnames' or "
+            "'donate_argnums'."
         )
 
-    # We choose not to make a distinction between ([arg, ... ,arg], kwargs) and ((arg, ... ,arg), kwargs)
+    # We choose not to make a distinction between ([arg, ..., arg], kwargs) and ((arg, ..., arg), kwargs)
     if (
         isinstance(filter_spec, tuple)
         and len(filter_spec) == 2

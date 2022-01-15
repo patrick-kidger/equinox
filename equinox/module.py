@@ -9,6 +9,29 @@ from .tree import tree_equal
 
 
 def static_field(**kwargs):
+    """Used for marking that a field should _not_ be treated as part of the PyTree
+    of a [`equinox.Module`][]. (And is instead just treated as extra metadata.)
+
+    !!! example
+
+        ```python
+        class MyModule(equinox.Module):
+            normal_field: int
+            static_field: int = equinox.static_field()
+
+        mymodule = MyModule()
+        leaves, treedef = jax.tree_flatten(mymodule)
+        assert len(leaves) == 1
+        ```
+
+    In practice this should rarely be used; it is usually preferential to just filter
+    out each field with `eqx.filter` whenever you need to select only some fields.
+
+    **Arguments:**
+
+    - `**kwargs`: If any are passed then they are passed on to `datacalss.field`.
+        (Recall that Equinox uses dataclasses for its modules.)
+    """
     try:
         metadata = dict(kwargs["metadata"])
     except KeyError:
@@ -22,6 +45,8 @@ def static_field(**kwargs):
 class _wrap_method:
     def __init__(self, method):
         self.method = method
+        if getattr(self.method, "__isabstractmethod__", False):
+            self.__isabstractmethod__ = self.method.__isabstractmethod__
 
     def __get__(self, instance, owner):
         if instance is None:
@@ -100,6 +125,87 @@ class _ModuleMeta(abc.ABCMeta):
 
 
 class Module(metaclass=_ModuleMeta):
+    """Base class. Created your model by inheriting from this.
+
+    **Fields**
+
+    Specify all its fields at the class level (identical to
+    [dataclasses](https://docs.python.org/3/library/dataclasses.html)). This defines
+    its children as a PyTree.
+
+    ```python
+    class MyModule(equinox.Module):
+        weight: jax.numpy.ndarray
+        bias: jax.numpy.ndarray
+        submodule: equinox.Module
+    ```
+
+    **Initialisation**
+
+    A default `__init__` is automatically provided, which just fills in fields with the
+    arguments passed. For example `MyModule(weight, bias, submodule)`.
+
+    Alternatively (quite commonly) you can provide an `__init__` method yourself:
+
+    ```python
+    class MyModule(equinox.Module):
+        weight: jax.numpy.ndarray
+        bias: jax.numpy.ndarray
+        submodule: equinox.Module
+
+        def __init__(self, in_size, out_size, key):
+            wkey, bkey, skey = jax.random.split(key, 3)
+            self.weight = jax.random.normal(wkey, (out_size, in_size))
+            self.bias = jax.random.normal(bkey, (out_size,))
+            self.submodule = equinox.nn.Linear(in_size, out_size, key=skey)
+    ```
+
+    **Methods**
+
+    It is common to create some methods on the class -- for example to define the forward pass of a model.
+
+    ```python
+    class MyModule(equinox.Module):
+        ...  # as above
+
+        def __call__(self, x):
+            return self.submodule(x) + self.weight @ x + self.bias
+    ```
+
+    !!! tip
+
+        You don't have to define `__call__`:
+
+        - You can define other methods if you want.
+        - You can define multiple methods if you want.
+        - You can define no methods if you want. (And just use `equinox.Module` as a
+            nice syntax for custom PyTrees.)
+
+        No method is special-cased.
+
+    **Usage**
+
+    After you have defined your model, then you can use it just like any other PyTree
+    -- that just happens to have some methods attached. In particular you can pass it
+    around across `jax.jit`, `jax.grad` etc. in exactly the way that you're used to.
+
+    !!! example
+
+        If you wanted to, then it would be completely safe to do
+
+        ```python
+        class MyModule(equinox.Module):
+            ...
+
+            @jax.jit
+            def __call__(self, x):
+                ...
+        ```
+
+        because `self` is just a PyTree. Unlike most other neural network libaries, you
+        can mix Equinox and native JAX without any difficulties at all.
+    """
+
     _has_dataclass_init = True
 
     def __hash__(self):

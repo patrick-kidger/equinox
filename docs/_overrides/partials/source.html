@@ -1,0 +1,20 @@
+{% import "partials/language.html" as lang with context %}
+<a href="{{ config.repo_url }}" title="{{ lang.t('source.link.title') }}" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    {% set icon = config.theme.icon.repo or "fontawesome/brands/git-alt" %}
+    {% include ".icons/" ~ icon ~ ".svg" %}
+  </div>
+  <div class="md-source__repository">
+    {{ config.repo_name }}
+  </div>
+</a>
+{% if config.theme.twitter_url %}
+<a href="{{ config.theme.twitter_url }}" title="Go to Twitter" class="md-source">
+  <div class="md-source__icon md-icon">
+    {% include ".icons/fontawesome/brands/twitter.svg" %}
+  </div>
+  <div class="md-source__repository">
+    {{ config.theme.twitter_name }}
+  </div>
+</a>
+{% endif %}
