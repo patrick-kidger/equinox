@@ -33,6 +33,7 @@ theme:
 site_name: Equinox
 site_description: The documentation for the Equinox software library.
 site_author: Patrick Kidger
+site_url: https://docs.kidger.site/equinox
 
 repo_url: https://github.com/patrick-kidger/equinox
 repo_name: patrick-kidger/equinox
@@ -47,8 +48,6 @@ strict: true  # Don't allow warnings during the build process
 
 extra_css:
     - _static/custom_css.css
-    # Awful hack to get the favicon to load.  # TODO: find a proper way to include extra static files.
-    - _static/favicon.png
 
 markdown_extensions:
 # Enable if LaTeX is needed
@@ -65,6 +64,11 @@ markdown_extensions:
 plugins:
     - search  # default search plugin; needs manually re-enabling when using any other plugins
     - autorefs  # Cross-links to headings
+    - include_exclude_files:
+        include:
+            - ".htaccess"
+        exclude:
+            - "_overrides"
     - mknotebooks  # Jupyter notebooks
     - mkdocstrings:
         handlers:
