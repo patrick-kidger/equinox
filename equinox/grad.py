@@ -1,4 +1,5 @@
 import functools as ft
+import types
 import typing
 
 import jax
@@ -228,8 +229,11 @@ class filter_custom_vjp:
 if getattr(typing, "GENERATING_DOCUMENTATION", False):
     _filter_custom_vjp_doc = filter_custom_vjp.__doc__
 
-    def filter_custom_vjp(fn):
+    def defvjp(fn_fwd, fn_bwd):
         pass
+
+    def filter_custom_vjp(fn):
+        return types.SimpleNamespace(defvjp=defvjp)
 
     filter_custom_vjp.__doc__ = _filter_custom_vjp_doc
 
