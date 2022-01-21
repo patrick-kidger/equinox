@@ -99,7 +99,11 @@ class _ModuleMeta(abc.ABCMeta):
         # e.g. if `B` has a custom init then `class A(B): pass` would otherwise set a
         # dataclass init that overrides the custom __init__.
         _init = cls._has_dataclass_init = _has_dataclass_init(cls)
+        if _init:
+            init_doc = cls.__init__.__doc__
         cls = dataclass(eq=False, frozen=True, init=_init)(cls)
+        if _init:
+            cls.__init__.__doc__ = init_doc
         jax.tree_util.register_pytree_node_class(cls)
         return cls
 
