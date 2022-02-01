@@ -65,7 +65,7 @@ Finally, there's no magic behind the scenes. All `eqx.Module` does is register y
 
 ## Citation
 
-If you found this library to be useful in academic work, then please cite:
+If you found this library to be useful in academic work, then please cite: ([arXiv link](https://arxiv.org/abs/2111.00254))
 
 ```bibtex
 @article{kidger2021equinox,
