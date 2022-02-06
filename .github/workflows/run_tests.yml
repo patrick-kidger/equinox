@@ -25,12 +25,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install flake8 pytest optax wheel
+          python -m pip install pytest wheel optax
 
       - name: Checks with pre-commit
         uses: pre-commit/action@v2.0.3
 
       - name: Test with pytest
         run: |
-          python setup.py install
+          python -m pip install .
           python -m pytest
