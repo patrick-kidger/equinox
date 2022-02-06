@@ -72,7 +72,7 @@ import equinox as eqx
 import functools as ft
 import jax
 
-# Start off by crreating a model just like normal, but with some arbitrary Python
+# Start off by creating a model just like normal, but with some arbitrary Python
 # objects as part of its parameterisation. In this case, we have `jax.nn.relu`, which
 # is a Python function.
 class AnotherModule(eqx.Module):
