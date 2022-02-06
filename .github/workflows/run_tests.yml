@@ -6,7 +6,7 @@ on:
     - cron: "0 2 * * 6"
 
 jobs:
-  build:
+  run-test:
     strategy:
       matrix:
         python-version: [ 3.8, 3.9 ]
