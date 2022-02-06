@@ -28,7 +28,7 @@ class GRUCell(Module):
             def __call__(self, xs):
                 scan_fn = lambda state, input: (cell(input, state), None)
                 init_state = jnp.zeros(self.cell.hidden_size)
-                final_state, _ = jax.lax.scan(scan_fn init_state, xs)
+                final_state, _ = jax.lax.scan(scan_fn, init_state, xs)
                 return final_state
         ```
     """
@@ -136,7 +136,7 @@ class LSTMCell(Module):
                 scan_fn = lambda state, input: (cell(input, state), None)
                 init_state = (jnp.zeros(self.cell.hidden_size),
                               jnp.zeros(self.cell.hidden_size))
-                final_state, _ = jax.lax.scan(scan_fn init_state, xs)
+                final_state, _ = jax.lax.scan(scan_fn, init_state, xs)
                 return final_state
         ```
     """

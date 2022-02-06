@@ -34,6 +34,8 @@ def tree_at(
     - `replace_fn`: A function `Leaf -> Any`. It will be called on every leaf specified
         by `where`. The return value from `replace_fn` will be used in its place.
         Mutually exclusive with `replace`.
+    - `is_leaf`: As `jax.tree_flatten`; used to determine what should be treated as a
+        leaf.
 
     **Returns:**
 
@@ -108,7 +110,7 @@ def tree_at(
 
 
 def tree_equal(*pytrees: PyTree) -> bool:
-    """Returns `True` if all input PyTrees are equal. Every PyTrees must have the same
+    """Returns `True` if all input PyTrees are equal. Every PyTree must have the same
     structure. Any JAX or NumPy arrays (as leaves) must have the same shape, dtype, and
     values to be considered equal. JAX arrays and NumPy arrays are not considered equal
     to each other.
