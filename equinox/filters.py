@@ -143,7 +143,7 @@ def combine(*pytrees: PyTree) -> PyTree:
 
     **Arguments:**
 
-        - `*pytrees*: a sequence of PyTrees all with the same structure.
+    - `*pytrees`: a sequence of PyTrees all with the same structure.
 
     **Returns:**
 
