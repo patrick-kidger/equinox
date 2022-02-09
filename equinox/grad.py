@@ -209,7 +209,12 @@ class filter_custom_vjp:
         fn_wrapped.defvjp(fn_fwd_wrapped, fn_bwd_wrapped)
         self.fn_wrapped = fn_wrapped
 
-    def __call__(self, vjp_arg, /, *args, **kwargs):
+    def __call__(__self, __vjp_arg, *args, **kwargs):
+        # Try and avoid name collisions with the arguments of the wrapped function.
+        # TODO: once we switch to Python 3.8, use (self, vjp_arg, /, *args, **kwargs).
+        self = __self
+        vjp_arg = __vjp_arg
+        del __self, __vjp_arg
         if self.fn_wrapped is None:
             raise RuntimeError(f"defvjp not yet called for {self.fn.__name__}")
         array_vjp_arg, nonarray_vjp_arg = partition(vjp_arg, is_array)
