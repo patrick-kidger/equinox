@@ -28,7 +28,6 @@ jobs:
           python -m pip install pytest wheel optax
 
       - name: Checks with pre-commit
-        if: matrix.python-version != '3.7'  # pre-commit has a spurious error for 3.7
         uses: pre-commit/action@v2.0.3
 
       - name: Test with pytest
