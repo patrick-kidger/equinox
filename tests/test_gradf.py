@@ -1,4 +1,5 @@
 import functools as ft
+import warnings
 
 import jax
 import jax.numpy as jnp
@@ -9,6 +10,18 @@ import pytest
 import equinox as eqx
 
 
+# This module tests deprecated functionality
+def _catch_warnings(fn):
+    @ft.wraps(fn)
+    def _fn(*args, **kwargs):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return fn(*args, **kwargs)
+
+    return _fn
+
+
+@_catch_warnings
 def test_gradf_filter_fn(getkey):
     a = jrandom.normal(getkey(), (2, 3))
     b = jrandom.normal(getkey(), (2, 3))
@@ -117,6 +130,7 @@ def test_gradf_filter_fn(getkey):
     assert np.all(gnp == 1)
 
 
+@_catch_warnings
 def test_gradf_filter_tree(getkey):
     a = jrandom.normal(getkey(), (2, 3))
     b = jrandom.normal(getkey(), (1, 2))
@@ -176,6 +190,7 @@ def test_gradf_filter_tree(getkey):
     assert graddict["b"] is None
 
 
+@_catch_warnings
 def test_both_filter():
     with pytest.raises(ValueError):
 
@@ -184,6 +199,7 @@ def test_both_filter():
             return x
 
 
+@_catch_warnings
 def test_no_filter():
     with pytest.raises(ValueError):
 
@@ -192,7 +208,7 @@ def test_no_filter():
             return x
 
 
-# TODO: more comprehensive tests on this.
+@_catch_warnings
 def test_value_and_grad_f(getkey):
     a = jrandom.normal(getkey(), (2, 3))
 
@@ -205,6 +221,7 @@ def test_value_and_grad_f(getkey):
     assert jnp.all(grad == 1)
 
 
+@_catch_warnings
 def test_aux(getkey):
     a = jrandom.normal(getkey(), (2, 3))
 
