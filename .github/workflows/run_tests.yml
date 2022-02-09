@@ -9,8 +9,8 @@ jobs:
   run-test:
     strategy:
       matrix:
-        python-version: [ 3.8, 3.9 ]
-        os: [ ubuntu-latest, macOS-latest ]
+        python-version: [ 3.7, 3.8, 3.9 ]
+        os: [ macOS-latest ]
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
@@ -28,6 +28,7 @@ jobs:
           python -m pip install pytest wheel optax
 
       - name: Checks with pre-commit
+        if: matrix.python-version != '3.7'  # pre-commit has a spurious error for 3.7
         uses: pre-commit/action@v2.0.3
 
       - name: Test with pytest

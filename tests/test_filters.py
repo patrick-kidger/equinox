@@ -1,3 +1,5 @@
+import warnings
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -155,13 +157,19 @@ def test_splitfn_and_merge(getkey):
         ],
         [1, 1, 1, 1, "hi"],
     ):
-        int_args, notint_args, which, treedef = eqx.split(pytree, filter_fn=filter_fn)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            int_args, notint_args, which, treedef = eqx.split(
+                pytree, filter_fn=filter_fn
+            )
         for arg in int_args:
             assert isinstance(arg, int)
         for arg in notint_args:
             assert not isinstance(arg, int)
         assert sum(which) == 4
-        re_pytree = eqx.merge(int_args, notint_args, which, treedef)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            re_pytree = eqx.merge(int_args, notint_args, which, treedef)
         assert re_pytree == pytree
 
 
@@ -179,19 +187,24 @@ def test_splittree_and_merge(getkey):
             [1, 1, [1, 1, {"a": 1, "b": 1, "c": linear}]],
         )
     ):
-        keep_args, notkeep_args, which, treedef = eqx.split(
-            pytree, filter_tree=filter_tree
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            keep_args, notkeep_args, which, treedef = eqx.split(
+                pytree, filter_tree=filter_tree
+            )
         if i == 0:
             assert set(notkeep_args) == {2, 3, True, 4}
         else:
             assert notkeep_args == [1, 1, 1, 1]
         assert sum(which) == 4
 
-        re_pytree = eqx.merge(keep_args, notkeep_args, which, treedef)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            re_pytree = eqx.merge(keep_args, notkeep_args, which, treedef)
         assert re_pytree == pytree
 
     filter_tree = [True, [False, False]]
     pytree = [True, None]
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError), warnings.catch_warnings():
+        warnings.simplefilter("ignore")
         eqx.split(pytree, filter_tree=filter_tree)

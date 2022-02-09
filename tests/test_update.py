@@ -18,7 +18,7 @@ def test_apply_updates2():
     def f(p):
         return p[1] + p[2]
 
-    grads = eqx.gradf(f, filter_fn=lambda x: x == 3)(params)
+    grads = eqx.filter_grad(f, filter_spec=lambda x: x == 3)(params)
     new_params = eqx.apply_updates(params, grads)
     assert new_params == [o, jnp.array([4.0]), jnp.array([2.0])]
 
