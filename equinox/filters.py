@@ -87,7 +87,7 @@ def filter(
 
     !!! info
 
-        An common special case is `equinox.filter(pytree, equinox.is_array)`. Then
+        A common special case is `equinox.filter(pytree, equinox.is_array)`. Then
         `equinox.is_array` is evaluted on all of `pytree`'s leaves, and each leaf then
         kept or replaced.
 
