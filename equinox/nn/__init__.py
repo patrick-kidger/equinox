@@ -1,3 +1,4 @@
+from .attention import MultiheadAttention
 from .composed import MLP, Sequential
 from .conv import (
     Conv,
@@ -10,5 +11,6 @@ from .conv import (
     ConvTranspose3d,
 )
 from .dropout import Dropout
+from .embedding import Embedding
 from .linear import Identity, Linear
 from .rnn import GRUCell, LSTMCell
