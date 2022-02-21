@@ -6,7 +6,8 @@ import jax.random as jrandom
 
 from ..custom_types import Array
 from ..module import Module, static_field
-from .linear import Dropout, Linear
+from .dropout import Dropout
+from .linear import Linear
 
 
 class MultiheadAttention(Module):
