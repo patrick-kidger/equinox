@@ -9,6 +9,7 @@ from ..module import Module, static_field
 
 
 class Embedding(Module):
+    """Simple lookup table style embedding"""
 
     num_embeddings: int = static_field()
     embedding_dim: int = static_field()
@@ -22,11 +23,20 @@ class Embedding(Module):
         *,
         key: "jax.random.PRNGKey",
     ):
-        key1, _ = jrandom.split(key, 2)
+        """**Arguments:**
+
+        - `num_embeddings`: Size of embedding dictionary.
+        - `embedding_dim`: Size of each embedding vector.
+        - `weight`: If given, the embedding lookup table.
+        - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
+            initialisation. (Keyword only argument.)
+
+        """
+        super().__init__()
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
         if weight is None:
-            self.weight = jrandom.normal(key1, (num_embeddings, embedding_dim))
+            self.weight = jrandom.normal(key, (num_embeddings, embedding_dim))
         else:
             if list(weight.shape) != [num_embeddings, embedding_dim]:
                 raise ValueError(
@@ -35,7 +45,19 @@ class Embedding(Module):
                 )
             self.weight = weight
 
-    def __call__(self, x: Array) -> Array:
+    def __call__(
+        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
+    ) -> Array:
+        """**Arguments:**
+
+        - `x`: The table index.
+        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
+            (Keyword only argument.)
+
+        **Returns:**
+
+        A JAX array of shape `embedding_dim` that gives the xth index of the embedding table.
+        """
         if not jnp.issubdtype(x, jnp.integer):
             raise ValueError(
                 f"Input must be an array of integer dtype but input was {x.dtype}"
