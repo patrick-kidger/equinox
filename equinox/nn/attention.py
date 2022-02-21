@@ -10,6 +10,7 @@ from .linear import Dropout, Linear
 
 
 class MultiheadAttention(Module):
+    """Multihead Attention layer from 'Attention Is All You Need' (https://arxiv.org/abs/1706.03762)"""
 
     embed_dim: int = static_field()
     num_heads: int = static_field()
@@ -35,6 +36,19 @@ class MultiheadAttention(Module):
         *,
         key: "jax.random.PRNGKey",
     ):
+        """**Arguments:**
+
+        - `embed_dim`: Dimension of the model.
+        - `num_heads`: Number of parallel attention heads.
+        - `dropout`: Dropout probability on attention matrix. Default: `0.0`.
+        - `use_bias`: Whether to use a bias term on the output projection. Default: `True`.
+        - `kdim`: Total number of features for keys. Default: `None` (use `kdim=embed_dim`).
+        - `vdim`: Total number of features for values. Default: `None` (use `vdim=embed_dim`).
+        - `add_bias_kv`: Whether to use bias term for value and key projections. Default: `False`.
+        - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
+            initialisation. (Keyword only argument.)
+
+        """
         super().__init__()
         key1, key2, key3, key4 = jrandom.split(key, 4)
         self.embed_dim = embed_dim
@@ -72,6 +86,18 @@ class MultiheadAttention(Module):
         *,
         key_: Optional["jax.random.PRNGKey"] = None,
     ) -> Array:
+        """**Arguments:**
+
+        - `query`: Query embedding. Should be a JAX array of shape `(sequence_lenth, embed_dim)`.
+        - `key`: Key embedding. Should be a JAX array of shape `(sequence_lenth, embed_dim)`.
+        - `value`: Value embedding. Should be a JAX array of shape `(sequence_lenth, embed_dim)`.
+        - `attn_mask`: A mask preventing attention to certain positions.
+        - `key_`: A PRNGKey used for dropout.
+
+        **Returns:**
+
+        A JAX array of shape `(sequence_lenth, embed_dim)`.
+        """
         d1, d2 = query.shape
         query_heads = jax.vmap(self.q_proj)(query).reshape(
             self.embed_dim, self.num_heads, d1
