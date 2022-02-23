@@ -1,4 +1,4 @@
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -11,6 +11,7 @@ _shape_t = Union[int, List[int]]
 
 
 class LayerNorm(Module):
+    """Layer Normalization as described in https://arxiv.org/abs/1607.06450"""
 
     normalized_shape: Union[int, Tuple[int], List[int]] = static_field()
     eps: float = static_field()
@@ -26,13 +27,22 @@ class LayerNorm(Module):
         *,
         key: "jax.random.PRNGKey"
     ):
+        """**Arguments:**
+        - `normalized_shape`: Input shape.
+        - `eps`: Value added to denominator for numerical stability. Default: `1e-5`.
+        - `elementwise_affine`: Whether the module has learnable affine parameters. Default: `True`.
+        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
+            (Keyword only argument.)
+        """
         self.normalized_shape = normalized_shape
         self.eps = eps
         self.elementwise_affine = elementwise_affine
         self.weight = jnp.ones(self.normalized_shape)
         self.bias = jnp.zeros(self.normalized_shape)
 
-    def __call__(self, x):
+    def __call__(
+        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
+    ) -> Array:
         mean = jnp.mean(x, keepdims=True)
         variance = jnp.var(x, keepdims=True)
         if self.elementwise_affine:

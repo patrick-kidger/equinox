@@ -40,8 +40,8 @@ class Embedding(Module):
         else:
             if list(weight.shape) != [num_embeddings, embedding_dim]:
                 raise ValueError(
-                    f"Shape of weight ({weight.shape}) does not match num_embeddings ({num_embeddings})"
-                    f" and embedding_dim ({embedding_dim})"
+                    f"Shape of weight ({weight.shape}) does not match num_embeddings"
+                    f" ({num_embeddings}) and embedding_dim ({embedding_dim})"
                 )
             self.weight = weight
 
