@@ -57,8 +57,8 @@ def filter_grad(fun, *, filter_spec=is_inexact_array, **gradkwargs):
 
     A function computing the derivative of `fun` with respect to its first input. Any
     nondifferentiable leaves will have `None` as the gradient. See
-    `equinox.apply_updates` for a convenience function that will only attempt to apply
-    non-`None` updates.
+    [`equinox.apply_updates`][] for a convenience function that will only attempt to
+    apply non-`None` updates.
 
     !!! info
 
