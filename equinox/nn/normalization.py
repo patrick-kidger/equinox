@@ -7,13 +7,13 @@ from ..custom_types import Array
 from ..module import Module, static_field
 
 
-_shape_t = Union[int, List[int]]
+_shape_t = Union[int, Tuple[int], List[int]]
 
 
 class LayerNorm(Module):
     """Layer Normalization as described in https://arxiv.org/abs/1607.06450"""
 
-    normalized_shape: Union[int, Tuple[int], List[int]] = static_field()
+    normalized_shape: _shape_t = static_field()
     eps: float = static_field()
     elementwise_affine: bool = static_field()
     weight: Array

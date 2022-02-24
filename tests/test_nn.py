@@ -503,3 +503,19 @@ def test_embedding(getkey):
     )
     x = jnp.array([-1])
     assert jnp.allclose(emb(x), jnp.linspace(9.1, 10.0, 10))
+
+
+def test_layer_norm(getkey):
+    ln = eqx.nn.LayerNorm(128, key=getkey())
+    x = jrandom.uniform(getkey(), (128,))
+    assert ln(x).shape == (128,)
+
+    ln = eqx.nn.LayerNorm(normalized_shape=(128, 128), key=getkey())
+    x = jrandom.uniform(getkey(), (128, 128))
+    assert ln(x).shape == (128, 128)
+
+    ln = eqx.nn.LayerNorm(10, key=getkey())
+    x1 = jnp.linspace(0.1, 1, 10)
+    x2 = jnp.linspace(0, 1, 10)
+    x3 = (x1 - x1.mean()) / jnp.sqrt(x1.var() + 1e-5)
+    assert jnp.allclose(ln(x1), ln(x2)) and jnp.allclose(x1, x3)
