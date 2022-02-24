@@ -107,15 +107,9 @@ class MultiheadAttention(Module):
         A JAX array of shape `(sequence_length, embed_dim)`.
         """
         d1, _ = query.shape
-        query_heads = jax.vmap(self.q_proj)(query).reshape(
-            d1, self.num_heads, self.embed_dim // self.num_heads
-        )
-        key_heads = jax.vmap(self.k_proj)(key).reshape(
-            d1, self.num_heads, self.embed_dim // self.num_heads
-        )
-        value_heads = jax.vmap(self.v_proj)(value).reshape(
-            d1, self.num_heads, self.embed_dim // self.num_heads
-        )
+        query_heads = self._project(self.q_proj, query)
+        key_heads = self._project(self.k_proj, key)
+        value_heads = self._project(self.v_proj, value)
         attn_logits = jnp.einsum("...shd,...Shd->...hsS", query_heads, key_heads)
         sqrt_key_size = np.sqrt(self.kdim // self.num_heads).astype(key.dtype)
         attn_logits = attn_logits / sqrt_key_size
@@ -133,3 +127,10 @@ class MultiheadAttention(Module):
         attn_vec = jnp.reshape(attn, (*query.shape[:-1], -1))
 
         return jax.vmap(self.out_proj)(attn_vec)
+
+    def _project(self, proj, x):
+        d1, _ = x.shape
+        projection = jax.vmap(proj)(x).reshape(
+            d1, self.num_heads, self.embed_dim // self.num_heads
+        )
+        return projection

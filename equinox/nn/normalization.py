@@ -43,6 +43,16 @@ class LayerNorm(Module):
     def __call__(
         self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
+        """**Arguments:**
+
+        - `x`: A JAX array of shape `normalized_shape`.
+        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
+            (Keyword only argument.)
+
+        **Returns:**
+
+        A JAX array of shape `normalized_shape`.
+        """
         mean = jnp.mean(x, keepdims=True)
         variance = jnp.var(x, keepdims=True)
         if self.elementwise_affine:
