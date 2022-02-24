@@ -463,3 +463,43 @@ def test_convtranspose3d(getkey):
         ]
     ).reshape(1, 3, 3, 3)
     assert jnp.allclose(conv(data), answer)
+
+
+def test_multiheadattn(getkey):
+    atn = eqx.nn.MultiheadAttention(128, 4, key=getkey())
+    x = jrandom.uniform(getkey(), (4, 128))
+    assert atn(x, x, x).shape == (4, 128)
+
+    atn = eqx.nn.MultiheadAttention(embed_dim=512, num_heads=8, key=getkey())
+    x = jrandom.uniform(getkey(), (2, 512))
+    assert atn(x, x, x).shape == (2, 512)
+
+    atn = eqx.nn.MultiheadAttention(4, 2, use_bias=False, key=getkey())
+    atn = eqx.tree_at(
+        lambda x: (
+            x.q_proj.weight,
+            x.k_proj.weight,
+            x.v_proj.weight,
+            x.out_proj.weight,
+        ),
+        atn,
+        [jnp.arange(16).reshape(4, 4) for _ in range(4)],
+    )
+    x = jnp.array([[1, 2, 3, 4]])
+    assert jnp.allclose(atn(x, x, x), jnp.array([[680.0, 1960.0, 3240.0, 4520.0]]))
+
+
+def test_embedding(getkey):
+    emb = eqx.nn.Embedding(100, 512, key=getkey())
+    x = jnp.array([1])
+    assert emb(x).shape == (1, 512)
+
+    emb = eqx.nn.Embedding(num_embeddings=10, embedding_dim=20)
+    x = jnp.array([0])
+    assert emb(x).shape == (1, 20)
+
+    emb = eqx.nn.Embedding(
+        10, 10, weight=jnp.linspace(0, 10, 100).reshape(10, 10), key=getkey()
+    )
+    x = jnp.array([-1])
+    assert jnp.allclose(emb(x), jnp.linspace(9.1, 10.0, 10))
