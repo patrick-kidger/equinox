@@ -499,7 +499,7 @@ def test_embedding(getkey):
     assert emb(x).shape == (1, 20)
 
     emb = eqx.nn.Embedding(
-        10, 10, weight=jnp.linspace(0, 10, 100).reshape(10, 10), key=getkey()
+        10, 10, weight=jnp.linspace(0.1, 10, 100).reshape(10, 10), key=getkey()
     )
     x = jnp.array([-1])
     assert jnp.allclose(emb(x), jnp.linspace(9.1, 10.0, 10))
