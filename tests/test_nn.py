@@ -494,7 +494,7 @@ def test_embedding(getkey):
     x = jnp.array([1])
     assert emb(x).shape == (1, 512)
 
-    emb = eqx.nn.Embedding(num_embeddings=10, embedding_dim=20)
+    emb = eqx.nn.Embedding(num_embeddings=10, embedding_dim=20, key=getkey())
     x = jnp.array([0])
     assert emb(x).shape == (1, 20)
 
@@ -518,4 +518,5 @@ def test_layer_norm(getkey):
     x1 = jnp.linspace(0.1, 1, 10)
     x2 = jnp.linspace(0, 1, 10)
     x3 = (x1 - x1.mean()) / jnp.sqrt(x1.var() + 1e-5)
-    assert jnp.allclose(ln(x1), ln(x2)) and jnp.allclose(x1, x3)
+    assert jnp.allclose(ln(x1), ln(x2))
+    assert jnp.allclose(x1, x3)
