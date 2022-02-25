@@ -518,5 +518,5 @@ def test_layer_norm(getkey):
     x1 = jnp.linspace(0.1, 1, 10)
     x2 = jnp.linspace(0, 1, 10)
     x3 = (x1 - x1.mean()) / jnp.sqrt(x1.var() + 1e-5)
-    assert jnp.allclose(ln(x1), ln(x2))
-    assert jnp.allclose(x1, x3)
+    assert jnp.allclose(ln(x1), ln(x2), atol=1e-4)
+    assert jnp.allclose(ln(x1), x3, atol=1e-4)
