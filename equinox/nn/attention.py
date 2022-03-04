@@ -13,7 +13,11 @@ from .linear import Linear
 
 class MultiheadAttention(Module):
     """
-    Multihead Attention layer from 'Attention Is All You Need' (https://arxiv.org/abs/1706.03762)
+    Multihead Attention layer from `Attention Is All You Need <https://arxiv.org/abs/1706.03762>`_.
+
+    $\text{MultiHeadAttention}(Q, K, V) = \text{Concat}(head_{1},...,head_{h})W^{out}$,
+    where $head_i = \text{softmax}(\frac{QW_i^Q(KW_i^K)^\intercal}{\sqrt{d_k}})VW_i^V$
+
     """
 
     embed_dim: int = static_field()
@@ -39,6 +43,7 @@ class MultiheadAttention(Module):
         add_bias_kv: bool = False,
         *,
         key: "jax.random.PRNGKey",
+        **kwargs,
     ):
         """**Arguments:**
 
@@ -53,7 +58,7 @@ class MultiheadAttention(Module):
             initialisation. (Keyword only argument.)
 
         """
-        super().__init__()
+        super().__init__(**kwargs)
         key1, key2, key3, key4 = jrandom.split(key, 4)
         self.embed_dim = embed_dim
         self.kdim = kdim if kdim is not None else embed_dim
@@ -88,19 +93,19 @@ class MultiheadAttention(Module):
     def __call__(
         self,
         query: Array,
-        key: Array,
+        key_: Array,
         value: Array,
         attn_mask: Optional[Array] = None,
         *,
-        key_: Optional["jax.random.PRNGKey"] = None,
+        key: Optional["jax.random.PRNGKey"] = None,
     ) -> Array:
         """**Arguments:**
 
         - `query`: Query embedding. Should be a JAX array of shape `(sequence_length, embed_dim)`.
-        - `key`: Key embedding. Should be a JAX array of shape `(sequence_length, embed_dim)`.
+        - `key_`: Key embedding. Should be a JAX array of shape `(sequence_length, embed_dim)`.
         - `value`: Value embedding. Should be a JAX array of shape `(sequence_length, embed_dim)`.
         - `attn_mask`: A mask preventing attention to certain positions.
-        - `key_`: A PRNGKey used for dropout.
+        - `key`: A PRNGKey used for dropout.
 
         **Returns:**
 
@@ -108,12 +113,12 @@ class MultiheadAttention(Module):
         """
         d1, _ = query.shape
         query_heads = self._project(self.q_proj, query)
-        key_heads = self._project(self.k_proj, key)
+        key_heads = self._project(self.k_proj, key_)
         value_heads = self._project(self.v_proj, value)
-        attn_logits = jnp.einsum("...shd,...Shd->...hsS", query_heads, key_heads)
+        attn_logits = jnp.einsum("shd,Shd->hsS", query_heads, key_heads)
         sqrt_key_size = np.sqrt(self.kdim // self.num_heads).astype(key.dtype)
         attn_logits = attn_logits / sqrt_key_size
-        attn_logits = self.dropout(attn_logits, key=key_)
+        attn_logits = self.dropout(attn_logits, key=key)
 
         if attn_mask is not None:
             if attn_mask.ndim != attn_logits.ndim:
@@ -123,7 +128,7 @@ class MultiheadAttention(Module):
                 )
             attn_logits = jnp.where(attn_mask, attn_logits, -1e30)
         attn_weights = jax.nn.softmax(attn_logits, axis=-1)
-        attn = jnp.einsum("...hsS,...Shd->...shd", attn_weights, value_heads)
+        attn = jnp.einsum("hsS,Shd->shd", attn_weights, value_heads)
         attn_vec = jnp.reshape(attn, (*query.shape[:-1], -1))
 
         return jax.vmap(self.out_proj)(attn_vec)

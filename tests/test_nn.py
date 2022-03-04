@@ -465,7 +465,7 @@ def test_convtranspose3d(getkey):
     assert jnp.allclose(conv(data), answer)
 
 
-def test_multiheadattn(getkey):
+def test_multihead_attention(getkey):
     atn = eqx.nn.MultiheadAttention(128, 4, key=getkey())
     x = jrandom.uniform(getkey(), (4, 128))
     assert atn(x, x, x).shape == (4, 128)

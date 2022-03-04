@@ -1,7 +1,6 @@
 from typing import Optional
 
 import jax
-import jax.numpy as jnp
 import jax.random as jrandom
 
 from ..custom_types import Array
@@ -22,6 +21,7 @@ class Embedding(Module):
         weight: Optional[Array] = None,
         *,
         key: "jax.random.PRNGKey",
+        **kwargs,
     ):
         """**Arguments:**
 
@@ -32,7 +32,7 @@ class Embedding(Module):
             initialisation. (Keyword only argument.)
 
         """
-        super().__init__()
+        super().__init__(**kwargs)
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
         if weight is None:
@@ -58,8 +58,4 @@ class Embedding(Module):
 
         A JAX array of shape `embedding_dim` that gives the xth index of the embedding table.
         """
-        if not jnp.issubdtype(x, jnp.integer):
-            raise ValueError(
-                f"Input must be an array of integer dtype but input was {x.dtype}"
-            )
-        return self.weight[(x,)]
+        return self.weight[x]
