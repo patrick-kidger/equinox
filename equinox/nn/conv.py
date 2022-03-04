@@ -35,14 +35,8 @@ def compute_adjusted_padding(
     dilation: int = 1,
 ) -> Tuple[int, int]:
     """Computes adjusted padding for desired ConvTranspose `output_padding`."""
-    output_size = (
-        (input_size - 1) * stride
-        - 2 * padding
-        + dilation * (kernel_size - 1)
-        + output_padding
-        + 1
-    )
     kernel_size = (kernel_size - 1) * dilation + 1
+    output_size = (input_size - 1) * stride - 2 * padding + kernel_size + output_padding
     if padding == 0:
         expected_input_size = (output_size - kernel_size + stride) // stride
         if input_size != expected_input_size:
@@ -120,7 +114,7 @@ class Conv(Module):
             All of `kernel_size`, `stride`, `padding`, `dilation` can be either an
             integer or a sequence of integers. If they are a sequence then the sequence
             should be of length equal to `num_spatial_dims`, and specify the value of
-            each property down each spatial dimension in turn.. If they are an integer
+            each property down each spatial dimension in turn. If they are an integer
             then the same kernel size / stride / padding / dilation will be used along
             every spatial dimension.
 
@@ -334,7 +328,7 @@ class ConvTranspose(Module):
         - `kernel_size`: The size of the transposed convolutional kernel.
         - `stride`: The stride of the transposed convolution.
         - `padding`: The amount of implicit padding on both sides for `dilation *
-            (kernel_size - 1) - padding points.
+            (kernel_size - 1) - padding` points.
         - `output_padding`: The additional size added to the output shape.
         - `dilation`: The spacing between kernel points.
         - `use_bias`: Whether to add on a bias after the transposed convolution.
@@ -369,7 +363,7 @@ class ConvTranspose(Module):
         elif self.num_spatial_dims == 3:
             self.dimension_numbers = ("NCDHW", "IODHW", "NCDHW")
         else:
-            raise ValueError(
+            raise NotImplementedError(
                 "`ConvTranspose` only supports between 1 and 3 spatial dims",
                 f"({self.num_spatial_dims} was given)",
             )
@@ -421,9 +415,7 @@ class ConvTranspose(Module):
         if self.output_padding is not None:
             padding = tuple(
                 map(
-                    lambda s, k, st, p, o, d: compute_adjusted_padding(
-                        s, k, st, p, o, d
-                    ),
+                    compute_adjusted_padding,
                     x.shape[2:],
                     self.weight.shape[2:],
                     self.stride,
