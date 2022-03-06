@@ -105,7 +105,7 @@ def test_aux(getkey):
     def f(x):
         return jnp.sum(x), "hi"
 
-    aux, grad = f(a)
+    grad, aux = f(a)
     assert aux == "hi"
     assert jnp.all(grad == 1)
 

@@ -93,8 +93,8 @@ def filter_grad(fun, *, filter_spec=is_inexact_array, **gradkwargs):
     def fun_grad(*args, **kwargs):
         value, grad = fun_value_and_grad(*args, **kwargs)
         if has_aux:
-            value, aux = value
-            return aux, grad
+            _, aux = value
+            return grad, aux
         else:
             return grad
 
