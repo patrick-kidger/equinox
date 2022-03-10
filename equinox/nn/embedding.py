@@ -8,17 +8,17 @@ from ..module import Module, static_field
 
 
 class Embedding(Module):
-    """Simple lookup table style embedding"""
+    """A simple lookup table that stores embeddings of a fixed size."""
 
     num_embeddings: int = static_field()
-    embedding_dim: int = static_field()
+    embedding_size: int = static_field()
     weight: Array
 
     def __init__(
         self,
         num_embeddings: int,
-        embedding_dim: int,
-        weight: Optional[Array] = None,
+        embedding_size: int,
+        weight: Optional[Array["num_embeddings", "embedding_size"]] = None,
         *,
         key: "jax.random.PRNGKey",
         **kwargs,
@@ -26,24 +26,23 @@ class Embedding(Module):
         """**Arguments:**
 
         - `num_embeddings`: Size of embedding dictionary.
-        - `embedding_dim`: Size of each embedding vector.
-        - `weight`: If given, the embedding lookup table.
+        - `embedding_size`: Size of each embedding vector.
+        - `weight`: If given, the embedding lookup table. Will be generated randomly
+            if not provided.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
-
         """
         super().__init__(**kwargs)
-        self.num_embeddings = num_embeddings
-        self.embedding_dim = embedding_dim
         if weight is None:
-            self.weight = jrandom.normal(key, (num_embeddings, embedding_dim))
+            self.weight = jrandom.normal(key, (num_embeddings, embedding_size))
         else:
-            if list(weight.shape) != [num_embeddings, embedding_dim]:
+            if weight.shape != (num_embeddings, embedding_size):
                 raise ValueError(
-                    f"Shape of weight ({weight.shape}) does not match num_embeddings"
-                    f" ({num_embeddings}) and embedding_dim ({embedding_dim})"
+                    "weight must have shape (num_embeddings, embedding_size)."
                 )
             self.weight = weight
+        self.num_embeddings = num_embeddings
+        self.embedding_size = embedding_size
 
     def __call__(
         self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
@@ -56,6 +55,7 @@ class Embedding(Module):
 
         **Returns:**
 
-        A JAX array of shape `embedding_dim` that gives the xth index of the embedding table.
+        A JAX array of shape `(embedding_size,)`, from the x-th index of the embedding
+        table.
         """
         return self.weight[x]

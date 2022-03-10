@@ -105,6 +105,7 @@ nav:
             - 'api/nn/attention.md'
             - 'api/nn/dropout.md'
             - 'api/nn/normalisation.md'
+            - 'api/nn/embedding.md'
             - 'api/nn/composed.md'
         - Filtering:
             - 'api/filtering/filter-operations.md'
