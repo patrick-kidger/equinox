@@ -34,6 +34,8 @@ class Dropout(Module):
 
         if deterministic is None:
             deterministic = self.deterministic
+        if isinstance(self.p, (int, float)) and self.p == 0:
+            deterministic = True
         if deterministic:
             return x
         elif key is None:
