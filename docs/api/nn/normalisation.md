@@ -1,4 +1,4 @@
-# Normalisation layers
+# Normalisation
 
 ::: equinox.nn.LayerNorm
     selection:

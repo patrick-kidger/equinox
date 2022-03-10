@@ -1,4 +1,4 @@
-# Linear layers
+# Linear
 
 ::: equinox.nn.Linear
     selection:

@@ -1,4 +1,4 @@
-# Convolutional layers
+# Convolutional
 
 ::: equinox.nn.Conv
     selection:

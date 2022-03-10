@@ -1,4 +1,4 @@
-# Attention layers
+# Attention
 
 ::: equinox.nn.MultiheadAttention
     selection:
