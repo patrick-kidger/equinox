@@ -120,48 +120,46 @@ class Conv(Module):
 
         """
         super().__init__(**kwargs)
-        self.num_spatial_dims = num_spatial_dims
-        parse = _ntuple(self.num_spatial_dims)
         wkey, bkey = jrandom.split(key, 2)
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.kernel_size = parse(kernel_size)
-        self.use_bias = use_bias
-        lim = 1 / np.sqrt(self.in_channels * np.prod(self.kernel_size))
 
+        parse = _ntuple(num_spatial_dims)
+        kernel_size = parse(kernel_size)
+        stride = parse(stride)
+        dilation = parse(dilation)
+
+        lim = 1 / np.sqrt(in_channels * np.prod(kernel_size))
         self.weight = jrandom.uniform(
             wkey,
-            (
-                self.out_channels,
-                self.in_channels,
-            )
-            + self.kernel_size,
+            (out_channels, in_channels) + kernel_size,
             minval=-lim,
             maxval=lim,
         )
-        if self.use_bias:
+        if use_bias:
             self.bias = jrandom.uniform(
                 bkey,
-                (self.out_channels,) + (1,) * self.num_spatial_dims,
+                (out_channels,) + (1,) * num_spatial_dims,
                 minval=-lim,
                 maxval=lim,
             )
         else:
             self.bias = None
 
-        self.stride = parse(stride)
+        self.num_spatial_dims = num_spatial_dims
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
+        self.stride = stride
         if isinstance(padding, int):
-            self.padding = tuple(
-                (padding, padding) for _ in range(self.num_spatial_dims)
-            )
-        elif isinstance(padding, Sequence) and len(padding) == self.num_spatial_dims:
+            self.padding = tuple((padding, padding) for _ in range(num_spatial_dims))
+        elif isinstance(padding, Sequence) and len(padding) == num_spatial_dims:
             self.padding = tuple((p, p) for p in padding)
         else:
             raise ValueError(
                 "`padding` must either be an int or tuple of length "
-                f"{self.num_spatial_dims}."
+                f"{num_spatial_dims}."
             )
-        self.dilation = parse(dilation)
+        self.dilation = dilation
+        self.use_bias = use_bias
 
     def __call__(
         self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
