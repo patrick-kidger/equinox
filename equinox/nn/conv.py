@@ -74,10 +74,10 @@ class Conv(Module):
     bias: Optional[Array]
     in_channels: int = static_field()
     out_channels: int = static_field()
-    kernel_size: Tuple[int] = static_field()
-    stride: Tuple[int] = static_field()
-    padding: Tuple[int] = static_field()
-    dilation: Tuple[int] = static_field()
+    kernel_size: Tuple[int, ...] = static_field()
+    stride: Tuple[int, ...] = static_field()
+    padding: Tuple[Tuple[int, int], ...] = static_field()
+    dilation: Tuple[int, ...] = static_field()
     use_bias: bool = static_field()
 
     def __init__(
@@ -296,13 +296,13 @@ class ConvTranspose(Module):
     bias: Optional[Array]
     in_channels: int = static_field()
     out_channels: int = static_field()
-    kernel_size: Tuple[int] = static_field()
-    stride: Tuple[int] = static_field()
-    padding: Tuple[int] = static_field()
-    output_padding: Tuple[int] = static_field()
-    dilation: Tuple[int] = static_field()
+    kernel_size: Tuple[int, ...] = static_field()
+    stride: Tuple[int, ...] = static_field()
+    padding: Tuple[int, ...] = static_field()
+    output_padding: Tuple[int, ...] = static_field()
+    dilation: Tuple[int, ...] = static_field()
     use_bias: bool = static_field()
-    dimension_numbers: Tuple[str] = static_field()
+    dimension_numbers: Tuple[str, ...] = static_field()
 
     def __init__(
         self,
