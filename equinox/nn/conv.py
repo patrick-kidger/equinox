@@ -1,12 +1,11 @@
-import collections
-from itertools import repeat
+import itertools as it
 from typing import Any, Optional, Sequence, Tuple, Union
 
 import jax
+import jax.lax as lax
 import jax.numpy as jnp
 import jax.random as jrandom
 import numpy as np
-from jax.lax import conv_general_dilated, conv_transpose
 
 from ..custom_types import Array
 from ..module import Module, static_field
@@ -14,14 +13,15 @@ from ..module import Module, static_field
 
 def _ntuple(n: int) -> callable:
     def parse(x: Any) -> tuple:
-        if isinstance(x, collections.abc.Iterable):
+        if isinstance(x, Sequence):
             if len(x) == n:
                 return tuple(x)
             else:
                 raise ValueError(
                     f"Length of {x} (length = {len(x)}) is not equal to {n}"
                 )
-        return tuple(repeat(x, n))
+        else:
+            return tuple(it.repeat(x, n))
 
     return parse
 
@@ -185,7 +185,7 @@ class Conv(Module):
                 f" but input has shape {x.shape}.",
             )
         x = jnp.expand_dims(x, axis=0)
-        x = conv_general_dilated(
+        x = lax.conv_general_dilated(
             lhs=x,
             rhs=self.weight,
             window_strides=self.stride,
@@ -424,7 +424,7 @@ class ConvTranspose(Module):
                     self.dilation,
                 )
             )
-        x = conv_transpose(
+        x = lax.conv_transpose(
             lhs=x,
             rhs=self.weight,
             strides=self.stride,
