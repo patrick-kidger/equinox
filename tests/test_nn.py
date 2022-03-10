@@ -517,7 +517,7 @@ def test_layer_norm(getkey):
     x = jrandom.uniform(getkey(), (128,))
     assert ln(x).shape == (128,)
 
-    ln = eqx.nn.LayerNorm(normalized_shape=(128, 128), key=getkey())
+    ln = eqx.nn.LayerNorm(normalised_shape=(128, 128), key=getkey())
     x = jrandom.uniform(getkey(), (128, 128))
     assert ln(x).shape == (128, 128)
 
