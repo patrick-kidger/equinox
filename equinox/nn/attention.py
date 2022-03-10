@@ -13,12 +13,10 @@ from .linear import Linear
 
 class MultiheadAttention(Module):
     r"""
-    Multihead attention layer.
-
     Computes
 
-    $\text{MultiheadAttention}(Q, K, V)
-     = \sum_i \text{Attention}\left(QW^Q_i, KW^K_i, VW^V_i\right)W^O_i$
+    $$\text{MultiheadAttention}(Q, K, V)
+      = \sum_i \text{Attention}\left(QW^Q_i, KW^K_i, VW^V_i\right)W^O_i$$
 
     where:
 
@@ -45,7 +43,7 @@ class MultiheadAttention(Module):
 
     ??? cite
 
-        [arXiv link](https://arxiv.org/abs/1706.03762)
+        [Attention is All You Need](https://arxiv.org/abs/1706.03762)
 
         ```bibtex
         @inproceedings{vaswani2017attention,
@@ -54,7 +52,7 @@ class MultiheadAttention(Module):
                     Kaiser, {\L}ukasz and Polosukhin, Illia},
             booktitle={Advances in Neural Information Processing Systems},
             publisher={Curran Associates, Inc.},
-            title={Attention is All you Need},
+            title={Attention is All You Need},
             volume={30},
             year={2017}
         }
