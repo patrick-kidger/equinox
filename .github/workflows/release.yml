@@ -1,0 +1,27 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Release
+        uses: patrick-kidger/action_update_python_project@v1
+        with:
+            python-version: "3.8"
+            test-script: |
+                python -m pip install pytest
+                cp -r ${{ github.workspace }}/test ./test
+                pytest
+            pypi-token: ${{ secrets.pypi_token }}
+            github-user: patrick-kidger
+            # Flipped to token_github as secrets starting with "github" are verboten.
+            github-token: ${{ secrets.token_github }}
+            email-user: ${{ secrets.email_user}
+            email-token: ${{ secrets.email_token }}
+            email-server: ${{ secrets.email_server}
+            email-target: ${{ secrets.email_target }}
