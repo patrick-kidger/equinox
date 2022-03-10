@@ -102,8 +102,10 @@ nav:
             - 'api/nn/linear.md'
             - 'api/nn/conv.md'
             - 'api/nn/rnn.md'
-            - 'api/nn/composed.md'
+            - 'api/nn/attention.md'
             - 'api/nn/dropout.md'
+            - 'api/nn/normalisation.md'
+            - 'api/nn/composed.md'
         - Filtering:
             - 'api/filtering/filter-operations.md'
             - 'api/filtering/filter-functions.md'
