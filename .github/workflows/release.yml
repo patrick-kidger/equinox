@@ -19,8 +19,7 @@ jobs:
                 pytest
             pypi-token: ${{ secrets.pypi_token }}
             github-user: patrick-kidger
-            # Flipped to token_github as secrets starting with "github" are verboten.
-            github-token: ${{ secrets.token_github }}
+            github-token: ${{ github.token }}
             email-user: ${{ secrets.email_user}
             email-token: ${{ secrets.email_token }}
             email-server: ${{ secrets.email_server}
