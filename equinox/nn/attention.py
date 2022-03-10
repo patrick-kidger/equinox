@@ -1,9 +1,9 @@
+import math
 from typing import Optional
 
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
-import numpy as np
 
 from ..custom_types import Array
 from ..module import Module, static_field
@@ -12,130 +12,228 @@ from .linear import Linear
 
 
 class MultiheadAttention(Module):
+    r"""
+    Multihead attention layer.
+
+    Computes
+
+    $\text{MultiheadAttention}(Q, K, V)
+     = \sum_i \text{Attention}\left(QW^Q_i, KW^K_i, VW^V_i\right)W^O_i$
+
+    where:
+
+    - The inputs are
+      $Q \in \mathbb{R}^{d_\text{seq} \times d_\text{query}}$,
+      $K \in \mathbb{R}^{d_\text{seq} \times d_\text{key}}$,
+      $V \in \mathbb{R}^{d_\text{seq} \times d_\text{value}}$.
+      These are referred to as query, key, and value respectively. Meanwhile
+      $d_\text{seq}$ is the sequence length, and $d_\text{query}$, $d_\text{key}$,
+      $d_\text{value}$ are numbers of channels.
+
+    - The trainable weights are
+    $W^Q_i \in \mathbb{R}^{d_\text{query} \times d_\text{qk}}$,
+    $W^K_i \in \mathbb{R}^{d_\text{key} \times d_\text{qk}}$,
+    $W^V_i \in \mathbb{R}^{d_\text{value} \times d_\text{vo}}$,
+    $W^O_i \in \mathbb{R}^{d_\text{vo} \times d_\text{output}}$,
+    with $i \in \{1, \ldots, h\}$, where $h$ is the number of heads, and $d_\text{qk}$,
+    $d_\text{vo}$, $d_\text{output}$ are hyperparameters.
+
+    - $\text{Attention}$ is defined as
+      $\text{Attention}(\widetilde{Q}, \widetilde{K}, \widetilde{V})
+       = \text{softmax}(\frac{\widetilde{Q}\widetilde{K}^\intercal}
+                             {\sqrt{d_\text{qk}}})\widetilde{V}$.
+
+    ??? cite
+
+        [arXiv link](https://arxiv.org/abs/1706.03762)
+
+        ```bibtex
+        @inproceedings{vaswani2017attention,
+            author={Vaswani, Ashish and Shazeer, Noam and Parmar, Niki and
+                    Uszkoreit, Jakob and Jones, Llion and Gomez, Aidan N and
+                    Kaiser, {\L}ukasz and Polosukhin, Illia},
+            booktitle={Advances in Neural Information Processing Systems},
+            publisher={Curran Associates, Inc.},
+            title={Attention is All you Need},
+            volume={30},
+            year={2017}
+        }
+        ```
+
+    !!! faq "FAQ"
+
+        Different software libraries often implement multihead attention in slightly
+        different ways. Some of them will or won't add on biases by default. Most of
+        them will fix the values of $d_\text{qk}, d_\text{vo}, d_\text{output}$ in
+        terms of $d_\text{query}$ or $d_\text{key}$ or $d_\text{value}$. Equinox
+        chooses to expose all of these as options.
+
+        Relative to the original
+        [Attention is All You Need](https://arxiv.org/abs/1706.03762) paper: our
+        $d_\text{qk}$ is their "$d_k$". Our $d_\text{vo}$ is their "$d_\text{v}$". They
+        fix $d_\text{query} = d_\text{key} = d_\text{value} = d_\text{output}$ and
+        refer to it as "$d_\text{model}$".
     """
-    Multihead Attention layer from `Attention Is All You Need <https://arxiv.org/abs/1706.03762>`_.
 
-    $\text{MultiHeadAttention}(Q, K, V) = \text{Concat}(head_{1},...,head_{h})W^{out}$,
-    where $head_i = \text{softmax}(\frac{QW_i^Q(KW_i^K)^\intercal}{\sqrt{d_k}})VW_i^V$
-
-    """
-
-    embed_dim: int = static_field()
-    num_heads: int = static_field()
-    kdim: int = static_field()
-    vdim: int = static_field()
-    _qkv_same_embed_dim: bool = static_field()
-    head_dim: int = static_field()
-    q_proj: Linear
-    k_proj: Linear
-    v_proj: Linear
-    out_proj: Linear
+    query_proj: Linear
+    key_proj: Linear
+    value_proj: Linear
+    output_proj: Linear
     dropout: Dropout
+
+    num_heads: int = static_field()
+    query_size: int = static_field()
+    key_size: int = static_field()
+    value_size: int = static_field()
+    output_size: int = static_field()
+    qk_size: int = static_field()
+    vo_size: int = static_field()
+    use_query_bias: bool = static_field()
+    use_key_bias: bool = static_field()
+    use_value_bias: bool = static_field()
+    use_output_bias: bool = static_field()
 
     def __init__(
         self,
-        embed_dim: int,
         num_heads: int,
-        dropout: float = 0.0,
-        use_bias: bool = True,
-        kdim: Optional[int] = None,
-        vdim: Optional[int] = None,
-        add_bias_kv: bool = False,
+        query_size: int,
+        key_size: Optional[int] = None,
+        value_size: Optional[int] = None,
+        output_size: Optional[int] = None,
+        qk_size: Optional[int] = None,
+        vo_size: Optional[int] = None,
+        use_query_bias: bool = False,
+        use_key_bias: bool = False,
+        use_value_bias: bool = False,
+        use_output_bias: bool = False,
+        dropout_p: float = 0.0,
         *,
         key: "jax.random.PRNGKey",
         **kwargs,
     ):
-        """**Arguments:**
+        r"""**Arguments:**
 
-        - `embed_dim`: Dimension of the model.
-        - `num_heads`: Number of parallel attention heads.
-        - `dropout`: Dropout probability on attention matrix. Default: `0.0`.
-        - `use_bias`: Whether to use a bias term on the output projection. Default: `True`.
-        - `kdim`: Total number of features for keys. Default: `None` (use `kdim=embed_dim`).
-        - `vdim`: Total number of features for values. Default: `None` (use `vdim=embed_dim`).
-        - `add_bias_kv`: Whether to use bias term for value and key projections. Default: `False`.
+        - `num_heads`: Number of parallel attention heads $h$.
+        - `query_size`: Number of input channels for query $Q$.
+        - `key_size`: Number of input channels for key $K$. Defaults to `query_size`.
+        - `value_size`: Number of input channels for value $V$. Defaults to
+            `query_size`.
+        - `output_size`: Number of output channels. Defaults to `query_size`.
+        - `qk_size`: Number of channels to compare query and key over, per head.
+            Defaults to `query_size // num_heads`.
+        - `vo_size`: Number of channels to compare attention-weighted value and output
+            over, per head. Defaults to `query_size // num_heads`.
+        - `use_query_bias`: Whether to use a bias term in the query projections.
+        - `use_key_bias`: Whether to use a bias term in the key projections.
+        - `use_value_bias`: Whether to use a bias term in the value projections.
+        - `use_output_bias`: Whether to use a bias term in the output projection.
+        - `dropout_p`: Dropout probability on attention matrix.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
-
         """
         super().__init__(**kwargs)
-        key1, key2, key3, key4 = jrandom.split(key, 4)
-        self.embed_dim = embed_dim
-        self.kdim = kdim if kdim is not None else embed_dim
-        self.vdim = vdim if vdim is not None else embed_dim
-        self._qkv_same_embed_dim = self.kdim == embed_dim and self.vdim == embed_dim
+        qkey, kkey, vkey, okey = jrandom.split(key, 4)
+
+        if key_size is None:
+            key_size = query_size
+        if value_size is None:
+            value_size = query_size
+        if qk_size is None:
+            qk_size = query_size // num_heads
+        if vo_size is None:
+            vo_size = query_size // num_heads
+        if output_size is None:
+            output_size = query_size
+
+        self.query_proj = Linear(
+            query_size, num_heads * qk_size, use_bias=use_query_bias, key=qkey
+        )
+        self.key_proj = Linear(
+            key_size, num_heads * qk_size, use_bias=use_key_bias, key=kkey
+        )
+        self.value_proj = Linear(
+            value_size, num_heads * vo_size, use_bias=use_value_bias, key=vkey
+        )
+        self.output_proj = Linear(
+            num_heads * vo_size, output_size, use_bias=use_output_bias, key=okey
+        )
+        self.dropout = Dropout(dropout_p)
+
         self.num_heads = num_heads
-        self.head_dim = embed_dim // num_heads
-        if self.embed_dim % num_heads != 0:
-            raise ValueError(
-                f"embed_dim must be divisible by num_heads (got embed_dim = {self.embed_dim}"
-                f" and num_heads = {self.num_heads})"
-            )
-        if self.kdim % num_heads != 0:
-            raise ValueError(
-                f"kdim must be divisible by num_heads (got kdim = {self.kdim} and "
-                f"num_heads = {self.num_heads})"
-            )
-        if self.vdim % num_heads != 0:
-            raise ValueError(
-                f"vdim must be divisible by num_heads (got vdim = {self.vdim} and "
-                f"num_heads = {self.num_heads})"
-            )
-        if dropout == 0.0:
-            self.dropout = Dropout(dropout, deterministic=True)
-        else:
-            self.dropout = Dropout(dropout)
-        self.q_proj = Linear(self.embed_dim, self.embed_dim, use_bias=False, key=key1)
-        self.k_proj = Linear(self.kdim, self.embed_dim, use_bias=add_bias_kv, key=key2)
-        self.v_proj = Linear(self.vdim, self.embed_dim, use_bias=add_bias_kv, key=key3)
-        self.out_proj = Linear(embed_dim, embed_dim, use_bias=use_bias, key=key4)
+        self.query_size = query_size
+        self.key_size = key_size
+        self.value_size = value_size
+        self.output_size = output_size
+        self.qk_size = qk_size
+        self.vo_size = vo_size
+        self.use_query_bias = use_query_bias
+        self.use_key_bias = use_key_bias
+        self.use_value_bias = use_value_bias
+        self.use_output_bias = use_output_bias
 
     def __call__(
         self,
-        query: Array,
-        key_: Array,
-        value: Array,
-        attn_mask: Optional[Array] = None,
+        query: Array["seq_length", "query_size"],  # noqa: F821
+        key_: Array["seq_length", "key_size"],  # noqa: F821
+        value: Array["seq_length", "value_size"],  # noqa: F821
+        mask: Optional[
+            Array["num_heads", "seq_length", "seq_length"]  # noqa: F821
+        ] = None,
         *,
         key: Optional["jax.random.PRNGKey"] = None,
-    ) -> Array:
+        deterministic: Optional[bool] = None,
+    ) -> Array["seq_length", "output_size"]:  # noqa: F821
         """**Arguments:**
 
-        - `query`: Query embedding. Should be a JAX array of shape `(sequence_length, embed_dim)`.
-        - `key_`: Key embedding. Should be a JAX array of shape `(sequence_length, embed_dim)`.
-        - `value`: Value embedding. Should be a JAX array of shape `(sequence_length, embed_dim)`.
-        - `attn_mask`: A mask preventing attention to certain positions.
-        - `key`: A PRNGKey used for dropout.
+        - `query`: Query embedding. Should be a JAX array of shape
+            `(seq_length, query_size)`.
+        - `key_`: Key embedding. Should be a JAX array of shape
+            `(seq_length, key_size)`.
+        - `value`: Value embedding. Should be a JAX array of shape
+            `(seq_length, value_size)`.
+        - `mask`: Optional mask preventing attention to certain positions. Should be a
+            JAX array of shape `(num_heads, seq_length, seq_length)`.
+        - `key`: A `jax.random.PRNGKey` used for dropout. Unused if `dropout = 0`.
+            (Keyword only argument.)
+        - `deterministic`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
+            argument.)
 
         **Returns:**
 
-        A JAX array of shape `(sequence_length, embed_dim)`.
+        A JAX array of shape `(seq_length, output_size)`.
         """
-        d1, _ = query.shape
-        query_heads = self._project(self.q_proj, query)
-        key_heads = self._project(self.k_proj, key_)
-        value_heads = self._project(self.v_proj, value)
-        attn_logits = jnp.einsum("shd,Shd->hsS", query_heads, key_heads)
-        sqrt_key_size = np.sqrt(self.kdim // self.num_heads).astype(key.dtype)
-        attn_logits = attn_logits / sqrt_key_size
-        attn_logits = self.dropout(attn_logits, key=key)
 
-        if attn_mask is not None:
-            if attn_mask.ndim != attn_logits.ndim:
+        seq_length, _ = query.shape
+        seq_length2, _ = key_.shape
+        seq_length3, _ = value.shape
+        if seq_length != seq_length2 or seq_length != seq_length3:
+            raise ValueError(
+                "query, key, and value must all be sequences of equal length."
+            )
+
+        query_heads = self._project(self.query_proj, query)
+        key_heads = self._project(self.key_proj, key_)
+        value_heads = self._project(self.value_proj, value)
+
+        logits = jnp.einsum("shd,Shd->hsS", query_heads, key_heads)
+        logits = logits / math.sqrt(self.qk_size)
+        logits = self.dropout(logits, key=key, deterministic=deterministic)
+        if mask is not None:
+            if mask.shape != logits.shape:
                 raise ValueError(
-                    f"Mask dimensionality {attn_mask.ndim} must match logits "
-                    f"{attn_logits.ndim}."
+                    f"mask must have shape (num_heads, seq_length, seq_length)="
+                    f"({self.num_heads}, {seq_length}, {seq_length}). Got "
+                    f"{mask.shape}."
                 )
-            attn_logits = jnp.where(attn_mask, attn_logits, -1e30)
-        attn_weights = jax.nn.softmax(attn_logits, axis=-1)
-        attn = jnp.einsum("hsS,Shd->shd", attn_weights, value_heads)
-        attn_vec = jnp.reshape(attn, (*query.shape[:-1], -1))
+            logits = jnp.where(mask, logits, -jnp.inf)
 
-        return jax.vmap(self.out_proj)(attn_vec)
+        weights = jax.nn.softmax(logits, axis=-1)
+        attn = jnp.einsum("hsS,Shd->shd", weights, value_heads)
+        attn = attn.reshape(seq_length, -1)
+
+        return jax.vmap(self.output_proj)(attn)
 
     def _project(self, proj, x):
-        d1, _ = x.shape
-        projection = jax.vmap(proj)(x).reshape(
-            d1, self.num_heads, self.embed_dim // self.num_heads
-        )
-        return projection
+        seq_length, _ = x.shape
+        projection = jax.vmap(proj)(x)
+        return projection.reshape(seq_length, self.num_heads, -1)
