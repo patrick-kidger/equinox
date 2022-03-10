@@ -262,41 +262,24 @@ def test_convtranspose1d(getkey):
     x = jrandom.normal(getkey(), (1, 32))
     assert conv(x).shape == (3, 34)
 
-    # Some keyword arguments
-    conv = eqx.nn.ConvTranspose1d(1, out_channels=3, kernel_size=(3,), key=getkey())
-    x = jrandom.normal(getkey(), (1, 32))
-    assert conv(x).shape == (3, 34)
-
-    # All keyword arguments
-    conv = eqx.nn.ConvTranspose1d(
-        in_channels=1,
-        out_channels=3,
-        kernel_size=(3,),
-        padding=0,
-        output_padding=0,
-        use_bias=False,
-        key=getkey(),
-    )
-    x = jrandom.normal(getkey(), (1, 32))
-    assert conv(x).shape == (3, 34)
-
-    # Test strides
+    # Test stride and dilation
     conv = eqx.nn.ConvTranspose1d(
         in_channels=3,
         out_channels=1,
-        kernel_size=(3,),
+        kernel_size=3,
         stride=2,
         padding=1,
         output_padding=1,
-        use_bias=True,
+        dilation=2,
+        use_bias=False,
         key=getkey(),
     )
-    x = jrandom.normal(getkey(), (3, 32))
+    x = jrandom.normal(getkey(), (3, 31))
     assert conv(x).shape == (1, 64)
 
     # Test value matches
     conv = eqx.nn.ConvTranspose1d(1, 3, kernel_size=3, padding=0, key=getkey())
-    new_weight = jnp.arange(9).reshape(1, 3, 3)
+    new_weight = jnp.arange(9).reshape(3, 1, 3)
     new_bias = jnp.array([1, 2, 3]).reshape(3, 1)
     data = jnp.arange(-3, 3).reshape(1, -1)
     assert new_weight.shape == conv.weight.shape
@@ -330,7 +313,7 @@ def test_convtranspose1d(getkey):
             15,
         ]
     ).reshape(3, 8)
-    assert jnp.allclose(conv(data), answer)
+    assert jnp.all(conv(data) == answer)
 
 
 def test_convtranspose2d(getkey):
@@ -339,24 +322,7 @@ def test_convtranspose2d(getkey):
     x = jrandom.normal(getkey(), (1, 32, 32))
     assert conv(x).shape == (3, 34, 34)
 
-    # Some keyword arguments
-    conv = eqx.nn.ConvTranspose2d(1, out_channels=3, kernel_size=(3, 3), key=getkey())
-    x = jrandom.normal(getkey(), (1, 32, 32))
-    assert conv(x).shape == (3, 34, 34)
-
-    # All keyword arguments
-    conv = eqx.nn.ConvTranspose2d(
-        in_channels=1,
-        out_channels=3,
-        kernel_size=(3, 3),
-        padding=1,
-        use_bias=False,
-        key=getkey(),
-    )
-    x = jrandom.normal(getkey(), (1, 32, 32))
-    assert conv(x).shape == (3, 32, 32)
-
-    # Test strides
+    # Test stride and dilation
     conv = eqx.nn.ConvTranspose2d(
         in_channels=3,
         out_channels=1,
@@ -364,10 +330,11 @@ def test_convtranspose2d(getkey):
         stride=2,
         padding=1,
         output_padding=1,
-        use_bias=True,
+        dilation=2,
+        use_bias=False,
         key=getkey(),
     )
-    x = jrandom.normal(getkey(), (3, 32, 32))
+    x = jrandom.normal(getkey(), (3, 31, 31))
     assert conv(x).shape == (1, 64, 64)
 
     # Test value matches
@@ -379,7 +346,7 @@ def test_convtranspose2d(getkey):
     assert new_bias.shape == conv.bias.shape
     conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
     answer = jnp.array([-37, -31, -9, 25, 61, 49, 23, 41, 27]).reshape(1, 3, 3)
-    assert jnp.allclose(conv(data), answer)
+    assert jnp.all(conv(data) == answer)
 
 
 def test_convtranspose3d(getkey):
@@ -388,26 +355,7 @@ def test_convtranspose3d(getkey):
     x = jrandom.normal(getkey(), (1, 3, 32, 32))
     assert conv(x).shape == (3, 5, 34, 34)
 
-    # Some keyword arguments
-    conv = eqx.nn.ConvTranspose3d(
-        1, out_channels=3, kernel_size=(3, 3, 3), key=getkey()
-    )
-    x = jrandom.normal(getkey(), (1, 3, 32, 32))
-    assert conv(x).shape == (3, 5, 34, 34)
-
-    # All keyword arguments
-    conv = eqx.nn.ConvTranspose3d(
-        in_channels=1,
-        out_channels=3,
-        kernel_size=(3, 3, 3),
-        padding=1,
-        use_bias=False,
-        key=getkey(),
-    )
-    x = jrandom.normal(getkey(), (1, 3, 32, 32))
-    assert conv(x).shape == (3, 3, 32, 32)
-
-    # Test strides
+    # Test stride and dilation
     conv = eqx.nn.ConvTranspose3d(
         in_channels=3,
         out_channels=1,
@@ -415,10 +363,11 @@ def test_convtranspose3d(getkey):
         stride=2,
         padding=1,
         output_padding=1,
-        use_bias=True,
+        dilation=2,
+        use_bias=False,
         key=getkey(),
     )
-    x = jrandom.normal(getkey(), (3, 3, 32, 32))
+    x = jrandom.normal(getkey(), (3, 2, 31, 31))
     assert conv(x).shape == (1, 6, 64, 64)
 
     # Test value matches
@@ -462,7 +411,7 @@ def test_convtranspose3d(getkey):
             1,
         ]
     ).reshape(1, 3, 3, 3)
-    assert jnp.allclose(conv(data), answer)
+    assert jnp.all(conv(data) == answer)
 
 
 def test_multihead_attention(getkey):
