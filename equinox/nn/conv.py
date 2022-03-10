@@ -289,7 +289,7 @@ class Conv3d(Conv):
 
 
 class ConvTranspose(Module):
-    """General N dimension Transpose Convolution"""
+    """General N-dimensional transposed convolution."""
 
     num_spatial_dims: int = static_field()
     weight: Array
