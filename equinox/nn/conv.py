@@ -320,7 +320,7 @@ class ConvTranspose(Module):
             input.
 
             See [these animations](https://github.com/vdumoulin/conv_arithmetic/blob/af6f818b0bb396c26da79899554682a8a499101d/README.md#transposed-convolution-animations)
-            and [this report](https://arxiv.org/abs/1603.07285) as a nice reference.
+            and [this report](https://arxiv.org/abs/1603.07285) for a nice reference.
         """  # noqa: E501
 
         super().__init__(**kwargs)
