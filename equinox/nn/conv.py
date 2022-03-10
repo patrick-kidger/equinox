@@ -32,7 +32,7 @@ def compute_adjusted_padding(
     stride: int,
     padding: int,
     output_padding: int,
-    dilation: int = 1,
+    dilation: int,
 ) -> Tuple[int, int]:
     """Computes adjusted padding for desired ConvTranspose `output_padding`."""
     kernel_size = (kernel_size - 1) * dilation + 1
@@ -193,7 +193,7 @@ class Conv(Module):
             rhs_dilation=self.dilation,
         )
         if self.use_bias:
-            x += jnp.broadcast_to(self.bias, x.shape)
+            x = x + self.bias
         x = jnp.squeeze(x, axis=0)
         return x
 
@@ -433,7 +433,7 @@ class ConvTranspose(Module):
             dimension_numbers=self.dimension_numbers,
         )
         if self.use_bias:
-            x += jnp.broadcast_to(self.bias, x.shape)
+            x = x + self.bias
         x = jnp.squeeze(x, axis=0)
         return x
 
