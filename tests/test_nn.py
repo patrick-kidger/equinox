@@ -501,7 +501,7 @@ def test_embedding(getkey):
     x = jnp.array([1])
     assert emb(x).shape == (1, 512)
 
-    emb = eqx.nn.Embedding(num_embeddings=10, embedding_dim=20, key=getkey())
+    emb = eqx.nn.Embedding(num_embeddings=10, embedding_size=20, key=getkey())
     x = jnp.array([0])
     assert emb(x).shape == (1, 20)
 
@@ -517,7 +517,7 @@ def test_layer_norm(getkey):
     x = jrandom.uniform(getkey(), (128,))
     assert ln(x).shape == (128,)
 
-    ln = eqx.nn.LayerNorm(normalised_shape=(128, 128), key=getkey())
+    ln = eqx.nn.LayerNorm(shape=(128, 128), key=getkey())
     x = jrandom.uniform(getkey(), (128, 128))
     assert ln(x).shape == (128, 128)
 
