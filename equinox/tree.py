@@ -218,5 +218,11 @@ def tree_pformat(pytree: PyTree, **kwargs) -> str:
     **Returns:**
 
     A string.
+
+    !!! info
+
+        This is best used with Python 3.10 or above, for which the standard library
+        `pprint` supports dataclasses and will add line breaks appropriately.
+        (`tree_pformat` uses `pprint`; [`equinox.Module`][] uses dataclasses.)
     """
     return pprint.pformat(jax.tree_map(_convert, pytree), **kwargs)
