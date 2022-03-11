@@ -19,8 +19,8 @@ from .grad import (
 )
 from .jit import filter_jit, jitf
 from .module import Module, static_field
-from .tree import tree_at, tree_equal
+from .tree import tree_at, tree_equal, tree_pformat
 from .update import apply_updates
 
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"

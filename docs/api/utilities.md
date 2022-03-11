@@ -1,14 +1,18 @@
 # Utilities
 
+::: equinox.apply_updates
+
+---
+
 ::: equinox.tree_at
 
 ---
 
-::: equinox.tree_equal
+::: equinox.tree_pformat
 
 ---
 
-::: equinox.apply_updates
+::: equinox.tree_equal
 
 ---
 
