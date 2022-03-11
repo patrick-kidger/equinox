@@ -20,7 +20,7 @@ jobs:
             pypi-token: ${{ secrets.pypi_token }}
             github-user: patrick-kidger
             github-token: ${{ github.token }}
-            email-user: ${{ secrets.email_user}
+            email-user: ${{ secrets.email_user }}
             email-token: ${{ secrets.email_token }}
-            email-server: ${{ secrets.email_server}
+            email-server: ${{ secrets.email_server }}
             email-target: ${{ secrets.email_target }}
