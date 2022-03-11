@@ -15,7 +15,7 @@ jobs:
             python-version: "3.8"
             test-script: |
                 python -m pip install pytest
-                cp -r ${{ github.workspace }}/test ./test
+                cp -r ${{ github.workspace }}/tests ./tests
                 pytest
             pypi-token: ${{ secrets.pypi_token }}
             github-user: patrick-kidger
