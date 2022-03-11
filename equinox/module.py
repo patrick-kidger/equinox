@@ -5,7 +5,7 @@ from dataclasses import dataclass, field, fields
 
 import jax
 
-from .tree import tree_equal
+from .tree import tree_equal, tree_pformat
 
 
 def static_field(**kwargs):
@@ -217,6 +217,9 @@ class Module(metaclass=_ModuleMeta):
 
     def __eq__(self, other):
         return tree_equal(self, other)
+
+    def __str__(self):
+        return tree_pformat(self)
 
     def tree_flatten(self):
         dynamic_field_names = []
