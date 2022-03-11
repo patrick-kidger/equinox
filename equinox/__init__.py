@@ -23,4 +23,4 @@ from .tree import tree_at, tree_equal, tree_pformat
 from .update import apply_updates
 
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
