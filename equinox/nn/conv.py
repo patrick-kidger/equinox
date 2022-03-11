@@ -283,8 +283,8 @@ class ConvTranspose(Module):
         - `in_channels`: The number of input channels.
         - `out_channels`: The number of output channels.
         - `kernel_size`: The size of the transposed convolutional kernel.
-        - `stride`: The stride used on the equivalent [`eqx.nn.Conv`][].
-        - `padding`: The amount of padding used on the equivalent [`eqx.nn.Conv`][].
+        - `stride`: The stride used on the equivalent [`equinox.nn.Conv`][].
+        - `padding`: The amount of padding used on the equivalent [`equinox.nn.Conv`][].
         - `output_padding`: Additional padding for the output shape.
         - `dilation`: The spacing between kernel points.
         - `use_bias`: Whether to add on a bias after the transposed convolution.
@@ -308,11 +308,11 @@ class ConvTranspose(Module):
             Moreover, to do so with the same "connectivity", i.e. which inputs can
             affect which outputs.
 
-            Relative to an [`eqx.nn.Conv`][] layer, this can be accomplished by
+            Relative to an [`equinox.nn.Conv`][] layer, this can be accomplished by
             switching the values of `in_channels` and `out_channels`, whilst keeping
             `kernel_size`, `stride, `padding`, and `dilation` the same.
 
-            When `stride > 1` then [`eqx.nn.Conv`][] maps multiple input shapes to the
+            When `stride > 1` then [`equinox.nn.Conv`][] maps multiple input shapes to the
             same output shape. `output_padding` is provided to resolve this ambiguity,
             by adding a little extra padding to just the bottom/right edges of the
             input.
