@@ -103,7 +103,7 @@ class MultiheadAttention(Module):
         use_query_bias: bool = False,
         use_key_bias: bool = False,
         use_value_bias: bool = False,
-        use_output_bias: bool = False,
+        use_output_bias: bool = True,
         dropout_p: float = 0.0,
         *,
         key: "jax.random.PRNGKey",
@@ -215,7 +215,6 @@ class MultiheadAttention(Module):
 
         logits = jnp.einsum("shd,Shd->hsS", query_heads, key_heads)
         logits = logits / math.sqrt(self.qk_size)
-        logits = self.dropout(logits, key=key, deterministic=deterministic)
         if mask is not None:
             if mask.shape != logits.shape:
                 raise ValueError(
@@ -226,6 +225,7 @@ class MultiheadAttention(Module):
             logits = jnp.where(mask, logits, -jnp.inf)
 
         weights = jax.nn.softmax(logits, axis=-1)
+        weights = self.dropout(weights, key=key, deterministic=deterministic)
         attn = jnp.einsum("hsS,Shd->shd", weights, value_heads)
         attn = attn.reshape(seq_length, -1)
 
