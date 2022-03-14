@@ -171,26 +171,26 @@ class MultiheadAttention(Module):
 
     def __call__(
         self,
-        query: Array["seq_length", "query_size"],  # noqa: F821
-        key_: Array["seq_length", "key_size"],  # noqa: F821
-        value: Array["seq_length", "value_size"],  # noqa: F821
+        query: Array["query_seq_length", "query_size"],  # noqa: F821
+        key_: Array["kv_seq_length", "key_size"],  # noqa: F821
+        value: Array["kv_seq_length", "value_size"],  # noqa: F821
         mask: Optional[
-            Array["num_heads", "seq_length", "seq_length"]  # noqa: F821
+            Array["num_heads", "query_seq_length", "kv_seq_length"]  # noqa: F821
         ] = None,
         *,
         key: Optional["jax.random.PRNGKey"] = None,
         deterministic: Optional[bool] = None,
-    ) -> Array["seq_length", "output_size"]:  # noqa: F821
+    ) -> Array["query_seq_length", "output_size"]:  # noqa: F821
         """**Arguments:**
 
         - `query`: Query embedding. Should be a JAX array of shape
-            `(seq_length, query_size)`.
+            `(query_seq_length, query_size)`.
         - `key_`: Key embedding. Should be a JAX array of shape
-            `(seq_length, key_size)`.
+            `(kv_seq_length, key_size)`.
         - `value`: Value embedding. Should be a JAX array of shape
-            `(seq_length, value_size)`.
+            `(kv_seq_length, value_size)`.
         - `mask`: Optional mask preventing attention to certain positions. Should be a
-            JAX array of shape `(num_heads, seq_length, seq_length)`.
+            JAX array of shape `(num_heads, query_seq_length, kv_seq_length)`.
         - `key`: A `jax.random.PRNGKey` used for dropout. Unused if `dropout = 0`.
             (Keyword only argument.)
         - `deterministic`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
@@ -198,16 +198,15 @@ class MultiheadAttention(Module):
 
         **Returns:**
 
-        A JAX array of shape `(seq_length, output_size)`.
+        A JAX array of shape `(query_seq_length, output_size)`.
         """
 
-        seq_length, _ = query.shape
-        seq_length2, _ = key_.shape
-        seq_length3, _ = value.shape
-        if seq_length != seq_length2 or seq_length != seq_length3:
-            raise ValueError(
-                "query, key, and value must all be sequences of equal length."
-            )
+        query_seq_length, _ = query.shape
+        kv_seq_length, _ = key_.shape
+        kv_seq_length2, _ = value.shape
+        if kv_seq_length != kv_seq_length2:
+            # query length can be different
+            raise ValueError("key and value must both be sequences of equal length.")
 
         query_heads = self._project(self.query_proj, query)
         key_heads = self._project(self.key_proj, key_)
@@ -218,16 +217,16 @@ class MultiheadAttention(Module):
         if mask is not None:
             if mask.shape != logits.shape:
                 raise ValueError(
-                    f"mask must have shape (num_heads, seq_length, seq_length)="
-                    f"({self.num_heads}, {seq_length}, {seq_length}). Got "
-                    f"{mask.shape}."
+                    f"mask must have shape (num_heads, query_seq_length, "
+                    f"kv_seq_length)=({self.num_heads}, {query_seq_length}, "
+                    f"{kv_seq_length}). Got {mask.shape}."
                 )
             logits = jnp.where(mask, logits, -jnp.inf)
 
         weights = jax.nn.softmax(logits, axis=-1)
         weights = self.dropout(weights, key=key, deterministic=deterministic)
         attn = jnp.einsum("hsS,Shd->shd", weights, value_heads)
-        attn = attn.reshape(seq_length, -1)
+        attn = attn.reshape(query_seq_length, -1)
 
         return jax.vmap(self.output_proj)(attn)
 

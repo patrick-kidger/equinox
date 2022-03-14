@@ -426,8 +426,8 @@ def test_multihead_attention(getkey):
         key=getkey(),
     )
     q = jrandom.uniform(getkey(), (19, 3))
-    k = jrandom.uniform(getkey(), (19, 5))
-    v = jrandom.uniform(getkey(), (19, 7))
+    k = jrandom.uniform(getkey(), (23, 5))
+    v = jrandom.uniform(getkey(), (23, 7))
     assert attn(q, k, v).shape == (19, 11)
 
     attn = eqx.nn.MultiheadAttention(num_heads=2, query_size=4, key=getkey())
