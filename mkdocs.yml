@@ -41,17 +41,18 @@ edit_uri: ""  # No edit button, as some of our pages are in /docs and some in /e
 
 strict: true  # Don't allow warnings during the build process
 
-# Enable if LaTeX is needed
-# extra_javascript: 
-#     # TODO: Switch to MathJax v3: https://squidfunk.github.io/mkdocs-material/reference/mathjax
-#     - https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-AMS_CHTML
+extra_javascript: 
+    # The below three make MathJax work, see https://squidfunk.github.io/mkdocs-material/reference/mathjax/
+    - _static/mathjax.js
+    - https://polyfill.io/v3/polyfill.min.js?features=es6
+    - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
 extra_css:
     - _static/custom_css.css
 
 markdown_extensions:
-# Enable if LaTeX is needed
-#     - pymdownx.arithmatex  # Render LaTeX via MathJax
+    - pymdownx.arithmatex:  # Render LaTeX via MathJax
+        generic: true
     - pymdownx.superfences  # Seems to enable syntax highlighting when used with the Material theme.
     - pymdownx.details  # Allowing hidden expandable regions denoted by ???
     - pymdownx.snippets:  # Include one Markdown file into another
@@ -97,12 +98,15 @@ nav:
         - Compatibility with init-apply libraries: 'examples/init_apply.ipynb'
     - Full API:
         - 'api/module.md'
-        - Neural networks:
+        - Neural network layers:
             - 'api/nn/linear.md'
             - 'api/nn/conv.md'
             - 'api/nn/rnn.md'
-            - 'api/nn/composed.md'
+            - 'api/nn/attention.md'
             - 'api/nn/dropout.md'
+            - 'api/nn/normalisation.md'
+            - 'api/nn/embedding.md'
+            - 'api/nn/composed.md'
         - Filtering:
             - 'api/filtering/filter-operations.md'
             - 'api/filtering/filter-functions.md'

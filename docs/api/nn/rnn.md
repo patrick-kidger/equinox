@@ -1,4 +1,4 @@
-# Recurrent layers
+# Recurrent
 
 ::: equinox.nn.GRUCell
     selection:

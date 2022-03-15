@@ -1,5 +1,14 @@
-# Convolutional layers
+# Convolutional
+
 ::: equinox.nn.Conv
+    selection:
+        members:
+            - __init__
+            - __call__
+
+---
+
+::: equinox.nn.ConvTranspose
     selection:
         members:
             - __init__
@@ -20,5 +29,23 @@
 ---
 
 ::: equinox.nn.Conv3d
+    selection:
+        members: false
+
+---
+
+::: equinox.nn.ConvTranspose1d
+    selection:
+        members: false
+
+---
+
+::: equinox.nn.ConvTranspose2d
+    selection:
+        members: false
+
+---
+
+::: equinox.nn.ConvTranspose3d
     selection:
         members: false
