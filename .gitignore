@@ -4,5 +4,6 @@
 build/
 dist/
 site/
+examples/data
 .all_objects.cache
 .pymon
