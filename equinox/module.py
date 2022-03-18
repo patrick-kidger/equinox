@@ -129,7 +129,7 @@ class _ModuleMeta(abc.ABCMeta):
 
 
 class Module(metaclass=_ModuleMeta):
-    """Base class. Created your model by inheriting from this.
+    """Base class. Create your model by inheriting from this.
 
     **Fields**
 

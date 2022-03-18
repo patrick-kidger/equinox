@@ -125,7 +125,7 @@ class MultiheadAttention(Module):
         - `use_key_bias`: Whether to use a bias term in the key projections.
         - `use_value_bias`: Whether to use a bias term in the value projections.
         - `use_output_bias`: Whether to use a bias term in the output projection.
-        - `dropout_p`: Dropout probability on attention matrix.
+        - `dropout_p`: Dropout probability on attention weights.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
         """
