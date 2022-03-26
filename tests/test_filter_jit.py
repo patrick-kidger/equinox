@@ -172,3 +172,35 @@ def test_num_traces():
     assert num_traces == 5
     h(True, {"a": 2, "b": 1}, True, True)
     assert num_traces == 5
+
+
+def test_bound_method():
+    num_traces = 0
+
+    class M(eqx.Module):
+        def method(self, x):
+            nonlocal num_traces
+            num_traces += 1
+            return x + 1
+
+    m = M()
+    y = jnp.array(1.0)
+    eqx.filter_jit(m.method)(y)
+    eqx.filter_jit(m.method)(y)
+    assert num_traces == 1
+
+
+def test_callable_class():
+    num_traces = 0
+
+    class M(eqx.Module):
+        def __call__(self, x):
+            nonlocal num_traces
+            num_traces += 1
+            return x + 1
+
+    m = M()
+    y = jnp.array(1.0)
+    eqx.filter_jit(m)(y)
+    eqx.filter_jit(m)(y)
+    assert num_traces == 1

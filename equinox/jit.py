@@ -11,15 +11,12 @@ class _Static(Module):
     value: Any = static_field()
 
 
-@ft.lru_cache(maxsize=4096)
-def _filter_jit_cache(f, **jitkwargs):
-    @ft.partial(jax.jit, static_argnums=(0, 1, 4), **jitkwargs)
-    def f_wrapped(
-        static_leaves, static_treedef, dynamic_args, dynamic_kwargs, filter_spec_return
-    ):
-        static_args, static_kwargs = jax.tree_unflatten(static_treedef, static_leaves)
-        args = combine(dynamic_args, static_args)
-        kwargs = combine(dynamic_kwargs, static_kwargs)
+@ft.lru_cache(maxsize=None)
+def _f_wrapped_cache(**jitkwargs):
+    @ft.partial(jax.jit, static_argnums=(1, 2, 3), **jitkwargs)
+    def f_wrapped(dynamic, static_treedef, static_leaves, filter_spec_return):
+        static = jax.tree_unflatten(static_treedef, static_leaves)
+        f, args, kwargs = combine(dynamic, static)
         out = f(*args, **kwargs)
         dynamic_out, static_out = partition(out, filter_spec_return)
         return dynamic_out, _Static(static_out)
@@ -27,7 +24,14 @@ def _filter_jit_cache(f, **jitkwargs):
     return f_wrapped
 
 
-def filter_jit(fun, *, filter_spec=is_array, filter_spec_return=is_array, **jitkwargs):
+def filter_jit(
+    fun,
+    *,
+    filter_spec=is_array,
+    filter_spec_return=is_array,
+    filter_spec_fun=is_array,
+    **jitkwargs
+):
     """Wraps together [`equinox.partition`][] and `jax.jit`.
 
     **Arguments:**
@@ -39,8 +43,13 @@ def filter_jit(fun, *, filter_spec=is_array, filter_spec_return=is_array, **jitk
         static.
     - `filter_spec_return` is a PyTree whose structure should be a prefix of the
         structure of the outputs of `fun`. It behaves as the `filter_spec` argument to
-        [`equinox.filter`][]. Truthy values should be tracers; falsely values are any
+        [`equinox.filter`][]. Truthy values should be tracers; falsey values are any
         (non-tracer) auxiliary information to return.
+    - `filter_spec_fun` is a PyTree whose structure should be a prefix of `fun` itself.
+        (Note that `fun` may be any callable -- e.g. a bound method, or a class
+        implementing `__call__` -- and not necessarily only a function.) It behaves as
+        the `filter_spec` argument to [`equinox.filter`][]. Truthy values will be
+        traced; falsey values will be held static.
     - `**jitkwargs` are any other keyword arguments to `jax.jit`.
 
         !!! info
@@ -57,9 +66,8 @@ def filter_jit(fun, *, filter_spec=is_array, filter_spec_return=is_array, **jitk
         A very important special case is to trace all JAX arrays and treat all other
         objects as static.
 
-        This is accomplished with `filter_spec=equinox.is_array`,
-        `filter_spec_return=equinox.is_array` -- which are the defaults. (It is
-        unusual to need different behaviour to this.)
+        This is accomplished with `filter_spec=equinox.is_array`, which is the default.
+        (It is relatively unusual to need different behaviour to this.)
     """
 
     if any(
@@ -80,17 +88,14 @@ def filter_jit(fun, *, filter_spec=is_array, filter_spec_return=is_array, **jitk
 
     @ft.wraps(fun)
     def fun_wrapper(*args, **kwargs):
-        (dynamic_args, dynamic_kwargs), (static_args, static_kwargs) = partition(
-            (args, kwargs), filter_spec
-        )
-        static_leaves, static_treedef = jax.tree_flatten((static_args, static_kwargs))
+        dynamic_args_kwargs, static_args_kwargs = partition((args, kwargs), filter_spec)
+        dynamic_fun, static_fun = partition(fun, filter_spec_fun)
+        dynamic = (dynamic_fun,) + dynamic_args_kwargs
+        static = (static_fun,) + static_args_kwargs
+        static_leaves, static_treedef = jax.tree_flatten(static)
         static_leaves = tuple(static_leaves)
-        dynamic_out, static_out = _filter_jit_cache(fun, **jitkwargs)(
-            static_leaves,
-            static_treedef,
-            dynamic_args,
-            dynamic_kwargs,
-            filter_spec_return,
+        dynamic_out, static_out = _f_wrapped_cache(**jitkwargs)(
+            dynamic, static_treedef, static_leaves, filter_spec_return
         )
         return combine(dynamic_out, static_out.value)
 
