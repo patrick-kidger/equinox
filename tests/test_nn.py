@@ -467,15 +467,15 @@ def test_embedding(getkey):
 
 
 def test_layer_norm(getkey):
-    ln = eqx.nn.LayerNorm(128, key=getkey())
+    ln = eqx.nn.LayerNorm(128)
     x = jrandom.uniform(getkey(), (128,))
     assert ln(x).shape == (128,)
 
-    ln = eqx.nn.LayerNorm(shape=(128, 128), key=getkey())
+    ln = eqx.nn.LayerNorm(shape=(128, 128))
     x = jrandom.uniform(getkey(), (128, 128))
     assert ln(x).shape == (128, 128)
 
-    ln = eqx.nn.LayerNorm(10, key=getkey())
+    ln = eqx.nn.LayerNorm(10)
     x1 = jnp.linspace(0.1, 1, 10)
     x2 = jnp.linspace(0, 1, 10)
     x3 = (x1 - x1.mean()) / jnp.sqrt(x1.var() + 1e-5)
