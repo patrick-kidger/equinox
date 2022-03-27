@@ -55,8 +55,6 @@ class LayerNorm(Module):
         shape: Union[None, int, Sequence[int]],
         eps: float = 1e-5,
         elementwise_affine: bool = True,
-        *,
-        key: "jax.random.PRNGKey",
         **kwargs,
     ):
         """**Arguments:**
@@ -65,8 +63,6 @@ class LayerNorm(Module):
             `elementwise_affine=False`.
         - `eps`: Value added to denominator for numerical stability.
         - `elementwise_affine`: Whether the module has learnable affine parameters.
-        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
-            (Keyword only argument.)
         """
         super().__init__(**kwargs)
         self.weight = jnp.ones(shape) if elementwise_affine else None

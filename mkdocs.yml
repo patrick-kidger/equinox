@@ -112,6 +112,9 @@ nav:
             - 'api/filtering/filter-operations.md'
             - 'api/filtering/filter-functions.md'
             - 'api/filtering/filtered-transformations.md'
-        - 'api/utilities.md'
+        - Utilities:
+            - 'api/helpers.md'
+            - 'api/stateful.md'
     - Misc:
         - 'citation.md'
+        - 'faq.md'

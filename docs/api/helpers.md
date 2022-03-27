@@ -1,4 +1,4 @@
-# Utilities
+# Helpers for trees
 
 ::: equinox.apply_updates
 

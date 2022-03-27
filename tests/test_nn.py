@@ -1,3 +1,6 @@
+import functools as ft
+
+import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 import pytest
@@ -464,17 +467,111 @@ def test_embedding(getkey):
 
 
 def test_layer_norm(getkey):
-    ln = eqx.nn.LayerNorm(128, key=getkey())
+    ln = eqx.nn.LayerNorm(128)
     x = jrandom.uniform(getkey(), (128,))
     assert ln(x).shape == (128,)
 
-    ln = eqx.nn.LayerNorm(shape=(128, 128), key=getkey())
+    ln = eqx.nn.LayerNorm(shape=(128, 128))
     x = jrandom.uniform(getkey(), (128, 128))
     assert ln(x).shape == (128, 128)
 
-    ln = eqx.nn.LayerNorm(10, key=getkey())
+    ln = eqx.nn.LayerNorm(10)
     x1 = jnp.linspace(0.1, 1, 10)
     x2 = jnp.linspace(0, 1, 10)
     x3 = (x1 - x1.mean()) / jnp.sqrt(x1.var() + 1e-5)
     assert jnp.allclose(ln(x1), ln(x2), atol=1e-4)
     assert jnp.allclose(ln(x1), x3, atol=1e-4)
+
+
+def test_batch_norm(getkey):
+    x0 = jrandom.uniform(getkey(), (5,))
+    x1 = jrandom.uniform(getkey(), (10, 5))
+    x2 = jrandom.uniform(getkey(), (10, 5, 6))
+    x3 = jrandom.uniform(getkey(), (10, 5, 7, 8))
+
+    # Test that it works with a single vmap'd axis_name
+
+    bn = eqx.experimental.BatchNorm(5, "batch")
+
+    assert jax.vmap(bn, axis_name="batch")(x1).shape == x1.shape
+    running_mean, running_var = bn.state_index.unsafe_get()[0]
+    assert running_mean.shape == (5,)
+    assert running_var.shape == (5,)
+
+    assert jax.vmap(bn, axis_name="batch")(x2).shape == x2.shape
+    running_mean, running_var = bn.state_index.unsafe_get()[0]
+    assert running_mean.shape == (5,)
+    assert running_var.shape == (5,)
+
+    assert jax.vmap(bn, axis_name="batch")(x3).shape == x3.shape
+    running_mean, running_var = bn.state_index.unsafe_get()[0]
+    assert running_mean.shape == (5,)
+    assert running_var.shape == (5,)
+
+    # Test that it fails without any vmap'd axis_name
+
+    with pytest.raises(NameError):
+        jax.vmap(bn)(x1)
+
+    with pytest.raises(NameError):
+        bn(x0)
+
+    # Test that it vmaps with other vmaps without axis_name
+
+    bn = eqx.experimental.BatchNorm(5, "batch")
+
+    assert (
+        jax.vmap(jax.vmap(bn, axis_name="batch", in_axes=1, out_axes=1))(x2).shape
+        == x2.shape
+    )
+    running_mean, running_var = bn.state_index.unsafe_get()[0]
+    assert running_mean.shape == (10, 5)
+    assert running_var.shape == (10, 5)
+
+    assert (
+        jax.vmap(
+            jax.vmap(bn, axis_name="batch", in_axes=1, out_axes=1),
+            axis_name="not-batch",
+        )(x2).shape
+        == x2.shape
+    )
+    running_mean, running_var = bn.state_index.unsafe_get()[0]
+    assert running_mean.shape == (10, 5)
+    assert running_var.shape == (10, 5)
+
+    # Test that switching to a different amount of batching raises an error
+
+    with pytest.raises(TypeError):
+        jax.vmap(bn, axis_name="batch")(x1)
+
+    # Test that it normalises
+
+    x1alt = jrandom.normal(jrandom.PRNGKey(5678), (10, 5))  # avoid flakey test
+    bn = eqx.experimental.BatchNorm(5, "batch", channelwise_affine=False)
+    out = jax.vmap(bn, axis_name="batch")(x1alt)
+    true_out = (x1alt - jnp.mean(x1alt, axis=0)) / jnp.sqrt(
+        jnp.var(x1alt, axis=0) + 1e-5
+    )
+    assert jnp.allclose(out, true_out)
+
+    # Test that the statistics update during training
+
+    bn = eqx.experimental.BatchNorm(5, "batch")
+    with pytest.raises(KeyError):
+        bn.state_index.unsafe_get()
+    jax.vmap(bn, axis_name="batch")(x1)
+    running_mean, running_var = bn.state_index.unsafe_get()[0]
+    jax.vmap(bn, axis_name="batch")(3 * x1 + 10)
+    running_mean2, running_var2 = bn.state_index.unsafe_get()[0]
+    assert not jnp.allclose(running_mean, running_mean2)
+    assert not jnp.allclose(running_var, running_var2)
+
+    # Test that the statistics don't update at inference
+
+    bn = eqx.experimental.BatchNorm(5, "batch")
+    jax.vmap(bn, axis_name="batch")(x1)
+    running_mean, running_var = bn.state_index.unsafe_get()[0]
+    jax.vmap(ft.partial(bn, inference=True), axis_name="batch")(3 * x1 + 10)
+    running_mean2, running_var2 = bn.state_index.unsafe_get()[0]
+    assert jnp.allclose(running_mean, running_mean2)
+    assert jnp.allclose(running_var, running_var2)
