@@ -1,5 +1,4 @@
 import math
-import warnings
 from typing import Optional
 
 import jax
@@ -46,7 +45,6 @@ class GRUCell(Module):
         input_size: int,
         hidden_size: int,
         use_bias: bool = True,
-        bias=None,
         *,
         key: Optional["jax.random.PRNGKey"],
         **kwargs
@@ -61,9 +59,6 @@ class GRUCell(Module):
             initialisation. (Keyword only argument.)
         """
         super().__init__(**kwargs)
-        if bias is not None:
-            warnings.warn("`bias` is deprecated in favour of `use_bias`.")
-            use_bias = bias
 
         ihkey, hhkey, bkey, bkey2 = jrandom.split(key, 4)
         lim = math.sqrt(1 / hidden_size)
@@ -104,7 +99,7 @@ class GRUCell(Module):
 
         The updated hidden state, which is a JAX array of shape `(hidden_size,)`.
         """
-        if self.bias is None:
+        if self.use_bias:
             bias = 0
             bias_n = 0
         else:
@@ -153,7 +148,6 @@ class LSTMCell(Module):
         input_size: int,
         hidden_size: int,
         use_bias: bool = True,
-        bias=None,
         *,
         key: "jax.random.PRNGKey",
         **kwargs
@@ -168,9 +162,6 @@ class LSTMCell(Module):
             initialisation. (Keyword only argument.)
         """
         super().__init__(**kwargs)
-        if bias is not None:
-            warnings.warn("`bias` is deprecated in favour of `use_bias`.")
-            use_bias = bias
 
         ihkey, hhkey, bkey = jrandom.split(key, 3)
         lim = math.sqrt(1 / hidden_size)
@@ -181,7 +172,7 @@ class LSTMCell(Module):
         self.weight_hh = jrandom.uniform(
             hhkey, (4 * hidden_size, hidden_size), minval=-lim, maxval=lim
         )
-        if bias is None:
+        if use_bias:
             self.bias = jrandom.uniform(
                 bkey, (4 * hidden_size,), minval=-lim, maxval=lim
             )
@@ -208,7 +199,7 @@ class LSTMCell(Module):
         """
         h, c = hidden
         lin = self.weight_ih @ input + self.weight_hh @ h
-        if self.bias is not None:
+        if self.use_bias:
             lin = lin + self.bias
         i, f, g, o = jnp.split(lin, 4)
         i = jnn.sigmoid(i)

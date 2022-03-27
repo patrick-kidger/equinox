@@ -1,11 +1,10 @@
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, Union
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
-from .custom_types import PyTree, TreeDef
-from .deprecated import deprecated
+from .custom_types import PyTree
 
 
 #
@@ -153,68 +152,3 @@ def combine(*pytrees: PyTree) -> PyTree:
     """
 
     return jax.tree_map(_combine, *pytrees, is_leaf=_is_none)
-
-
-#
-# Deprecated
-#
-
-
-@deprecated(in_favour_of=filter)
-def split(
-    pytree: PyTree,
-    filter_fn: Optional[Callable[[Any], bool]] = None,
-    filter_tree: Optional[PyTree] = None,
-) -> Tuple[List[Any], List[Any], List[bool], TreeDef]:
-    validate_filters("split", filter_fn, filter_tree)
-    flat, treedef = jax.tree_flatten(pytree)
-    flat_true = []
-    flat_false = []
-
-    if filter_fn is None:
-        which, treedef_filter = jax.tree_flatten(filter_tree)
-        if treedef != treedef_filter:
-            raise ValueError(
-                "filter_tree must have the same tree structure as the PyTree being split."
-            )
-        for f, w in zip(flat, which):
-            if w:
-                flat_true.append(f)
-            else:
-                flat_false.append(f)
-    else:
-        which = []
-        for f in flat:
-            if filter_fn(f):
-                flat_true.append(f)
-                which.append(True)
-            else:
-                flat_false.append(f)
-                which.append(False)
-
-    return flat_true, flat_false, which, treedef
-
-
-@deprecated(in_favour_of=combine)
-def merge(
-    flat_true: List[Any], flat_false: List[Any], which: List[bool], treedef: TreeDef
-):
-    flat = []
-    flat_true = iter(flat_true)
-    flat_false = iter(flat_false)
-    for element in which:
-        if element:
-            flat.append(next(flat_true))
-        else:
-            flat.append(next(flat_false))
-    return jax.tree_unflatten(treedef, flat)
-
-
-# Internal and only used by deprecated functions
-def validate_filters(fn_name, filter_fn, filter_tree):
-    if (filter_fn is None and filter_tree is None) or (
-        filter_fn is not None and filter_tree is not None
-    ):
-        raise ValueError(
-            f"Precisely one of `filter_fn` and `filter_tree` should be passed to {fn_name}"
-        )
