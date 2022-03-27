@@ -115,9 +115,8 @@ class BatchNorm(Module):
 
     !!! warning
 
-        This layer must be used inside of precisely a single `vmap`, with a matching
-        `axis_name`. Attempting to vmap again, or not vmaping at all, will raise an
-        error.
+        This layer must be used inside of a `vmap` or `pmap` with a matching
+        `axis_name`. Not doing so will raise an error.
     """  # noqa: E501
     weight: Optional[Array["channels"]]
     bias: Optional[Array["channels"]]
@@ -176,7 +175,6 @@ class BatchNorm(Module):
         self.momentum = momentum
 
         set_state(self.first_time_index, jnp.array(True))
-        set_state(self.state_index, (jnp.zeros((channels,)), jnp.zeros((channels,))))
 
     def __call__(
         self,
@@ -202,8 +200,6 @@ class BatchNorm(Module):
 
         A `NameError` if no `vmap`s are placed around this operation, or if this vmap
         does not have a matching `axis_name`.
-
-        A `NotImplementedError` if too many `vmap`s are placed around this operation.
         """
 
         def _stats(y):
@@ -215,9 +211,12 @@ class BatchNorm(Module):
 
         batch_state = jax.vmap(_stats)(x)
 
-        first_time = get_state(self.first_time_index)
+        first_time = get_state(self.first_time_index, like=jnp.array(False))
+
         running_state = lax.cond(
-            first_time, lambda: batch_state, lambda: get_state(self.state_index)
+            first_time,
+            lambda: batch_state,
+            lambda: get_state(self.state_index, like=batch_state),
         )
         set_state(self.first_time_index, jnp.array(False))
 

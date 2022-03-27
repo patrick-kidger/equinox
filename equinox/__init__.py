@@ -11,7 +11,7 @@ from .filters import (
 from .grad import filter_custom_vjp, filter_grad, filter_value_and_grad
 from .jit import filter_jit
 from .module import Module, static_field
-from .stateful import get_state, set_state, StateIndex
+from .stateful import get_state, set_state, size_state_cache, StateIndex
 from .tree import tree_at, tree_equal, tree_pformat
 from .update import apply_updates
 
