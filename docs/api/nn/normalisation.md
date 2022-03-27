@@ -8,7 +8,7 @@
 
 ---
 
-::: equinox.nn.BatchNorm
+::: equinox.experimental.BatchNorm
     selection:
         members:
             - __init__
