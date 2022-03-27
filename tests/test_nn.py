@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 import pytest
@@ -478,3 +479,32 @@ def test_layer_norm(getkey):
     x3 = (x1 - x1.mean()) / jnp.sqrt(x1.var() + 1e-5)
     assert jnp.allclose(ln(x1), ln(x2), atol=1e-4)
     assert jnp.allclose(ln(x1), x3, atol=1e-4)
+
+
+def test_batch_norm(getkey):
+    bn = eqx.nn.BatchNorm("batch", 5, key=getkey())
+    x0 = jrandom.uniform(getkey(), (5,))
+    x1 = jrandom.uniform(getkey(), (10, 5))
+    x2 = jrandom.uniform(getkey(), (10, 5, 6))
+    x3 = jrandom.uniform(getkey(), (10, 5, 7, 8))
+    assert jax.vmap(bn, axis_name="batch")(x1).shape == x1.shape
+    assert jax.vmap(bn, axis_name="batch")(x2).shape == x2.shape
+    assert jax.vmap(bn, axis_name="batch")(x3).shape == x3.shape
+
+    with pytest.raises(NameError):
+        jax.vmap(bn)(x1)
+
+    with pytest.raises(NameError):
+        bn(x0)
+
+    bn = eqx.nn.BatchNorm("batch", 6, key=getkey())
+
+    with pytest.raises(NotImplementedError):
+        jax.vmap(jax.vmap(bn, axis_name="batch"))(x2)
+    with pytest.raises(NotImplementedError):
+        jax.vmap(jax.vmap(bn, axis_name="batch"), axis_name="not-batch")(x2)
+
+    bn = eqx.nn.BatchNorm("batch", 5, channelwise_affine=False, key=getkey())
+    out = jax.vmap(bn, axis_name="batch")(x1)
+    true_out = (x1 - jnp.mean(x1, axis=0)) / jnp.sqrt(jnp.var(x1, axis=0) + 1e-5)
+    assert jnp.allclose(out, true_out)

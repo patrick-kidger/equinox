@@ -13,5 +13,5 @@ from .conv import (
 from .dropout import Dropout
 from .embedding import Embedding
 from .linear import Identity, Linear
-from .normalisation import LayerNorm
+from .normalisation import BatchNorm, LayerNorm
 from .rnn import GRUCell, LSTMCell
