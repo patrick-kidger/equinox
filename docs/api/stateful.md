@@ -18,10 +18,12 @@ import jax.lax as lax
 import jax.numpy as jnp
 
 index = eqx.experimental.StateIndex()
-eqx.experimental.set_state(index, jnp.array(0))
+init = jnp.array(0)
+eqx.experimental.set_state(index, init)
 
+@jax.jit
 def scan_fun(_, __):
-    val = eqx.experimental.get_state(index)
+    val = eqx.experimental.get_state(index, like=init)
     val = val + 1
     eqx.experimental.set_state(index, val)
     return None, val
