@@ -118,11 +118,6 @@ class BatchNorm(Module):
         This layer must be used inside of precisely a single `vmap`, with a matching
         `axis_name`. Attempting to vmap again, or not vmaping at all, will raise an
         error.
-
-    !!! warning
-
-        Whilst the clue is in the name: note that this layer breaks the `vmap`
-        abstraction by computing statistics over the vmap'd dimension.
     """  # noqa: E501
     weight: Optional[Array["channels"]]
     bias: Optional[Array["channels"]]
