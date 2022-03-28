@@ -251,3 +251,17 @@ def test_function_name_warning(log_compiles_config, caplog):
     warning_text = caplog.text
 
     assert 'Finished XLA compilation of the_test_function_name_value_and_grad in' in warning_text
+
+    def wrapped_fun(x, y):
+        return x + y
+
+    def the_test_function_name(x, y):
+        return wrapped_fun(x, y)
+
+    fun = eqx.filter_jit(ft.wraps(wrapped_fun)(ft.partial(the_test_function_name, jnp.array(1.0))))
+
+    fun(jnp.array(1.0))
+
+    warning_text = caplog.text
+
+    assert 'Finished XLA compilation of wrapped_fun in' in warning_text

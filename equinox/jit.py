@@ -25,6 +25,15 @@ def _f_wrapped_cache(fun, **jitkwargs):
     return f_wrapped
 
 
+def _strip_wrapped_partial(fun):
+    """Preserve the outermost wraps call's docstring or traverse to the inner function"""
+    if hasattr(fun, '__wrapped__'):
+        return _strip_wrapped_partial(fun.__wrapped__)
+    if isinstance(fun, ft.partial):
+        return _strip_wrapped_partial(fun.func)
+    return fun
+
+
 def filter_jit(
     fun,
     *,
@@ -95,10 +104,7 @@ def filter_jit(
         static = (static_fun,) + static_args_kwargs
         static_leaves, static_treedef = jax.tree_flatten(static)
         static_leaves = tuple(static_leaves)
-        if isinstance(static_fun, ft.partial):
-            inner_fun = static_fun.func
-        else:
-            inner_fun = static_fun
+        inner_fun = _strip_wrapped_partial(static_fun)
         dynamic_out, static_out = _f_wrapped_cache(inner_fun, **jitkwargs)(
             dynamic, static_treedef, static_leaves, filter_spec_return
         )
