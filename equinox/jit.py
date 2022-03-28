@@ -95,7 +95,7 @@ def filter_jit(
         static = (static_fun,) + static_args_kwargs
         static_leaves, static_treedef = jax.tree_flatten(static)
         static_leaves = tuple(static_leaves)
-        if isinstance(fun, ft.partial):
+        if isinstance(static_fun, ft.partial):
             inner_fun = static_fun.func
         else:
             inner_fun = static_fun
