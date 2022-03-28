@@ -28,6 +28,35 @@ class _IndexObj:
 class StateIndex(Module):
     """An index for setting or getting a piece of state with
     [`equinox.experimental.get_state`][] or [`equinox.experimental.set_state`][].
+
+    You should typically treat this like a model parameter.
+
+    !!! example
+
+        ```python
+        import equinox as eqx
+        import equinox.experimental as eqxe
+        import jax.numpy as jnp
+
+        class CacheInput(eqx.Module):
+            index: eqxe.StateIndex
+
+            def __init__(self, input_shape):
+                self.index = eqxe.StateIndex()
+                eqxe.set_state(self.index, jnp.zeros(input_shape))
+
+            def __call__(self, x):
+                last_x = eqxe.get_state(self.index, x)
+                eqxe.set_state(self.index, x)
+                print(f"last_x={last_x}, x={x}")
+
+        x = jnp.array([1., 2.])
+        y = jnp.array([3., 4.])
+        shape = x.shape
+        ci = CacheInput(shape)
+        ci(x)
+        ci(y)
+        ```
     """
 
     obj: _IndexObj = static_field()
@@ -110,7 +139,7 @@ def _get_state(
     return hcb.call(_get_state_hcb, arg, result_shape=like_shape)
 
 
-def get_state(index: StateIndex, like: PyTree[Array]) -> PyTree:
+def get_state(index: StateIndex, like: PyTree[Array]) -> PyTree[Array]:
     """Get some previously saved state.
 
     **Arguments:**

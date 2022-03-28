@@ -1,4 +1,4 @@
-# Helpers for trees
+# Helpers for PyTrees
 
 ::: equinox.apply_updates
 

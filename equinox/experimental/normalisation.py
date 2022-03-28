@@ -24,17 +24,6 @@ class BatchNorm(Module):
     `channelwise_affine=False`. Expectations are computed over all spatial dimensions
     *and* over the batch dimension, and updated batch-by-batch according to `momentum`.
 
-    !!! warning
-
-        This layer must be used inside of a `vmap` or `pmap` with a matching
-        `axis_name`. (Not doing so will raise a `NameError`.)
-
-    !!! warning
-
-        [`equinox.experimental.BatchNorm`][] saves the running statistics as a side
-        effect of its forward pass. Side effects are quite unusual in JAX; as such
-        `BatchNorm` is considered experimental. Let us know how you find it!
-
     !!! example
 
         ```python
@@ -52,8 +41,21 @@ class BatchNorm(Module):
 
         x = jr.normal(dkey, (10, 3))
         jax.vmap(model, axis_name="batch")(x)
+        # BatchNorm will automatically update its running statistics internally.
         ```
+
+    !!! warning
+
+        This layer must be used inside of a `vmap` or `pmap` with a matching
+        `axis_name`. (Not doing so will raise a `NameError`.)
+
+    !!! warning
+
+        [`equinox.experimental.BatchNorm`][] updates its running statistics as a side
+        effect of its forward pass. Side effects are quite unusual in JAX; as such
+        `BatchNorm` is considered experimental. Let us know how you find it!
     """  # noqa: E501
+
     weight: Optional[Array["input_size"]]
     bias: Optional[Array["input_size"]]
     first_time_index: StateIndex

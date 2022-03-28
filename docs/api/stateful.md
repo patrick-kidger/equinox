@@ -6,9 +6,14 @@ These operations can be used to introduce save/load JAX arrays as a side-effect 
 
     This is considered experimental.
 
+!!! danger
+
+    Really, **this is experimental**. Side effects can easily make your code do something unexpected. Whatever you're doing, you almost certainly do not need this.
+
 Use cases:
+
 - Something like [`equinox.experimental.BatchNorm`][], for which we would like to save the running statistics as a side-effect.
-- Implicitly passing information between loop iterations -- i.e. rather than explicitly via the `carry` argument to `lax.scan`. Perhaps you're using a third-party library that handles the `lax.scan`, but you want to pass your own information between repeated invocations.
+- Implicitly passing information between loop iterations -- i.e. rather than explicitly via the `carry` argument to `lax.scan`. Perhaps you're using a third-party library that handles the `lax.scan`, that doesn't allow you pass your own information between iterations.
 
 Example:
 ```python
