@@ -27,7 +27,7 @@ def _f_wrapped_cache(fun, **jitkwargs):
 
 def _strip_wrapped_partial(fun):
     """Preserve the outermost wraps call's docstring or traverse to the inner function"""
-    if hasattr(fun, '__wrapped__'):
+    if hasattr(fun, "__wrapped__"):
         return _strip_wrapped_partial(fun.__wrapped__)
     if isinstance(fun, ft.partial):
         return _strip_wrapped_partial(fun.func)
