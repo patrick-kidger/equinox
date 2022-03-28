@@ -96,9 +96,9 @@ def filter_jit(
         static_leaves, static_treedef = jax.tree_flatten(static)
         static_leaves = tuple(static_leaves)
         if isinstance(fun, ft.partial):
-            inner_fun = fun.func
+            inner_fun = static_fun.func
         else:
-            inner_fun = fun
+            inner_fun = static_fun
         dynamic_out, static_out = _f_wrapped_cache(inner_fun, **jitkwargs)(
             dynamic, static_treedef, static_leaves, filter_spec_return
         )
