@@ -209,9 +209,8 @@ def test_callable_class():
 @pytest.fixture
 def log_compiles_config():
     """Setup and teardown of jax_log_compiles flag"""
-    jax.config.update('jax_log_compiles', True)
-    yield
-    jax.config.update('jax_log_compiles', False)
+    with jax.log_compiles(True):
+        yield
 
 
 def test_function_name_warning(log_compiles_config, caplog):
