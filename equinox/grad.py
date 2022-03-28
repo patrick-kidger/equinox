@@ -25,6 +25,7 @@ def filter_value_and_grad(
         x = combine(diff_x, nondiff_x)
         return fun(x, *args, **kwargs)
 
+    @ft.wraps(fun)
     def fun_value_and_grad_wrapper(x, *args, **kwargs):
         diff_x, nondiff_x = partition(x, filter_spec)
         return fun_value_and_grad(diff_x, nondiff_x, *args, **kwargs)
@@ -81,6 +82,7 @@ def filter_grad(fun, *, filter_spec=is_inexact_array, **gradkwargs):
         fun, filter_spec=filter_spec, **gradkwargs
     )
 
+    @ft.wraps(fun)
     def fun_grad(*args, **kwargs):
         value, grad = fun_value_and_grad(*args, **kwargs)
         if has_aux:

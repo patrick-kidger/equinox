@@ -204,3 +204,70 @@ def test_callable_class():
     eqx.filter_jit(m)(y)
     eqx.filter_jit(m)(y)
     assert num_traces == 1
+
+
+@pytest.fixture
+def log_compiles_config():
+    """Setup and teardown of jax_log_compiles flag"""
+    with jax.log_compiles(True):
+        yield
+
+
+def test_function_name_warning(log_compiles_config, caplog):
+    """Test that the proper function names are used when compiling a function decorated with `filter_jit`"""
+
+    @eqx.filter_jit
+    def the_test_function_name(x):
+        return x + 1
+
+    # Trigger compile to log a warning message
+    the_test_function_name(jnp.array(1.0))
+
+    warning_text = caplog.text
+
+    # Check that the warning message contains the function name
+    assert "Finished XLA compilation of the_test_function_name in" in warning_text
+
+    # Check that it works for filter_grad also
+    @eqx.filter_jit
+    @eqx.filter_grad
+    def the_test_function_name_grad(x):
+        return x + 1
+
+    # Trigger compile to log a warning message
+    the_test_function_name_grad(jnp.array(1.0))
+
+    warning_text = caplog.text
+
+    assert "Finished XLA compilation of the_test_function_name_grad in" in warning_text
+
+    @eqx.filter_jit
+    @eqx.filter_value_and_grad
+    def the_test_function_name_value_and_grad(x):
+        return x + 1
+
+    # Trigger compile to log a warning message
+    the_test_function_name_value_and_grad(jnp.array(1.0))
+
+    warning_text = caplog.text
+
+    assert (
+        "Finished XLA compilation of the_test_function_name_value_and_grad in"
+        in warning_text
+    )
+
+    def wrapped_fun(x, y):
+        return x + y
+
+    def the_test_function_name(x, y):
+        return wrapped_fun(x, y)
+
+    fun = eqx.filter_jit(
+        ft.wraps(wrapped_fun)(ft.partial(the_test_function_name, jnp.array(1.0)))
+    )
+
+    fun(jnp.array(1.0))
+
+    warning_text = caplog.text
+
+    assert "Finished XLA compilation of wrapped_fun in" in warning_text
