@@ -241,7 +241,6 @@ def test_function_name_warning(log_compiles_config, caplog):
 
     assert 'Finished XLA compilation of the_test_function_name_grad in' in warning_text
 
-
     @eqx.filter_jit
     @eqx.filter_value_and_grad
     def the_test_function_name_value_and_grad(x):
