@@ -12,8 +12,9 @@ class _Static(Module):
 
 
 @ft.lru_cache(maxsize=None)
-def _f_wrapped_cache(**jitkwargs):
+def _f_wrapped_cache(fun, **jitkwargs):
     @ft.partial(jax.jit, static_argnums=(1, 2, 3), **jitkwargs)
+    @ft.wraps(fun)
     def f_wrapped(dynamic, static_treedef, static_leaves, filter_spec_return):
         static = jax.tree_unflatten(static_treedef, static_leaves)
         f, args, kwargs = combine(dynamic, static)
@@ -94,7 +95,11 @@ def filter_jit(
         static = (static_fun,) + static_args_kwargs
         static_leaves, static_treedef = jax.tree_flatten(static)
         static_leaves = tuple(static_leaves)
-        dynamic_out, static_out = _f_wrapped_cache(**jitkwargs)(
+        if isinstance(fun, ft.partial):
+            inner_fun = fun.func
+        else:
+            inner_fun = fun
+        dynamic_out, static_out = _f_wrapped_cache(inner_fun, **jitkwargs)(
             dynamic, static_treedef, static_leaves, filter_spec_return
         )
         return combine(dynamic_out, static_out.value)

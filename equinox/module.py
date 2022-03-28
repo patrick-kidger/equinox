@@ -85,7 +85,7 @@ def _not_magic(k):
 
 
 # Inherits from abc.ABCMeta as a convenience for a common use-case.
-# It's not a feature we use ourselve.
+# It's not a feature we use ourselves.
 class _ModuleMeta(abc.ABCMeta):
     def __new__(mcs, name, bases, dict_):
         dict_ = {

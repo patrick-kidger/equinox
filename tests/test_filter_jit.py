@@ -204,3 +204,39 @@ def test_callable_class():
     eqx.filter_jit(m)(y)
     eqx.filter_jit(m)(y)
     assert num_traces == 1
+
+
+@pytest.fixture
+def log_compiles_config():
+    """Setup and teardown of jax_log_compiles flag"""
+    jax.config.update('jax_log_compiles', True)
+    yield
+    jax.config.update('jax_log_compiles', False)
+
+
+def test_function_name_warning(log_compiles_config, caplog):
+    """Test that the proper function names are used when compiling a function decorated with `filter_jit`"""
+    @eqx.filter_jit
+    def the_test_function_name(x):
+        return x + 1
+
+    # Trigger compile to log a warning message
+    the_test_function_name(jnp.array(1.0))
+
+    warning_text = caplog.text
+
+    # Check that the warning message contains the function name
+    assert 'Finished XLA compilation of the_test_function_name in' in warning_text
+
+    # Check that it works for filter_grad also
+    @eqx.filter_jit
+    @eqx.filter_grad
+    def the_test_function_name_grad(x):
+        return x + 1
+
+    # Trigger compile to log a warning message
+    the_test_function_name_grad(jnp.array(1.0))
+
+    warning_text = caplog.text
+
+    assert 'Finished XLA compilation of the_test_function_name_grad in' in warning_text
