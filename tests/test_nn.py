@@ -631,9 +631,14 @@ def test_spectral_norm(getkey):
 
     mlp = eqx.nn.MLP(2, 2, 2, 2, key=getkey())
     spectral = eqx.experimental.SpectralNorm.withkey(getkey())
-    apply = lambda linear: eqx.tree_at(lambda l: l.weight, linear, replace_fn=spectral)
-    is_linear = lambda x: isinstance(x, eqx.nn.Linear)
-    spectral_mlp = eqx.filter_tree_map(apply, mlp, is_leaf=is_linear)
+
+    def get_weights(m):
+        is_linear = lambda x: isinstance(x, eqx.nn.Linear)
+        return tuple(
+            k.weight for k in jax.tree_leaves(m, is_leaf=is_linear) if is_linear(k)
+        )
+
+    spectral_mlp = eqx.tree_at(get_weights, mlp, replace_fn=spectral)
     for layer in spectral_mlp.layers:
         assert isinstance(layer.weight, eqx.experimental.SpectralNorm)
 
