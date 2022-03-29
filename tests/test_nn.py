@@ -1,4 +1,5 @@
 import functools as ft
+import warnings
 
 import jax
 import jax.numpy as jnp
@@ -54,21 +55,43 @@ def test_identity(getkey):
     assert jnp.all(x == identity4(x))
 
 
-def test_dropout(getkey):
+def test_dropout_basic(getkey):
     dropout = eqx.nn.Dropout()
     x = jrandom.normal(getkey(), (3, 4, 5))
     y = dropout(x, key=getkey())
     assert jnp.all((y == 0) | (y == x / 0.5))
-    z1 = dropout(x, key=getkey(), deterministic=True)
-    z2 = dropout(x, deterministic=True)
+
+
+def test_dropout_inference(getkey):
+    dropout = eqx.nn.Dropout()
+    x = jrandom.normal(getkey(), (3, 4, 5))
+    z1 = dropout(x, key=getkey(), inference=True)
+    z2 = dropout(x, inference=True)
     assert jnp.all(x == z1)
     assert jnp.all(x == z2)
 
-    dropout2 = eqx.nn.Dropout(deterministic=True)
+    dropout2 = eqx.nn.Dropout(inference=True)
     assert jnp.all(x == dropout2(x))
 
-    dropout3 = eqx.tree_at(lambda d: d.deterministic, dropout2, replace=False)
+    dropout3 = eqx.tree_at(lambda d: d.inference, dropout2, replace=False)
     assert jnp.any(x != dropout3(x, key=jrandom.PRNGKey(0)))
+
+
+def test_dropout_deterministic(getkey):
+    with warnings.catch_warnings():
+        dropout = eqx.nn.Dropout()
+        x = jrandom.normal(getkey(), (3, 4, 5))
+        warnings.simplefilter("ignore")
+        z1 = dropout(x, key=getkey(), deterministic=True)
+        z2 = dropout(x, deterministic=True)
+        assert jnp.all(x == z1)
+        assert jnp.all(x == z2)
+
+        dropout2 = eqx.nn.Dropout(deterministic=True)
+        assert jnp.all(x == dropout2(x))
+
+        dropout3 = eqx.tree_at(lambda d: d.deterministic, dropout2, replace=False)
+        assert jnp.any(x != dropout3(x, key=jrandom.PRNGKey(0)))
 
 
 def test_gru_cell(getkey):
