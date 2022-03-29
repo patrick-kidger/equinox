@@ -575,3 +575,31 @@ def test_batch_norm(getkey):
     running_mean2, running_var2 = bn.state_index.unsafe_get()[0]
     assert jnp.allclose(running_mean, running_mean2)
     assert jnp.allclose(running_var, running_var2)
+
+
+def test_spectral_norm(getkey):
+    weight = jrandom.normal(getkey(), (5, 6))
+    spectral = eqx.experimental.SpectralNorm(weight, key=getkey())
+    for _ in range(100):
+        spectral.__jax_array__()
+    _, s, _ = jnp.linalg.svd(spectral.__jax_array__())
+    assert jnp.allclose(s[0], 1)
+    # "gradient descent"
+    spectral = eqx.tree_at(lambda s: s.weight, spectral, spectral.weight + 1)
+    _, s, _ = jnp.linalg.svd(spectral.__jax_array__())
+    assert not jnp.allclose(s[0], 1)
+    for _ in range(100):
+        spectral.__jax_array__()
+    _, s, _ = jnp.linalg.svd(spectral.__jax_array__())
+    assert jnp.allclose(s[0], 1)
+
+    # Test not updated at inference time
+    spectral = eqx.tree_at(
+        lambda s: (s.weight, s.inference), spectral, (spectral.weight + 1, True)
+    )
+    _, s, _ = jnp.linalg.svd(spectral.__jax_array__())
+    assert not jnp.allclose(s[0], 1)
+    for _ in range(100):
+        spectral.__jax_array__()
+    _, s, _ = jnp.linalg.svd(spectral.__jax_array__())
+    assert not jnp.allclose(s[0], 1)
