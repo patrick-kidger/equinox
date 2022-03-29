@@ -603,3 +603,19 @@ def test_spectral_norm(getkey):
         spectral.__jax_array__()
     _, s, _ = jnp.linalg.svd(spectral.__jax_array__())
     assert not jnp.allclose(s[0], 1)
+
+    # Test withkey
+
+    mlp = eqx.nn.MLP(2, 2, 2, 2, key=getkey())
+    spectral = eqx.experimental.SpectralNorm.withkey(getkey())
+    apply = lambda linear: eqx.tree_at(lambda l: l.weight, linear, replace_fn=spectral)
+    is_linear = lambda x: isinstance(x, eqx.nn.Linear)
+    spectral_mlp = eqx.filter_tree_map(apply, mlp, is_leaf=is_linear)
+    for layer in spectral_mlp.layers:
+        assert isinstance(layer.weight, eqx.experimental.SpectralNorm)
+
+    # Test >2 dimensional input
+
+    conv = eqx.nn.Conv3d(5, 4, 3, key=getkey())
+    conv = eqx.tree_at(lambda c: c.weight, conv, replace_fn=spectral)
+    assert conv(jrandom.normal(getkey(), (5, 8, 8, 8))).shape == (4, 6, 6, 6)

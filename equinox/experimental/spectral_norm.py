@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import jax
 import jax.lax as lax
 import jax.numpy as jnp
@@ -110,6 +112,7 @@ class SpectralNorm(Module):
         `SpectralNorm` is considered experimental. Let us know how you find it!
     """  # noqa: E501
 
+    weight_shape: Tuple[int, ...] = static_field()
     weight: Array
     uv_index: StateIndex
     num_power_iterations: int = static_field()
@@ -135,9 +138,11 @@ class SpectralNorm(Module):
         - `key`: A `jax.random.PRNGKey` used to provide randomness for initialisation. (Keyword only argument.)
         """
         super().__init__(**kwargs)
-        if weight.ndim != 2:
-            raise ValueError("weight must be two-dimensional")
+        if weight.ndim < 2:
+            raise ValueError("`weight` must be at least two-dimensional")
 
+        self.weight_shape = weight.shape
+        weight = jnp.reshape(weight, (weight.shape[0], -1))
         self.weight = weight
         self.uv_index = StateIndex()
         self.num_power_iterations = num_power_iterations
@@ -163,8 +168,8 @@ class SpectralNorm(Module):
         u = lax.stop_gradient(u)
         v = lax.stop_gradient(v)
         σ = jnp.einsum("i,ij,j->", u, self.weight, v)
-        return self.weight / σ
+        return jnp.reshape(self.weight / σ, self.weight_shape)
 
     @classmethod
     def withkey(cls, key: "jax.random.PRNGKey"):
-        return lambda **kwargs: cls(key=key, **kwargs)
+        return lambda *args, **kwargs: cls(*args, key=key, **kwargs)
