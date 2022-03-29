@@ -11,8 +11,8 @@ from .filters import (
 from .grad import filter_custom_vjp, filter_grad, filter_value_and_grad
 from .jit import filter_jit
 from .module import Module, static_field
-from .tree import tree_at, tree_equal, tree_pformat
+from .tree import filter_tree_map, tree_at, tree_equal, tree_pformat
 from .update import apply_updates
 
 
-__version__ = "0.3.1"
+__version__ = "0.3.2"

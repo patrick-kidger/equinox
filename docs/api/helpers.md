@@ -8,6 +8,10 @@
 
 ---
 
+::: equinox.filter_tree_map
+
+---
+
 ::: equinox.tree_pformat
 
 ---
