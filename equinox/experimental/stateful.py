@@ -61,9 +61,20 @@ class StateIndex(Module):
     """
 
     obj: _IndexObj = static_field()
+    inference: bool
 
-    def __init__(self):
+    def __init__(self, inference: bool = False):
+        """**Arguments:**
+
+        - `inference`: If `True`, then `equinox.experimental.set_state(index, value)`
+            will be disabled, and throw a `RuntimeError`. This is based on the fact
+            that we typically don't want to update state (batch norm statistics,
+            spectral norm power iterations, etc.) during model inference.
+            If you have some other use case for saving state then this can be left at
+            `False`.
+        """
         self.obj = _IndexObj()
+        self.inference = inference
 
     def unsafe_get(self):
         return _state_cache[self.obj]
@@ -244,6 +255,8 @@ def set_state(index: StateIndex, state: PyTree[Array]) -> None:
 
     **Raises:**
 
+    A `RuntimeError` at trace time if `index.inference` is truthy.
+
     A `TypeError` at trace time if `state` is not a PyTree of JAX arrays.
 
     A `TypeError` at run time if this `index` has previously been used to save a
@@ -265,6 +278,8 @@ def set_state(index: StateIndex, state: PyTree[Array]) -> None:
         `lax.cond` etc. (As e.g. under `vmap` then `lax.cond` is transformed into
         `lax.select`.)
     """
+    if index.inference:
+        raise RuntimeError("Cannot use `set_state` during inference.")
     return _set_state(index, state, ())
 
 

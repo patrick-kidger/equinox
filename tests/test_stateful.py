@@ -158,3 +158,9 @@ def test_multi_vmap():
 
     with pytest.raises(TypeError):
         get_state_bad(b)
+
+
+def test_inference():
+    index = eqx.experimental.StateIndex(inference=True)
+    with pytest.raises(RuntimeError):
+        eqx.experimental.set_state(index, jnp.array(1))
