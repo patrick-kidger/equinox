@@ -4,6 +4,7 @@ from typing import Tuple
 import jax
 import jax.experimental.host_callback as hcb
 import jax.interpreters.batching as batching
+import jax.interpreters.xla as xla
 import jax.lax as lax
 
 from ..custom_types import Array, PyTree
@@ -76,16 +77,41 @@ def _monkey_patch():
     global _have_monkey_patched
     if not _have_monkey_patched:
         _have_monkey_patched = True
+
+        _old_outside_call_impl = hcb.outside_call_p.impl
+        _old_outside_call_translation_rule = xla._translations[hcb.outside_call_p]
         _old_outside_call_batching_rule = batching.primitive_batchers[
             hcb.outside_call_p
         ]
+
+        def _outside_call_impl(*arg_flat, arg_treedef, **params):
+            leaves = [jax.core.token] * arg_treedef.num_leaves
+            call_type = type(jax.tree_unflatten(arg_treedef, leaves))
+            # Not using isinstance for speed. (Questionable choice?)
+            if call_type is _GetStateArg:
+                _, like_treedef = arg_treedef.children()
+                assert len(arg_flat) == like_treedef.num_leaves
+                arg_flat = leaves
+            return _old_outside_call_impl(*arg_flat, arg_treedef=arg_treedef, **params)
+
+        def _outside_call_translation_rule(ctx, avals_in, *args, arg_treedef, **kwargs):
+            leaves = [jax.core.abstract_token] * arg_treedef.num_leaves
+            call_type = type(jax.tree_unflatten(arg_treedef, leaves))
+            if call_type is _GetStateArg:
+                _, like_treedef = arg_treedef.children()
+                assert len(avals_in) == arg_treedef.num_leaves + 2
+                assert len(avals_in) == like_treedef.num_leaves + 2
+                extra_tokens = avals_in[-2:]
+                avals_in = leaves + extra_tokens
+            return _old_outside_call_translation_rule(
+                ctx, avals_in, *args, arg_treedef=arg_treedef, **kwargs
+            )
 
         def _outside_call_batching_rule(
             arg_flat, batch_axes, *, arg_treedef, result_treedef, **params
         ):
             leaves = [None] * arg_treedef.num_leaves
             call_type = type(jax.tree_unflatten(arg_treedef, leaves))
-            # Not using isinstance for speed. (Questionable choice?)
             if call_type is _GetStateArg:
                 arg = jax.tree_unflatten(arg_treedef, arg_flat)
                 state = _get_state(arg.index, arg.like, arg.batch_axes + batch_axes)
@@ -106,7 +132,9 @@ def _monkey_patch():
                     **params
                 )
 
+        hcb.outside_call_p.def_impl(_outside_call_impl)
         batching.primitive_batchers[hcb.outside_call_p] = _outside_call_batching_rule
+        xla.register_translation(hcb.outside_call_p, _outside_call_translation_rule)
 
 
 class _GetStateArg(Module):
