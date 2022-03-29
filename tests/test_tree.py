@@ -1,4 +1,3 @@
-import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 import pytest
@@ -86,19 +85,3 @@ def test_tree_equal():
     assert not eqx.tree_equal(pytree1, pytree3)
     assert not eqx.tree_equal(pytree1, pytree4)
     assert not eqx.tree_equal(pytree1, pytree5)
-
-
-def test_filter_tree_map(getkey):
-    model = eqx.nn.MLP(4, 4, 4, 4, key=getkey())
-    model = jax.tree_map(lambda x: x + 100 if eqx.is_array(x) else x, model)
-
-    is_linear = lambda x: isinstance(x, eqx.nn.Linear)
-    get_weight = lambda linear: linear.weight
-    clip_weight = lambda weight: jnp.clip(weight, -1, 1)
-    apply = lambda linear: eqx.tree_at(get_weight, linear, replace_fn=clip_weight)
-
-    clipped_model = eqx.filter_tree_map(apply, model, is_leaf=is_linear)
-    for layer in clipped_model.layers:
-        assert jnp.all(layer.weight <= 1)
-        assert jnp.all(layer.weight >= -1)
-        assert jnp.any(layer.bias > 1)
