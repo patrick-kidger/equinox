@@ -100,8 +100,8 @@ class BatchNorm(Module):
         else:
             self.weight = None
             self.bias = None
-        self.first_time_index = StateIndex()
-        self.state_index = StateIndex()
+        self.first_time_index = StateIndex(inference=inference)
+        self.state_index = StateIndex(inference=inference)
         self.inference = inference
         self.axis_name = axis_name
         self.input_size = input_size
