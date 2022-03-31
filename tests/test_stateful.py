@@ -94,7 +94,9 @@ def test_index_jittable():
     assert get_state(index2, d) == b
 
 
-def test_vmap():
+@pytest.mark.parametrize("with_jit", (False, True))
+@pytest.mark.parametrize("with_pytree", (False, True))
+def test_vmap(with_jit, with_pytree):
     index1 = eqx.experimental.StateIndex()
     index2 = eqx.experimental.StateIndex()
 
@@ -106,31 +108,43 @@ def test_vmap():
     def vmap_get_state(i, x):
         return eqx.experimental.get_state(i, x)
 
+    if with_jit:
+        vmap_set_state = eqx.filter_jit(vmap_set_state)
+        vmap_get_state = eqx.filter_jit(vmap_get_state)
+
     a = jnp.array([1, 2])
     b = jnp.array([3, 4])
-    vmap_set_state(index1, a)
-    assert jnp.array_equal(vmap_get_state(index1, b), a)
+    if with_pytree:
+        set_ = (a, a)
+        get_ = (b, b)
+    else:
+        set_ = a
+        get_ = b
+    vmap_set_state(index1, set_)
+    assert jnp.array_equal(vmap_get_state(index1, get_), set_)
 
     with pytest.raises(TypeError):
         # setting state without vmap, after setting state with vmap
-        eqx.experimental.set_state(index1, a)
+        eqx.experimental.set_state(index1, set_)
 
     with pytest.raises(TypeError):
         # getting state without vmap, after setting state with vmap
-        eqx.experimental.get_state(index1, b)
+        eqx.experimental.get_state(index1, get_)
 
-    eqx.experimental.set_state(index2, a)
+    eqx.experimental.set_state(index2, set_)
 
     with pytest.raises(TypeError):
         # setting state with vmap, after setting state without vmap
-        vmap_set_state(index2, a)
+        vmap_set_state(index2, set_)
 
     with pytest.raises(TypeError):
         # getting state with vmap, after setting state without vmap
-        vmap_get_state(index2, a)
+        vmap_get_state(index2, get_)
 
 
-def test_multi_vmap():
+@pytest.mark.parametrize("with_jit", (False, True))
+@pytest.mark.parametrize("with_pytree", (False, True))
+def test_multi_vmap(with_jit, with_pytree):
     index = eqx.experimental.StateIndex()
 
     @jax.vmap
@@ -148,19 +162,220 @@ def test_multi_vmap():
     def get_state_bad(y):
         return eqx.experimental.get_state(index, y)
 
+    if with_jit:
+        set_state = eqx.filter_jit(set_state)
+        get_state = eqx.filter_jit(get_state)
+        get_state_bad = eqx.filter_jit(get_state_bad)
+
     a = jnp.array([[1, 2]])
     b = jnp.array([[3, 4]])
-    set_state(a)
-    assert jnp.array_equal(get_state(b), a)
+    if with_pytree:
+        set_ = (a, a)
+        get_ = (b, b)
+    else:
+        set_ = a
+        get_ = b
+    set_state(set_)
+    assert jnp.array_equal(get_state(get_), set_)
 
     with pytest.raises(TypeError):
-        eqx.experimental.get_state(index, b)
+        eqx.experimental.get_state(index, get_)
 
     with pytest.raises(TypeError):
-        get_state_bad(b)
+        get_state_bad(get_)
 
 
-def test_inference():
+def test_inference_not_set_state():
     index = eqx.experimental.StateIndex(inference=True)
     with pytest.raises(RuntimeError):
         eqx.experimental.set_state(index, jnp.array(1))
+
+
+def test_inference_no_state():
+    index = eqx.experimental.StateIndex(inference=True)
+    with pytest.raises(KeyError):
+        eqx.experimental.get_state(index, jnp.array(1))
+
+
+@pytest.mark.skip
+def test_inference_not_set_under_jit():
+    index = eqx.experimental.StateIndex()
+
+    @jax.jit
+    def f(i):
+        eqx.tree_at(lambda j: j.inference, i, True)
+
+    with pytest.raises(ValueError):
+        f(index)
+
+
+def test_inference_can_set():
+    index = eqx.experimental.StateIndex()
+    eqx.tree_at(lambda i: i.inference, index, True)
+
+
+def test_inference_nojit():
+    index = eqx.experimental.StateIndex()
+    eqx.experimental.set_state(index, jnp.array(1))
+
+    def f(i):
+        x = eqx.experimental.get_state(i, jnp.array(0))
+        return x + 1
+
+    index_inference = eqx.tree_at(lambda i: i.inference, index, True)
+    out = f(index_inference)
+    assert jnp.array_equal(out, jnp.array(2))
+    eqx.experimental.set_state(index, jnp.array(2))
+    out = f(index_inference)
+    assert jnp.array_equal(out, jnp.array(3))
+
+
+def test_inference_jit_input():
+    num_jits = 0
+
+    index = eqx.experimental.StateIndex()
+    eqx.experimental.set_state(index, jnp.array(1))
+
+    @eqx.filter_jit
+    def f(i):
+        nonlocal num_jits
+        num_jits = num_jits + 1
+        x = eqx.experimental.get_state(i, jnp.array(0))
+        return x + 1
+
+    index_inference = eqx.tree_at(lambda i: i.inference, index, True)
+    out = f(index_inference)
+    assert jnp.array_equal(out, jnp.array(2))
+    eqx.experimental.set_state(index, jnp.array(2))
+    out = f(index_inference)
+    assert jnp.array_equal(out, jnp.array(3))
+
+    assert num_jits == 1
+
+    (hlo,) = f.lower(index_inference).compile().runtime_executable().hlo_modules()
+    assert "custom-call" not in hlo.to_string()
+    # Test the test: just in case the use of custom-call ever changes.
+    (hlo,) = f.lower(index).compile().runtime_executable().hlo_modules()
+    assert "custom-call" in hlo.to_string()
+
+
+def test_inference_jit_closure():
+    num_jits = 0
+
+    index = eqx.experimental.StateIndex()
+    eqx.experimental.set_state(index, jnp.array(1))
+    index_inference = eqx.tree_at(lambda i: i.inference, index, True)
+
+    @eqx.filter_jit
+    def f():
+        nonlocal num_jits
+        num_jits = num_jits + 1
+        x = eqx.experimental.get_state(index_inference, jnp.array(0))
+        return x + 1
+
+    out = f()
+    assert jnp.array_equal(out, jnp.array(2))
+    eqx.experimental.set_state(index, jnp.array(2))
+    out = f()
+    # not updated because passed in via closure
+    assert jnp.array_equal(out, jnp.array(2))
+
+    assert num_jits == 1
+
+    (hlo,) = f.lower().compile().runtime_executable().hlo_modules()
+    assert "custom-call" not in hlo.to_string()
+
+    # Test the test: just in case the use of custom-call ever changes.
+    @eqx.filter_jit
+    def g():
+        x = eqx.experimental.get_state(index, jnp.array(0))
+        return x + 1
+
+    (hlo,) = g.lower().compile().runtime_executable().hlo_modules()
+    assert "custom-call" in hlo.to_string()
+
+
+@pytest.mark.parametrize("with_jit", (False, True))
+@pytest.mark.parametrize("with_pytree", (False, True))
+def test_inference_vmap(with_jit, with_pytree):
+    index1 = eqx.experimental.StateIndex()
+    index2 = eqx.experimental.StateIndex()
+    index1_inference = eqx.tree_at(lambda i: i.inference, index1, True)
+    index2_inference = eqx.tree_at(lambda i: i.inference, index2, True)
+
+    @ft.partial(jax.vmap, in_axes=(None, 0))
+    def vmap_set_state(i, x):
+        eqx.experimental.set_state(i, x)
+
+    @ft.partial(jax.vmap, in_axes=(None, 0))
+    def vmap_get_state(i, x):
+        return eqx.experimental.get_state(i, x)
+
+    if with_jit:
+        vmap_set_state = eqx.filter_jit(vmap_set_state)
+        vmap_get_state = eqx.filter_jit(vmap_get_state)
+
+    a = jnp.array([1, 2])
+    b = jnp.array([3, 4])
+    if with_pytree:
+        set_ = (a, a)
+        get_ = (b, b)
+    else:
+        set_ = a
+        get_ = b
+    vmap_set_state(index1, set_)
+    assert jnp.array_equal(vmap_get_state(index1_inference, get_), set_)
+
+    with pytest.raises(TypeError):
+        # getting state without vmap, after setting state with vmap
+        eqx.experimental.get_state(index1_inference, get_)
+
+    eqx.experimental.set_state(index2, set_)
+
+    with pytest.raises(TypeError):
+        # getting state with vmap, after setting state without vmap
+        vmap_get_state(index2_inference, get_)
+
+
+@pytest.mark.parametrize("with_jit", (False, True))
+@pytest.mark.parametrize("with_pytree", (False, True))
+def test_inference_multi_vmap(with_jit, with_pytree):
+    index = eqx.experimental.StateIndex()
+    index_inference = eqx.tree_at(lambda i: i.inference, index, True)
+
+    @jax.vmap
+    @jax.vmap
+    def set_state(x):
+        eqx.experimental.set_state(index, x)
+
+    @jax.vmap
+    @jax.vmap
+    def get_state(y):
+        return eqx.experimental.get_state(index_inference, y)
+
+    @ft.partial(jax.vmap, in_axes=(1,))
+    @ft.partial(jax.vmap, in_axes=(0,))
+    def get_state_bad(y):
+        return eqx.experimental.get_state(index_inference, y)
+
+    if with_jit:
+        set_state = eqx.filter_jit(set_state)
+        get_state = eqx.filter_jit(get_state)
+        get_state_bad = eqx.filter_jit(get_state_bad)
+
+    a = jnp.array([[1, 2]])
+    b = jnp.array([[3, 4]])
+    if with_pytree:
+        set_ = (a, a)
+        get_ = (b, b)
+    else:
+        set_ = a
+        get_ = b
+    set_state(set_)
+    assert jnp.array_equal(get_state(get_), set_)
+
+    with pytest.raises(TypeError):
+        eqx.experimental.get_state(index_inference, get_)
+
+    with pytest.raises(TypeError):
+        get_state_bad(get_)
