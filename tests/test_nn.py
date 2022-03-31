@@ -1,4 +1,5 @@
 import functools as ft
+import warnings
 
 import jax
 import jax.numpy as jnp
@@ -54,21 +55,43 @@ def test_identity(getkey):
     assert jnp.all(x == identity4(x))
 
 
-def test_dropout(getkey):
+def test_dropout_basic(getkey):
     dropout = eqx.nn.Dropout()
     x = jrandom.normal(getkey(), (3, 4, 5))
     y = dropout(x, key=getkey())
     assert jnp.all((y == 0) | (y == x / 0.5))
-    z1 = dropout(x, key=getkey(), deterministic=True)
-    z2 = dropout(x, deterministic=True)
+
+
+def test_dropout_inference(getkey):
+    dropout = eqx.nn.Dropout()
+    x = jrandom.normal(getkey(), (3, 4, 5))
+    z1 = dropout(x, key=getkey(), inference=True)
+    z2 = dropout(x, inference=True)
     assert jnp.all(x == z1)
     assert jnp.all(x == z2)
 
-    dropout2 = eqx.nn.Dropout(deterministic=True)
+    dropout2 = eqx.nn.Dropout(inference=True)
     assert jnp.all(x == dropout2(x))
 
-    dropout3 = eqx.tree_at(lambda d: d.deterministic, dropout2, replace=False)
+    dropout3 = eqx.tree_at(lambda d: d.inference, dropout2, replace=False)
     assert jnp.any(x != dropout3(x, key=jrandom.PRNGKey(0)))
+
+
+def test_dropout_deterministic(getkey):
+    with warnings.catch_warnings():
+        dropout = eqx.nn.Dropout()
+        x = jrandom.normal(getkey(), (3, 4, 5))
+        warnings.simplefilter("ignore")
+        z1 = dropout(x, key=getkey(), deterministic=True)
+        z2 = dropout(x, deterministic=True)
+        assert jnp.all(x == z1)
+        assert jnp.all(x == z2)
+
+        dropout2 = eqx.nn.Dropout(deterministic=True)
+        assert jnp.all(x == dropout2(x))
+
+        dropout3 = eqx.tree_at(lambda d: d.deterministic, dropout2, replace=False)
+        assert jnp.any(x != dropout3(x, key=jrandom.PRNGKey(0)))
 
 
 def test_gru_cell(getkey):
@@ -575,3 +598,52 @@ def test_batch_norm(getkey):
     running_mean2, running_var2 = bn.state_index.unsafe_get()[0]
     assert jnp.allclose(running_mean, running_mean2)
     assert jnp.allclose(running_var, running_var2)
+
+
+def test_spectral_norm(getkey):
+    weight = jrandom.normal(getkey(), (5, 6))
+    spectral = eqx.experimental.SpectralNorm(weight, key=getkey())
+    for _ in range(100):
+        spectral.__jax_array__()
+    _, s, _ = jnp.linalg.svd(spectral.__jax_array__())
+    assert jnp.allclose(s[0], 1)
+    # "gradient descent"
+    spectral = eqx.tree_at(lambda s: s.weight, spectral, spectral.weight + 1)
+    _, s, _ = jnp.linalg.svd(spectral.__jax_array__())
+    assert not jnp.allclose(s[0], 1)
+    for _ in range(100):
+        spectral.__jax_array__()
+    _, s, _ = jnp.linalg.svd(spectral.__jax_array__())
+    assert jnp.allclose(s[0], 1)
+
+    # Test not updated at inference time
+    spectral = eqx.tree_at(
+        lambda s: (s.weight, s.inference), spectral, (spectral.weight + 1, True)
+    )
+    _, s, _ = jnp.linalg.svd(spectral.__jax_array__())
+    assert not jnp.allclose(s[0], 1)
+    for _ in range(100):
+        spectral.__jax_array__()
+    _, s, _ = jnp.linalg.svd(spectral.__jax_array__())
+    assert not jnp.allclose(s[0], 1)
+
+    # Test withkey
+
+    mlp = eqx.nn.MLP(2, 2, 2, 2, key=getkey())
+    spectral = eqx.experimental.SpectralNorm.withkey(getkey())
+
+    def get_weights(m):
+        is_linear = lambda x: isinstance(x, eqx.nn.Linear)
+        return tuple(
+            k.weight for k in jax.tree_leaves(m, is_leaf=is_linear) if is_linear(k)
+        )
+
+    spectral_mlp = eqx.tree_at(get_weights, mlp, replace_fn=spectral)
+    for layer in spectral_mlp.layers:
+        assert isinstance(layer.weight, eqx.experimental.SpectralNorm)
+
+    # Test >2 dimensional input
+
+    conv = eqx.nn.Conv3d(5, 4, 3, key=getkey())
+    conv = eqx.tree_at(lambda c: c.weight, conv, replace_fn=spectral)
+    assert conv(jrandom.normal(getkey(), (5, 8, 8, 8))).shape == (4, 6, 6, 6)

@@ -4,11 +4,13 @@ from typing import Tuple
 import jax
 import jax.experimental.host_callback as hcb
 import jax.interpreters.batching as batching
+import jax.interpreters.xla as xla
 import jax.lax as lax
 
 from ..custom_types import Array, PyTree
 from ..filters import is_array
 from ..module import Module, static_field
+from ..tree import tree_at
 
 
 # So the use of a weak dictionary is a bit of wishful thinking here, really.
@@ -60,9 +62,20 @@ class StateIndex(Module):
     """
 
     obj: _IndexObj = static_field()
+    inference: bool
 
-    def __init__(self):
+    def __init__(self, inference: bool = False):
+        """**Arguments:**
+
+        - `inference`: If `True`, then `equinox.experimental.set_state(index, value)`
+            will be disabled, and throw a `RuntimeError`. This is based on the fact
+            that we typically don't want to update state (batch norm statistics,
+            spectral norm power iterations, etc.) during model inference.
+            If you have some other use case for saving state then this can be left at
+            `False`.
+        """
         self.obj = _IndexObj()
+        self.inference = inference
 
     def unsafe_get(self):
         return _state_cache[self.obj]
@@ -76,23 +89,57 @@ def _monkey_patch():
     global _have_monkey_patched
     if not _have_monkey_patched:
         _have_monkey_patched = True
+
+        _old_outside_call_impl = hcb.outside_call_p.impl
+        _old_outside_call_translation_rule = xla._translations[hcb.outside_call_p]
         _old_outside_call_batching_rule = batching.primitive_batchers[
             hcb.outside_call_p
         ]
+
+        def _outside_call_impl(*arg_flat, arg_treedef, **params):
+            leaves = [None] * arg_treedef.num_leaves
+            call_type = type(jax.tree_unflatten(arg_treedef, leaves))
+            # Not using isinstance for speed. (Questionable choice?)
+            if call_type is _GetStateArg:
+                arg = jax.tree_unflatten(arg_treedef, arg_flat)
+                token_like = jax.tree_map(lambda _: jax.core.token, arg.like)
+                arg = tree_at(
+                    lambda a: jax.tree_leaves(a.like), arg, jax.tree_leaves(token_like)
+                )
+                arg_flat = jax.tree_leaves(arg)
+            return _old_outside_call_impl(*arg_flat, arg_treedef=arg_treedef, **params)
+
+        def _outside_call_translation_rule(ctx, avals_in, *args, arg_treedef, **kwargs):
+            leaves = [None] * arg_treedef.num_leaves
+            call_type = type(jax.tree_unflatten(arg_treedef, leaves))
+            if call_type is _GetStateArg:
+                arg_flat = avals_in[:-2]
+                extra_tokens = avals_in[-2:]
+                arg = jax.tree_unflatten(arg_treedef, arg_flat)
+                token_like = jax.tree_map(lambda _: jax.core.abstract_token, arg.like)
+                arg = tree_at(
+                    lambda a: jax.tree_leaves(a.like), arg, jax.tree_leaves(token_like)
+                )
+                arg_flat = jax.tree_leaves(arg)
+                avals_in = arg_flat + extra_tokens
+            return _old_outside_call_translation_rule(
+                ctx, avals_in, *args, arg_treedef=arg_treedef, **kwargs
+            )
 
         def _outside_call_batching_rule(
             arg_flat, batch_axes, *, arg_treedef, result_treedef, **params
         ):
             leaves = [None] * arg_treedef.num_leaves
             call_type = type(jax.tree_unflatten(arg_treedef, leaves))
-            # Not using isinstance for speed. (Questionable choice?)
             if call_type is _GetStateArg:
                 arg = jax.tree_unflatten(arg_treedef, arg_flat)
                 state = _get_state(arg.index, arg.like, arg.batch_axes + batch_axes)
                 state_leaves, state_treedef = jax.tree_flatten(state)
                 assert state_treedef == result_treedef
-                assert all(a is b for a, b in zip(arg_flat, jax.tree_leaves(arg.like)))
-                return state_leaves, batch_axes
+                assert all(
+                    a is b for a, b in zip(arg_flat[1:], jax.tree_leaves(arg.like))
+                )
+                return state_leaves, batch_axes[1:]
             elif call_type is _SetStateArg:
                 arg = jax.tree_unflatten(arg_treedef, arg_flat)
                 _set_state(arg.index, arg.state, arg.batch_axes + batch_axes)
@@ -106,7 +153,9 @@ def _monkey_patch():
                     **params
                 )
 
+        hcb.outside_call_p.def_impl(_outside_call_impl)
         batching.primitive_batchers[hcb.outside_call_p] = _outside_call_batching_rule
+        xla.register_translation(hcb.outside_call_p, _outside_call_translation_rule)
 
 
 class _GetStateArg(Module):
@@ -216,6 +265,8 @@ def set_state(index: StateIndex, state: PyTree[Array]) -> None:
 
     **Raises:**
 
+    A `RuntimeError` at trace time if `index.inference` is truthy.
+
     A `TypeError` at trace time if `state` is not a PyTree of JAX arrays.
 
     A `TypeError` at run time if this `index` has previously been used to save a
@@ -237,6 +288,8 @@ def set_state(index: StateIndex, state: PyTree[Array]) -> None:
         `lax.cond` etc. (As e.g. under `vmap` then `lax.cond` is transformed into
         `lax.select`.)
     """
+    if index.inference:
+        raise RuntimeError("Cannot use `set_state` during inference.")
     return _set_state(index, state, ())
 
 

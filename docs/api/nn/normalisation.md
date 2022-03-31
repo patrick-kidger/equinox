@@ -13,3 +13,10 @@
         members:
             - __init__
             - __call__
+
+---
+
+::: equinox.experimental.SpectralNorm
+    selection:
+        members:
+            - __init__
