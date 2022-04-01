@@ -214,7 +214,7 @@ def test_inference_can_set():
     eqx.tree_at(lambda i: i.inference, index, True)
 
 
-def test_inference_nojit():
+def test_inference_no_jit():
     index = eqx.experimental.StateIndex()
     eqx.experimental.set_state(index, jnp.array(1))
 
@@ -293,6 +293,57 @@ def test_inference_jit_closure():
 
     (hlo,) = g.lower().compile().runtime_executable().hlo_modules()
     assert "custom-call" in hlo.to_string()
+
+
+def test_inference_fixed_wrapper():
+    class M:
+        def __init__(self, value):
+            self.value = value
+
+    index = eqx.experimental.StateIndex()
+    eqx.experimental.set_state(index, jnp.array(1))
+
+    index_inference = eqx.tree_at(lambda i: i.inference, index, True)
+    m = M(index_inference)
+
+    num_jits = 0
+
+    @eqx.filter_jit
+    def f(k):
+        nonlocal num_jits
+        num_jits = num_jits + 1
+        return eqx.experimental.get_state(k.value, jnp.array(2))
+
+    assert jnp.array_equal(f(m), jnp.array(1))
+
+    # update ignored; result baked in.
+    eqx.experimental.set_state(index, jnp.array(3))
+    assert jnp.array_equal(f(m), jnp.array(1))
+
+    assert num_jits == 1
+
+
+def test_inference_hashable_wrapper():
+    class M:
+        def __init__(self, value):
+            self.value = value
+
+        def __eq__(self, other):
+            return self.value == other.value
+
+        def __hash__(self):
+            return hash(self.value)
+
+    index = eqx.experimental.StateIndex()
+    eqx.experimental.set_state(index, jnp.array(1))
+    m = M(index)
+
+    @eqx.filter_jit
+    def f(k):
+        return eqx.experimental.get_state(k.value, jnp.array(2))
+
+    with pytest.raises(ValueError):
+        f(m)
 
 
 @pytest.mark.parametrize("with_jit", (False, True))
@@ -379,3 +430,16 @@ def test_inference_multi_vmap(with_jit, with_pytree):
 
     with pytest.raises(TypeError):
         get_state_bad(get_)
+
+
+def test_equality():
+    index = eqx.experimental.StateIndex()
+    eqx.experimental.set_state(index, jnp.array(1))
+    leaves, treedef = jax.tree_flatten(index)
+    index2 = jax.tree_unflatten(treedef, leaves)
+    assert index == index2
+
+    index3 = eqx.tree_at(lambda i: i.inference, index, True)
+    assert index != index3
+    index4 = eqx.tree_at(lambda i: i.inference, index2, True)
+    assert index4 == index3

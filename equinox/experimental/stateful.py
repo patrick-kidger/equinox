@@ -12,7 +12,7 @@ import jax.numpy as jnp
 from ..custom_types import Array, PyTree
 from ..filters import is_array
 from ..module import Module, static_field
-from ..tree import tree_at, tree_equal
+from ..tree import tree_at
 
 
 # So the use of a weak dictionary is a bit of wishful thinking here, really.
@@ -194,37 +194,12 @@ class StateIndex(Module):
     # StateIndex via a hashable wrapper that examines its contents to handle hashing
     # and equality.
     # (For example as is sometimes done with hashable array wrappers.)
-    # The desired behaviour here is probably that the object should count as
-    # "different" if the (cached) state has updated, and trigger a re-compilation.
-    # Thus we implement `__eq__` as examining `self._obj`, `self.inference`, and the
-    # (cached) state. (But not `._state` or `._version`, which are merely cunning
-    # internal details used elsewhere in this file.
-    # However `__hash__` only examines `self._obj` and `self.inference`. This is
-    # because an object's hash must be invariant over its lifetime. This is fine for
-    # both of these attributes, but we cannot have our hash depend on this mutable
-    # external state.
-    # (This is totally fine, hash collisions are a thing, blah blah blah.)
+    # It's not obvious that the desired behaviour here is to bake things in, but that's
+    # the only option available to us. So just to be sure we set `__hash__ = None`
+    # to avoid potential bugs.
     #
 
-    def __hash__(self):
-        return hash((self._obj, self.inference))
-
-    def __eq__(self, other):
-        if jax.tree_structure(self) != jax.tree_structure(other):
-            return False
-        try:
-            self_state = self.unsafe_get()
-        except KeyError:
-            self_state = None
-        try:
-            other_state = other.unsafe_get()
-        except KeyError:
-            other_state = other.unsafe_get()
-        return (
-            self._obj == other._obj
-            and self.inference == other.inference
-            and tree_equal(self_state, other_state)
-        )
+    __hash__ = None
 
 
 class _Leaf:  # Not a PyTree

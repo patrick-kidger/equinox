@@ -36,3 +36,25 @@ in which the same object is saved multiple times in the model. After making some
 Recall that in Equinox, models are PyTrees. Meanwhile, JAX treats all PyTrees as *trees*: that is, the same object does not appear more in the tree than once. (If it did, then it would be a *directed acyclic graph* instead.) If JAX ever encounters the same object multiple times then it will unwittingly make independent copies of the object whenever it transforms the overall PyTree.
 
 The resolution is simple: just don't store the same object in multiple places in the PyTree.
+
+## I cannot feed higher-order tensors (e.g. with batch dimensions) into my model.
+
+Use [`jax.vmap`](https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html#jax.vmap). This maps arbitrary JAX operations -- including any Equinox module -- over additional dimensions.
+
+For example if `x` is an array/tensor of shape `(..., d_in)`, the following code in PyTorch:
+
+```python
+import torch
+linear = torch.nn.Linear(d_in, d_out)
+y = linear(x)
+```
+
+is equivalent to the following code in Equinox:
+
+```python
+import jax
+import equinox as eqx
+key = jax.random.PRNGKey(seed=0)
+linear = eqx.nn.Linear(d_in, d_out, key=key)
+y = jax.vmap(linear)(x)
+```
