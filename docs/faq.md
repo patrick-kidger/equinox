@@ -36,3 +36,41 @@ in which the same object is saved multiple times in the model. After making some
 Recall that in Equinox, models are PyTrees. Meanwhile, JAX treats all PyTrees as *trees*: that is, the same object does not appear more in the tree than once. (If it did, then it would be a *directed acyclic graph* instead.) If JAX ever encounters the same object multiple times then it will unwittingly make independent copies of the object whenever it transforms the overall PyTree.
 
 The resolution is simple: just don't store the same object in multiple places in the PyTree.
+
+## I cannot feed higher-order tensors (with batch dimensions or others) into my layers 
+
+It is quite common for deep learning frameworks like PyTorch to support higher-order tensors as inputs.
+For example, if `x` is a vector of shape `(..., d_in)`, the following PyTorch code
+
+```python
+import torch
+linear = torch.nn.Linear(d_in, d_out)
+y = linear(x)
+```
+
+is legitimate and produces a vector of shape `(..., d_out)` where the left-most dimensions of the input are preserved.
+In contrast, running the similar Equinox code
+
+```python
+import jax
+import equinox as eqx
+key = jax.random.PRNGKey(seed=0)
+linear = eqx.nn.Linear(d_in, d_out, key=key)
+# will fail with a TypeError
+y = linear(x)
+```
+
+will fail. 
+In PyTorch, this code is possible due to implicit use of broadcasting. 
+Equinox, on the other hand, is a bit stricter here.
+Luckily, the functional style of JAX makes it straight-forward to add support for higher-order tensors
+by transforming the linear layer call with [`jax.vmap`](https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html#jax.vmap).
+Making use of `vmap`, the rewritten code reads
+
+```python
+import jax
+import equinox as eqx
+key = jax.random.PRNGKey(seed=0)
+linear = eqx.nn.Linear(d_in, d_out, key=key)
+y = jax.vmap(linear, in_axes=0, out_axes=0)(x)
+```
