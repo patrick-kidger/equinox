@@ -57,6 +57,15 @@ class Linear(Module):
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
 
+        !!! info
+
+        Note that in contrast to [PyTorch](https://pytorch.org/docs/stable/generated/torch.nn.Linear.html) or other
+        deep learning frameworks where the input `x` is allowed to be a higher order tensor of shape
+        `(in_features, ...)`, here we require `x` to be a vector. If you want to use higher order tensors as
+        inputs, use `jax.vmap`.
+        For example, for an input `x` of shape `(in_features, d)`, using `jax.vmap(linear, in_axes=1, out_axes=1)(x)`
+        produces the appropriate output of shape `(out_features, d)`.
+
         **Returns:**
 
         A JAX array of shape `(out_features,)`
