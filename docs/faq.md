@@ -37,10 +37,11 @@ Recall that in Equinox, models are PyTrees. Meanwhile, JAX treats all PyTrees as
 
 The resolution is simple: just don't store the same object in multiple places in the PyTree.
 
-## I cannot feed higher-order tensors (with batch dimensions or others) into my layers 
+## I cannot feed higher-order tensors (e.g. with batch dimensions) into my model.
 
-It is quite common for deep learning frameworks like PyTorch to support higher-order tensors as inputs.
-For example, if `x` is a vector of shape `(..., d_in)`, the following PyTorch code
+Use [`jax.vmap`](https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html#jax.vmap). This maps arbitrary JAX operations -- including any Equinox module -- over additional dimensions.
+
+For example if `x` is an array/tensor of shape `(..., d_in)`, the following code in PyTorch:
 
 ```python
 import torch
@@ -48,29 +49,12 @@ linear = torch.nn.Linear(d_in, d_out)
 y = linear(x)
 ```
 
-is legitimate and produces a vector of shape `(..., d_out)` where the left-most dimensions of the input are preserved.
-In contrast, running the similar Equinox code
+is equivalent to the following code in Equinox:
 
 ```python
 import jax
 import equinox as eqx
 key = jax.random.PRNGKey(seed=0)
 linear = eqx.nn.Linear(d_in, d_out, key=key)
-# will fail with a TypeError
-y = linear(x)
-```
-
-will fail. 
-In PyTorch, this code is possible due to implicit use of broadcasting. 
-Equinox, on the other hand, is a bit stricter here.
-Luckily, the functional style of JAX makes it straight-forward to add support for higher-order tensors
-by transforming the linear layer call with [`jax.vmap`](https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html#jax.vmap).
-Making use of `vmap`, the rewritten code reads
-
-```python
-import jax
-import equinox as eqx
-key = jax.random.PRNGKey(seed=0)
-linear = eqx.nn.Linear(d_in, d_out, key=key)
-y = jax.vmap(linear, in_axes=0, out_axes=0)(x)
+y = jax.vmap(linear)(x)
 ```
