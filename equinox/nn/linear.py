@@ -57,6 +57,16 @@ class Linear(Module):
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
 
+        !!! info
+
+            If you want to use higher order tensors as inputs (for example featuring batch dimensions) then use
+            `jax.vmap`. For example, for an input `x` of shape `(batch, in_features)`, using
+            ```python
+            linear = equinox.nn.Linear(...)
+            jax.vmap(linear)(x)
+            ```
+            will produce the appropriate output of shape `(batch, out_features)`.
+
         **Returns:**
 
         A JAX array of shape `(out_features,)`
