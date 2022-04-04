@@ -463,11 +463,9 @@ def test_multihead_attention(getkey):
             x.key_proj.weight,
             x.value_proj.weight,
             x.output_proj.weight,
-            x.output_proj.bias,
         ),
         attn,
-        [jnp.arange(16).reshape(4, 4) for _ in range(4)]
-        + [jnp.zeros_like(attn.output_proj.bias)],
+        [jnp.arange(16).reshape(4, 4) for _ in range(4)],
     )
     x = jnp.array([[1, 2, 3, 4]])
     assert jnp.allclose(attn(x, x, x), jnp.array([[680.0, 1960.0, 3240.0, 4520.0]]))
