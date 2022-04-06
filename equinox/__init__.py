@@ -11,7 +11,8 @@ from .filters import (
 from .grad import filter_custom_vjp, filter_grad, filter_value_and_grad
 from .jit import filter_jit
 from .module import Module, static_field
-from .tree import tree_at, tree_equal, tree_pformat
+from .pretty_print import tree_pformat
+from .tree import tree_at, tree_equal
 from .update import apply_updates
 
 

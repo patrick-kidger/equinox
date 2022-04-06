@@ -1,6 +1,3 @@
-import functools as ft
-import inspect
-import pprint
 from typing import Any, Callable, Sequence, Union
 
 import jax
@@ -8,7 +5,6 @@ import jax.numpy as jnp
 import numpy as np
 
 from .custom_types import PyTree
-from .filters import is_array
 
 
 _sentinel = object()
@@ -152,77 +148,3 @@ def tree_equal(*pytrees: PyTree) -> bool:
                     if elem != elem_:
                         return False
     return True
-
-
-# From:
-# https://github.com/google/jax/blob/ee6749608a1588f1f458e0e8ad8c9ecc8942aa83/jax/core.py#L1080  # noqa: E501
-def _short_dtype_name(dtype):
-    return (
-        dtype.name.replace("float", "f")
-        .replace("uint", "u")
-        .replace("int", "i")
-        .replace("complex", "c")
-    )
-
-
-class _WithRepr:
-    def __init__(self, val):
-        self.val = val
-
-    def __repr__(self):
-        return self.val
-
-
-def _convert(leaf):
-    wrapped = False
-    wrapper_types = (jax.custom_vjp, jax.custom_jvp, ft.partial)
-    while isinstance(leaf, wrapper_types):
-        if isinstance(leaf, (jax.custom_jvp, jax.custom_vjp)):
-            leaf = leaf.__wrapped__
-            # Not always thought of as a wrapper so we don't set wrapped=True
-        if isinstance(leaf, ft.partial):
-            leaf = leaf.func
-            wrapped = True
-
-    if is_array(leaf):
-        dt_str = _short_dtype_name(leaf.dtype)
-        shape_str = ",".join(map(str, leaf.shape))
-        return _WithRepr(f"{dt_str}[{shape_str}]")
-    elif inspect.isfunction(leaf):
-        if wrapped:
-            fn_str = "wrapped function"
-        else:
-            fn_str = "function"
-        return _WithRepr(f"<{fn_str} {leaf.__name__}>")
-    else:
-        return leaf
-
-
-def tree_pformat(pytree: PyTree, **kwargs) -> str:
-    """Pretty-formats a PyTree as a string, whilst abbreviating JAX arrays.
-
-    All JAX arrays in the PyTree are condensed down to a short string representation
-    of their dtype and shape.
-
-    (This is the function used in `__str__` of [`equinox.Module`][].)
-
-    !!! example
-
-        A 32-bit floating-point JAX array of shape `(3, 4)` is printed as `f32[3,4]`.
-
-    **Arguments:**
-
-    - `pytree`: The PyTree to pretty-format.
-    - `**kwargs`: Any keyword arguments for `pprint.pformat`.
-
-    **Returns:**
-
-    A string.
-
-    !!! info
-
-        This is best used with Python 3.10 or above, for which the standard library
-        `pprint` supports dataclasses and will add line breaks appropriately.
-        (`tree_pformat` uses `pprint`; [`equinox.Module`][] uses dataclasses.)
-    """
-    return pprint.pformat(jax.tree_map(_convert, pytree), **kwargs)
