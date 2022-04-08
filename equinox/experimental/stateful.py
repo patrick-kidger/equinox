@@ -5,12 +5,7 @@ from typing import Tuple
 import jax
 import jax.experimental.host_callback as hcb
 import jax.interpreters.batching as batching
-
-
-try:
-    import jax.interpreters.mlir as mlir
-except ImportError:
-    mlir = None
+import jax.interpreters.mlir as mlir
 import jax.interpreters.xla as xla
 import jax.lax as lax
 import jax.numpy as jnp
@@ -370,12 +365,9 @@ if hasattr(xla, "lower_fun"):
         _batchify_p,
         xla.lower_fun(_batchify_impl, multiple_results=True, new_style=True),
     )
-# The `mlir` module got added in later JAX versions.
-# (Probably just `if mlir is not None` would suffice here?)
-if hasattr(mlir, "lower_fun") and hasattr(mlir, "register_lowering"):
-    mlir.register_lowering(
-        _batchify_p, mlir.lower_fun(_batchify_impl, multiple_results=True)
-    )
+mlir.register_lowering(
+    _batchify_p, mlir.lower_fun(_batchify_impl, multiple_results=True)
+)
 
 
 class _GetStateArg(Module):
