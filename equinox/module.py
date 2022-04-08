@@ -5,7 +5,8 @@ from dataclasses import dataclass, field, fields
 
 import jax
 
-from .tree import tree_equal, tree_pformat
+from .pretty_print import tree_pformat
+from .tree import tree_equal
 
 
 def static_field(**kwargs):
@@ -101,7 +102,7 @@ class _ModuleMeta(abc.ABCMeta):
         _init = cls._has_dataclass_init = _has_dataclass_init(cls)
         if _init:
             init_doc = cls.__init__.__doc__
-        cls = dataclass(eq=False, frozen=True, init=_init)(cls)
+        cls = dataclass(eq=False, repr=False, frozen=True, init=_init)(cls)
         if _init:
             cls.__init__.__doc__ = init_doc
         jax.tree_util.register_pytree_node_class(cls)
@@ -218,7 +219,7 @@ class Module(metaclass=_ModuleMeta):
     def __eq__(self, other):
         return tree_equal(self, other)
 
-    def __str__(self):
+    def __repr__(self):
         return tree_pformat(self)
 
     def tree_flatten(self):
