@@ -16,4 +16,4 @@ from .tree import tree_at, tree_equal
 from .update import apply_updates
 
 
-__version__ = "0.3.2"
+__version__ = "0.4.0"
