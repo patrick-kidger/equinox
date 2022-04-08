@@ -52,7 +52,7 @@ def test_no_nonjaxarray():
 def test_no_set():
     index = eqx.experimental.StateIndex()
     a = jnp.array(2)
-    with pytest.raises(KeyError):
+    with pytest.raises(RuntimeError):
         eqx.experimental.get_state(index, a)
 
 
@@ -70,9 +70,9 @@ def test_no_change_shape():
         eqx.experimental.set_state(index2, jnp.array(1))
         eqx.experimental.set_state(index2, [jnp.array(1)])
 
-    with pytest.raises(TypeError):
+    with pytest.raises(RuntimeError):
         set_state1()
-    with pytest.raises(TypeError):
+    with pytest.raises(RuntimeError):
         set_state2()
 
 
@@ -123,21 +123,21 @@ def test_vmap(with_jit, with_pytree):
     vmap_set_state(index1, set_)
     assert jnp.array_equal(vmap_get_state(index1, get_), set_)
 
-    with pytest.raises(TypeError):
+    with pytest.raises(RuntimeError):
         # setting state without vmap, after setting state with vmap
         eqx.experimental.set_state(index1, set_)
 
-    with pytest.raises(TypeError):
+    with pytest.raises(RuntimeError):
         # getting state without vmap, after setting state with vmap
         eqx.experimental.get_state(index1, get_)
 
     eqx.experimental.set_state(index2, set_)
 
-    with pytest.raises(TypeError):
+    with pytest.raises(RuntimeError):
         # setting state with vmap, after setting state without vmap
         vmap_set_state(index2, set_)
 
-    with pytest.raises(TypeError):
+    with pytest.raises(RuntimeError):
         # getting state with vmap, after setting state without vmap
         vmap_get_state(index2, get_)
 
@@ -178,10 +178,10 @@ def test_multi_vmap(with_jit, with_pytree):
     set_state(set_)
     assert jnp.array_equal(get_state(get_), set_)
 
-    with pytest.raises(TypeError):
+    with pytest.raises(RuntimeError):
         eqx.experimental.get_state(index, get_)
 
-    with pytest.raises(TypeError):
+    with pytest.raises(RuntimeError):
         get_state_bad(get_)
 
 
@@ -193,7 +193,7 @@ def test_inference_not_set_state():
 
 def test_inference_no_state():
     index = eqx.experimental.StateIndex(inference=True)
-    with pytest.raises(KeyError):
+    with pytest.raises(RuntimeError):
         eqx.experimental.get_state(index, jnp.array(1))
 
 
@@ -205,7 +205,7 @@ def test_inference_not_set_under_jit():
     def f(i):
         eqx.tree_at(lambda j: j.inference, i, True)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         f(index)
 
 
@@ -377,13 +377,13 @@ def test_inference_vmap(with_jit, with_pytree):
     vmap_set_state(index1, set_)
     assert jnp.array_equal(vmap_get_state(index1_inference, get_), set_)
 
-    with pytest.raises(TypeError):
+    with pytest.raises(RuntimeError):
         # getting state without vmap, after setting state with vmap
         eqx.experimental.get_state(index1_inference, get_)
 
     eqx.experimental.set_state(index2, set_)
 
-    with pytest.raises(TypeError):
+    with pytest.raises(RuntimeError):
         # getting state with vmap, after setting state without vmap
         vmap_get_state(index2_inference, get_)
 
@@ -425,10 +425,10 @@ def test_inference_multi_vmap(with_jit, with_pytree):
     set_state(set_)
     assert jnp.array_equal(get_state(get_), set_)
 
-    with pytest.raises(TypeError):
+    with pytest.raises(RuntimeError):
         eqx.experimental.get_state(index_inference, get_)
 
-    with pytest.raises(TypeError):
+    with pytest.raises(RuntimeError):
         get_state_bad(get_)
 
 

@@ -326,7 +326,7 @@ def _monkey_patch():
 
 def _batchify_impl(*flat, treedef, like_batch_axes, current_batch_axes):
     if current_batch_axes != like_batch_axes:
-        raise TypeError("`like` and the saved state have different batch axes")
+        raise RuntimeError("`like` and the saved state have different batch axes")
     state, like = jax.tree_unflatten(treedef, flat)
     return jax.tree_leaves(state)
 
@@ -390,9 +390,9 @@ def _get_state_hcb(arg: _GetStateArg) -> PyTree:
     try:
         current_state, current_batch_axes, _ = _state_cache[index._obj]
     except KeyError as e:
-        raise KeyError("Cannot get state before it has been set") from e
+        raise RuntimeError("Cannot get state before it has been set") from e
     if current_batch_axes != batch_axes:
-        raise TypeError("`like` and the saved state have different batch axes")
+        raise RuntimeError("`like` and the saved state have different batch axes")
     return current_state
 
 
@@ -423,10 +423,11 @@ def get_state(index: StateIndex, like: PyTree[Array]) -> PyTree[Array]:
 
     A `TypeError` at trace time if `like` is not a PyTree of JAX arrays.
 
-    A `TypeError` at run time if `like` is not of the same shape, dtype, PyTree
+    A `RuntimeError` at run time if `like` is not of the same shape, dtype, PyTree
     structure, and batch axes as the retrieved value.
 
-    A `KeyError` at run time if no state has previously been saved with this `index`.
+    A `RuntimeError` at run time if no state has previously been saved with this
+    `index`.
 
     !!! warning
 
@@ -483,14 +484,14 @@ def get_state(index: StateIndex, like: PyTree[Array]) -> PyTree[Array]:
                 index._obj
             ]
         except KeyError as e:
-            raise KeyError("Cannot get state before it has been set") from e
+            raise RuntimeError("Cannot get state before it has been set") from e
         if current_version == index._version.value:
             state = index._state
         else:
             state = jax.tree_map(jnp.asarray, current_state)
         _treedef = jax.tree_structure(state)
         if _treedef != jax.tree_structure(state):
-            raise ValueError(
+            raise RuntimeError(
                 "`like` has different PyTree structure to the stored state"
             )
         flat, treedef = jax.tree_flatten((state, like))
@@ -530,11 +531,11 @@ def _set_state_hcb(arg: _SetStateArg) -> None:
         current_state_shape = jax.eval_shape(lambda: current_state)
         state_shape = jax.eval_shape(lambda: state)
         if current_state_shape != state_shape:
-            raise TypeError(
+            raise RuntimeError(
                 "New state and old state have different shape, dtype, or PyTree structure"
             )
         if current_batch_axes != batch_axes:
-            raise TypeError("New state and old state have different batch axes")
+            raise RuntimeError("New state and old state have different batch axes")
     _state_cache[index._obj] = (state, batch_axes, current_version + 1)
 
 
@@ -553,12 +554,12 @@ def set_state(index: StateIndex, state: PyTree[Array]) -> None:
 
     **Raises:**
 
-    A `RuntimeError` at trace time if `index.inference` is truthy.
-
     A `TypeError` at trace time if `state` is not a PyTree of JAX arrays.
 
-    A `TypeError` at run time if this `index` has previously been used to save a
+    A `RuntimeError` at run time if this `index` has previously been used to save a
     `state` with a different shape, dtype, PyTree structure, or batch axes.
+
+    A `RuntimeError` at trace time if `index.inference` is truthy.
 
     !!! info
 

@@ -562,7 +562,7 @@ def test_batch_norm(getkey):
 
     # Test that switching to a different amount of batching raises an error
 
-    with pytest.raises(TypeError):
+    with pytest.raises(RuntimeError):
         jax.vmap(bn, axis_name="batch")(x1)
 
     # Test that it normalises
