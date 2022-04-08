@@ -144,7 +144,7 @@ class SpectralNorm(Module):
         self.weight_shape = weight.shape
         weight = jnp.reshape(weight, (weight.shape[0], -1))
         self.weight = weight
-        self.uv_index = StateIndex()
+        self.uv_index = StateIndex(inference=inference)
         self.num_power_iterations = num_power_iterations
         self.eps = eps
         self.inference = inference

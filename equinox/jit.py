@@ -27,11 +27,21 @@ def _f_wrapped_cache(fun, **jitkwargs):
 
 def _strip_wrapped_partial(fun):
     """Preserve the outermost wraps call's docstring or traverse to the inner function"""
-    if hasattr(fun, "__wrapped__"):
+    if hasattr(fun, "__wrapped__"):  # ft.wraps
         return _strip_wrapped_partial(fun.__wrapped__)
     if isinstance(fun, ft.partial):
         return _strip_wrapped_partial(fun.func)
     return fun
+
+
+def _process_args(args, kwargs, dynamic_fun, static_fun, filter_spec):
+    dynamic_args_kwargs, static_args_kwargs = partition((args, kwargs), filter_spec)
+    dynamic = (dynamic_fun,) + dynamic_args_kwargs
+    static = (static_fun,) + static_args_kwargs
+    static_leaves, static_treedef = jax.tree_flatten(static)
+    static_leaves = tuple(static_leaves)
+    inner_fun = _strip_wrapped_partial(static_fun)
+    return inner_fun, dynamic, static_treedef, static_leaves
 
 
 def filter_jit(
@@ -96,18 +106,26 @@ def filter_jit(
     ):
         filter_spec = (tuple(filter_spec[0]), filter_spec[1])
 
+    dynamic_fun, static_fun = partition(fun, filter_spec_fun)
+
     @ft.wraps(fun)
     def fun_wrapper(*args, **kwargs):
-        dynamic_args_kwargs, static_args_kwargs = partition((args, kwargs), filter_spec)
-        dynamic_fun, static_fun = partition(fun, filter_spec_fun)
-        dynamic = (dynamic_fun,) + dynamic_args_kwargs
-        static = (static_fun,) + static_args_kwargs
-        static_leaves, static_treedef = jax.tree_flatten(static)
-        static_leaves = tuple(static_leaves)
-        inner_fun = _strip_wrapped_partial(static_fun)
+        inner_fun, dynamic, static_treedef, static_leaves = _process_args(
+            args, kwargs, dynamic_fun, static_fun, filter_spec
+        )
         dynamic_out, static_out = _f_wrapped_cache(inner_fun, **jitkwargs)(
             dynamic, static_treedef, static_leaves, filter_spec_return
         )
         return combine(dynamic_out, static_out.value)
+
+    def lower(*args, **kwargs):
+        inner_fun, dynamic, static_treedef, static_leaves = _process_args(
+            args, kwargs, dynamic_fun, static_fun, filter_spec
+        )
+        return _f_wrapped_cache(inner_fun, **jitkwargs).lower(
+            dynamic, static_treedef, static_leaves, filter_spec_return
+        )
+
+    fun_wrapper.lower = lower
 
     return fun_wrapper
