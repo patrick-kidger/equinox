@@ -14,7 +14,7 @@ jobs:
         with:
             python-version: "3.8"
             test-script: |
-                python -m pip install pytest
+                python -m pip install pytest jaxlib
                 cp -r ${{ github.workspace }}/tests ./tests
                 pytest
             pypi-token: ${{ secrets.pypi_token }}
