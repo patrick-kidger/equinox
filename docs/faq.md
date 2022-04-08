@@ -16,7 +16,7 @@ This can be fixed by doing
 ```python
 optim.init(eqx.filter(model, eqx.is_array))
 ```
-which after a little thought should make sense: Optax can only optimise JAX arrays. It's not meaningful to ask Optax to optimsie whichever other arbitrary Python objects may be a part of your model. (e.g. the activation function of an `eqx.nn.MLP`).
+which after a little thought should make sense: Optax can only optimise JAX arrays. It's not meaningful to ask Optax to optimise whichever other arbitrary Python objects may be a part of your model. (e.g. the activation function of an `eqx.nn.MLP`).
 
 ## A module saved in two places has become two independent copies.
 
@@ -41,11 +41,12 @@ The resolution is simple: just don't store the same object in multiple places in
 
 Use [`jax.vmap`](https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html#jax.vmap). This maps arbitrary JAX operations -- including any Equinox module -- over additional dimensions.
 
-For example if `x` is an array/tensor of shape `(..., d_in)`, the following code in PyTorch:
+For example if `x` is an array/tensor of shape `(batch_size, input_size)`, the following code in PyTorch:
 
 ```python
 import torch
-linear = torch.nn.Linear(d_in, d_out)
+linear = torch.nn.Linear(input_size, output_size)
+
 y = linear(x)
 ```
 
@@ -55,6 +56,7 @@ is equivalent to the following code in Equinox:
 import jax
 import equinox as eqx
 key = jax.random.PRNGKey(seed=0)
-linear = eqx.nn.Linear(d_in, d_out, key=key)
+linear = eqx.nn.Linear(input_size, output_size, key=key)
+
 y = jax.vmap(linear)(x)
 ```
