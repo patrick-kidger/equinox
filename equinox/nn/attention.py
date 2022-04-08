@@ -103,7 +103,7 @@ class MultiheadAttention(Module):
         use_query_bias: bool = False,
         use_key_bias: bool = False,
         use_value_bias: bool = False,
-        use_output_bias: bool = True,
+        use_output_bias: bool = False,
         dropout_p: float = 0.0,
         *,
         key: "jax.random.PRNGKey",
