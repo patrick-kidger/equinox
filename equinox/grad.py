@@ -1,18 +1,37 @@
 import functools as ft
 import types
 import typing
+import warnings
 
 import jax
 
 from .filters import combine, is_array, is_inexact_array, partition
 
 
+_sentinel = object()
+
+
 def filter_value_and_grad(
-    fun, *, filter_spec=is_inexact_array, argnums=None, **gradkwargs
+    fun=_sentinel,
+    *,
+    arg=is_inexact_array,
+    filter_spec=None,
+    argnums=None,
+    **gradkwargs,
 ):
     """As [`equinox.filter_grad`][], except that it is `jax.value_and_grad` that is
     wrapped.
     """
+
+    if fun is _sentinel:
+        return ft.partial(
+            filter_value_and_grad, arg=arg, filter_spec=filter_spec, **gradkwargs
+        )
+
+    if filter_spec is not None:
+        warnings.warn("For brevity the `filter_spec` argument has been renamed `arg`")
+        arg = filter_spec
+
     if argnums is not None:
         raise ValueError(
             "`argnums` should not be passed. If you need to differentiate "
@@ -27,19 +46,19 @@ def filter_value_and_grad(
 
     @ft.wraps(fun)
     def fun_value_and_grad_wrapper(x, *args, **kwargs):
-        diff_x, nondiff_x = partition(x, filter_spec)
+        diff_x, nondiff_x = partition(x, arg)
         return fun_value_and_grad(diff_x, nondiff_x, *args, **kwargs)
 
     return fun_value_and_grad_wrapper
 
 
-def filter_grad(fun, *, filter_spec=is_inexact_array, **gradkwargs):
+def filter_grad(fun=_sentinel, *, arg=is_inexact_array, filter_spec=None, **gradkwargs):
     """Wraps together [`equinox.partition`][] and `jax.grad`.
 
     **Arguments:**
 
     - `fun` is a pure function to JIT compile.
-    - `filter_spec` is a PyTree whose structure should be a prefix of the structure of
+    - `arg` is a PyTree whose structure should be a prefix of the structure of
         the **first** argument to `fun`. It behaves as the `filter_spec` argument to
         [`equinox.filter`][]. Truthy values will be differentiated; falsey values will
         not.
@@ -54,10 +73,10 @@ def filter_grad(fun, *, filter_spec=is_inexact_array, **gradkwargs):
 
     !!! info
 
-        A very important special case is to trace all inexact (i.e. floating point)
+        An important special case is to trace all inexact (i.e. floating point)
         JAX arrays and treat all other objects as nondifferentiable.
 
-        This is accomplished with `filter_spec=equinox.is_inexact_array`, which is the
+        This is accomplished with `arg=equinox.is_inexact_array`, which is the
         default.
 
     !!! tip
@@ -76,11 +95,16 @@ def filter_grad(fun, *, filter_spec=is_inexact_array, **gradkwargs):
         ```
     """
 
+    if fun is _sentinel:
+        return ft.partial(filter_grad, arg=arg, filter_spec=filter_spec, **gradkwargs)
+
+    if filter_spec is not None:
+        warnings.warn("For brevity the `filter_spec` argument has been renamed `arg`")
+        arg = filter_spec
+
     has_aux = gradkwargs.get("has_aux", False)
 
-    fun_value_and_grad = filter_value_and_grad(
-        fun, filter_spec=filter_spec, **gradkwargs
-    )
+    fun_value_and_grad = filter_value_and_grad(fun, filter_spec=arg, **gradkwargs)
 
     @ft.wraps(fun)
     def fun_grad(*args, **kwargs):

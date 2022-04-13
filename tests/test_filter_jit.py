@@ -256,11 +256,11 @@ def test_function_name_warning(log_compiles_config, caplog):
         in warning_text
     )
 
-    def wrapped_fun(x, y):
-        return x + y
+    def wrapped_fun(y):
+        pass
 
     def the_test_function_name(x, y):
-        return wrapped_fun(x, y)
+        return x + y
 
     fun = eqx.filter_jit(
         ft.wraps(wrapped_fun)(ft.partial(the_test_function_name, jnp.array(1.0)))
