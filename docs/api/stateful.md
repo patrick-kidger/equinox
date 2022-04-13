@@ -6,6 +6,8 @@ These operations can be used to introduce save/load JAX arrays as a side-effect 
 
     This is considered experimental.
 
+    Stateful operations will not produce correct results under `jax.checkpoint` or `jax.pmap`.
+
 !!! danger
 
     Really, **this is experimental**. Side effects can easily make your code do something unexpected. Whatever you're doing, you almost certainly do not need this.

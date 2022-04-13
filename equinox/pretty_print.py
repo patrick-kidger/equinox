@@ -189,7 +189,7 @@ def tree_pformat(
 
     !!! example
 
-       A 32-bit floating-point JAX array of shape `(3, 4)` is printed as `f32[3,4]`.
+        A 32-bit floating-point JAX array of shape `(3, 4)` is printed as `f32[3,4]`.
 
     **Arguments:**
 
