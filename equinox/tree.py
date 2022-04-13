@@ -148,3 +148,50 @@ def tree_equal(*pytrees: PyTree) -> bool:
                     if elem != elem_:
                         return False
     return True
+
+
+def _has_inference(leaf):
+    return hasattr(leaf, "inference")
+
+
+def _inferences(pytree):
+    return tuple(
+        x.inference
+        for x in jax.tree_leaves(pytree, is_leaf=_has_inference)
+        if _has_inference(x)
+    )
+
+
+def tree_inference(pytree: PyTree, value: bool) -> PyTree:
+    """Convenience function for setting all `inference` attributes on a PyTree.
+
+    Equivalent to:
+    ```python
+    has_inference = lambda leaf: hasattr(leaf, "inference")
+
+    def where(pytree):
+        return tuple(x.inference
+                     for x in jax.tree_leaves(pytree, is_leaf=has_inference)
+                     if has_inference(x))
+
+    equinox.tree_at(where, pytree, replace_fn=lambda _: value)
+    ```
+
+    **Arguments:**
+
+        - `pytree`: the PyTree to modify.
+        - `value`: the value to set all `inference` attributes to.
+
+    **Returns:**
+
+    The new PyTree, of the same structure as `pytree`, with all `inference` flags set to `value`.
+    """
+
+    # For the sake of equinox.experimental.StateIndex. This won't defend against anyone
+    # setting inference flags manually using tree_at etc., but it should help overall.
+    if isinstance(jnp.array(0) + 1, jax.core.Tracer):
+        raise RuntimeError(
+            "inference flags should not be set whilst jit'ing, vmap'ing etc."
+        )
+
+    return tree_at(_inferences, pytree, replace_fn=lambda _: value)
