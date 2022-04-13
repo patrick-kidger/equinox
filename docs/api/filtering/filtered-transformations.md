@@ -1,6 +1,6 @@
 # Filtered transformations
 
-These typically combine [`equinox.partition`][], a filter function, and a JAX transformation, all together.
+These typically combine [`equinox.partition`][], a [filter function](./filter-functions.md), and a JAX transformation, all together.
 
 Practically speaking these are usually the only kind of filtering you ever have to use. (But it's good to understand what e.g. [`equinox.partition`][] and [`equinox.is_array`][] are doing under the hood, just so that these don't seem too magical.)
 
@@ -19,3 +19,11 @@ Practically speaking these are usually the only kind of filtering you ever have 
 ::: equinox.filter_custom_vjp
     selection:
         members: false
+
+---
+
+::: equinox.experimental.filter_vmap
+
+---
+
+::: equinox.experimental.filter_pmap

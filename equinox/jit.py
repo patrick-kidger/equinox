@@ -1,28 +1,19 @@
 import functools as ft
 import inspect
 import warnings
-from typing import Any
+from typing import Callable
 
 import jax
 
+from .compile_utils import (
+    hashable_combine,
+    hashable_partition,
+    Static,
+    strip_wrapped_partial,
+)
+from .custom_types import BoolAxisSpec, PyTree, sentinel
+from .doc_utils import doc_fn, doc_strip_annotations
 from .filters import combine, is_array, partition
-from .module import Module, static_field
-
-
-def _hashable_partition(pytree, filter_spec):
-    dynamic, static = partition(pytree, filter_spec)
-    static_leaves, static_treedef = jax.tree_flatten(static)
-    static_leaves = tuple(static_leaves)
-    return dynamic, static_leaves, static_treedef
-
-
-def _hashable_combine(dynamic, static_leaves, static_treedef):
-    static = jax.tree_unflatten(static_treedef, static_leaves)
-    return combine(dynamic, static)
-
-
-class _Static(Module):
-    value: Any = static_field()
 
 
 @ft.lru_cache(maxsize=None)
@@ -40,43 +31,28 @@ def _filter_jit_cache(unwrapped_fun_treedef, unwrapped_fun_leaves, **jitkwargs):
             static_spec_leaves,
             filter_out,
         ) = static
-        fun = _hashable_combine(dynamic_fun, static_fun_leaves, static_fun_treedef)
-        args, kwargs = _hashable_combine(
+        fun = hashable_combine(dynamic_fun, static_fun_leaves, static_fun_treedef)
+        args, kwargs = hashable_combine(
             dynamic_spec, static_spec_leaves, static_spec_treedef
         )
         out = fun(*args, **kwargs)
         dynamic_out, static_out = partition(out, filter_out)
-        return dynamic_out, _Static(static_out)
+        return dynamic_out, Static(static_out)
 
     return fun_wrapped
 
 
-def _strip_wrapped_partial(fun):
-    if hasattr(fun, "__wrapped__"):  # ft.wraps
-        return _strip_wrapped_partial(fun.__wrapped__)
-    if isinstance(fun, ft.partial):
-        return _strip_wrapped_partial(fun.func)
-    return fun
-
-
-_sentinel = object()
-
-
+@doc_strip_annotations
 def filter_jit(
-    fun=_sentinel,
+    fun: Callable = sentinel,
     *,
-    default=is_array,
-    fn=is_array,
-    args=(),
-    kwargs=None,
-    out=is_array,
-    # Backward compatibility
-    filter_spec=is_array,
-    filter_spec_return=is_array,
-    filter_spec_fun=is_array,
-    # ~Backward compatibility
+    default: BoolAxisSpec = doc_fn(is_array),
+    fn: PyTree[BoolAxisSpec] = doc_fn(is_array),
+    args: PyTree[BoolAxisSpec] = (),
+    kwargs: PyTree[BoolAxisSpec] = None,
+    out: PyTree[BoolAxisSpec] = doc_fn(is_array),
     **jitkwargs
-):
+) -> Callable:
     """Wraps together [`equinox.partition`][] and `jax.jit`.
 
     **Arguments:**
@@ -139,7 +115,7 @@ def filter_jit(
         ```
     """
 
-    if fun is _sentinel:
+    if fun is sentinel:
         return ft.partial(
             filter_jit,
             default=default,
@@ -147,11 +123,6 @@ def filter_jit(
             args=args,
             kwargs=kwargs,
             out=out,
-            # Backward compatibility
-            filter_spec=filter_spec,
-            filter_spec_fun=filter_spec_fun,
-            filter_spec_return=filter_spec_return,
-            # ~Backward compatibility
             **jitkwargs
         )
 
@@ -177,6 +148,9 @@ def filter_jit(
     signature = inspect.signature(fun)
 
     # Backward compatibility
+    filter_spec = jitkwargs.get("filter_spec", is_array)
+    filter_spec_return = jitkwargs.get("filter_spec_return", is_array)
+    filter_spec_fun = jitkwargs.get("filter_spec_fun", is_array)
     if any(
         x is not is_array for x in (filter_spec, filter_spec_return, filter_spec_fun)
     ):
@@ -219,10 +193,10 @@ def filter_jit(
         new_style = True
     # ~Backward compatibility
 
-    _, unwrapped_fun_leaves, unwrapped_fun_treedef = _hashable_partition(
-        _strip_wrapped_partial(fun), filter_fn
+    _, unwrapped_fun_leaves, unwrapped_fun_treedef = hashable_partition(
+        strip_wrapped_partial(fun), filter_fn
     )
-    dynamic_fun, static_fun_leaves, static_fun_treedef = _hashable_partition(
+    dynamic_fun, static_fun_leaves, static_fun_treedef = hashable_partition(
         fun, filter_fn
     )
     cached = _filter_jit_cache(unwrapped_fun_treedef, unwrapped_fun_leaves, **jitkwargs)
@@ -232,7 +206,7 @@ def filter_jit(
             bound = signature.bind(*args, **kwargs)
             args = bound.args
             kwargs = bound.kwargs
-        dynamic_spec, static_spec_leaves, static_spec_treedef = _hashable_partition(
+        dynamic_spec, static_spec_leaves, static_spec_treedef = hashable_partition(
             (args, kwargs), filter_spec
         )
         dynamic = (dynamic_fun, dynamic_spec)

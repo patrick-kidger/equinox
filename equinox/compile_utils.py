@@ -1,0 +1,31 @@
+import functools as ft
+from typing import Any
+
+import jax
+
+from .filters import combine, partition
+from .module import Module, static_field
+
+
+def hashable_partition(pytree, filter_spec):
+    dynamic, static = partition(pytree, filter_spec)
+    static_leaves, static_treedef = jax.tree_flatten(static)
+    static_leaves = tuple(static_leaves)
+    return dynamic, static_leaves, static_treedef
+
+
+def hashable_combine(dynamic, static_leaves, static_treedef):
+    static = jax.tree_unflatten(static_treedef, static_leaves)
+    return combine(dynamic, static)
+
+
+class Static(Module):
+    value: Any = static_field()
+
+
+def strip_wrapped_partial(fun):
+    if hasattr(fun, "__wrapped__"):  # ft.wraps
+        return strip_wrapped_partial(fun.__wrapped__)
+    if isinstance(fun, ft.partial):
+        return strip_wrapped_partial(fun.func)
+    return fun

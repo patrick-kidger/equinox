@@ -2,36 +2,35 @@ import functools as ft
 import types
 import typing
 import warnings
+from typing import Callable
 
 import jax
 
+from .custom_types import BoolAxisSpec, PyTree, sentinel
+from .doc_utils import doc_fn, doc_strip_annotations
 from .filters import combine, is_array, is_inexact_array, partition
 
 
-_sentinel = object()
-
-
+@doc_strip_annotations
 def filter_value_and_grad(
-    fun=_sentinel,
+    fun: Callable = sentinel,
     *,
-    arg=is_inexact_array,
-    filter_spec=None,
-    argnums=None,
+    arg: PyTree[BoolAxisSpec] = doc_fn(is_inexact_array),
     **gradkwargs,
-):
+) -> Callable:
     """As [`equinox.filter_grad`][], except that it is `jax.value_and_grad` that is
     wrapped.
     """
 
-    if fun is _sentinel:
-        return ft.partial(
-            filter_value_and_grad, arg=arg, filter_spec=filter_spec, **gradkwargs
-        )
+    if fun is sentinel:
+        return ft.partial(filter_value_and_grad, arg=arg, **gradkwargs)
 
+    filter_spec = gradkwargs.pop("filter_spec", None)
     if filter_spec is not None:
         warnings.warn("For brevity the `filter_spec` argument has been renamed `arg`")
         arg = filter_spec
 
+    argnums = gradkwargs.pop("argnums", None)
     if argnums is not None:
         raise ValueError(
             "`argnums` should not be passed. If you need to differentiate "
@@ -52,7 +51,13 @@ def filter_value_and_grad(
     return fun_value_and_grad_wrapper
 
 
-def filter_grad(fun=_sentinel, *, arg=is_inexact_array, filter_spec=None, **gradkwargs):
+@doc_strip_annotations
+def filter_grad(
+    fun: Callable = sentinel,
+    *,
+    arg: PyTree[BoolAxisSpec] = doc_fn(is_inexact_array),
+    **gradkwargs,
+):
     """Wraps together [`equinox.partition`][] and `jax.grad`.
 
     **Arguments:**
@@ -95,16 +100,12 @@ def filter_grad(fun=_sentinel, *, arg=is_inexact_array, filter_spec=None, **grad
         ```
     """
 
-    if fun is _sentinel:
-        return ft.partial(filter_grad, arg=arg, filter_spec=filter_spec, **gradkwargs)
-
-    if filter_spec is not None:
-        warnings.warn("For brevity the `filter_spec` argument has been renamed `arg`")
-        arg = filter_spec
+    if fun is sentinel:
+        return ft.partial(filter_grad, arg=arg, **gradkwargs)
 
     has_aux = gradkwargs.get("has_aux", False)
 
-    fun_value_and_grad = filter_value_and_grad(fun, filter_spec=arg, **gradkwargs)
+    fun_value_and_grad = filter_value_and_grad(fun, arg=arg, **gradkwargs)
 
     @ft.wraps(fun)
     def fun_grad(*args, **kwargs):

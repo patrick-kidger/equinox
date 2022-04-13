@@ -1,10 +1,10 @@
-from typing import Any, Callable, Union
+from typing import Any
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
-from .custom_types import PyTree
+from .custom_types import BoolAxisSpec, PyTree, ResolvedBoolAxisSpec
 
 
 #
@@ -17,7 +17,6 @@ def is_array(element: Any) -> bool:
     return isinstance(element, jnp.ndarray)
 
 
-# Does _not_ do a try/except on jnp.asarray(element) because that's very slow.
 # Chosen to match
 # https://github.com/google/jax/blob/4a17c78605e7fc69a69a999e2f6298db79d3837a/jax/_src/numpy/lax_numpy.py#L542  # noqa: E501
 def is_array_like(element: Any) -> bool:
@@ -51,7 +50,7 @@ def is_inexact_array_like(element: Any) -> bool:
 #
 
 
-def _make_filter_tree(mask: Union[bool, Callable[[Any], bool]], arg: Any) -> bool:
+def _make_filter_tree(mask: BoolAxisSpec, arg: Any) -> ResolvedBoolAxisSpec:
     if isinstance(mask, bool):
         return mask
     elif callable(mask):
@@ -61,7 +60,10 @@ def _make_filter_tree(mask: Union[bool, Callable[[Any], bool]], arg: Any) -> boo
 
 
 def filter(
-    pytree: PyTree, filter_spec: PyTree, inverse: bool = False, replace: Any = None
+    pytree: PyTree,
+    filter_spec: PyTree[BoolAxisSpec],
+    inverse: bool = False,
+    replace: Any = None,
 ) -> PyTree:
     """
     Filters out the leaves of a PyTree not satisfying a condition. Those not satisfying
@@ -89,10 +91,6 @@ def filter(
         A common special case is `equinox.filter(pytree, equinox.is_array)`. Then
         `equinox.is_array` is evaluted on all of `pytree`'s leaves, and each leaf then
         kept or replaced.
-
-    !!! info
-
-        See also [`equinox.combine`][] to reconstitute the PyTree again.
     """
 
     inverse = bool(inverse)  # just in case, to make the != trick below work reliably
@@ -102,9 +100,15 @@ def filter(
     )
 
 
-def partition(pytree: PyTree, filter_spec: PyTree, replace: Any = None) -> PyTree:
+def partition(
+    pytree: PyTree, filter_spec: PyTree[BoolAxisSpec], replace: Any = None
+) -> PyTree:
     """Equivalent to `filter(...), filter(..., inverse=True)`, but slightly more
     efficient.
+
+    !!! info
+
+        See also [`equinox.combine`][] to reconstitute the PyTree again.
     """
 
     filter_tree = jax.tree_map(_make_filter_tree, filter_spec, pytree)
