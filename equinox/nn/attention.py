@@ -179,6 +179,7 @@ class MultiheadAttention(Module):
         ] = None,
         *,
         key: Optional["jax.random.PRNGKey"] = None,
+        inference: Optional[bool] = None,
         deterministic: Optional[bool] = None,
     ) -> Array["query_seq_length", "output_size"]:  # noqa: F821
         """**Arguments:**
@@ -193,8 +194,9 @@ class MultiheadAttention(Module):
             JAX array of shape `(num_heads, query_seq_length, kv_seq_length)`.
         - `key`: A `jax.random.PRNGKey` used for dropout. Unused if `dropout = 0`.
             (Keyword only argument.)
-        - `deterministic`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
+        - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
             argument.)
+        - `deterministic`: (Deprecated in favour of `inference`.)
 
         **Returns:**
 
@@ -224,7 +226,9 @@ class MultiheadAttention(Module):
             logits = jnp.where(mask, logits, -jnp.inf)
 
         weights = jax.nn.softmax(logits, axis=-1)
-        weights = self.dropout(weights, key=key, deterministic=deterministic)
+        weights = self.dropout(
+            weights, key=key, inference=inference, deterministic=deterministic
+        )
         attn = jnp.einsum("hsS,Shd->shd", weights, value_heads)
         attn = attn.reshape(query_seq_length, -1)
 
