@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 import pytest
@@ -85,3 +86,19 @@ def test_tree_equal():
     assert not eqx.tree_equal(pytree1, pytree3)
     assert not eqx.tree_equal(pytree1, pytree4)
     assert not eqx.tree_equal(pytree1, pytree5)
+
+
+def test_tree_inference(getkey):
+    attention = eqx.nn.MultiheadAttention(2, 4, key=getkey())
+    assert attention.dropout.inference is False
+    attention2 = eqx.tree_inference(attention, True)
+    assert attention.dropout.inference is False
+    assert attention2.dropout.inference is True
+
+    @jax.jit
+    def f():
+        dropout = eqx.nn.Dropout()
+        eqx.tree_inference(dropout, True)
+
+    with pytest.raises(RuntimeError):
+        f()
