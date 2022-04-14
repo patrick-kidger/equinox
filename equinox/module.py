@@ -10,8 +10,9 @@ from .tree import tree_equal
 
 
 def static_field(**kwargs):
-    """Used for marking that a field should _not_ be treated as part of the PyTree
-    of a [`equinox.Module`][]. (And is instead just treated as extra metadata.)
+    """Used for marking that a field should _not_ be treated as a leaf of the PyTree
+    of a [`equinox.Module`][]. (And is instead treated as part of the structure, i.e.
+    as extra metadata.)
 
     !!! example
 
@@ -20,9 +21,10 @@ def static_field(**kwargs):
             normal_field: int
             static_field: int = equinox.static_field()
 
-        mymodule = MyModule()
+        mymodule = MyModule("normal", "static")
         leaves, treedef = jax.tree_flatten(mymodule)
-        assert len(leaves) == 1
+        assert leaves == ["normal"]
+        assert "static" in str(treedef)
         ```
 
     In practice this should rarely be used; it is usually preferential to just filter
