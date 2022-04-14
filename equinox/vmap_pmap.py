@@ -5,15 +5,15 @@ from typing import Any, Callable, Union
 import jax
 import jax.interpreters.batching as batching
 
-from ..compile_utils import (
+from .compile_utils import (
     hashable_combine,
     hashable_partition,
     Static,
     strip_wrapped_partial,
 )
-from ..custom_types import BoolAxisSpec, PyTree, ResolvedBoolAxisSpec, sentinel
-from ..doc_utils import doc_fn, doc_strip_annotations
-from ..filters import combine, is_array, partition
+from .custom_types import BoolAxisSpec, PyTree, ResolvedBoolAxisSpec, sentinel
+from .doc_utils import doc_strip_annotations
+from .filters import combine, is_array, partition
 
 
 ResolvedMapAxisSpec = Union[None, int]
@@ -109,11 +109,14 @@ def _zero_if_array_else_none(x: Any) -> ResolvedMapAxisSpec:
 def filter_vmap(
     fun: Callable = sentinel,
     *,
-    default: AxisSpec = doc_fn(_zero_if_array_else_none),
+    default: AxisSpec = _zero_if_array_else_none,
     fn: PyTree[AxisSpec] = None,
     args: PyTree[AxisSpec] = (),
     kwargs: PyTree[AxisSpec] = None,
-    out: PyTree[AxisSpec] = doc_fn(_zero_if_array_else_none),
+    # `out` default would ideally be _zero_if_array_else_none but that hits
+    # experimental behaviour, so it's not a good default.
+    # As a bonus, this also keeps the default the same as filter_pmap.
+    out: PyTree[AxisSpec] = 0,
     **vmapkwargs
 ) -> Callable:
     """Wraps together [`equinox.partition`][] and `jax.vmap`.
@@ -124,8 +127,11 @@ def filter_vmap(
     type `Union[None, int]` or a function `Leaf -> Union[None, int]`.
 
     For all of `default`, `args,` `kwargs`, `out`, `fn`, then integers specify which
-    array axis to vectorise over. `None` specifies not to vectorise over any axis.
-    (These follow the same behaviour as `jax.vmap(in_axes=..., out_axes=...)`.)
+    array axis to vectorise over. `None` specifies not to vectorise over any axis, and
+    may be used for non-JAX-array arguments.
+    (This is the same semantics as `jax.vmap(in_axes=..., out_axes=...)`.)
+
+    It is an error to try and specify an integer axis for a non-JAX-array.
 
     - `fun` is a pure function to vectorise.
     - `default` should be a value of type `Union[None, int]` or a function
@@ -160,32 +166,39 @@ def filter_vmap(
 
         In fact, besides `None`, `int` and `Leaf -> Union[None, int]`, then boolean
         types are also supported, and treated identical to `None`. This is to support
-        seamlessly switching out [`equinox.experimental.filter_pmap`][] for
-        [`equinox.experimental.filter_vmap`][] if desired.
+        seamlessly switching out [`equinox.filter_pmap`][] for
+        [`equinox.filter_vmap`][] if desired.
+
+    !!! warning
+
+        Using functions `Leaf -> Union[None, int]` in `out` (as opposed to just values
+        of type `Union[None, int]`) is considered experimental, and may change.
 
     !!! example
 
         ```python
-        import equinox.experimental as eqxe
+        import equinox as eqx
         import jax.numpy as jnp
 
-        @eqxe.filter_vmap
+        @eqx.filter_vmap
         def f(x, y):
             return x + y
 
-        @eqxe.filter_vmap(kwargs=dict(x=1))
+        @eqx.filter_vmap(kwargs=dict(x=1))
         def g(x, y):
             return x + y
 
-        @eqxe.filter_vmap(args=(None,))
+        @eqx.filter_vmap(args=(None,))
         def h(x, y):
             return x + y
 
         f(jnp.array([1, 2]), jnp.array([3, 4]))  # both args vectorised down axis 0
         f(jnp.array([1, 2]), 3)  # first arg vectorised down axis 0
                                  # second arg broadcasted
+
         g(jnp.array([[1, 2]]), jnp.array([3, 4]))  # first arg vectorised down axis 1
                                                    # second arg vectorised down axis 0
+
         h(jnp.array(1), jnp.array([2, 3]))  # first arg broadcasted
                                             # second arg vectorised down axis 0
         ```
@@ -197,7 +210,6 @@ def filter_vmap(
 
         ```python
         import equinox as eqx
-        import equinox.experimental as eqxe
         import jax.random as jr
 
         key = jr.PRNGKey(0)
@@ -205,7 +217,7 @@ def filter_vmap(
 
         # Create an ensemble of models
 
-        @eqxe.filter_vmap
+        @eqx.filter_vmap(out=lambda x: 0 if eqx.is_array(x) else None)
         def make_ensemble(key):
             return eqx.nn.MLP(2, 2, 2, 2, key=key)
 
@@ -213,7 +225,7 @@ def filter_vmap(
 
         # Evaluate each member of the ensemble on the same data
 
-        @eqxe.filter_vmap(kwargs=dict(x=None))
+        @eqx.filter_vmap(kwargs=dict(x=None))
         def evaluate_ensemble(model, x):
             return model(x)
 
@@ -221,7 +233,7 @@ def filter_vmap(
 
         # Evaluate each member of the ensemble on different data
 
-        @eqxe.filter_vmap
+        @eqx.filter_vmap
         def evaluate_per_ensemble(model, x):
             return model(x)
 
@@ -239,8 +251,6 @@ def filter_vmap(
         cannot be called directly. It must instead be passed back into a vectorised
         region to be called.
     """
-
-    _monkey_patch()
 
     if fun is sentinel:
         return ft.partial(
@@ -264,6 +274,13 @@ def filter_vmap(
     bound = signature_default.bind_partial(*args, **kwargs)
     bound.apply_defaults()
 
+    if any(callable(o) for o in jax.tree_leaves(out)):
+        # Experimental behaviour
+        _monkey_patch()
+        callable_out_axes = True
+    else:
+        callable_out_axes = False
+
     def _fun_wrapper(_fun, _args, _kwargs):
         result = _fun(*_args, **_kwargs)
         out_axes = _resolve_axes(result, out)
@@ -275,11 +292,15 @@ def filter_vmap(
     @ft.wraps(fun)
     def fun_wrapper(*_args, **_kwargs):
         _bound = signature.bind(*_args, **_kwargs)
+        _bound.apply_defaults()
         in_axes = _resolve_axes(
             (fun, _bound.args, _bound.kwargs), (fn, bound.args, bound.kwargs)
         )
         in_axes = _map_axes(in_axes)
-        out_axes = (jax.tree_map(_VmapFilter, out), None)
+        if callable_out_axes:  # `out` of type AxisSpec
+            out_axes = (jax.tree_map(_VmapFilter, out), None)
+        else:  # `out` of type ResolvedAxisSpec
+            out_axes = _map_axes(out)
         vmapd, nonvmapd = jax.vmap(
             _fun_wrapper, in_axes=in_axes, out_axes=out_axes, **vmapkwargs
         )(fun, _bound.args, _bound.kwargs)
@@ -308,13 +329,100 @@ def filter_pmap(
     fun: Callable = sentinel,
     axis_name=None,
     *,
-    default: AxisSpec = doc_fn(_zero_if_array_else_none),
+    default: AxisSpec = _zero_if_array_else_none,
     fn: PyTree[AxisSpec] = None,
     args: PyTree[AxisSpec] = (),
     kwargs: PyTree[AxisSpec] = None,
     out: PyTree[AxisSpec] = 0,
     **pmapkwargs
 ) -> Callable:
+    """Wraps together [`equinox.partition`][] and `jax.pmap`.
+
+    **Arguments:**
+
+    For all of `args`, `kwargs`, `out`, `fn`, then each leaf should either be a value of
+    type `Union[None, bool, int]` or a function `Leaf -> Union[None, bool, int]`.
+
+    For all of `default`, `args,` `kwargs`, `out`, `fn`, then integers specify which
+    array axis to split down. `None` specifies to instead broadcast the argument, and
+    may be used for non-JAX-array arguments.
+    (This is the same semantics as `jax.pmap(in_axes=..., out_axes=...)`.)
+
+    It is an error to try and specify an integer axis for a non-JAX-array.
+
+    Note that `jax.pmap`, and thus `equinox.filter_pmap`, also JIT-compile their
+    function. By default all JAX arrays are traced and all other arrays are treated as
+    static inputs. This may be controlled explicitly -- instead of just passing `None`
+    as above -- by setting the values in `default`, `args`, etc. to `True` (traced) or
+    `False` (static).
+
+    - `fun` is a pure function to parallelise.
+    - `default` should be a value of type `Union[None, bool, int]` or a function
+        `Leaf -> Union[None, bool, int]` that will be called on every leaf of every
+        input to the function.
+    - `args` and `kwargs` are optional per-argument and per-keyword-argument overrides
+        for `default`. These should be PyTrees whose structures are a prefix of the
+        inputs to `fun`.
+    - `out` is a PyTree whose structure should be a prefix of the structure of the
+        outputs of `fun`.
+    - `fn` is a PyTree whose structure should be a prefix of the function `fun` itself.
+        (So that `fun` may be any callable -- such as a bound method, or a class
+        implementing `__call__` -- and not necessarily just a normal Python function.)
+    - `**vmapkwargs` are any other keyword arguments to `jax.vmap`.
+
+    Where `args`, `kwargs`, `out`, `fn` are prefixes of the corresponding input, their
+    value will be mapped over the input PyTree.
+
+    **Returns:**
+
+    The parallelised version of `fun`.
+
+    !!! info
+
+        By default, the computation is parallelised by splitting all JAX arrays down
+        their leading axis (i.e. axis index 0), and broadcasting all other types to
+        each replica.
+
+        (Indeed only JAX arrays may be either split or not-split; all other types must
+        always be broadcasted.)
+
+    !!! example
+
+        ```python
+        import equinox as eqx
+        import jax.numpy as jnp
+
+        @eqx.filter_pmap
+        def f(x, y):
+            return x + y
+
+        @eqx.filter_pmap(kwargs=dict(x=1))
+        def g(x, y):
+            return x + y
+
+        @eqx.filter_pmap(args=(None,))
+        def h(x, y):
+            return x + y
+
+        @eqx.filter_pmap
+        def apply(fun, x):
+            return fun(x)
+
+        f(jnp.array([1, 2]), jnp.array([3, 4]))  # both args split down axis 0
+        f(jnp.array([1, 2]), 3)  # first arg split down axis 0
+                                 # second arg broadcasted
+
+        g(jnp.array([[1, 2]]), jnp.array([3, 4]))  # first arg split down axis 1
+                                                   # second arg split down axis 0
+
+        h(jnp.array(1), jnp.array([2, 3]))  # first arg broadcasted
+                                            # second arg split down axis 0
+
+        apply(lambda x: x + 1, jnp.array([2, 3]))  # first arg broadcasted (as it's not
+                                                   # a JAX array)
+                                                   # second arg split down axis 0
+        ```
+    """
 
     if fun is sentinel:
         return ft.partial(
@@ -345,6 +453,7 @@ def filter_pmap(
 
     def _fun_wrapper(is_lower, _args, _kwargs):
         _bound = signature.bind(*_args, **_kwargs)
+        _bound.apply_defaults()
         in_axes = _resolve_axes(
             (fun, _bound.args, _bound.kwargs), (fn, bound.args, bound.kwargs)
         )

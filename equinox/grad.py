@@ -7,7 +7,7 @@ from typing import Callable
 import jax
 
 from .custom_types import BoolAxisSpec, PyTree, sentinel
-from .doc_utils import doc_fn, doc_strip_annotations
+from .doc_utils import doc_strip_annotations
 from .filters import combine, is_array, is_inexact_array, partition
 
 
@@ -15,7 +15,7 @@ from .filters import combine, is_array, is_inexact_array, partition
 def filter_value_and_grad(
     fun: Callable = sentinel,
     *,
-    arg: PyTree[BoolAxisSpec] = doc_fn(is_inexact_array),
+    arg: PyTree[BoolAxisSpec] = is_inexact_array,
     **gradkwargs,
 ) -> Callable:
     """As [`equinox.filter_grad`][], except that it is `jax.value_and_grad` that is
@@ -55,7 +55,7 @@ def filter_value_and_grad(
 def filter_grad(
     fun: Callable = sentinel,
     *,
-    arg: PyTree[BoolAxisSpec] = doc_fn(is_inexact_array),
+    arg: PyTree[BoolAxisSpec] = is_inexact_array,
     **gradkwargs,
 ):
     """Wraps together [`equinox.partition`][] and `jax.grad`.

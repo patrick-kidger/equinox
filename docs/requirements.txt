@@ -4,7 +4,7 @@ mkdocs-material==7.3.6   # Theme
 pymdown-extensions==9.1  # Markdown extensions e.g. to handle LaTeX.
 mkdocstrings==0.17.0     # Autogenerate documentation from docstrings.
 mknotebooks==0.7.1       # Turn Jupyter Lab notebooks into webpages.
-pytkdocs_tweaks==0.0.4   # Tweaks mkdocstrings to improve various aspects
+pytkdocs_tweaks==0.0.5   # Tweaks mkdocstrings to improve various aspects
 mkdocs_include_exclude_files==0.0.1  # Tweak which files are included/excluded
 jinja2==3.0.3            # Older version. After 3.1.0 seems to be incompatible with current versions of mkdocstrings.
 

@@ -12,7 +12,7 @@ from .compile_utils import (
     strip_wrapped_partial,
 )
 from .custom_types import BoolAxisSpec, PyTree, sentinel
-from .doc_utils import doc_fn, doc_strip_annotations
+from .doc_utils import doc_strip_annotations
 from .filters import combine, is_array, partition
 
 
@@ -46,11 +46,11 @@ def _filter_jit_cache(unwrapped_fun_treedef, unwrapped_fun_leaves, **jitkwargs):
 def filter_jit(
     fun: Callable = sentinel,
     *,
-    default: BoolAxisSpec = doc_fn(is_array),
-    fn: PyTree[BoolAxisSpec] = doc_fn(is_array),
+    default: BoolAxisSpec = is_array,
+    fn: PyTree[BoolAxisSpec] = is_array,
     args: PyTree[BoolAxisSpec] = (),
     kwargs: PyTree[BoolAxisSpec] = None,
-    out: PyTree[BoolAxisSpec] = doc_fn(is_array),
+    out: PyTree[BoolAxisSpec] = is_array,
     **jitkwargs
 ) -> Callable:
     """Wraps together [`equinox.partition`][] and `jax.jit`.
@@ -148,9 +148,9 @@ def filter_jit(
     signature = inspect.signature(fun)
 
     # Backward compatibility
-    filter_spec = jitkwargs.get("filter_spec", is_array)
-    filter_spec_return = jitkwargs.get("filter_spec_return", is_array)
-    filter_spec_fun = jitkwargs.get("filter_spec_fun", is_array)
+    filter_spec = jitkwargs.pop("filter_spec", is_array)
+    filter_spec_return = jitkwargs.pop("filter_spec_return", is_array)
+    filter_spec_fun = jitkwargs.pop("filter_spec_fun", is_array)
     if any(
         x is not is_array for x in (filter_spec, filter_spec_return, filter_spec_fun)
     ):
@@ -204,6 +204,7 @@ def filter_jit(
     def _fun_wrapper(is_lower, args, kwargs):
         if new_style:
             bound = signature.bind(*args, **kwargs)
+            bound.apply_defaults()
             args = bound.args
             kwargs = bound.kwargs
         dynamic_spec, static_spec_leaves, static_spec_treedef = hashable_partition(

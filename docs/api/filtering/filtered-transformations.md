@@ -22,8 +22,8 @@ Practically speaking these are usually the only kind of filtering you ever have 
 
 ---
 
-::: equinox.experimental.filter_vmap
+::: equinox.filter_vmap
 
 ---
 
-::: equinox.experimental.filter_pmap
+::: equinox.filter_pmap

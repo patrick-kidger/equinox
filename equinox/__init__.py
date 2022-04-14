@@ -14,6 +14,7 @@ from .module import Module, static_field
 from .pretty_print import tree_pformat
 from .tree import tree_at, tree_equal, tree_inference
 from .update import apply_updates
+from .vmap_pmap import filter_pmap, filter_vmap
 
 
 __version__ = "0.4.0"
