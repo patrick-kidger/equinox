@@ -57,25 +57,32 @@ def filter_jit(
 
     **Arguments:**
 
+    In each of the following cases, `True` indicates that an argument should be traced,
+    `False` indicates that an argument should be held static, and functions
+    `Leaf -> bool` are mapped and evaluated on every leaf of their subtree.
+
     - `fun` is a pure function to JIT compile.
-    - `default` should be function `Leaf -> bool` that will be called on every leaf of
-        every input to the function. Truthy values will be traced; falsey values will
-        be held static.
-    - `args` and `kwargs` are optional per-argument and per-keyword-argument overrides
-        for `default`. These should be PyTrees whose structures are a prefix of the
-        inputs to `fun`. It behaves as the `filter_spec` argument to
-        [`equinox.filter`][]; truthy values will be traced; falsey values will be held
-        static.
-    - `out` is a PyTree whose structure should be a prefix of the
-        structure of the outputs of `fun`. It behaves as the `filter_spec` argument to
-        [`equinox.filter`][]. Truthy values should be tracers; falsey values are any
-        (non-tracer) auxiliary information to return.
-    - `fn` is a PyTree whose structure should be a prefix of the function `fun` itself.
-        It behaves as the `filter_spec` argument to [`equinox.filter`][]. Truthy values
-        will be traced; falsey values will be held static. (So that `fun` may be any
-        callable -- such as a bound method, or a class implementing `__call__` -- and
-        not necessarily just a normal Python function.)
+    - `default` should be a `bool` or a function `Leaf -> bool`, and is applied by
+        default to every argument and keyword argument to `fun`.
+    - `args` is an optional per-argument override for `default`, and should be a tuple
+        of PyTrees with leaves that are either `bool`s or functions `Leaf -> bool`.
+        The PyTree structures should be prefixes of the corresponding input to `fun`.
+    - `kwargs` is an optional per-keyword-argument override for `default` and should be
+        a dictionary, whose keys are the names of arguments to `fun`, and whose values
+        are PyTrees with leaves that either `bool`s or functions `Leaf -> bool`. The
+        PyTree structures should be prefixes of the corresponding input to `fun`.
+    - `out` should be a PyTree with leaves that either `bool`s or functions
+        `Leaf -> bool`. The PyTree structure should be a prefix of the output of `fun`.
+        Truthy values should be tracers; falsey values are any (non-tracer) auxiliary
+        information to return.
+    - `fn` should be a PyTree with leaves that either `bool`s or functions
+        `Leaf -> bool`. The PyTree structure should be a prefix of `fun` itself. (Note
+        that `fun` may be any callable, e.g. a bound method, or a class implementing
+        `__call__`, and doesn't have to be a normal Python function.)
     - `**jitkwargs` are any other keyword arguments to `jax.jit`.
+
+    When `args`, `kwargs`, `out`, `fn` are prefixes of the corresponding input, their
+    value will be mapped over the input PyTree.
 
     **Returns:**
 
@@ -84,7 +91,7 @@ def filter_jit(
     !!! info
 
         The most common case is to trace all JAX arrays and treat all other objects as
-        static. This is accomplished with `equinox.is_array`, which is the default.
+        static. This is accomplished with [`equinox.is_array`][], which is the default.
         (It is relatively unusual to need different behaviour to this.)
 
     !!! example
@@ -102,6 +109,10 @@ def filter_jit(
         def h(x):
             return x
 
+        @eqx.filter_jit
+        def apply(f, x):
+            return f(x)
+
         f(jnp.array(1), jnp.array(2))  # both args traced
         f(jnp.array(1), 2)  # first arg traced, second arg static
         f(1, 2)  # both args static
@@ -112,6 +123,8 @@ def filter_jit(
         h(1)  # traced
         h(jnp.array(1))  # traced
         h("hi")  # not a trace-able JAX type, so error
+
+        apply(lambda x: x + 1, jnp.array(1))  # first arg static, second arg traced.
         ```
     """
 

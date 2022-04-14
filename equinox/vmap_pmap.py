@@ -123,31 +123,39 @@ def filter_vmap(
 
     **Arguments:**
 
-    For all of `args`, `kwargs`, `out`, `fn`, then each leaf should either be a value of
-    type `Union[None, int]` or a function `Leaf -> Union[None, int]`.
+    In each of the following cases, then `int` indicates an array axis to vectorise
+    over, `None` indicates that an argument should be broadcast (not vectorised
+    over), and functions `Leaf -> Union[None, int]` are mapped and evaluated on every
+    leaf of their subtree.
 
-    For all of `default`, `args,` `kwargs`, `out`, `fn`, then integers specify which
-    array axis to vectorise over. `None` specifies not to vectorise over any axis, and
-    may be used for non-JAX-array arguments.
     (This is the same semantics as `jax.vmap(in_axes=..., out_axes=...)`.)
 
-    It is an error to try and specify an integer axis for a non-JAX-array.
+    `None` may be used for non-JAX-array arguments. It is an error to try and specify
+    an integer axis for a non-JAX-array.
 
     - `fun` is a pure function to vectorise.
-    - `default` should be a value of type `Union[None, int]` or a function
-        `Leaf -> Union[None, int]` that will be called on every leaf of every input to
-        the function.
-    - `args` and `kwargs` are optional per-argument and per-keyword-argument overrides
-        for `default`. These should be PyTrees whose structures are a prefix of the
-        inputs to `fun`.
-    - `out` is a PyTree whose structure should be a prefix of the structure of the
-        outputs of `fun`.
-    - `fn` is a PyTree whose structure should be a prefix of the function `fun` itself.
-        (So that `fun` may be any callable -- such as a bound method, or a class
-        implementing `__call__` -- and not necessarily just a normal Python function.)
+    - `default` should be a `Union[None, int]` or a function
+        `Leaf -> Union[None, int]`, and is applied by default to every argument and
+        keyword argument to `fun`.
+    - `args` is an optional per-argument override for `default`, and should be a tuple
+        of PyTrees with leaves that are either `Union[None, int]`s or functions
+        `Leaf -> Union[None, int]`. The PyTree structures should be prefixes of the
+        corresponding input to `fun`.
+    - `kwargs` is an optional per-keyword-argument override for `default` and should be
+        a dictionary, whose keys are the names of arguments to `fun`, and whose values
+        are PyTrees with leaves that either `Union[None, int]`s or functions
+        `Leaf -> Union[None, int]`. The PyTree structures should be prefixes of the
+        corresponding input to `fun`.
+    - `out` should be a PyTree with leaves that either `Union[None, int]`s or functions
+        `Leaf -> Union[None, int]`. The PyTree structure should be a prefix of the
+        output of `fun`.
+    - `fn` should be a PyTree with leaves that either `Union[None, int]`s or functions
+        `Leaf -> Union[None, int]`. The PyTree structure should be a prefix of `fun`
+        itself. (Note that `fun` may be any callable, e.g. a bound method, or a class
+        implementing `__call__`, and doesn't have to be a normal Python function.)
     - `**vmapkwargs` are any other keyword arguments to `jax.vmap`.
 
-    Where `args`, `kwargs`, `out`, `fn` are prefixes of the corresponding input, their
+    When `args`, `kwargs`, `out`, `fn` are prefixes of the corresponding input, their
     value will be mapped over the input PyTree.
 
     **Returns:**
@@ -159,14 +167,11 @@ def filter_vmap(
         By default, all JAX arrays are vectorised down their leading axis (i.e. axis
         index 0), and all other types are not vectorised.
 
-        (Indeed only JAX arrays may be either vectorised or non-vectorised; all other
-        types must always by non-vectorised.)
-
     !!! info
 
         In fact, besides `None`, `int` and `Leaf -> Union[None, int]`, then boolean
-        types are also supported, and treated identical to `None`. This is to support
-        seamlessly switching out [`equinox.filter_pmap`][] for
+        types are also supported, and treated identically to `None`. This is to support
+        seamlessly switching between [`equinox.filter_pmap`][] and
         [`equinox.filter_vmap`][] if desired.
 
     !!! warning
@@ -340,37 +345,48 @@ def filter_pmap(
 
     **Arguments:**
 
-    For all of `args`, `kwargs`, `out`, `fn`, then each leaf should either be a value of
-    type `Union[None, bool, int]` or a function `Leaf -> Union[None, bool, int]`.
-
-    For all of `default`, `args,` `kwargs`, `out`, `fn`, then integers specify which
-    array axis to split down. `None` specifies to instead broadcast the argument, and
-    may be used for non-JAX-array arguments.
-    (This is the same semantics as `jax.pmap(in_axes=..., out_axes=...)`.)
-
-    It is an error to try and specify an integer axis for a non-JAX-array.
+    In each of the following cases, then `int` indicates an array axis to split down,
+    `None` indicates that an argument should be broadcast to each device (not split
+    across devices), and functions `Leaf -> Union[None, bool, int]` are mapped and
+    evaluated on every leaf of their subtree.
 
     Note that `jax.pmap`, and thus `equinox.filter_pmap`, also JIT-compile their
-    function. By default all JAX arrays are traced and all other arrays are treated as
-    static inputs. This may be controlled explicitly -- instead of just passing `None`
-    as above -- by setting the values in `default`, `args`, etc. to `True` (traced) or
+    function in the same way as `jax.jit`. By default, all JAX arrays are traced and
+    all other arrays are treated as static inputs. This may be controlled explicitly
+    -- instead of just passing `None` -- by passing either `True` (traced) or
     `False` (static).
 
-    - `fun` is a pure function to parallelise.
-    - `default` should be a value of type `Union[None, bool, int]` or a function
-        `Leaf -> Union[None, bool, int]` that will be called on every leaf of every
-        input to the function.
-    - `args` and `kwargs` are optional per-argument and per-keyword-argument overrides
-        for `default`. These should be PyTrees whose structures are a prefix of the
-        inputs to `fun`.
-    - `out` is a PyTree whose structure should be a prefix of the structure of the
-        outputs of `fun`.
-    - `fn` is a PyTree whose structure should be a prefix of the function `fun` itself.
-        (So that `fun` may be any callable -- such as a bound method, or a class
-        implementing `__call__` -- and not necessarily just a normal Python function.)
-    - `**vmapkwargs` are any other keyword arguments to `jax.vmap`.
+    (For `None` and `int`, this is the same semantics as
+    `jax.vmap(in_axes=..., out_axes=...)`.)
 
-    Where `args`, `kwargs`, `out`, `fn` are prefixes of the corresponding input, their
+    `None`, `False` and `True` may be used for non-JAX-array arguments. It is an error
+    to try and specify an integer axis for a non-JAX-array.
+
+    - `fun` is a pure function to parallelise.
+    - `default` should be a `Union[None, bool, int]` or a function
+        `Leaf -> Union[None, bool, int]`, and is applied by default to every argument
+        and keyword argument to `fun`.
+    - `args` is an optional per-argument override for `default`, and should be a tuple
+        of PyTrees with leaves that are either `Union[None, bool, int]`s or functions
+        `Leaf -> Union[None, bool, int]`. The PyTree structures should be prefixes of
+        the corresponding input to `fun`.
+    - `kwargs` is an optional per-keyword-argument override for `default` and should be
+        a dictionary, whose keys are the names of arguments to `fun`, and whose values
+        are PyTrees with leaves that either `Union[None, bool, int]`s or functions
+        `Leaf -> Union[None, bool, int]`. The PyTree structures should be prefixes of
+        the corresponding input to `fun`.
+    - `out` should be a PyTree with leaves that either `Union[None, bool, int]`s or
+        functions `Leaf -> Union[None, bool, int]`. The PyTree structure should be a
+        prefix of the output of `fun`. `True` indicates a tracer, `False` indicates any
+        auxiliary information to return.
+    - `fn` should be a PyTree with leaves that either `Union[None, bool, int]`s or
+        functions `Leaf -> Union[None, bool, int]`. The PyTree structure should be a
+        prefix of `fun` itself. (Note that `fun` may be any callable, e.g. a bound
+        method, or a class implementing `__call__`, and doesn't have to be a normal
+        Python function.)
+    - `**pmapkwargs` are any other keyword arguments to `jax.pmap`.
+
+    When `args`, `kwargs`, `out`, `fn` are prefixes of the corresponding input, their
     value will be mapped over the input PyTree.
 
     **Returns:**
@@ -382,9 +398,6 @@ def filter_pmap(
         By default, the computation is parallelised by splitting all JAX arrays down
         their leading axis (i.e. axis index 0), and broadcasting all other types to
         each replica.
-
-        (Indeed only JAX arrays may be either split or not-split; all other types must
-        always be broadcasted.)
 
     !!! example
 

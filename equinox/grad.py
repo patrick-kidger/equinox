@@ -81,7 +81,7 @@ def filter_grad(
         An important special case is to trace all inexact (i.e. floating point)
         JAX arrays and treat all other objects as nondifferentiable.
 
-        This is accomplished with `arg=equinox.is_inexact_array`, which is the
+        This is accomplished with [`equinox.is_inexact_array`][], which is the
         default.
 
     !!! tip
