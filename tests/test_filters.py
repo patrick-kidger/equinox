@@ -139,3 +139,8 @@ def test_partition_and_combine(getkey):
             assert not isinstance(arg, int)
         assert eqx.combine(filtered, unfiltered) == pytree
         assert eqx.combine(unfiltered, filtered) == pytree
+
+
+def test_partition_subtree():
+    a, b = eqx.partition([(1,), 2], [True, False])
+    eqx.combine(a, b)

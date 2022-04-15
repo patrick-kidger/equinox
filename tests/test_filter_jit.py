@@ -12,7 +12,8 @@ def _eq(a, b):
     return (type(a) is type(b)) and (a == b)
 
 
-def test_filter_jit1(getkey):
+@pytest.mark.parametrize("api_version", (0, 1))
+def test_filter_jit1(api_version, getkey):
     a = jrandom.normal(getkey(), (2, 3))
     b = jrandom.normal(getkey(), (3,))
     c = jrandom.normal(getkey(), (1, 4))
@@ -27,9 +28,17 @@ def test_filter_jit1(getkey):
     array_tree = [{"a": a, "b": b}, (c,)]
     _mlp = jax.tree_map(lambda u: u if eqx.is_array_like(u) else None, general_tree[-1])
 
-    @ft.partial(eqx.filter_jit, filter_spec=lambda _: True)
-    def f(x):
-        return x
+    if api_version == 0:
+
+        @ft.partial(eqx.filter_jit, filter_spec=lambda _: True)
+        def f(x):
+            return x
+
+    else:
+
+        @eqx.filter_jit(default=True)
+        def f(x):
+            return x
 
     assert jnp.all(a == f(a))
     f1 = f(array_tree)
@@ -40,9 +49,13 @@ def test_filter_jit1(getkey):
     with pytest.raises(TypeError):
         f(general_tree)
 
-    @ft.partial(eqx.filter_jit, filter_spec=eqx.is_inexact_array)
     def g(x):
         return jax.tree_map(lambda u: u if eqx.is_array_like(u) else None, x)
+
+    if api_version == 0:
+        g = eqx.filter_jit(g, filter_spec=eqx.is_inexact_array)
+    else:
+        g = eqx.filter_jit(default=eqx.is_inexact_array)(g)
 
     assert jnp.all(a == g(a))
     g1 = g(array_tree)
@@ -59,9 +72,13 @@ def test_filter_jit1(getkey):
     assert jnp.all(g2[4] == c)
     assert _eq(g2[5], _mlp)
 
-    @ft.partial(eqx.filter_jit, filter_spec=eqx.is_array_like)
     def h(x):
         return jax.tree_map(lambda u: u if eqx.is_array_like(u) else None, x)
+
+    if api_version == 0:
+        h = eqx.filter_jit(h, filter_spec=eqx.is_array_like)
+    else:
+        h = eqx.filter_jit(h, default=eqx.is_array_like)
 
     assert jnp.all(a == h(a))
     h1 = h(array_tree)
@@ -79,7 +96,8 @@ def test_filter_jit1(getkey):
     assert _eq(h2[5], _mlp)
 
 
-def test_filter_jit2(getkey):
+@pytest.mark.parametrize("api_version", (0, 1))
+def test_filter_jit2(api_version, getkey):
     a = jrandom.normal(getkey(), (2, 3))
     b = jrandom.normal(getkey(), (3,))
     c = jrandom.normal(getkey(), (1, 4))
@@ -93,43 +111,48 @@ def test_filter_jit2(getkey):
     ]
     _mlp = jax.tree_map(lambda u: u if eqx.is_array_like(u) else None, general_tree[-1])
 
-    @ft.partial(
-        eqx.filter_jit,
-        filter_spec=(
-            (
-                [
-                    True,
-                    True,
-                    False,
-                    {"a": True, "tuple": (False, True)},
-                    True,
-                    eqx.is_inexact_array,
-                ],
-            ),
-            {},
-        ),
-    )
+    spec = [
+        True,
+        True,
+        False,
+        {"a": True, "tuple": (False, True)},
+        True,
+        eqx.is_inexact_array,
+    ]
+
     def f(x):
         return jax.tree_map(lambda u: u if eqx.is_array_like(u) else None, x)
 
-    f1 = f(general_tree)
-    assert _eq(f1[0], jnp.array(1))
-    assert _eq(f1[1], jnp.array(True))
-    assert _eq(f1[2], None)
-    assert jnp.all(f1[3]["a"] == a)
-    assert _eq(f1[3]["tuple"][0], 2.0)
-    assert jnp.all(f1[3]["tuple"][1] == b)
-    assert jnp.all(f1[4] == c)
-    assert _eq(f1[5], _mlp)
+    if api_version == 0:
+        wrappers = [ft.partial(eqx.filter_jit, filter_spec=((spec,), {}))]
+    else:
+        wrappers = [eqx.filter_jit(args=(spec,)), eqx.filter_jit(kwargs=dict(x=spec))]
+
+    for wrapper in wrappers:
+        _f = wrapper(f)
+        f1 = _f(general_tree)
+        assert _eq(f1[0], jnp.array(1))
+        assert _eq(f1[1], jnp.array(True))
+        assert _eq(f1[2], None)
+        assert jnp.all(f1[3]["a"] == a)
+        assert _eq(f1[3]["tuple"][0], 2.0)
+        assert jnp.all(f1[3]["tuple"][1] == b)
+        assert jnp.all(f1[4] == c)
+        assert _eq(f1[5], _mlp)
 
 
-def test_num_traces():
+@pytest.mark.parametrize("api_version", (0, 1))
+def test_num_traces(api_version):
     num_traces = 0
 
-    @ft.partial(eqx.filter_jit, filter_spec=lambda _: True)
     def f(x):
         nonlocal num_traces
         num_traces += 1
+
+    if api_version == 0:
+        f = eqx.filter_jit(f, filter_spec=lambda _: True)
+    else:
+        f = eqx.filter_jit(default=True)(f)
 
     f(jnp.zeros(2))
     f(jnp.zeros(2))
@@ -146,10 +169,14 @@ def test_num_traces():
 
     num_traces = 0
 
-    @ft.partial(eqx.filter_jit, filter_spec=([eqx.is_array_like, False], {}))
     def g(x, y):
         nonlocal num_traces
         num_traces += 1
+
+    if api_version == 0:
+        g = eqx.filter_jit(g, filter_spec=([eqx.is_array_like, False], {}))
+    else:
+        g = eqx.filter_jit(args=[eqx.is_array_like, False])(g)
 
     g(jnp.zeros(2), True)
     g(jnp.zeros(2), False)
@@ -157,12 +184,18 @@ def test_num_traces():
 
     num_traces = 0
 
-    @ft.partial(
-        eqx.filter_jit, filter_spec=([False, {"a": True, "b": False}, False, False], {})
-    )
     def h(x, y, z, w):
         nonlocal num_traces
         num_traces += 1
+
+    if api_version == 0:
+        h = eqx.filter_jit(
+            h, filter_spec=([False, {"a": True, "b": False}, False, False], {})
+        )
+    else:
+        h = eqx.filter_jit(
+            h, args=[False, {"a": True, "b": False}], kwargs=dict(z=False, w=False)
+        )
 
     h(True, {"a": 1, "b": 1}, True, True)
     h(False, {"a": 1, "b": 1}, True, True)
