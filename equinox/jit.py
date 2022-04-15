@@ -1,7 +1,8 @@
 import functools as ft
 import inspect
 import warnings
-from typing import Callable
+from types import FunctionType
+from typing import Any, Callable, Sequence
 
 import jax
 
@@ -11,9 +12,10 @@ from .compile_utils import (
     Static,
     strip_wrapped_partial,
 )
-from .custom_types import BoolAxisSpec, PyTree, sentinel
+from .custom_types import BoolAxisSpec, PyTree, sentinel, TreeDef
 from .doc_utils import doc_strip_annotations
 from .filters import combine, is_array, partition
+from .module import Module, module_update_wrapper
 
 
 @ft.lru_cache(maxsize=None)
@@ -40,6 +42,60 @@ def _filter_jit_cache(unwrapped_fun_treedef, unwrapped_fun_leaves, **jitkwargs):
         return dynamic_out, Static(static_out)
 
     return fun_wrapped
+
+
+class _JitWrapper(Module):
+    _new_style: bool
+    _signature: inspect.Signature
+    _dynamic_fun: PyTree[Any]
+    _static_fun_treedef: TreeDef
+    _static_fun_leaves: Sequence[Any]
+    _filter_default: BoolAxisSpec
+    _filter_spec: PyTree[BoolAxisSpec]
+    _filter_out: PyTree[Any]
+    _cached: FunctionType
+
+    def _fun_wrapper(self, is_lower, args, kwargs):
+        if self.new_style:
+            bound = self.signature.bind(*args, **kwargs)
+            bound.apply_defaults()
+            args = bound.args
+            kwargs = bound.kwargs
+        if isinstance(self.filter_spec, tuple) and len(self.filter_spec) == 2:
+            filter_args, filter_kwargs = self.filter_spec
+            if isinstance(filter_args, tuple):
+                filter_args = filter_args + (self._filter_default,) * (
+                    len(args) - len(filter_args)
+                )
+            if isinstance(filter_kwargs, dict):
+                filter_kwargs = {
+                    key: filter_kwargs.get(key, self._filter_default) for key in kwargs
+                }
+            filter_spec = (filter_args, filter_kwargs)
+        else:
+            filter_spec = self.filter_spec
+        dynamic_spec, static_spec_leaves, static_spec_treedef = hashable_partition(
+            (args, kwargs), filter_spec
+        )
+        dynamic = (self.dynamic_fun, dynamic_spec)
+        static = (
+            self.static_fun_treedef,
+            self.static_fun_leaves,
+            static_spec_treedef,
+            static_spec_leaves,
+            self.filter_out,
+        )
+        if is_lower:
+            return self.cached.lower(dynamic, static)
+        else:
+            dynamic_out, static_out = self.cached(dynamic, static)
+            return combine(dynamic_out, static_out.value)
+
+    def __call__(__self, *args, **kwargs):
+        return __self._fun_wrapper(False, args, kwargs)
+
+    def lower(__self, *args, **kwargs):
+        return __self._fun_wrapper(True, args, kwargs)
 
 
 @doc_strip_annotations
@@ -197,7 +253,11 @@ def filter_jit(
 
         signature_default = signature.replace(
             parameters=[
-                p.replace(default=filter_default) for p in signature.parameters.values()
+                p
+                if p.kind
+                in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+                else p.replace(default=filter_default)
+                for p in signature.parameters.values()
             ]
         )
         filter_bound = signature_default.bind_partial(*filter_args, **filter_kwargs)
@@ -214,36 +274,15 @@ def filter_jit(
     )
     cached = _filter_jit_cache(unwrapped_fun_treedef, unwrapped_fun_leaves, **jitkwargs)
 
-    def _fun_wrapper(is_lower, args, kwargs):
-        if new_style:
-            bound = signature.bind(*args, **kwargs)
-            bound.apply_defaults()
-            args = bound.args
-            kwargs = bound.kwargs
-        dynamic_spec, static_spec_leaves, static_spec_treedef = hashable_partition(
-            (args, kwargs), filter_spec
-        )
-        dynamic = (dynamic_fun, dynamic_spec)
-        static = (
-            static_fun_treedef,
-            static_fun_leaves,
-            static_spec_treedef,
-            static_spec_leaves,
-            filter_out,
-        )
-        if is_lower:
-            return cached.lower(dynamic, static)
-        else:
-            dynamic_out, static_out = cached(dynamic, static)
-            return combine(dynamic_out, static_out.value)
-
-    @ft.wraps(fun)
-    def fun_wrapper(*args, **kwargs):
-        return _fun_wrapper(False, args, kwargs)
-
-    def lower(*args, **kwargs):
-        return _fun_wrapper(True, args, kwargs)
-
-    fun_wrapper.lower = lower
-
-    return fun_wrapper
+    jit_wrapper = _JitWrapper(
+        _new_style=new_style,
+        _signature=signature,
+        _dynamic_fun=dynamic_fun,
+        _static_fun_treedef=static_fun_treedef,
+        _static_fun_leaves=static_fun_leaves,
+        _filter_default=filter_default,
+        _filter_spec=filter_spec,
+        _filter_out=filter_out,
+        _cached=cached,
+    )
+    return module_update_wrapper(jit_wrapper, fun)

@@ -58,8 +58,15 @@ class _wrap_method:
 
 
 @ft.lru_cache(maxsize=128)
-def _make_initable(cls):
+def _make_initable(cls, allow_wraps):
     field_names = {field.name for field in fields(cls)}
+    if allow_wraps:
+        field_names.add("__module__")
+        field_names.add("__name__")
+        field_names.add("__qualname__")
+        field_names.add("__doc__")
+        field_names.add("__annotations__")
+        field_names.add("__wrapped__")
 
     class _InitableModule(cls):
         pass
@@ -114,10 +121,12 @@ class _ModuleMeta(abc.ABCMeta):
         self = cls.__new__(cls, *args, **kwargs)
 
         # Defreeze it during __init__
-        initable_cls = _make_initable(cls)
+        initable_cls = _make_initable(cls, allow_wraps=False)
         object.__setattr__(self, "__class__", initable_cls)
-        cls.__init__(self, *args, **kwargs)
-        object.__setattr__(self, "__class__", cls)
+        try:
+            cls.__init__(self, *args, **kwargs)
+        finally:
+            object.__setattr__(self, "__class__", cls)
 
         missing_names = {
             field.name
@@ -256,3 +265,14 @@ class Module(metaclass=_ModuleMeta):
         for name, value in zip(static_field_names, static_field_values):
             object.__setattr__(self, name, value)
         return self
+
+
+def module_update_wrapper(wrapper: Module, wrapped):
+    cls = wrapper.__class__
+    initable_cls = _make_initable(cls, allow_wraps=True)
+    object.__setattr__(wrapper, "__class__", initable_cls)
+    try:
+        ft.update_wrapper(wrapper, wrapped)
+    finally:
+        object.__setattr__(wrapper, "__class__", cls)
+    return wrapper

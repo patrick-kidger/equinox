@@ -2,13 +2,44 @@ import functools as ft
 import types
 import typing
 import warnings
-from typing import Callable
+from typing import Any, Callable, Dict
 
 import jax
 
 from .custom_types import BoolAxisSpec, PyTree, sentinel
 from .doc_utils import doc_strip_annotations
 from .filters import combine, is_array, is_inexact_array, partition
+from .module import Module, module_update_wrapper
+
+
+class _ValueAndGradWrapper(Module):
+    _fun: Callable
+    _arg: PyTree[BoolAxisSpec]
+    _gradkwargs: Dict[str, Any]
+
+    # Try to avoid clashes with existing argument names.
+    # TODO: use "/" once we're on Python 3.8.
+    def __call__(__self, __x, *args, **kwargs):
+        @ft.partial(jax.value_and_grad, argnums=0, **__self._gradkwargs)
+        def fun_value_and_grad(_diff_x, _nondiff_x, *_args, **_kwargs):
+            _x = combine(_diff_x, _nondiff_x)
+            return __self._fun(_x, *_args, **_kwargs)
+
+        diff_x, nondiff_x = partition(__x, __self._arg)
+        return fun_value_and_grad(diff_x, nondiff_x, *args, **kwargs)
+
+
+class _GradWrapper(Module):
+    _fun_value_and_grad: _ValueAndGradWrapper
+    _has_aux: bool
+
+    def __call__(__self, *args, **kwargs):
+        value, grad = __self._fun_value_and_grad(*args, **kwargs)
+        if __self._has_aux:
+            _, aux = value
+            return grad, aux
+        else:
+            return grad
 
 
 @doc_strip_annotations
@@ -38,17 +69,7 @@ def filter_value_and_grad(
             "as the first argument."
         )
 
-    @ft.partial(jax.value_and_grad, argnums=0, **gradkwargs)
-    def fun_value_and_grad(diff_x, nondiff_x, *args, **kwargs):
-        x = combine(diff_x, nondiff_x)
-        return fun(x, *args, **kwargs)
-
-    @ft.wraps(fun)
-    def fun_value_and_grad_wrapper(x, *args, **kwargs):
-        diff_x, nondiff_x = partition(x, arg)
-        return fun_value_and_grad(diff_x, nondiff_x, *args, **kwargs)
-
-    return fun_value_and_grad_wrapper
+    return module_update_wrapper(_ValueAndGradWrapper(fun, arg, gradkwargs), fun)
 
 
 @doc_strip_annotations
@@ -106,17 +127,7 @@ def filter_grad(
     has_aux = gradkwargs.get("has_aux", False)
 
     fun_value_and_grad = filter_value_and_grad(fun, arg=arg, **gradkwargs)
-
-    @ft.wraps(fun)
-    def fun_grad(*args, **kwargs):
-        value, grad = fun_value_and_grad(*args, **kwargs)
-        if has_aux:
-            _, aux = value
-            return grad, aux
-        else:
-            return grad
-
-    return fun_grad
+    return module_update_wrapper(_GradWrapper(fun_value_and_grad, has_aux), fun)
 
 
 class filter_custom_vjp:
