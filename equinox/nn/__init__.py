@@ -14,4 +14,5 @@ from .dropout import Dropout
 from .embedding import Embedding
 from .linear import Identity, Linear
 from .normalisation import LayerNorm
+from .pool import Pool, Pool2d_Avg, Pool2d_Max
 from .rnn import GRUCell, LSTMCell

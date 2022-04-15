@@ -645,3 +645,29 @@ def test_spectral_norm(getkey):
     conv = eqx.nn.Conv3d(5, 4, 3, key=getkey())
     conv = eqx.tree_at(lambda c: c.weight, conv, replace_fn=spectral)
     assert conv(jrandom.normal(getkey(), (5, 8, 8, 8))).shape == (4, 6, 6, 6)
+
+
+def test_pool(getkey):
+    Pool = eqx.nn.Pool("max", 2, (2, 2))
+    x = jrandom.normal(getkey(), (1, 16, 16))
+    assert Pool(x).shape == (1, 8, 8)
+
+    AvgPool = eqx.nn.Pool2d_Avg((2, 2))
+    x = jrandom.normal(getkey(), (1, 16, 16))
+    assert AvgPool(x).shape == (1, 8, 8)
+
+    Pool = eqx.nn.Pool("max", 2, (2, 2))
+    x = jrandom.normal(getkey(), (1, 15, 15))
+    assert Pool(x).shape == (1, 8, 8)
+
+    AvgPool = eqx.nn.Pool("max", 2, (2, 2))
+    x = jrandom.normal(getkey(), (1, 15, 15))
+    assert AvgPool(x).shape == (1, 8, 8)
+
+    Pool = eqx.nn.Pool2d_Max((2, 2), padding="VALID")
+    x = jrandom.normal(getkey(), (1, 15, 15))
+    assert Pool(x).shape == (1, 7, 7)
+
+    AvgPool = eqx.nn.Pool("max", 2, (2, 2), padding="VALID")
+    x = jrandom.normal(getkey(), (1, 15, 15))
+    assert Pool(x).shape == (1, 7, 7)
