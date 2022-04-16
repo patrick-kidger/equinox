@@ -2,6 +2,7 @@ import abc
 import functools as ft
 import inspect
 from dataclasses import dataclass, field, fields
+from typing import Type
 
 import jax
 
@@ -57,16 +58,23 @@ class _wrap_method:
         return jax.tree_util.Partial(self.method, instance)
 
 
+def _not_magic(k: str) -> bool:
+    return not (k.startswith("__") and k.endswith("__"))
+
+
 @ft.lru_cache(maxsize=128)
-def _make_initable(cls, allow_wraps):
-    field_names = {field.name for field in fields(cls)}
-    if allow_wraps:
-        field_names.add("__module__")
-        field_names.add("__name__")
-        field_names.add("__qualname__")
-        field_names.add("__doc__")
-        field_names.add("__annotations__")
-        field_names.add("__wrapped__")
+def _make_initable(cls: Type["Module"], wraps: bool) -> Type["Module"]:
+    if wraps:
+        field_names = {
+            "__module__",
+            "__name__",
+            "__qualname__",
+            "__doc__",
+            "__annotations__",
+            "__wrapped__",
+        }
+    else:
+        field_names = {field.name for field in fields(cls)}
 
     class _InitableModule(cls):
         pass
@@ -84,14 +92,10 @@ def _make_initable(cls, allow_wraps):
     return _InitableModule
 
 
-def _has_dataclass_init(cls):
+def _has_dataclass_init(cls: Type["Module"]) -> bool:
     if "__init__" in cls.__dict__:
         return False
     return cls._has_dataclass_init
-
-
-def _not_magic(k):
-    return not (k.startswith("__") and k.endswith("__"))
 
 
 # Inherits from abc.ABCMeta as a convenience for a common use-case.
@@ -121,7 +125,7 @@ class _ModuleMeta(abc.ABCMeta):
         self = cls.__new__(cls, *args, **kwargs)
 
         # Defreeze it during __init__
-        initable_cls = _make_initable(cls, allow_wraps=False)
+        initable_cls = _make_initable(cls, wraps=False)
         object.__setattr__(self, "__class__", initable_cls)
         try:
             cls.__init__(self, *args, **kwargs)
@@ -267,9 +271,10 @@ class Module(metaclass=_ModuleMeta):
         return self
 
 
-def module_update_wrapper(wrapper: Module, wrapped):
+# Modifies in-place, just like functools.update_wrapper
+def module_update_wrapper(wrapper: Module, wrapped) -> Module:
     cls = wrapper.__class__
-    initable_cls = _make_initable(cls, allow_wraps=True)
+    initable_cls = _make_initable(cls, wraps=True)
     object.__setattr__(wrapper, "__class__", initable_cls)
     try:
         ft.update_wrapper(wrapper, wrapped)

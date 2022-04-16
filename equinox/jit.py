@@ -95,6 +95,11 @@ class _JitWrapper(Module):
     def lower(__self, *args, **kwargs):
         return __self._fun_wrapper(True, args, kwargs)
 
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        return jax.tree_util.Partial(self, instance)
+
 
 @doc_strip_annotations
 def filter_jit(

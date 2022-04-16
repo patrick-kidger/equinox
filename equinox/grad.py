@@ -28,6 +28,11 @@ class _ValueAndGradWrapper(Module):
         diff_x, nondiff_x = partition(__x, __self._arg)
         return fun_value_and_grad(diff_x, nondiff_x, *args, **kwargs)
 
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        return jax.tree_util.Partial(self, instance)
+
 
 class _GradWrapper(Module):
     _fun_value_and_grad: _ValueAndGradWrapper
@@ -40,6 +45,11 @@ class _GradWrapper(Module):
             return grad, aux
         else:
             return grad
+
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        return jax.tree_util.Partial(self, instance)
 
 
 @doc_strip_annotations

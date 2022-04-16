@@ -1,9 +1,11 @@
 import functools as ft
+from typing import Union
 
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 import pytest
+from helpers import shaped_allclose
 
 import equinox as eqx
 
@@ -207,35 +209,151 @@ def test_num_traces(api_version):
     assert num_traces == 5
 
 
-def test_bound_method():
+@pytest.mark.parametrize("call", [False, True])
+@pytest.mark.parametrize("outer", [False, True])
+def test_methods(call, outer):
     num_traces = 0
 
     class M(eqx.Module):
-        def method(self, x):
-            nonlocal num_traces
-            num_traces += 1
-            return x + 1
+        increment: Union[int, jnp.ndarray]
 
-    m = M()
-    y = jnp.array(1.0)
-    eqx.filter_jit(m.method)(y)
-    eqx.filter_jit(m.method)(y)
+        if call:
+
+            def __call__(self, x):
+                nonlocal num_traces
+                num_traces += 1
+                return x + self.increment
+
+            if not outer:
+                __call__ = eqx.filter_jit(__call__)
+        else:
+
+            def method(self, x):
+                nonlocal num_traces
+                num_traces += 1
+                return x + self.increment
+
+            if not outer:
+                method = eqx.filter_jit(method)
+
+    y = jnp.ndarray(1.0)
+
+    def run(_m):
+        if call:
+            if outer:
+                return eqx.filter_jit(_m)(y)
+            else:
+                return _m(y)
+        else:
+            if outer:
+                return eqx.filter_jit(_m.method)(y)
+            else:
+                return _m.method(y)
+
+    m = M(1)
+    assert run(m) == 2
+    assert run(m) == 2
+    assert num_traces == 1
+    n = M(2)
+    assert run(n) == 3
+    assert run(n) == 3
+    assert num_traces == 2
+    o = M(jnp.ndarray(1))
+    p = M(jnp.ndarray(2))
+    assert run(o) == 2
+    assert run(p) == 3
+    assert num_traces == 3
+
+
+def test_args_kwargs():
+    num_traces = 0
+
+    @eqx.filter_jit(kwargs=dict(x=True))
+    def f(*args, **kwargs):
+        nonlocal num_traces
+        num_traces += 1
+        return kwargs["x"]
+
+    assert f(x=2) == 2
+    assert f(x=3) == 3
+    assert num_traces == 1
+
+    assert f(x=3, y=4) == 3  # check we can use other kwargs
+    assert num_traces == 2
+
+    @eqx.filter_jit(default=eqx.is_array_like)
+    def g(*args, **kwargs):
+        nonlocal num_traces
+        num_traces += 1
+        return kwargs["x"]
+
+    assert g(x=1, y=1) == 1
+    assert g(x=1, y=2) == 1
+    assert num_traces == 3
+
+    @eqx.filter_jit(args=(eqx.is_array,))
+    def h(*args, **kwargs):
+        nonlocal num_traces
+        num_traces += 1
+        return args[0]
+
+    assert h(1, 2) == 1  # check we can use other args
+
+
+def test_jit_jit():
+    num_traces = 0
+
+    @eqx.filter_jit(default=True)
+    @eqx.filter_jit(default=True)
+    def f(x):
+        nonlocal num_traces
+        num_traces += 1
+        return x + 1
+
+    assert f(1) == 2
+    assert f(2) == 3
+    assert num_traces == 1
+
+    @eqx.filter_jit(default=True)
+    def g(x):
+        nonlocal num_traces
+        num_traces += 1
+        return x + 1
+
+    assert eqx.filter_jit(g, default=True)(1) == 2
+    assert eqx.filter_jit(g, default=True)(2) == 3
+    assert num_traces == 2
+
+
+def test_jit_grad():
+    num_traces = 0
+
+    def f(x):
+        nonlocal num_traces
+        num_traces += 1
+        return x + 1
+
+    assert eqx.filter_jit(eqx.filter_grad(f))(jnp.array(1.0)) == 1
+    assert eqx.filter_jit(eqx.filter_grad(f))(jnp.array(2.0)) == 1
+    assert num_traces == 1
+
+    assert eqx.filter_jit(eqx.filter_value_and_grad(f))(jnp.array(1.0)) == (2, 1)
+    assert eqx.filter_jit(eqx.filter_value_and_grad(f))(jnp.array(2.0)) == (3, 1)
     assert num_traces == 1
 
 
-def test_callable_class():
+def test_jit_vmap():
     num_traces = 0
 
-    class M(eqx.Module):
-        def __call__(self, x):
-            nonlocal num_traces
-            num_traces += 1
-            return x + 1
+    def f(x):
+        nonlocal num_traces
+        num_traces += 1
+        return x + 1
 
-    m = M()
-    y = jnp.array(1.0)
-    eqx.filter_jit(m)(y)
-    eqx.filter_jit(m)(y)
+    out = eqx.filter_jit(eqx.filter_vmap(f))(jnp.array([1, 2]))
+    assert shaped_allclose(out, jnp.array([2, 3]))
+    out = eqx.filter_jit(eqx.filter_vmap(f))(jnp.array([2, 3]))
+    assert shaped_allclose(out, jnp.array([3, 4]))
     assert num_traces == 1
 
 

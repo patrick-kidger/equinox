@@ -141,6 +141,11 @@ class _VmapWrapper(Module):
         )(__self._fun, bound.args, bound.kwargs)
         return combine(vmapd, nonvmapd.value)
 
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        return jax.tree_util.Partial(self, instance)
+
 
 # Note the use of AxisSpec rather than MapAxisSpec.
 # This is to support seamlessly switching out filter_pmap for filter_vmap.
@@ -410,6 +415,11 @@ class _PmapWrapper(Module):
 
     def lower(__self, *args, **kwargs):
         return __self._fun_wrapper(True, args, kwargs)
+
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        return jax.tree_util.Partial(self, instance)
 
 
 @doc_strip_annotations

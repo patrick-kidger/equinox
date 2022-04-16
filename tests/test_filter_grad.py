@@ -1,4 +1,5 @@
 import functools as ft
+from typing import Union
 
 import jax
 import jax.numpy as jnp
@@ -119,3 +120,39 @@ def test_aux(getkey):
     assert value == jnp.sum(a)
     assert aux == "hi"
     assert jnp.all(grad == 1)
+
+
+@pytest.mark.parametrize("call", [False, True])
+@pytest.mark.parametrize("outer", [False, True])
+def test_methods(call, outer):
+    class M(eqx.Module):
+        increment: Union[int, jnp.ndarray]
+
+        if call:
+
+            def __call__(self, x):
+                return x + self.increment
+
+            if not outer:
+                __call__ = eqx.filter_grad(__call__)
+        else:
+
+            def method(self, x):
+                return x + self.increment
+
+            if not outer:
+                method = eqx.filter_grad(method)
+
+    m = M(5)
+    y = jnp.ndarray(1.0)
+
+    if call:
+        if outer:
+            assert eqx.filter_grad(m)(y) == 1
+        else:
+            assert m(y) == 1
+    else:
+        if outer:
+            assert eqx.filter_grad(m.method)(y) == 1
+        else:
+            assert m.method(y) == 1
