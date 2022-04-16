@@ -56,39 +56,37 @@ class _JitWrapper(Module):
     _cached: FunctionType
 
     def _fun_wrapper(self, is_lower, args, kwargs):
-        if self.new_style:
-            bound = self.signature.bind(*args, **kwargs)
+        if self._new_style:
+            bound = self._signature.bind(*args, **kwargs)
             bound.apply_defaults()
             args = bound.args
             kwargs = bound.kwargs
-        if isinstance(self.filter_spec, tuple) and len(self.filter_spec) == 2:
-            filter_args, filter_kwargs = self.filter_spec
-            if isinstance(filter_args, tuple):
-                filter_args = filter_args + (self._filter_default,) * (
-                    len(args) - len(filter_args)
-                )
-            if isinstance(filter_kwargs, dict):
-                filter_kwargs = {
-                    key: filter_kwargs.get(key, self._filter_default) for key in kwargs
-                }
+
+            filter_args, filter_kwargs = self._filter_spec
+            filter_args = filter_args + (self._filter_default,) * (
+                len(args) - len(filter_args)
+            )
+            filter_kwargs = {
+                key: filter_kwargs.get(key, self._filter_default) for key in kwargs
+            }
             filter_spec = (filter_args, filter_kwargs)
         else:
-            filter_spec = self.filter_spec
+            filter_spec = self._filter_spec
         dynamic_spec, static_spec_leaves, static_spec_treedef = hashable_partition(
             (args, kwargs), filter_spec
         )
-        dynamic = (self.dynamic_fun, dynamic_spec)
+        dynamic = (self._dynamic_fun, dynamic_spec)
         static = (
-            self.static_fun_treedef,
-            self.static_fun_leaves,
+            self._static_fun_treedef,
+            self._static_fun_leaves,
             static_spec_treedef,
             static_spec_leaves,
-            self.filter_out,
+            self._filter_out,
         )
         if is_lower:
-            return self.cached.lower(dynamic, static)
+            return self._cached.lower(dynamic, static)
         else:
-            dynamic_out, static_out = self.cached(dynamic, static)
+            dynamic_out, static_out = self._cached(dynamic, static)
             return combine(dynamic_out, static_out.value)
 
     def __call__(__self, *args, **kwargs):

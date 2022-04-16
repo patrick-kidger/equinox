@@ -52,7 +52,7 @@ def is_inexact_array_like(element: Any) -> bool:
 
 def _make_filter_tree(mask: BoolAxisSpec, arg: Any) -> ResolvedBoolAxisSpec:
     if isinstance(mask, bool):
-        return mask
+        return jax.tree_map(lambda _: mask, arg)
     elif callable(mask):
         return jax.tree_map(mask, arg)
     else:

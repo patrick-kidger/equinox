@@ -109,7 +109,7 @@ def test_filter(getkey):
     ]
     filtered = eqx.filter(pytree, filter_spec=filter_spec)
     none_linear = jax.tree_map(lambda _: None, eqx.nn.Linear(1, 1, key=getkey()))
-    assert filtered[0] is None
+    assert filtered[0] == none_linear
     assert filtered[1] == pytree[1]
     assert filtered[2][0] == none_linear
     assert filtered[2][1] is sentinel
