@@ -89,6 +89,25 @@ def test_no_arrays():
     assert shaped_allclose(f(1), 1)
 
 
+def test_bool():
+    num_traces = 0
+
+    @filter_pmap(args=(True, False), axis_size=1)
+    def f(x, y):
+        nonlocal num_traces
+        num_traces += 1
+        return x + y
+
+    assert shaped_allclose(f(1, 2), jnp.array([3]))
+    assert num_traces == 1
+    assert shaped_allclose(f(3, 2), jnp.array([5]))
+    assert num_traces == 1
+    assert shaped_allclose(f(1, 3), jnp.array([4]))
+    assert num_traces == 2
+    assert shaped_allclose(f(3, 3), jnp.array([6]))
+    assert num_traces == 2
+
+
 @pytest.mark.parametrize("call", [False, True])
 @pytest.mark.parametrize("outer", [False, True])
 def test_methods(call, outer):
@@ -147,3 +166,76 @@ def test_methods(call, outer):
         assert shaped_allclose(run(o), jnp.array([6]))
         assert shaped_allclose(run(p), jnp.array([7]))
     assert num_traces == 3
+
+
+def test_pmap_grad():
+    num_traces = 0
+
+    def f(x):
+        nonlocal num_traces
+        num_traces += 1
+        return x + 1
+
+    grad = eqx.filter_pmap(eqx.filter_grad(f))(jnp.array([1.0]))
+    assert shaped_allclose(grad, jnp.array([1.0]))
+    grad = eqx.filter_pmap(eqx.filter_grad(f))(jnp.array([2.0]))
+    assert shaped_allclose(grad, jnp.array([1.0]))
+    assert num_traces == 1
+
+    value, grad = eqx.filter_pmap(eqx.filter_value_and_grad(f))(jnp.array([1.0]))
+    assert shaped_allclose(value, jnp.array([2.0]))
+    assert shaped_allclose(grad, jnp.array([1.0]))
+    value, grad = eqx.filter_pmap(eqx.filter_value_and_grad(f))(jnp.array([2.0]))
+    assert shaped_allclose(value, jnp.array([3.0]))
+    assert shaped_allclose(grad, jnp.array([1.0]))
+    assert num_traces == 2
+
+
+def test_pmap_vmap():
+    num_traces = 0
+
+    def f(x):
+        nonlocal num_traces
+        num_traces += 1
+        return x + 1
+
+    out = eqx.filter_pmap(eqx.filter_vmap(f))(jnp.array([[1, 2]]))
+    assert shaped_allclose(out, jnp.array([[2, 3]]))
+    out = eqx.filter_pmap(eqx.filter_vmap(f))(jnp.array([[2, 3]]))
+    assert shaped_allclose(out, jnp.array([[3, 4]]))
+    assert num_traces == 1
+
+
+def test_args_kwargs():
+    num_traces = 0
+
+    @eqx.filter_pmap(kwargs=dict(x=True), axis_size=1)
+    def f(*args, **kwargs):
+        nonlocal num_traces
+        num_traces += 1
+        return kwargs["x"]
+
+    assert f(x=2) == 2
+    assert f(x=3) == 3
+    assert num_traces == 1
+
+    assert f(x=3, y=4) == 3  # check we can use other kwargs
+    assert num_traces == 2
+
+    @eqx.filter_pmap(default=eqx.is_array_like, axis_size=1)
+    def g(*args, **kwargs):
+        nonlocal num_traces
+        num_traces += 1
+        return kwargs["x"]
+
+    assert g(x=1, y=1) == 1
+    assert g(x=1, y=2) == 1
+    assert num_traces == 3
+
+    @eqx.filter_pmap(args=(eqx.is_array,), axis_size=1)
+    def h(*args, **kwargs):
+        nonlocal num_traces
+        num_traces += 1
+        return args[0]
+
+    assert h(1, 2) == 1  # check we can use other args

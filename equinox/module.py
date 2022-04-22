@@ -277,7 +277,11 @@ def module_update_wrapper(wrapper: Module, wrapped) -> Module:
     initable_cls = _make_initable(cls, wraps=True)
     object.__setattr__(wrapper, "__class__", initable_cls)
     try:
-        ft.update_wrapper(wrapper, wrapped)
+        # updated = ("__dict__",) is the default, but that's a bit much.
+        # It's common/possible for wrapper and wrapped to both be classes
+        # implementing __call__, in which case copying __dict__ over basically
+        # just breaks the wrapper class.
+        ft.update_wrapper(wrapper, wrapped, updated=())
     finally:
         object.__setattr__(wrapper, "__class__", cls)
     return wrapper

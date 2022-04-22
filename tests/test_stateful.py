@@ -197,13 +197,12 @@ def test_inference_no_state():
         eqx.experimental.get_state(index, jnp.array(1))
 
 
-@pytest.mark.skip
 def test_inference_not_set_under_jit():
     index = eqx.experimental.StateIndex()
 
     @jax.jit
     def f(i):
-        eqx.tree_at(lambda j: j.inference, i, True)
+        eqx.tree_inference(i, True)
 
     with pytest.raises(RuntimeError):
         f(index)
