@@ -29,3 +29,18 @@ def strip_wrapped_partial(fun):
     if isinstance(fun, ft.partial):
         return strip_wrapped_partial(fun.func)
     return fun
+
+
+def compile_cache(fun):
+    @ft.lru_cache(maxsize=None)
+    def _cache(leaves, treedef):
+        args, kwargs = jax.tree_unflatten(treedef, leaves)
+        return fun(*args, **kwargs)
+
+    @ft.wraps(fun)
+    def _fun(*args, **kwargs):
+        leaves, treedef = jax.tree_flatten((args, kwargs))
+        leaves = tuple(leaves)
+        return _cache(leaves, treedef)
+
+    return _fun

@@ -1,4 +1,3 @@
-import functools as ft
 from typing import Union
 
 import jax
@@ -10,28 +9,38 @@ import pytest
 import equinox as eqx
 
 
-def test_filter_grad1(getkey):
+@pytest.mark.parametrize("api_version", (0, 1))
+def test_filter_grad1(api_version, getkey):
     a = jrandom.normal(getkey(), (2, 3))
 
-    @ft.partial(eqx.filter_grad, filter_spec=lambda _: True)
     def f(x):
         return jnp.sum(x)
+
+    if api_version == 0:
+        f = eqx.filter_grad(f, filter_spec=lambda _: True)
+    else:
+        f = eqx.filter_grad(arg=True)(f)
 
     grad_f = f(a)
     assert jnp.all(grad_f == 1)
 
 
-def test_filter_grad2(getkey):
+@pytest.mark.parametrize("api_version", (0, 1))
+def test_filter_grad2(api_version, getkey):
     a = jrandom.normal(getkey(), (2, 3))
     b = jrandom.normal(getkey(), (2, 3))
 
-    @ft.partial(eqx.filter_grad, filter_spec=eqx.is_inexact_array)
     def f(x):
         sum = 0.0
         for arg in jax.tree_leaves(x):
             if eqx.is_array_like(arg):
                 sum = sum + jnp.sum(arg)
         return sum
+
+    if api_version == 0:
+        f = eqx.filter_grad(f, filter_spec=eqx.is_inexact_array)
+    else:
+        f = eqx.filter_grad(arg=eqx.is_inexact_array)(f)
 
     ga, gb = f([a, b])
     assert jnp.all(ga == 1)
@@ -61,22 +70,31 @@ def test_filter_grad2(getkey):
     assert gnp is None
 
 
-def test_filter_grad3(getkey):
+@pytest.mark.parametrize("api_version", (0, 1))
+def test_filter_grad3(api_version, getkey):
     a = jrandom.normal(getkey(), (2, 3))
     b = jrandom.normal(getkey(), (1, 2))
     c = jrandom.normal(getkey(), ())
 
-    @ft.partial(eqx.filter_grad, filter_spec=[True, False])
     def f(x):
         return jnp.sum(x[0]) + jnp.sum(x[1])
+
+    if api_version == 0:
+        f = eqx.filter_grad(f, filter_spec=[True, False])
+    else:
+        f = eqx.filter_grad(arg=[True, False])(f)
 
     ga, gb = f([a, b])
     assert jnp.all(ga == 1)
     assert gb is None
 
-    @ft.partial(eqx.filter_grad, filter_spec={"a": True, "b": False})
     def h(x, y):
         return jnp.sum(x["a"]) * jnp.sum(x["b"]) * y
+
+    if api_version == 0:
+        h = eqx.filter_grad(h, filter_spec={"a": True, "b": False})
+    else:
+        h = eqx.filter_grad(arg={"a": True, "b": False})(h)
 
     grad = h({"a": a, "b": b}, c)
     assert jnp.allclose(grad["a"], jnp.sum(b) * c)
@@ -87,34 +105,46 @@ def test_filter_grad3(getkey):
 
 
 # TODO: more comprehensive tests on this.
-def test_filter_value_and_grad_(getkey):
+@pytest.mark.parametrize("api_version", (0, 1))
+def test_filter_value_and_grad(api_version, getkey):
     a = jrandom.normal(getkey(), (2, 3))
 
-    @ft.partial(eqx.filter_value_and_grad, filter_spec=eqx.is_inexact_array)
     def f(x):
         return jnp.sum(x)
+
+    if api_version == 0:
+        f = eqx.filter_value_and_grad(f, filter_spec=eqx.is_inexact_array)
+    else:
+        f = eqx.filter_value_and_grad(arg=eqx.is_inexact_array)(f)
 
     val, grad = f(a)
     assert val == jnp.sum(a)
     assert jnp.all(grad == 1)
 
 
-def test_aux(getkey):
+@pytest.mark.parametrize("api_version", (0, 1))
+def test_aux(api_version, getkey):
     a = jrandom.normal(getkey(), (2, 3))
 
-    @ft.partial(eqx.filter_grad, has_aux=True, filter_spec=eqx.is_inexact_array)
     def f(x):
         return jnp.sum(x), "hi"
+
+    if api_version == 0:
+        f = eqx.filter_grad(f, has_aux=True, filter_spec=eqx.is_inexact_array)
+    else:
+        f = eqx.filter_grad(has_aux=True, arg=eqx.is_inexact_array)(f)
 
     grad, aux = f(a)
     assert aux == "hi"
     assert jnp.all(grad == 1)
 
-    @ft.partial(
-        eqx.filter_value_and_grad, has_aux=True, filter_spec=eqx.is_inexact_array
-    )
     def f(x):
         return jnp.sum(x), "hi"
+
+    if api_version == 0:
+        f = eqx.filter_value_and_grad(f, has_aux=True, filter_spec=eqx.is_inexact_array)
+    else:
+        f = eqx.filter_value_and_grad(has_aux=True, arg=eqx.is_inexact_array)(f)
 
     (value, aux), grad = f(a)
     assert value == jnp.sum(a)
@@ -143,16 +173,44 @@ def test_methods(call, outer):
             if not outer:
                 method = eqx.filter_grad(method)
 
-    m = M(5)
-    y = jnp.ndarray(1.0)
+    m = M(jnp.array(5.0))
+    grad_m = M(jnp.array(1.0))
+    y = jnp.array(1.0)
 
     if call:
         if outer:
             assert eqx.filter_grad(m)(y) == 1
         else:
-            assert m(y) == 1
+            assert m(y) == grad_m
     else:
         if outer:
             assert eqx.filter_grad(m.method)(y) == 1
         else:
-            assert m.method(y) == 1
+            assert m.method(y) == grad_m
+
+
+def test_grad_jit():
+    num_traces = 0
+
+    @eqx.filter_custom_vjp
+    def f(x):
+        return x
+
+    def f_fwd(x):
+        return x, None
+
+    def f_bwd(_, g, __):
+        nonlocal num_traces
+        num_traces += 1
+        return g + 2
+
+    f.defvjp(f_fwd, f_bwd)
+    x = jnp.array(1.0)
+
+    jitf = jax.jit(f)
+    assert eqx.filter_grad(jitf)(x) == 3
+    assert eqx.filter_grad(jitf)(x) == 3
+    assert num_traces == 1
+    assert eqx.filter_grad(eqx.filter_jit(f))(x) == 3
+    assert eqx.filter_grad(eqx.filter_jit(f))(x) == 3
+    assert num_traces == 2

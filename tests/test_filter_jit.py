@@ -236,7 +236,7 @@ def test_methods(call, outer):
             if not outer:
                 method = eqx.filter_jit(method)
 
-    y = jnp.ndarray(1.0)
+    y = jnp.array(1.0)
 
     def run(_m):
         if call:
@@ -258,8 +258,8 @@ def test_methods(call, outer):
     assert run(n) == 3
     assert run(n) == 3
     assert num_traces == 2
-    o = M(jnp.ndarray(1))
-    p = M(jnp.ndarray(2))
+    o = M(jnp.array(1))
+    p = M(jnp.array(2))
     assert run(o) == 2
     assert run(p) == 3
     assert num_traces == 3
@@ -339,7 +339,7 @@ def test_jit_grad():
 
     assert eqx.filter_jit(eqx.filter_value_and_grad(f))(jnp.array(1.0)) == (2, 1)
     assert eqx.filter_jit(eqx.filter_value_and_grad(f))(jnp.array(2.0)) == (3, 1)
-    assert num_traces == 1
+    assert num_traces == 2
 
 
 def test_jit_vmap():

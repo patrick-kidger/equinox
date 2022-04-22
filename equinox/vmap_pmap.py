@@ -1,19 +1,21 @@
 import functools as ft
 import inspect
-from typing import Any, Callable, Dict, Sequence, Union
+from typing import Any, Callable, Dict, Union
 
 import jax
 import jax.interpreters.batching as batching
+import jax.numpy as jnp
 
 from .compile_utils import (
+    compile_cache,
     hashable_combine,
     hashable_partition,
     Static,
     strip_wrapped_partial,
 )
-from .custom_types import BoolAxisSpec, PyTree, ResolvedBoolAxisSpec, sentinel, TreeDef
+from .custom_types import BoolAxisSpec, PyTree, ResolvedBoolAxisSpec, sentinel
 from .doc_utils import doc_strip_annotations
-from .filters import combine, is_array, partition
+from .filters import combine, filter, is_array, partition
 from .module import Module, module_update_wrapper
 
 
@@ -125,9 +127,14 @@ class _VmapWrapper(Module):
             return vmapd, Static(nonvmapd)
 
         bound = __self._signature.bind(*args, **kwargs)
+        del args, kwargs
         bound.apply_defaults()
-        _args = __self._args + (__self._default,) * (len(args) - len(__self._args))
-        _kwargs = {key: __self._kwargs.get(key, __self._default) for key in kwargs}
+        _args = __self._args + (__self._default,) * (
+            len(bound.args) - len(__self._args)
+        )
+        _kwargs = {
+            key: __self._kwargs.get(key, __self._default) for key in bound.kwargs
+        }
         in_axes = _resolve_axes(
             (__self._fun, bound.args, bound.kwargs), (__self._fn, _args, _kwargs)
         )
@@ -327,6 +334,7 @@ def filter_vmap(
         ]
     )
     bound = signature_default.bind_partial(*args, **kwargs)
+    del args, kwargs
     bound.apply_defaults()
 
     if any(callable(o) for o in jax.tree_leaves(out)):
@@ -350,14 +358,15 @@ def filter_vmap(
     return module_update_wrapper(vmap_wrapper, fun)
 
 
-@ft.lru_cache(maxsize=None)
-def _filter_pmap_cache(unwrapped_fun_treedef, unwrapped_fun_leaves, **pmapkwargs):
-    unwrapped_fun = jax.tree_unflatten(unwrapped_fun_treedef, unwrapped_fun_leaves)
-
+@compile_cache
+def _filter_pmap_cache(unwrapped_fun, **pmapkwargs):
     @ft.partial(jax.pmap, **pmapkwargs)
     @ft.wraps(unwrapped_fun)
     def fun_wrapped(dynamic, static_leaves, static_treedef, jit_out_axes):
-        _fun, _args, _kwargs = hashable_combine(dynamic, static_leaves, static_treedef)
+        _fun, _args, _kwargs, _maybe_dummy = hashable_combine(
+            dynamic, static_leaves, static_treedef
+        )
+        del _maybe_dummy
         _out = _fun(*_args, **_kwargs)
         _dynamic, _static = partition(_out, jit_out_axes)
         return _dynamic, Static(_static)
@@ -373,17 +382,25 @@ class _PmapWrapper(Module):
     _args: PyTree[AxisSpec]
     _kwargs: PyTree[AxisSpec]
     _out: PyTree[AxisSpec]
-    _unwrapped_fun_treedef: TreeDef
-    _unwrapped_fun_leaves: Sequence[Any]
+    _unwrapped_fun: Any
     _pmapkwargs: Dict[str, Any]
 
     def _fun_wrapper(self, is_lower, args, kwargs):
         bound = self._signature.bind(*args, **kwargs)
+        del args, kwargs
         bound.apply_defaults()
-        _args = self._args + (self._default,) * (len(args) - len(self._args))
-        _kwargs = {key: self._kwargs.get(key, self._default) for key in kwargs}
+        _args = self._args + (self._default,) * (len(bound.args) - len(self._args))
+        _kwargs = {key: self._kwargs.get(key, self._default) for key in bound.kwargs}
+        try:
+            axis_size = self._pmapkwargs["axis_size"]
+        except KeyError:
+            maybe_dummy = 0  # hashable non-array object
+        else:
+            # Work around JAX bug #9252
+            maybe_dummy = jnp.empty(axis_size)
         in_axes = _resolve_axes(
-            (self._fun, bound.args, bound.kwargs), (self._fn, _args, _kwargs)
+            (self._fun, bound.args, bound.kwargs, maybe_dummy),
+            (self._fn, _args, _kwargs, _zero_if_array_else_none),
         )
         jit_in_axes = _jit_axes(in_axes)
         map_in_axes = _map_axes(in_axes)
@@ -391,8 +408,7 @@ class _PmapWrapper(Module):
         map_out_axes = _map_axes(self._out)
 
         cached = _filter_pmap_cache(
-            self._unwrapped_fun_treedef,
-            self._unwrapped_fun_leaves,
+            self._unwrapped_fun,
             in_axes=(map_in_axes, None, None),
             out_axes=(map_out_axes, None),
             static_broadcasted_argnums=(1, 2, 3),
@@ -400,7 +416,7 @@ class _PmapWrapper(Module):
         )
 
         dynamic, static_leaves, static_treedef = hashable_partition(
-            (self._fun, bound.args, bound.kwargs), jit_in_axes
+            (self._fun, bound.args, bound.kwargs, maybe_dummy), jit_in_axes
         )
         if is_lower:
             return cached.lower(dynamic, static_leaves, static_treedef, jit_out_axes)
@@ -532,7 +548,7 @@ def filter_pmap(
 
     if fun is sentinel:
         return ft.partial(
-            filter_vmap,
+            filter_pmap,
             axis_name=axis_name,
             default=default,
             fn=fn,
@@ -557,11 +573,10 @@ def filter_pmap(
         ]
     )
     bound = signature_default.bind_partial(*args, **kwargs)
+    del args, kwargs
     bound.apply_defaults()
 
-    _, unwrapped_fun_leaves, unwrapped_fun_treedef = hashable_partition(
-        strip_wrapped_partial(fun), fn
-    )
+    unwrapped_fun = filter(strip_wrapped_partial(fun), _jit_axes(fn), inverse=True)
 
     if any(callable(o) for o in jax.tree_leaves(out)):
         # In practice we demand `out` be of type `PyTree[ResolvedAxisSpec]`.
@@ -574,11 +589,10 @@ def filter_pmap(
         _fun=fun,
         _default=default,
         _fn=fn,
-        _args=args,
-        _kwargs=kwargs,
+        _args=bound.args,
+        _kwargs=bound.kwargs,
         _out=out,
-        _unwrapped_fun_treedef=unwrapped_fun_treedef,
-        _unwrapped_fun_leaves=unwrapped_fun_leaves,
+        _unwrapped_fun=unwrapped_fun,
         _pmapkwargs=pmapkwargs,
     )
 
