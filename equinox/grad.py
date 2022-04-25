@@ -91,6 +91,12 @@ def filter_grad(
 ):
     """Wraps together [`equinox.partition`][] and `jax.grad`.
 
+    !!! info
+
+        By default, all inexact (floating-point) JAX arrays are differentiated. Any
+        nondifferentiable leaves will have `None` as the gradient.
+
+
     **Arguments:**
 
     - `fun` is a pure function to JIT compile.
@@ -106,14 +112,6 @@ def filter_grad(
     nondifferentiable leaves will have `None` as the gradient. See
     [`equinox.apply_updates`][] for a convenience function that will only attempt to
     apply non-`None` updates.
-
-    !!! info
-
-        An important special case is to trace all inexact (i.e. floating point)
-        JAX arrays and treat all other objects as nondifferentiable.
-
-        This is accomplished with [`equinox.is_inexact_array`][], which is the
-        default.
 
     !!! tip
 

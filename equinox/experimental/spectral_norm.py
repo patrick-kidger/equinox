@@ -135,6 +135,7 @@ class SpectralNorm(Module):
         - `num_power_iterations`: The number of power iterations to apply every time the array is accessed.
         - `eps`: Epsilon for numerical stability when calculating norms.
         - `inference`: Whether this is in inference mode, at which time no power iterations are performed.
+            This may be toggled with [`equinox.tree_inference`][].
         - `key`: A `jax.random.PRNGKey` used to provide randomness for initialisation. (Keyword only argument.)
         """
         super().__init__(**kwargs)

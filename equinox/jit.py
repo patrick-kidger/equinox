@@ -113,6 +113,10 @@ def filter_jit(
 ) -> Callable:
     """Wraps together [`equinox.partition`][] and `jax.jit`.
 
+    !!! info
+
+        By default, all JAX arrays are traced, and all other types are held static.
+
     **Arguments:**
 
     In each of the following cases, `True` indicates that an argument should be traced,
@@ -145,12 +149,6 @@ def filter_jit(
     **Returns:**
 
     The JIT'd version of `fun`.
-
-    !!! info
-
-        The most common case is to trace all JAX arrays and treat all other objects as
-        static. This is accomplished with [`equinox.is_array`][], which is the default.
-        (It is relatively unusual to need different behaviour to this.)
 
     !!! example
 

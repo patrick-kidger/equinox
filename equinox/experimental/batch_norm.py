@@ -90,7 +90,9 @@ class BatchNorm(Module):
             value between 0 and 1 exclusive.
         - `inference`: If `False` then the batch means and variances will be calculated
             and used to update the running statistics. If `True` then the running
-            statistics are directly used for normalisation.
+            statistics are directly used for normalisation. This may be toggled with
+            [`equinox.tree_inference`][] or overridden during
+            [`equinox.experimental.BatchNorm.__call__`][].
         """
 
         super().__init__(**kwargs)

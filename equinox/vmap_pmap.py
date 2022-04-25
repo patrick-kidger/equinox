@@ -172,6 +172,11 @@ def filter_vmap(
 ) -> Callable:
     """Wraps together [`equinox.partition`][] and `jax.vmap`.
 
+    !!! info
+
+        By default, all JAX arrays are vectorised down their leading axis (i.e. axis
+        index 0), and all other types are not vectorised.
+
     **Arguments:**
 
     In each of the following cases, then `int` indicates an array axis to vectorise
@@ -215,11 +220,6 @@ def filter_vmap(
 
     !!! info
 
-        By default, all JAX arrays are vectorised down their leading axis (i.e. axis
-        index 0), and all other types are not vectorised.
-
-    !!! info
-
         In fact, besides `None`, `int` and `Leaf -> Union[None, int]`, then boolean
         types are also supported, and treated identically to `None`. This is to support
         seamlessly switching between [`equinox.filter_pmap`][] and
@@ -227,8 +227,8 @@ def filter_vmap(
 
     !!! warning
 
-        Using functions `Leaf -> Union[None, int]` in `out` (as opposed to just values
-        of type `Union[None, int]`) is considered experimental, and may change.
+        Using functions `Leaf -> Union[None, int]` in `out` is considered experimental,
+        and may change.
 
     !!! example
 
@@ -452,6 +452,12 @@ def filter_pmap(
 ) -> Callable:
     """Wraps together [`equinox.partition`][] and `jax.pmap`.
 
+    !!! info
+
+        By default, the computation is parallelised by splitting all JAX arrays down
+        their leading axis (i.e. axis index 0), and broadcasting all other types to
+        each replica.
+
     **Arguments:**
 
     In each of the following cases, then `int` indicates an array axis to split down,
@@ -501,12 +507,6 @@ def filter_pmap(
     **Returns:**
 
     The parallelised version of `fun`.
-
-    !!! info
-
-        By default, the computation is parallelised by splitting all JAX arrays down
-        their leading axis (i.e. axis index 0), and broadcasting all other types to
-        each replica.
 
     !!! example
 

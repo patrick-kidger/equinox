@@ -8,11 +8,11 @@ import jax._src.pretty_printer as pp
 import jax.numpy as jnp
 import numpy as np
 
-from .custom_types import Array
+from .custom_types import Array, PyTree
 
 
 Dataclass = Any
-PrettyPrintAble = Any
+PrettyPrintAble = PyTree
 
 
 _comma_sep = pp.concat([pp.text(","), pp.brk()])
