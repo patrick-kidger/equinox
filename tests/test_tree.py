@@ -1,4 +1,5 @@
 import jax
+import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
 import pytest
@@ -70,6 +71,38 @@ def test_tree_at_replace_fn(getkey):
         eqx.tree_at(where, pytree, replace=(0, 1), replace_fn=replace_fn)
 
 
+def test_tree_at_subtree(getkey):
+    class L(eqx.Module):
+        def __call__(self, x):
+            return x
+
+    mlp = eqx.nn.MLP(2, 2, 2, 2, key=getkey())
+
+    # m.layers is a node in the PyTree
+    newmlp1 = eqx.tree_at(
+        lambda m: m.layers, mlp, [L() for _ in range(len(mlp.layers))]
+    )
+
+    # tuple(m.layers) is a sequence of nodes in the PyTree.
+    newmlp2 = eqx.tree_at(
+        lambda m: tuple(m.layers), mlp, [L() for _ in range(len(mlp.layers))]
+    )
+
+    x = jrandom.normal(getkey(), (2,))
+    assert (jnn.relu(x) == newmlp1(x)).all()
+    assert (jnn.relu(x) == newmlp2(x)).all()
+
+
+def test_tree_at_dependent_where(getkey):
+    mlp = eqx.nn.MLP(2, 2, 2, 2, key=getkey())
+
+    def where(m):
+        return jax.tree_leaves(eqx.filter(m, eqx.is_array))
+
+    with pytest.raises(ValueError):
+        eqx.tree_at(where, mlp, where(mlp))
+
+
 def test_tree_equal():
     key1 = jrandom.PRNGKey(0)
     key2 = jrandom.PRNGKey(1)
@@ -86,6 +119,30 @@ def test_tree_equal():
     assert not eqx.tree_equal(pytree1, pytree3)
     assert not eqx.tree_equal(pytree1, pytree4)
     assert not eqx.tree_equal(pytree1, pytree5)
+
+
+def test_tree_equal_jit():
+    a = jnp.array(0)
+    b = jnp.array(0)
+
+    @jax.jit
+    def run1():
+        assert not eqx.tree_equal(a, 0)
+
+    run1()
+
+    @jax.jit
+    def run2():
+        return eqx.tree_equal(a, b)
+
+    assert run2()
+
+    @jax.jit
+    def run3(x, y):
+        return eqx.tree_equal(x, y)
+
+    assert run3(a, b)
+    assert not run3(a, 1)
 
 
 def test_tree_inference(getkey):

@@ -1,3 +1,4 @@
+import warnings
 from typing import Any, Callable, Sequence, Union
 
 import jax
@@ -5,35 +6,68 @@ import jax.numpy as jnp
 import numpy as np
 
 from .custom_types import PyTree, sentinel
+from .doc_utils import doc_repr
 
 
-_Leaf = Any
+_Node = doc_repr(Any, "Node")
+
+
+class _LeafWrapper:
+    def __init__(self, value: Any):
+        self.value = value
+
+
+def _remove_leaf_wrapper(x: _LeafWrapper) -> Any:
+    assert type(x) is _LeafWrapper
+    return x.value
+
+
+class _CountedIdDict:
+    def __init__(self, keys, values):
+        assert len(keys) == len(values)
+        self._dict = {id(k): v for k, v in zip(keys, values)}
+        self._count = {id(k): 0 for k in keys}
+
+    def __contains__(self, item):
+        return id(item) in self._dict
+
+    def __getitem__(self, item):
+        self._count[id(item)] += 1
+        return self._dict[id(item)]
+
+    def get(self, item, default):
+        try:
+            return self[item]
+        except KeyError:
+            return default
+
+    def count(self, item):
+        return self._count[id(item)]
 
 
 def tree_at(
-    where: Callable[[PyTree], Union[_Leaf, Sequence[_Leaf]]],
+    where: Callable[[PyTree], Union[_Node, Sequence[_Node]]],
     pytree: PyTree,
-    replace: Union[_Leaf, Sequence[_Leaf]] = sentinel,
-    replace_fn: Callable[[_Leaf], _Leaf] = sentinel,
-    is_leaf: Callable[[_Leaf], bool] = None,
-) -> PyTree:
+    replace: Union[Any, Sequence[Any]] = sentinel,
+    replace_fn: Callable[[_Node], Any] = sentinel,
+    is_leaf: None = None,
+):
     """Updates a PyTree out-of-place; a bit like using `.at[].set()` on a JAX array.
 
     **Arguments:**
 
-    - `where`: A callable `PyTree -> Leaf` or `PyTree -> Sequence[Leaf]`. It should
-        consume a PyTree with the same structure as `pytree`, and return the leaf or
-        leaves that should be replaced. For example
+    - `where`: A callable `PyTree -> Node` or `PyTree -> Sequence[Node]`. It should
+        consume a PyTree with the same structure as `pytree`, and return the node or
+        nodes that should be replaced. For example
         `where = lambda mlp: mlp.layers[-1].linear.weight`.
     - `pytree`: The PyTree to modify.
     - `replace`: Either a single element, or a sequence of the same length as returned
         by `where`. This specifies the replacements to make at the locations specified
         by `where`. Mutually exclusive with `replace_fn`.
-    - `replace_fn`: A function `Leaf -> Any`. It will be called on every leaf specified
+    - `replace_fn`: A function `Node -> Any`. It will be called on every node specified
         by `where`. The return value from `replace_fn` will be used in its place.
         Mutually exclusive with `replace`.
-    - `is_leaf`: As `jax.tree_flatten`; used to determine what should be treated as a
-        leaf.
+    - `is_leaf`: (Deprecated.)
 
     **Returns:**
 
@@ -50,61 +84,123 @@ def tree_at(
         trainable = equinox.tree_at(lambda mlp: mlp.layers[-1].linear.weight, model, replace=True)
         equinox.filter_grad(..., filter_spec=trainable)
         ```
-
-    !!! example
-
-        Sub-PyTrees can be replaced by flattening them to leaves first:
-
-        ```python
-        equinox.tree_at(lambda t: jax.tree_leaves(t.subtree), pytree,
-                        jax.tree_leaves(new_subtree))
-        ```
     """
 
-    if (replace is sentinel and replace_fn is sentinel) or (
-        replace is not sentinel and replace_fn is not sentinel
+    if is_leaf is not None:
+        warnings.warn(
+            "The `is_leaf` argument is deprecated and now does nothing. `tree_at` now "
+            "supports working with nodes (not just leaves) directly."
+        )
+    del is_leaf
+
+    # We need to specify a particular node in a PyTree.
+    # This is surprisingly difficult to do! As far as I can see, pretty much the only
+    # way of doing this is to specify e.g. `x.foo[0].bar` via `is`, and then pulling
+    # a few tricks to try and ensure that the same object doesn't appear multiple
+    # times in the same PyTree.
+    #
+    # So this first `tree_map` serves a dual purpose.
+    # 1) Makes a copy of the composite nodes in the PyTree, to avoid aliasing via
+    #    e.g. `pytree=[(1,)] * 5`. This has the tuple `(1,)` appear multiple times.
+    # 2) It makes each leaf be a unique Python object, as it's wrapped in
+    #    `_LeafWrapper`. This is needed because Python caches a few builtin objects:
+    #    `assert 0 + 1 is 1`. I think only a few leaf types are subject to this.
+    # So point 1) should ensure that all composite nodes are unique Python objects,
+    # and point 2) should ensure that all leaves are unique Python objects.
+    # Between them, all nodes of `pytree` are handled.
+    #
+    # I think pretty much the only way this can fail is when using a custom node with
+    # singleton-like flatten+unflatten behaviour, which is pretty edge case. And we've
+    # added a check for it at the bottom of this function, just to be sure.
+    #
+    # Whilst we're here: we also double-check that `where` is well-formed and doesn't
+    # use leaf information. (As else `node_or_nodes` will be wrong.)
+    node_or_nodes_nowrapper = where(pytree)
+    pytree = jax.tree_map(_LeafWrapper, pytree)
+    node_or_nodes = where(pytree)
+    leaves1, structure1 = jax.tree_flatten(node_or_nodes_nowrapper)
+    leaves2, structure2 = jax.tree_flatten(node_or_nodes)
+    leaves2 = [_remove_leaf_wrapper(x) for x in leaves2]
+    if (
+        structure1 != structure2
+        or len(leaves1) != len(leaves2)
+        or any(l1 is not l2 for l1, l2 in zip(leaves1, leaves2))
     ):
         raise ValueError(
-            "Precisely one of `replace` and `replace_fn` must be specified."
+            "`where` must use just the PyTree structure of `pytree`. `where` must not "
+            "depend on the leaves in `pytree`."
         )
-    elif replace is sentinel:
-        replace_passed = False
-        replacer = lambda j, i: replace_fn(flat[i])
+    del node_or_nodes_nowrapper, leaves1, structure1, leaves2, structure2
+
+    # Normalise whether we were passed a single node or a sequence of nodes.
+    # We could probably handle something more general, PyTrees of nodes, if we wanted
+    # to.
+    in_pytree = False
+
+    def _in_pytree(x):
+        nonlocal in_pytree
+        if x is node_or_nodes:  # noqa: F821
+            in_pytree = True
+
+    jax.tree_map(_in_pytree, pytree, is_leaf=lambda x: x is node_or_nodes)  # noqa: F821
+    if in_pytree:
+        nodes = (node_or_nodes,)
+        if replace is not sentinel:
+            replace = (replace,)
     else:
-        replace_passed = True
-        replacer = lambda j, i: replace[j]
+        nodes = node_or_nodes
+    del in_pytree, node_or_nodes
 
-    # TODO: is there a neater way of accomplishing this?
-    flat, treedef = jax.tree_flatten(pytree, is_leaf=is_leaf)
-    flat_indices = list(range(len(flat)))
-    index_pytree = jax.tree_unflatten(treedef, flat_indices)
-    index = where(index_pytree)
-    # where can return either a single entry, or a sequence
-    if isinstance(index, int):
-        index = (index,)
-        replace = (replace,)
-    elif isinstance(index, Sequence):
-        for i in index:
-            if not isinstance(i, int):
+    # Normalise replace vs replace_fn
+    if replace is sentinel:
+        if replace_fn is sentinel:
+            raise ValueError(
+                "Precisely one of `replace` and `replace_fn` must be specified."
+            )
+        else:
+
+            def _replace_fn(x):
+                x = jax.tree_map(_remove_leaf_wrapper, x)
+                return replace_fn(x)
+
+            replace_fns = [_replace_fn] * len(nodes)
+    else:
+        if replace_fn is sentinel:
+            if len(nodes) != len(replace):
                 raise ValueError(
-                    r"""`where` must return a sequence of only leaves; not some subtree.
-
-                    If you want to replace all of a subtree, you can do so by replacing
-                    >>> eqx.tree_at(lambda t: t.subtree, tree, new_subtree)  # buggy
-                    with
-                    >>> eqx.tree_at(lambda t: jax.tree_leaves(t.subtree), tree, 
-                    ...             jax.tree_leaves(new_subtree))  # fixed
-                    """
+                    "`where` must return a sequence of leaves of the same length as "
+                    "`replace`."
                 )
+            replace_fns = [lambda _, r=r: r for r in replace]
+        else:
+            raise ValueError(
+                "Precisely one of `replace` and `replace_fn` must be specified."
+            )
+    node_replace_fns = _CountedIdDict(nodes, replace_fns)
 
-    if replace_passed and len(index) != len(replace):
-        raise ValueError(
-            "`where` must return a sequence of leaves of the same length as `replace`."
-        )
-    for j, i in enumerate(index):
-        flat[i] = replacer(j, i)
+    # Actually do the replacement
+    def _make_replacement(x: _Node) -> Any:
+        return node_replace_fns.get(x, _remove_leaf_wrapper)(x)
 
-    return jax.tree_unflatten(treedef, flat)
+    out = jax.tree_map(
+        _make_replacement, pytree, is_leaf=lambda x: x in node_replace_fns
+    )
+
+    # Check that `where` is well-formed.
+    for node in nodes:
+        count = node_replace_fns.count(node)
+        if count == 0:
+            raise ValueError(
+                "`where` does not specify an element or elements of `pytree`."
+            )
+        elif count == 1:
+            pass
+        else:
+            raise ValueError(
+                "`where` does not uniquely identify a single element of `pytree`."
+            )
+
+    return out
 
 
 def tree_equal(*pytrees: PyTree) -> bool:
@@ -123,6 +219,7 @@ def tree_equal(*pytrees: PyTree) -> bool:
     """
     flat, treedef = jax.tree_flatten(pytrees[0])
     array_types = (jnp.ndarray, np.ndarray)
+    out = True
     for pytree in pytrees[1:]:
         flat_, treedef_ = jax.tree_flatten(pytree)
         if treedef_ != treedef:
@@ -134,9 +231,12 @@ def tree_equal(*pytrees: PyTree) -> bool:
                         (type(elem) != type(elem_))
                         or (elem.shape != elem_.shape)
                         or (elem.dtype != elem_.dtype)
-                        or (elem != elem_).any()
                     ):
                         return False
+                    allsame = (elem == elem_).all()
+                    if allsame is False:
+                        return False
+                    out = out & allsame
                 else:
                     return False
             else:
@@ -145,7 +245,7 @@ def tree_equal(*pytrees: PyTree) -> bool:
                 else:
                     if elem != elem_:
                         return False
-    return True
+    return out
 
 
 def _has_inference(leaf):

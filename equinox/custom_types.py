@@ -4,7 +4,7 @@ from typing import Any, Callable, Generic, Tuple, TypeVar, Union
 
 import jax
 
-from .doc_utils import WithRepr
+from .doc_utils import doc_repr
 
 
 # Custom flag we set when generating documentation.
@@ -96,8 +96,6 @@ if getattr(typing, "GENERATING_DOCUMENTATION", False):
     Array.__module__ = "builtins"
     PyTree.__module__ = "builtins"
 
-    sentinel = WithRepr("sentinel")
-
 else:
 
     class Array:
@@ -108,8 +106,8 @@ else:
         def __class_getitem__(cls, item):
             return PyTree
 
-    sentinel = object()
 
+sentinel = doc_repr(object(), "sentinel")
 
 TreeDef = type(jax.tree_structure(0))
 
