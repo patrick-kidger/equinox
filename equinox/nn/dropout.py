@@ -27,29 +27,10 @@ class Dropout(Module):
 
         - `p`: The fraction of entries to set to zero. (On average.)
         - `inference`: Whether to actually apply dropout at all. If `True` then dropout
-            is *not* applied. If `False` then dropout is applied.
+            is *not* applied. If `False` then dropout is applied. This may be toggled
+            with [`equinox.tree_inference`][] or overridden during
+            [`equinox.nn.Dropout.__call__`][].
         - `deterministic`: Deprecated alternative to `inference`.
-
-        !!! info
-
-            The `inference` flag is provided as it is common to only apply dropout
-            during training, but not to apply it during inference. If you want to change
-            this flag between training and inference, then you can either:
-
-            - Override it with the `__call__`-time `inference` flag, see below.
-            - Modify the `inference` flag directly -- possible to do because `Dropout`
-                is just a PyTree. For example this sets all `inference` flags to
-                `True`:
-                ```python
-                model = ...  # some model featuring Dropout/BatchNorm/etc. layers.
-
-                def find_inference(m):
-                    has_inference = lambda x: hasattr(x, "inference")
-                    leaves = jax.tree_leaves(m, is_leaf=has_inference)
-                    return tuple(k.inference for k in leaves if has_inference(k))
-
-                model = eqx.tree_at(find_inference, model, replace_fn=lambda _: True)
-                ```
         """
 
         if deterministic is not None:

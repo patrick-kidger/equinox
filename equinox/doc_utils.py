@@ -3,7 +3,15 @@ from types import FunctionType
 from typing import Any
 
 
-class _WithRepr:
+# Inherits from type so that _WithRepr instances are types and can be used as
+# e.g. Sequence[_WithRepr(...)]
+class _WithRepr(type):
+    def __new__(self, string):
+        out = super().__new__(self, string, (), {})
+        # prevent the custom typing repr from doing the wrong thing
+        out.__module__ = "builtins"
+        return out
+
     def __init__(self, string):
         self.string = string
 

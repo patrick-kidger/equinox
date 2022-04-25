@@ -105,6 +105,7 @@ class MultiheadAttention(Module):
         use_value_bias: bool = False,
         use_output_bias: bool = False,
         dropout_p: float = 0.0,
+        inference: bool = False,
         *,
         key: "jax.random.PRNGKey",
         **kwargs,
@@ -126,6 +127,10 @@ class MultiheadAttention(Module):
         - `use_value_bias`: Whether to use a bias term in the value projections.
         - `use_output_bias`: Whether to use a bias term in the output projection.
         - `dropout_p`: Dropout probability on attention weights.
+        - `inference`: Whether to actually apply dropout at all. If `True` then dropout
+            is not applied. If `False` then dropout is applied. This may be toggled
+            with [`equinox.tree_inference`][] or overridden during
+            [`equinox.nn.MultiheadAttention.__call__`][].
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
         """
@@ -155,7 +160,7 @@ class MultiheadAttention(Module):
         self.output_proj = Linear(
             num_heads * vo_size, output_size, use_bias=use_output_bias, key=okey
         )
-        self.dropout = Dropout(dropout_p)
+        self.dropout = Dropout(dropout_p, inference=inference)
 
         self.num_heads = num_heads
         self.query_size = query_size

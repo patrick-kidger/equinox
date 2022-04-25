@@ -44,7 +44,8 @@ Use cases:
 
 ::: equinox.experimental.StateIndex
     selection:
-        members: false
+        members:
+            - __init__
 
 ---
 
