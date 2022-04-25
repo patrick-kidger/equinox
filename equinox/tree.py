@@ -4,10 +4,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from .custom_types import PyTree
+from .custom_types import PyTree, sentinel
 
-
-_sentinel = object()
 
 _Leaf = Any
 
@@ -15,8 +13,8 @@ _Leaf = Any
 def tree_at(
     where: Callable[[PyTree], Union[_Leaf, Sequence[_Leaf]]],
     pytree: PyTree,
-    replace: Union[_Leaf, Sequence[_Leaf]] = _sentinel,
-    replace_fn: Callable[[_Leaf], _Leaf] = _sentinel,
+    replace: Union[_Leaf, Sequence[_Leaf]] = sentinel,
+    replace_fn: Callable[[_Leaf], _Leaf] = sentinel,
     is_leaf: Callable[[_Leaf], bool] = None,
 ) -> PyTree:
     """Updates a PyTree out-of-place; a bit like using `.at[].set()` on a JAX array.
@@ -63,13 +61,13 @@ def tree_at(
         ```
     """
 
-    if (replace is _sentinel and replace_fn is _sentinel) or (
-        replace is not _sentinel and replace_fn is not _sentinel
+    if (replace is sentinel and replace_fn is sentinel) or (
+        replace is not sentinel and replace_fn is not sentinel
     ):
         raise ValueError(
             "Precisely one of `replace` and `replace_fn` must be specified."
         )
-    elif replace is _sentinel:
+    elif replace is sentinel:
         replace_passed = False
         replacer = lambda j, i: replace_fn(flat[i])
     else:
@@ -148,3 +146,54 @@ def tree_equal(*pytrees: PyTree) -> bool:
                     if elem != elem_:
                         return False
     return True
+
+
+def _has_inference(leaf):
+    return hasattr(leaf, "inference")
+
+
+def _inferences(pytree):
+    return tuple(
+        x.inference
+        for x in jax.tree_leaves(pytree, is_leaf=_has_inference)
+        if _has_inference(x)
+    )
+
+
+def tree_inference(pytree: PyTree, value: bool) -> PyTree:
+    """Convenience function for setting all `inference` attributes on a PyTree.
+
+    Equivalent to:
+    ```python
+    has_inference = lambda leaf: hasattr(leaf, "inference")
+
+    def where(pytree):
+        return tuple(x.inference
+                     for x in jax.tree_leaves(pytree, is_leaf=has_inference)
+                     if has_inference(x))
+
+    equinox.tree_at(where, pytree, replace_fn=lambda _: value)
+    ```
+
+    `inference` flags are used to toggle the behaviour of a number of the pre-built
+    neural network layers, such as [`equinox.nn.Dropout`][] or
+    [`equinox.experimental.BatchNorm`][].
+
+    **Arguments:**
+
+    - `pytree`: the PyTree to modify.
+    - `value`: the value to set all `inference` attributes to.
+
+    **Returns:**
+
+    A copy of `pytree` with all `inference` flags set to `value`.
+    """
+
+    # For the sake of equinox.experimental.StateIndex. This won't defend against anyone
+    # setting inference flags manually using tree_at etc., but it should help overall.
+    if isinstance(jnp.array(0) + 1, jax.core.Tracer):
+        raise RuntimeError(
+            "inference flags should not be set whilst jit'ing, vmap'ing etc."
+        )
+
+    return tree_at(_inferences, pytree, replace_fn=lambda _: value)

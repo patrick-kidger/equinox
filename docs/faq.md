@@ -37,11 +37,11 @@ Recall that in Equinox, models are PyTrees. Meanwhile, JAX treats all PyTrees as
 
 The resolution is simple: just don't store the same object in multiple places in the PyTree.
 
-## I cannot feed higher-order tensors (e.g. with batch dimensions) into my model.
+## How do I input higher-order tensors (e.g. with batch dimensions) into my model?
 
-Use [`jax.vmap`](https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html#jax.vmap). This maps arbitrary JAX operations -- including any Equinox module -- over additional dimensions.
+Use [`jax.vmap`](https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html#jax.vmap). This maps arbitrary JAX operations -- including any Equinox module -- over additional dimensions (such as batch dimensions).
 
-For example if `x` is an array/tensor of shape `(batch_size, input_size)`, the following code in PyTorch:
+For example if `x` is an array/tensor of shape `(batch_size, input_size)`, then the following PyTorch code:
 
 ```python
 import torch
@@ -50,8 +50,7 @@ linear = torch.nn.Linear(input_size, output_size)
 y = linear(x)
 ```
 
-is equivalent to the following code in Equinox:
-
+is equivalent to the following Equinox code:
 ```python
 import jax
 import equinox as eqx

@@ -8,6 +8,10 @@
 
 ---
 
+::: equinox.tree_inference
+
+---
+
 ::: equinox.tree_pformat
 
 ---

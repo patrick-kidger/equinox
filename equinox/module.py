@@ -2,6 +2,7 @@ import abc
 import functools as ft
 import inspect
 from dataclasses import dataclass, field, fields
+from typing import Type
 
 import jax
 
@@ -10,8 +11,9 @@ from .tree import tree_equal
 
 
 def static_field(**kwargs):
-    """Used for marking that a field should _not_ be treated as part of the PyTree
-    of a [`equinox.Module`][]. (And is instead just treated as extra metadata.)
+    """Used for marking that a field should _not_ be treated as a leaf of the PyTree
+    of a [`equinox.Module`][]. (And is instead treated as part of the structure, i.e.
+    as extra metadata.)
 
     !!! example
 
@@ -20,9 +22,10 @@ def static_field(**kwargs):
             normal_field: int
             static_field: int = equinox.static_field()
 
-        mymodule = MyModule()
+        mymodule = MyModule("normal", "static")
         leaves, treedef = jax.tree_flatten(mymodule)
-        assert len(leaves) == 1
+        assert leaves == ["normal"]
+        assert "static" in str(treedef)
         ```
 
     In practice this should rarely be used; it is usually preferential to just filter
@@ -55,9 +58,23 @@ class _wrap_method:
         return jax.tree_util.Partial(self.method, instance)
 
 
+def _not_magic(k: str) -> bool:
+    return not (k.startswith("__") and k.endswith("__"))
+
+
 @ft.lru_cache(maxsize=128)
-def _make_initable(cls):
-    field_names = {field.name for field in fields(cls)}
+def _make_initable(cls: Type["Module"], wraps: bool) -> Type["Module"]:
+    if wraps:
+        field_names = {
+            "__module__",
+            "__name__",
+            "__qualname__",
+            "__doc__",
+            "__annotations__",
+            "__wrapped__",
+        }
+    else:
+        field_names = {field.name for field in fields(cls)}
 
     class _InitableModule(cls):
         pass
@@ -75,14 +92,10 @@ def _make_initable(cls):
     return _InitableModule
 
 
-def _has_dataclass_init(cls):
+def _has_dataclass_init(cls: Type["Module"]) -> bool:
     if "__init__" in cls.__dict__:
         return False
     return cls._has_dataclass_init
-
-
-def _not_magic(k):
-    return not (k.startswith("__") and k.endswith("__"))
 
 
 # Inherits from abc.ABCMeta as a convenience for a common use-case.
@@ -112,10 +125,12 @@ class _ModuleMeta(abc.ABCMeta):
         self = cls.__new__(cls, *args, **kwargs)
 
         # Defreeze it during __init__
-        initable_cls = _make_initable(cls)
+        initable_cls = _make_initable(cls, wraps=False)
         object.__setattr__(self, "__class__", initable_cls)
-        cls.__init__(self, *args, **kwargs)
-        object.__setattr__(self, "__class__", cls)
+        try:
+            cls.__init__(self, *args, **kwargs)
+        finally:
+            object.__setattr__(self, "__class__", cls)
 
         missing_names = {
             field.name
@@ -254,3 +269,19 @@ class Module(metaclass=_ModuleMeta):
         for name, value in zip(static_field_names, static_field_values):
             object.__setattr__(self, name, value)
         return self
+
+
+# Modifies in-place, just like functools.update_wrapper
+def module_update_wrapper(wrapper: Module, wrapped) -> Module:
+    cls = wrapper.__class__
+    initable_cls = _make_initable(cls, wraps=True)
+    object.__setattr__(wrapper, "__class__", initable_cls)
+    try:
+        # updated = ("__dict__",) is the default, but that's a bit much.
+        # It's common/possible for wrapper and wrapped to both be classes
+        # implementing __call__, in which case copying __dict__ over basically
+        # just breaks the wrapper class.
+        ft.update_wrapper(wrapper, wrapped, updated=())
+    finally:
+        object.__setattr__(wrapper, "__class__", cls)
+    return wrapper

@@ -77,7 +77,7 @@ class StateIndex(Module):
     !!! warning
 
         You should not modify the `inference` flag whilst inside a JIT region. For
-        example, the following will produced undesired behaviour:
+        example, the following will produced undefined behaviour:
 
         ```python
         @jax.jit

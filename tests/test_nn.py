@@ -565,6 +565,14 @@ def test_batch_norm(getkey):
     with pytest.raises(RuntimeError):
         jax.vmap(bn, axis_name="batch")(x1)
 
+    # Test that it handles multiple axis_names
+
+    bn = eqx.experimental.BatchNorm(6, ("batch1", "batch2"))
+    assert (
+        jax.vmap(jax.vmap(bn, axis_name="batch1"), axis_name="batch2")(x2).shape
+        == x2.shape
+    )
+
     # Test that it normalises
 
     x1alt = jrandom.normal(jrandom.PRNGKey(5678), (10, 5))  # avoid flakey test
