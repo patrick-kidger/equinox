@@ -77,3 +77,8 @@ If you found this library to be useful in academic work, then please cite: ([arX
 ```
 
 (Also consider starring the project on GitHub.)
+
+
+## See also
+
+See the related [Diffrax](https://github.com/patrick-kidger/diffrax) library for JAX-based differential equation solvers.
