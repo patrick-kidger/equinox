@@ -182,10 +182,10 @@ def tree_pformat(
 ) -> str:
     """Pretty-formats a PyTree as a string, whilst abbreviating JAX arrays.
 
+    (This is the function used in `__repr__` of [`equinox.Module`][].)
+
     All JAX arrays in the PyTree are condensed down to a short string representation
     of their dtype and shape.
-
-    (This is the function used in `__repr__` of [`equinox.Module`][].)
 
     !!! example
 

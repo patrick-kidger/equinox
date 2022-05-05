@@ -67,7 +67,7 @@ def tree_at(
     - `replace_fn`: A function `Node -> Any`. It will be called on every node specified
         by `where`. The return value from `replace_fn` will be used in its place.
         Mutually exclusive with `replace`.
-    - `is_leaf`: (Deprecated.)
+    - (`is_leaf`: Deprecated and ignored.)
 
     **Returns:**
 
@@ -76,13 +76,18 @@ def tree_at(
     !!! example
 
         This can be used to help specify the weights of a model to train or not to
-        train:
+        train. For example the following will train only the weight of the final linear
+        layer of an MLP:
 
         ```python
-        model = ...
+        def loss(model, ...):
+            ...
+
+        model = eqx.nn.MLP(...)
         trainable = jax.tree_map(lambda _: False, model)
         trainable = equinox.tree_at(lambda mlp: mlp.layers[-1].linear.weight, model, replace=True)
-        equinox.filter_grad(..., filter_spec=trainable)
+        grad_loss = equinox.filter_grad(loss, arg=trainable)
+        grads = grad_loss(model)
         ```
     """
 
