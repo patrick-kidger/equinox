@@ -145,6 +145,6 @@ See also the API reference on the left.
 
 !!! faq "FAQ"
 
-    One common question that gets asked: a lot of other libraries introduce custom `library.jit` etc. operations, specifically to work with `library.Module`. What makes the filtered transformations of Equinox different?
+    One common question: a lot of other libraries introduce custom `library.jit` etc. operations, specifically to work with `library.Module`. What makes the filtered transformations of Equinox different?
 
-    The answer is that filters are tools that apply to *any PyTree*; and models just happen to be PyTrees. There is no special coupling between a filtered transformation and `eqx.Module`. (Not to mention that the purpose of filtered transformations -- being able to include non-JAX-arrays in your model's parameters -- is itself unusual/impossible in many other libraries.)
+    The answer is that filter transformations are tools that apply to any PyTree. And models just happen to be PyTrees. The filtered transformations and `eqx.Module` are not coupled together. 

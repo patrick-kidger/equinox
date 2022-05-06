@@ -1,3 +1,5 @@
+from typing import Any
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -109,7 +111,7 @@ def test_filter(getkey):
     ]
     filtered = eqx.filter(pytree, filter_spec=filter_spec)
     none_linear = jax.tree_map(lambda _: None, eqx.nn.Linear(1, 1, key=getkey()))
-    assert filtered[0] is None
+    assert filtered[0] == none_linear
     assert filtered[1] == pytree[1]
     assert filtered[2][0] == none_linear
     assert filtered[2][1] is sentinel
@@ -139,3 +141,28 @@ def test_partition_and_combine(getkey):
             assert not isinstance(arg, int)
         assert eqx.combine(filtered, unfiltered) == pytree
         assert eqx.combine(unfiltered, filtered) == pytree
+
+
+def test_partition_subtree():
+    a, b = eqx.partition([(1,), 2], [True, False])
+    eqx.combine(a, b)
+
+
+def test_is_leaf():
+    class M(eqx.Module):
+        value: Any
+
+    def is_m(x):
+        return isinstance(x, M)
+
+    def filter_spec(x):
+        if is_m(x):
+            return x.value == 1
+        return True
+
+    pytree = [M(1), M(2), 3]
+    out = eqx.filter(pytree, filter_spec, is_leaf=is_m)
+    assert out == [M(1), None, 3]
+    out1, out2 = eqx.partition(pytree, filter_spec, is_leaf=is_m)
+    assert out1 == [M(1), None, 3]
+    assert out2 == [None, M(2), None]

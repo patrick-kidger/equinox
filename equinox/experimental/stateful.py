@@ -73,19 +73,6 @@ class StateIndex(Module):
         ci(x)
         ci(y)
         ```
-
-    !!! warning
-
-        You should not modify the `inference` flag whilst inside a JIT region. For
-        example, the following will produced undesired behaviour:
-
-        ```python
-        @jax.jit
-        def f(...):
-            ...
-            index = eqx.tree_at(lambda i: i.inference, index, True)
-            ...
-        ```
     """
 
     _obj: _IndexObj = static_field(repr=False)
@@ -99,7 +86,21 @@ class StateIndex(Module):
         - `inference`: If `True`, then the state can only be get, but not set. All
             stored states will looked up when crossing the JIT boundary -- rather than
             dynamically at runtime -- and treated as inputs to the XLA computation
-            graph. This improves speed at runtime.
+            graph. This improves speed at runtime. This may be toggled with
+            [`equinox.tree_inference`][].
+
+        !!! warning
+
+            You should not modify the `inference` flag whilst inside a JIT region. For
+            example, the following will produced undefined behaviour:
+
+            ```python
+            @jax.jit
+            def f(...):
+                ...
+                index = eqx.tree_at(lambda i: i.inference, index, True)
+                ...
+            ```
         """
         self._obj = _IndexObj()
         self._version = _FixedInt(-1)

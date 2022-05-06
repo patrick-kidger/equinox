@@ -102,6 +102,7 @@ nav:
         - Neural network layers:
             - 'api/nn/linear.md'
             - 'api/nn/conv.md'
+            - 'api/nn/pool.md'
             - 'api/nn/rnn.md'
             - 'api/nn/attention.md'
             - 'api/nn/dropout.md'
@@ -113,8 +114,11 @@ nav:
             - 'api/filtering/filter-functions.md'
             - 'api/filtering/filtered-transformations.md'
         - Utilities:
-            - 'api/helpers.md'
-            - 'api/stateful.md'
+            - 'api/utilities/manipulation.md'
+            - 'api/utilities/serialisation.md'
+            - 'api/utilities/miscellaneous.md'
+        - Experimental:
+            - 'api/experimental/stateful.md'
     - Misc:
         - 'citation.md'
         - 'faq.md'

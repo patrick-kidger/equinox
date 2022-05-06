@@ -1,10 +1,10 @@
-from typing import Any, Callable, Union
+from typing import Any, Callable, Optional
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
-from .custom_types import PyTree
+from .custom_types import BoolAxisSpec, PyTree, ResolvedBoolAxisSpec
 
 
 #
@@ -17,7 +17,6 @@ def is_array(element: Any) -> bool:
     return isinstance(element, jnp.ndarray)
 
 
-# Does _not_ do a try/except on jnp.asarray(element) because that's very slow.
 # Chosen to match
 # https://github.com/google/jax/blob/4a17c78605e7fc69a69a999e2f6298db79d3837a/jax/_src/numpy/lax_numpy.py#L542  # noqa: E501
 def is_array_like(element: Any) -> bool:
@@ -51,17 +50,26 @@ def is_inexact_array_like(element: Any) -> bool:
 #
 
 
-def _make_filter_tree(mask: Union[bool, Callable[[Any], bool]], arg: Any) -> bool:
-    if isinstance(mask, bool):
-        return mask
-    elif callable(mask):
-        return jax.tree_map(mask, arg)
-    else:
-        raise ValueError("`filter_spec` must consist of booleans and callables only.")
+def _make_filter_tree(is_leaf):
+    def _filter_tree(mask: BoolAxisSpec, arg: Any) -> ResolvedBoolAxisSpec:
+        if isinstance(mask, bool):
+            return jax.tree_map(lambda _: mask, arg, is_leaf=is_leaf)
+        elif callable(mask):
+            return jax.tree_map(mask, arg, is_leaf=is_leaf)
+        else:
+            raise ValueError(
+                "`filter_spec` must consist of booleans and callables only."
+            )
+
+    return _filter_tree
 
 
 def filter(
-    pytree: PyTree, filter_spec: PyTree, inverse: bool = False, replace: Any = None
+    pytree: PyTree,
+    filter_spec: PyTree[BoolAxisSpec],
+    inverse: bool = False,
+    replace: Any = None,
+    is_leaf: Optional[Callable[[Any], bool]] = None,
 ) -> PyTree:
     """
     Filters out the leaves of a PyTree not satisfying a condition. Those not satisfying
@@ -79,6 +87,11 @@ def filter(
     - `inverse` switches the truthy/falsey behaviour: falsey results are kept and
         truthy results are replaced.
     - `replace` is what to replace any falsey leaves with. Defaults to `None`.
+    - `is_leaf`: Optional function called at each node of the PyTree. It should return
+        a boolean. `True` indicates that the whole subtree should be treated as leaf;
+        `False` indicates that the subtree should be traversed as a PyTree. This is
+        mostly useful for evaluating a callable `filter_spec` on a node instead of a
+        leaf.
 
     **Returns:**
 
@@ -89,25 +102,30 @@ def filter(
         A common special case is `equinox.filter(pytree, equinox.is_array)`. Then
         `equinox.is_array` is evaluted on all of `pytree`'s leaves, and each leaf then
         kept or replaced.
+    """
+
+    inverse = bool(inverse)  # just in case, to make the != trick below work reliably
+    filter_tree = jax.tree_map(_make_filter_tree(is_leaf), filter_spec, pytree)
+    return jax.tree_map(
+        lambda mask, x: x if bool(mask) != inverse else replace, filter_tree, pytree
+    )
+
+
+def partition(
+    pytree: PyTree,
+    filter_spec: PyTree[BoolAxisSpec],
+    replace: Any = None,
+    is_leaf: Optional[Callable[[Any], bool]] = None,
+) -> PyTree:
+    """Equivalent to `filter(...), filter(..., inverse=True)`, but slightly more
+    efficient.
 
     !!! info
 
         See also [`equinox.combine`][] to reconstitute the PyTree again.
     """
 
-    inverse = bool(inverse)  # just in case, to make the != trick below work reliably
-    filter_tree = jax.tree_map(_make_filter_tree, filter_spec, pytree)
-    return jax.tree_map(
-        lambda mask, x: x if bool(mask) != inverse else replace, filter_tree, pytree
-    )
-
-
-def partition(pytree: PyTree, filter_spec: PyTree, replace: Any = None) -> PyTree:
-    """Equivalent to `filter(...), filter(..., inverse=True)`, but slightly more
-    efficient.
-    """
-
-    filter_tree = jax.tree_map(_make_filter_tree, filter_spec, pytree)
+    filter_tree = jax.tree_map(_make_filter_tree(is_leaf), filter_spec, pytree)
     left = jax.tree_map(lambda mask, x: x if mask else replace, filter_tree, pytree)
     right = jax.tree_map(lambda mask, x: replace if mask else x, filter_tree, pytree)
     return left, right

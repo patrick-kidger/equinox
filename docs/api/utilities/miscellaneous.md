@@ -1,12 +1,4 @@
-# Helpers for PyTrees
-
-::: equinox.apply_updates
-
----
-
-::: equinox.tree_at
-
----
+# Miscellaneous
 
 ::: equinox.tree_pformat
 

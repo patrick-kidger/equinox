@@ -1,8 +1,10 @@
 import inspect
 import typing
-from typing import Generic, Tuple, TypeVar, Union
+from typing import Any, Callable, Generic, Tuple, TypeVar, Union
 
 import jax
+
+from .doc_utils import doc_repr
 
 
 # Custom flag we set when generating documentation.
@@ -105,4 +107,9 @@ else:
             return PyTree
 
 
+sentinel = doc_repr(object(), "sentinel")
+
 TreeDef = type(jax.tree_structure(0))
+
+ResolvedBoolAxisSpec = bool
+BoolAxisSpec = Union[ResolvedBoolAxisSpec, Callable[[Any], ResolvedBoolAxisSpec]]

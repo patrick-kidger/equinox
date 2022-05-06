@@ -8,11 +8,11 @@ import jax._src.pretty_printer as pp
 import jax.numpy as jnp
 import numpy as np
 
-from .custom_types import Array
+from .custom_types import Array, PyTree
 
 
 Dataclass = Any
-PrettyPrintAble = Any
+PrettyPrintAble = PyTree
 
 
 _comma_sep = pp.concat([pp.text(","), pp.brk()])
@@ -182,14 +182,14 @@ def tree_pformat(
 ) -> str:
     """Pretty-formats a PyTree as a string, whilst abbreviating JAX arrays.
 
+    (This is the function used in `__repr__` of [`equinox.Module`][].)
+
     All JAX arrays in the PyTree are condensed down to a short string representation
     of their dtype and shape.
 
-    (This is the function used in `__repr__` of [`equinox.Module`][].)
-
     !!! example
 
-       A 32-bit floating-point JAX array of shape `(3, 4)` is printed as `f32[3,4]`.
+        A 32-bit floating-point JAX array of shape `(3, 4)` is printed as `f32[3,4]`.
 
     **Arguments:**
 

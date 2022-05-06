@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Sequence, Union
 
 import jax
 import jax.lax as lax
@@ -60,7 +60,7 @@ class BatchNorm(Module):
     bias: Optional[Array["input_size"]]
     first_time_index: StateIndex
     state_index: StateIndex
-    axis_name: str
+    axis_name: Union[str, Sequence[str]]
     inference: bool
     input_size: int = static_field()
     eps: float = static_field()
@@ -81,7 +81,8 @@ class BatchNorm(Module):
 
         - `input_size`: The number of channels in the input array.
         - `axis_name`: The name of the batch axis to compute statistics over, as passed
-            to `axis_name` in `jax.vmap` or `jax.pmap`.
+            to `axis_name` in `jax.vmap` or `jax.pmap`. Can also be a sequence (tuple,
+            list) of strings to compute statistics over multiple named axes.
         - `eps`: Value added to the denominator for numerical stability.
         - `channelwise_affine`: Whether the module has learnable channel-wise affine
             parameters.
@@ -89,7 +90,9 @@ class BatchNorm(Module):
             value between 0 and 1 exclusive.
         - `inference`: If `False` then the batch means and variances will be calculated
             and used to update the running statistics. If `True` then the running
-            statistics are directly used for normalisation.
+            statistics are directly used for normalisation. This may be toggled with
+            [`equinox.tree_inference`][] or overridden during
+            [`equinox.experimental.BatchNorm.__call__`][].
         """
 
         super().__init__(**kwargs)
