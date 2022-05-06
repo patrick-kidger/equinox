@@ -14,25 +14,25 @@
 
 ---
 
-::: equinox.nn.MaxPool1D
-    selection:
-        members: false
-
----
-
 ::: equinox.nn.AvgPool2D
     selection:
         members: false
 
 ---
 
-::: equinox.nn.MaxPool2D
+::: equinox.nn.AvgPool3D
     selection:
         members: false
 
 ---
 
-::: equinox.nn.AvgPool3D
+::: equinox.nn.MaxPool1D
+    selection:
+        members: false
+
+---
+
+::: equinox.nn.MaxPool2D
     selection:
         members: false
 
