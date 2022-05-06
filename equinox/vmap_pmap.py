@@ -182,12 +182,7 @@ def filter_vmap(
     In each of the following cases, then `int` indicates an array axis to vectorise
     over, `None` indicates that an argument should be broadcast (not vectorised
     over), and functions `Leaf -> Union[None, int]` are mapped and evaluated on every
-    leaf of their subtree.
-
-    (This is the same semantics as `jax.vmap(in_axes=..., out_axes=...)`.)
-
-    `None` may be used for non-JAX-array arguments. It is an error to try and specify
-    an integer axis for a non-JAX-array.
+    leaf of their subtree. `None` should be used for non-JAX-array arguments.
 
     - `fun` is a pure function to vectorise.
     - `default` should be a `Union[None, int]` or a function
@@ -199,16 +194,16 @@ def filter_vmap(
         corresponding input to `fun`.
     - `kwargs` is an optional per-keyword-argument override for `default` and should be
         a dictionary, whose keys are the names of arguments to `fun`, and whose values
-        are PyTrees with leaves that either `Union[None, int]`s or functions
+        are PyTrees with leaves that are either `Union[None, int]`s or functions
         `Leaf -> Union[None, int]`. The PyTree structures should be prefixes of the
         corresponding input to `fun`.
-    - `out` should be a PyTree with leaves that either `Union[None, int]`s or functions
-        `Leaf -> Union[None, int]`. The PyTree structure should be a prefix of the
-        output of `fun`.
-    - `fn` should be a PyTree with leaves that either `Union[None, int]`s or functions
-        `Leaf -> Union[None, int]`. The PyTree structure should be a prefix of `fun`
-        itself. (Note that `fun` may be any callable, e.g. a bound method, or a class
-        implementing `__call__`, and doesn't have to be a normal Python function.)
+    - `out` should be a PyTree with leaves that are either `Union[None, int]`s or
+        functions `Leaf -> Union[None, int]`. The PyTree structure should be a prefix
+        of the output of `fun`.
+    - `fn` should be a PyTree with leaves that are either `Union[None, int]`s or
+        functions `Leaf -> Union[None, int]`. The PyTree structure should be a prefix of
+        `fun` itself. (Note that `fun` may be any callable, e.g. a bound method, or a
+        class implementing `__call__`, and doesn't have to be a normal Python function.)
     - `**vmapkwargs` are any other keyword arguments to `jax.vmap`.
 
     When `args`, `kwargs`, `out`, `fn` are prefixes of the corresponding input, their
@@ -471,11 +466,7 @@ def filter_pmap(
     -- instead of just passing `None` -- by passing either `True` (traced) or
     `False` (static).
 
-    (For `None` and `int`, this is the same semantics as
-    `jax.vmap(in_axes=..., out_axes=...)`.)
-
-    `None`, `False` and `True` may be used for non-JAX-array arguments. It is an error
-    to try and specify an integer axis for a non-JAX-array.
+    `None`, `False` and `True` should be used for non-JAX-array arguments.
 
     - `fun` is a pure function to parallelise.
     - `default` should be a `Union[None, bool, int]` or a function
@@ -487,14 +478,14 @@ def filter_pmap(
         the corresponding input to `fun`.
     - `kwargs` is an optional per-keyword-argument override for `default` and should be
         a dictionary, whose keys are the names of arguments to `fun`, and whose values
-        are PyTrees with leaves that either `Union[None, bool, int]`s or functions
+        are PyTrees with leaves that are either `Union[None, bool, int]`s or functions
         `Leaf -> Union[None, bool, int]`. The PyTree structures should be prefixes of
         the corresponding input to `fun`.
-    - `out` should be a PyTree with leaves that either `Union[None, bool, int]`s or
+    - `out` should be a PyTree with leaves that are either `Union[None, bool, int]`s or
         functions `Leaf -> Union[None, bool, int]`. The PyTree structure should be a
         prefix of the output of `fun`. `True` indicates a tracer, `False` indicates any
         auxiliary information to return.
-    - `fn` should be a PyTree with leaves that either `Union[None, bool, int]`s or
+    - `fn` should be a PyTree with leaves that are either `Union[None, bool, int]`s or
         functions `Leaf -> Union[None, bool, int]`. The PyTree structure should be a
         prefix of `fun` itself. (Note that `fun` may be any callable, e.g. a bound
         method, or a class implementing `__call__`, and doesn't have to be a normal
