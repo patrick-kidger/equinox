@@ -102,6 +102,7 @@ nav:
         - Neural network layers:
             - 'api/nn/linear.md'
             - 'api/nn/conv.md'
+            - 'api/nn/pool.md'
             - 'api/nn/rnn.md'
             - 'api/nn/attention.md'
             - 'api/nn/dropout.md'
