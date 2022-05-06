@@ -12,12 +12,12 @@ from ..module import Module, static_field
 class Pool(Module):
     """General N-dimensional downsampling over a sliding window."""
 
-    init: Union[int, float, Array] = static_field()
+    init: Union[int, float, Array]
     operation: Callable[[Array, Array], Array]
     num_spatial_dims: int = static_field()
     kernel_size: Union[int, Sequence[int]] = static_field()
     stride: Union[int, Sequence[int]] = static_field()
-    padding: Union[int, Sequence[int]] = static_field()
+    padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = static_field()
 
     def __init__(
         self,
@@ -40,7 +40,7 @@ class Pool(Module):
 
         !!! info
 
-            In order for `Pool' to be differentiable, `operation(init, x)=x' needs to
+            In order for `Pool' to be differentiable, `operation(init, x) == x' needs to
             be true for all finite `x'. For further details see
             https://www.tensorflow.org/xla/operation_semantics#reducewindow  and
             https://github.com/google/jax/issues/7718.
@@ -74,12 +74,11 @@ class Pool(Module):
 
         if isinstance(padding, int):
             self.padding = tuple((padding, padding) for _ in range(num_spatial_dims))
-        elif isinstance(padding, Sequence) and all(
-            isinstance(element, Sequence) for element in padding
-        ):
-            self.padding = padding
         elif isinstance(padding, Sequence) and len(padding) == num_spatial_dims:
-            self.padding = tuple((p, p) for p in padding)
+            if all(isinstance(element, Sequence) for element in padding):
+                self.padding = padding
+            else:
+                self.padding = tuple((p, p) for p in padding)
         else:
             raise ValueError(
                 "`padding` must either be an int or tuple of length "
@@ -130,9 +129,9 @@ class AvgPool1D(Pool):
     ):
         super().__init__(
             init=0,
+            operation=lax.add,
             num_spatial_dims=1,
             kernel_size=kernel_size,
-            operation=lax.add,
             stride=stride,
             padding=padding,
             **kwargs,
@@ -156,9 +155,9 @@ class MaxPool1D(Pool):
     ):
         super().__init__(
             init=-jnp.inf,
+            operation=lax.max,
             num_spatial_dims=1,
             kernel_size=kernel_size,
-            operation=lax.max,
             stride=stride,
             padding=padding,
             **kwargs,
@@ -177,9 +176,9 @@ class AvgPool2D(Pool):
     ):
         super().__init__(
             init=0,
+            operation=lax.add,
             num_spatial_dims=2,
             kernel_size=kernel_size,
-            operation=lax.add,
             stride=stride,
             padding=padding,
             **kwargs,
@@ -203,9 +202,9 @@ class MaxPool2D(Pool):
     ):
         super().__init__(
             init=-jnp.inf,
+            operation=lax.max,
             num_spatial_dims=2,
             kernel_size=kernel_size,
-            operation=lax.max,
             stride=stride,
             padding=padding,
             **kwargs,
@@ -224,9 +223,9 @@ class AvgPool3D(Pool):
     ):
         super().__init__(
             init=0,
+            operation=lax.add,
             num_spatial_dims=3,
             kernel_size=kernel_size,
-            operation=lax.add,
             stride=stride,
             padding=padding,
             **kwargs,
@@ -250,9 +249,9 @@ class MaxPool3D(Pool):
     ):
         super().__init__(
             init=-jnp.inf,
+            operation=lax.max,
             num_spatial_dims=3,
             kernel_size=kernel_size,
-            operation=lax.max,
             stride=stride,
             padding=padding,
             **kwargs,
