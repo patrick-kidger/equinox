@@ -103,6 +103,13 @@ def test_tree_at_dependent_where(getkey):
         eqx.tree_at(where, mlp, where(mlp))
 
 
+def test_tree_at_none_leaf():
+    with pytest.raises(ValueError):
+        eqx.tree_at(lambda y: y[0], (None, None, 0), True)
+    x = eqx.tree_at(lambda y: y[0], (None, None, 0), True, is_leaf=lambda y: y is None)
+    assert x == (True, None, 0)
+
+
 def test_tree_equal():
     key1 = jrandom.PRNGKey(0)
     key2 = jrandom.PRNGKey(1)

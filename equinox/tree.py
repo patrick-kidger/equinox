@@ -1,5 +1,4 @@
-import warnings
-from typing import Any, Callable, Sequence, Union
+from typing import Any, Callable, Optional, Sequence, Union
 
 import jax
 import jax.numpy as jnp
@@ -50,7 +49,7 @@ def tree_at(
     pytree: PyTree,
     replace: Union[Any, Sequence[Any]] = sentinel,
     replace_fn: Callable[[_Node], Any] = sentinel,
-    is_leaf: None = None,
+    is_leaf: Optional[Callable[[Any], bool]] = None,
 ):
     """Updates a PyTree out-of-place; a bit like using `.at[].set()` on a JAX array.
 
@@ -67,7 +66,8 @@ def tree_at(
     - `replace_fn`: A function `Node -> Any`. It will be called on every node specified
         by `where`. The return value from `replace_fn` will be used in its place.
         Mutually exclusive with `replace`.
-    - (`is_leaf`: Deprecated and ignored.)
+    - `is_leaf`: As `jax.tree_flatten`. For example pass `is_leaf=lambda x: x is None`
+        to be able to replace `None` values using `tree_at`.
 
     **Returns:**
 
@@ -90,13 +90,6 @@ def tree_at(
         grads = grad_loss(model)
         ```
     """
-
-    if is_leaf is not None:
-        warnings.warn(
-            "The `is_leaf` argument is deprecated and now does nothing. `tree_at` now "
-            "supports working with nodes (not just leaves) directly."
-        )
-    del is_leaf
 
     # We need to specify a particular node in a PyTree.
     # This is surprisingly difficult to do! As far as I can see, pretty much the only
@@ -121,9 +114,9 @@ def tree_at(
     # Whilst we're here: we also double-check that `where` is well-formed and doesn't
     # use leaf information. (As else `node_or_nodes` will be wrong.)
     node_or_nodes_nowrapper = where(pytree)
-    pytree = jax.tree_map(_LeafWrapper, pytree)
+    pytree = jax.tree_map(_LeafWrapper, pytree, is_leaf=is_leaf)
     node_or_nodes = where(pytree)
-    leaves1, structure1 = jax.tree_flatten(node_or_nodes_nowrapper)
+    leaves1, structure1 = jax.tree_flatten(node_or_nodes_nowrapper, is_leaf=is_leaf)
     leaves2, structure2 = jax.tree_flatten(node_or_nodes)
     leaves2 = [_remove_leaf_wrapper(x) for x in leaves2]
     if (
@@ -138,8 +131,6 @@ def tree_at(
     del node_or_nodes_nowrapper, leaves1, structure1, leaves2, structure2
 
     # Normalise whether we were passed a single node or a sequence of nodes.
-    # We could probably handle something more general, PyTrees of nodes, if we wanted
-    # to.
     in_pytree = False
 
     def _in_pytree(x):
@@ -202,7 +193,17 @@ def tree_at(
             pass
         else:
             raise ValueError(
-                "`where` does not uniquely identify a single element of `pytree`."
+                "`where` does not uniquely identify a single element of `pytree`. This "
+                "usually occurs when trying to replace a `None` value:\n"
+                "\n"
+                "  >>> eqx.tree_at(lambda t: t[0], (None, None, 1), True)\n"
+                "\n"
+                "\n"
+                "for which the fix is to specify that `None`s should be treated as "
+                "leaves:\n"
+                "\n"
+                "  >>> eqx.tree_at(lambda t: t[0], (None, None, 1), True,\n"
+                "  ...             is_leaf=lambda x: x is None)"
             )
 
     return out
