@@ -215,8 +215,8 @@ def filter_vmap(
 
     !!! info
 
-        In fact, besides `None`, `int` and `Leaf -> Union[None, int]`, then boolean
-        types are also supported, and treated identically to `None`. This is to support
+        In fact, besides `None`, `int` and `Leaf -> Union[None, int]`: boolean
+        types are also supported and treated identically to `None`. This is to support
         seamlessly switching between [`equinox.filter_pmap`][] and
         [`equinox.filter_vmap`][] if desired.
 
