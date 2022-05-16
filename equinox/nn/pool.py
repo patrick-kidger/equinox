@@ -30,7 +30,7 @@ class Pool(Module):
         **kwargs,
     ):
         """**Arguments:**
-        
+
         - `init`: The initial value for the reduction.
         - `operation`: The operation applied to the inputs of each window.
         - `num_spatial_dims`: The number of spatial dimensions.
