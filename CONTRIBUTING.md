@@ -53,7 +53,7 @@ Finally, open a pull request on GitHub!
 Make your changes. You can then build the documentation by doing
 
 ```bash
-pip install docs/requirements.txt
+pip install -r docs/requirements.txt
 mkdocs serve
 ```
 Then doing `Control-C`, and running:
