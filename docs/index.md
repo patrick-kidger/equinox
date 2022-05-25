@@ -38,7 +38,7 @@ class Linear(eqx.Module):
         self.bias = jax.random.normal(bkey, (out_size,))
 
     def __call__(self, x):
-        return self.weight @ x + self.bias
+        return self.weight * x + self.bias
 ```
 
 and fully compatible with normal JAX operations:
