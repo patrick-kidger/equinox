@@ -48,11 +48,18 @@ def _with_suffix(path):
 
 def _assert_same(new, old):
     if type(new) is not type(old):
-        raise RuntimeError(...)
-    if isinstance(new, (np.ndarray, jnp.ndarray)) and (
-        new.shape != old.shape or new.dtype != old.dtype
-    ):
-        raise RuntimeError(...)
+        raise RuntimeError(
+            f"Deserialised leaf has changed type from {type(old)} in `like` to {type(new)} on disk."
+        )
+    if isinstance(new, (np.ndarray, jnp.ndarray)):
+        if new.shape != old.shape:
+            raise RuntimeError(
+                f"Deserialised leaf has changed shape from {old.shape} in `like` to {new.shape} on disk."
+            )
+        if new.dtype != old.dtype:
+            raise RuntimeError(
+                f"Deserialised leaf has changed dtype from {old.dtype} in `like` to {new.dtype} on disk."
+            )
 
 
 def _is_index(x):
