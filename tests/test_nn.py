@@ -234,10 +234,8 @@ def test_conv2d(getkey):
     answer = jnp.array([-37, -31, -9, 25, 61, 49, 23, 41, 27]).reshape(1, 3, 3)
     assert jnp.allclose(conv(data), answer)
 
-    # Test num_feature_groups
-    conv = eqx.nn.Conv2d(
-        2, 2, kernel_size=3, padding=1, key=getkey(), num_feature_groups=2
-    )
+    # Test groups
+    conv = eqx.nn.Conv2d(2, 2, kernel_size=3, padding=1, key=getkey(), groups=2)
     # we will duplicate the weights from the "value matches" case
     # and multiply one copy by 2. Also, we modify the bias
     new_weight = jnp.concatenate(
