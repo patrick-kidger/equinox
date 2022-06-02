@@ -48,6 +48,7 @@ class Conv(Module):
     stride: Tuple[int, ...] = static_field()
     padding: Tuple[Tuple[int, int], ...] = static_field()
     dilation: Tuple[int, ...] = static_field()
+    groups: int = static_field()
     use_bias: bool = static_field()
 
     def __init__(
@@ -59,6 +60,7 @@ class Conv(Module):
         stride: Union[int, Sequence[int]] = 1,
         padding: Union[int, Sequence[int]] = 0,
         dilation: Union[int, Sequence[int]] = 1,
+        groups: int = 1,
         use_bias: bool = True,
         *,
         key: "jax.random.PRNGKey",
@@ -75,6 +77,13 @@ class Conv(Module):
         - `padding`: The amount of padding to apply before and after each spatial
             dimension. The same amount of padding is applied both before and after.
         - `dilation`: The dilation of the convolution.
+        - `groups`: The number of input channel groups. At `groups`
+            equal to 1, all input channels contribute to all output channels. Values
+            higher than 1 are equivalent to running `groups` independent
+            Conv operations side-by-side, each having access only to
+            `in_channels` // `groups` input channels, and
+            concatenating the results along the output channel dimension.
+            `in_channels` must be divisible by `groups`.
         - `use_bias`: Whether to add on a bias after the convolution.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
@@ -97,10 +106,17 @@ class Conv(Module):
         stride = parse(stride)
         dilation = parse(dilation)
 
-        lim = 1 / np.sqrt(in_channels * np.prod(kernel_size))
+        if in_channels % groups != 0:
+            raise ValueError(
+                f"`in_channels` (={in_channels}) must be divisible "
+                f"by `groups` (={groups})."
+            )
+
+        grouped_in_channels = in_channels // groups
+        lim = 1 / np.sqrt(grouped_in_channels * np.prod(kernel_size))
         self.weight = jrandom.uniform(
             wkey,
-            (out_channels, in_channels) + kernel_size,
+            (out_channels, grouped_in_channels) + kernel_size,
             minval=-lim,
             maxval=lim,
         )
@@ -129,6 +145,7 @@ class Conv(Module):
                 f"{num_spatial_dims}."
             )
         self.dilation = dilation
+        self.groups = groups
         self.use_bias = use_bias
 
     def __call__(
@@ -159,6 +176,7 @@ class Conv(Module):
             window_strides=self.stride,
             padding=self.padding,
             rhs_dilation=self.dilation,
+            feature_group_count=self.groups,
         )
         if self.use_bias:
             x = x + self.bias
@@ -177,6 +195,7 @@ class Conv1d(Conv):
         stride=1,
         padding=0,
         dilation=1,
+        groups=1,
         use_bias=True,
         *,
         key,
@@ -190,6 +209,7 @@ class Conv1d(Conv):
             stride=stride,
             padding=padding,
             dilation=dilation,
+            groups=groups,
             use_bias=use_bias,
             key=key,
             **kwargs,
@@ -207,6 +227,7 @@ class Conv2d(Conv):
         stride=(1, 1),
         padding=(0, 0),
         dilation=(1, 1),
+        groups=1,
         use_bias=True,
         *,
         key,
@@ -220,6 +241,7 @@ class Conv2d(Conv):
             stride=stride,
             padding=padding,
             dilation=dilation,
+            groups=groups,
             use_bias=use_bias,
             key=key,
             **kwargs,
@@ -237,6 +259,7 @@ class Conv3d(Conv):
         stride=(1, 1, 1),
         padding=(0, 0, 0),
         dilation=(1, 1, 1),
+        groups=1,
         use_bias=True,
         *,
         key,
@@ -250,6 +273,7 @@ class Conv3d(Conv):
             stride=stride,
             padding=padding,
             dilation=dilation,
+            groups=groups,
             use_bias=use_bias,
             key=key,
             **kwargs,
@@ -269,6 +293,7 @@ class ConvTranspose(Module):
     padding: Tuple[Tuple[int, int], ...] = static_field()
     output_padding: Tuple[int, ...] = static_field()
     dilation: Tuple[int, ...] = static_field()
+    groups: int = static_field()
     use_bias: bool = static_field()
 
     def __init__(
@@ -281,6 +306,7 @@ class ConvTranspose(Module):
         padding: Union[int, Sequence[int]] = 0,
         output_padding: Union[int, Sequence[int]] = 0,
         dilation: Union[int, Sequence[int]] = 1,
+        groups: int = 1,
         use_bias: bool = True,
         *,
         key: "jax.random.PRNGKey",
@@ -297,6 +323,13 @@ class ConvTranspose(Module):
         - `padding`: The amount of padding used on the equivalent [`equinox.nn.Conv`][].
         - `output_padding`: Additional padding for the output shape.
         - `dilation`: The spacing between kernel points.
+        - `groups`: The number of input channel groups. At `groups`
+            equal to 1, all input channels contribute to all output channels. Values
+            higher than 1 are equivalent to running `groups` independent
+            Conv operations side-by-side, each having access only to
+            `in_channels` // `groups` input channels, and
+            concatenating the results along the output channel dimension.
+            `in_channels` must be divisible by `groups`.
         - `use_bias`: Whether to add on a bias after the transposed convolution.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
@@ -344,10 +377,11 @@ class ConvTranspose(Module):
             if output_padding >= stride:
                 raise ValueError("Must have `output_padding < stride` (elementwise).")
 
-        lim = 1 / np.sqrt(in_channels * np.prod(kernel_size))
+        grouped_in_channels = in_channels // groups
+        lim = 1 / np.sqrt(grouped_in_channels * np.prod(kernel_size))
         self.weight = jrandom.uniform(
             wkey,
-            (out_channels, in_channels) + kernel_size,
+            (out_channels, grouped_in_channels) + kernel_size,
             minval=-lim,
             maxval=lim,
         )
@@ -377,6 +411,7 @@ class ConvTranspose(Module):
             )
         self.output_padding = output_padding
         self.dilation = dilation
+        self.groups = groups
         self.use_bias = use_bias
 
     def __call__(
@@ -414,6 +449,7 @@ class ConvTranspose(Module):
             padding=padding,
             lhs_dilation=self.stride,
             rhs_dilation=self.dilation,
+            feature_group_count=self.groups,
         )
         if self.use_bias:
             x = x + self.bias
@@ -433,6 +469,7 @@ class ConvTranspose1d(ConvTranspose):
         output_padding=0,
         padding=0,
         dilation=1,
+        groups=1,
         use_bias=True,
         *,
         key,
@@ -447,6 +484,7 @@ class ConvTranspose1d(ConvTranspose):
             output_padding=output_padding,
             padding=padding,
             dilation=dilation,
+            groups=groups,
             use_bias=use_bias,
             key=key,
             **kwargs,
@@ -465,6 +503,7 @@ class ConvTranspose2d(ConvTranspose):
         output_padding=(0, 0),
         padding=(0, 0),
         dilation=(1, 1),
+        groups=1,
         use_bias=True,
         *,
         key,
@@ -479,6 +518,7 @@ class ConvTranspose2d(ConvTranspose):
             output_padding=output_padding,
             padding=padding,
             dilation=dilation,
+            groups=groups,
             use_bias=use_bias,
             key=key,
             **kwargs,
@@ -497,6 +537,7 @@ class ConvTranspose3d(ConvTranspose):
         output_padding=(0, 0, 0),
         padding=(0, 0, 0),
         dilation=(1, 1, 1),
+        groups=1,
         use_bias=True,
         *,
         key,
@@ -511,6 +552,7 @@ class ConvTranspose3d(ConvTranspose):
             output_padding=output_padding,
             padding=padding,
             dilation=dilation,
+            groups=groups,
             use_bias=use_bias,
             key=key,
             **kwargs,
