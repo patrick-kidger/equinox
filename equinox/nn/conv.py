@@ -48,6 +48,7 @@ class Conv(Module):
     stride: Tuple[int, ...] = static_field()
     padding: Tuple[Tuple[int, int], ...] = static_field()
     dilation: Tuple[int, ...] = static_field()
+    num_feature_groups: int = static_field()
     use_bias: bool = static_field()
 
     def __init__(
@@ -59,6 +60,7 @@ class Conv(Module):
         stride: Union[int, Sequence[int]] = 1,
         padding: Union[int, Sequence[int]] = 0,
         dilation: Union[int, Sequence[int]] = 1,
+        num_feature_groups: int = 1,
         use_bias: bool = True,
         *,
         key: "jax.random.PRNGKey",
@@ -75,6 +77,8 @@ class Conv(Module):
         - `padding`: The amount of padding to apply before and after each spatial
             dimension. The same amount of padding is applied both before and after.
         - `dilation`: The dilation of the convolution.
+        - `num_feature_groups`: The number of input channels contributing to each
+            output channel. `in_channels` must be divisible by `num_feature_groups`.
         - `use_bias`: Whether to add on a bias after the convolution.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
@@ -97,10 +101,17 @@ class Conv(Module):
         stride = parse(stride)
         dilation = parse(dilation)
 
-        lim = 1 / np.sqrt(in_channels * np.prod(kernel_size))
+        if in_channels % num_feature_groups != 0:
+            raise ValueError(
+                f"`in_channels` (={in_channels}) must be divisible "
+                f"by `num_feature_groups` (={num_feature_groups})."
+            )
+
+        grouped_in_channels = in_channels // num_feature_groups
+        lim = 1 / np.sqrt(grouped_in_channels * np.prod(kernel_size))
         self.weight = jrandom.uniform(
             wkey,
-            (out_channels, in_channels) + kernel_size,
+            (out_channels, grouped_in_channels) + kernel_size,
             minval=-lim,
             maxval=lim,
         )
@@ -129,6 +140,7 @@ class Conv(Module):
                 f"{num_spatial_dims}."
             )
         self.dilation = dilation
+        self.num_feature_groups = num_feature_groups
         self.use_bias = use_bias
 
     def __call__(
@@ -159,6 +171,7 @@ class Conv(Module):
             window_strides=self.stride,
             padding=self.padding,
             rhs_dilation=self.dilation,
+            feature_group_count=self.num_feature_groups,
         )
         if self.use_bias:
             x = x + self.bias
@@ -177,6 +190,7 @@ class Conv1d(Conv):
         stride=1,
         padding=0,
         dilation=1,
+        num_feature_groups=1,
         use_bias=True,
         *,
         key,
@@ -190,6 +204,7 @@ class Conv1d(Conv):
             stride=stride,
             padding=padding,
             dilation=dilation,
+            num_feature_groups=num_feature_groups,
             use_bias=use_bias,
             key=key,
             **kwargs,
@@ -207,6 +222,7 @@ class Conv2d(Conv):
         stride=(1, 1),
         padding=(0, 0),
         dilation=(1, 1),
+        num_feature_groups=1,
         use_bias=True,
         *,
         key,
@@ -220,6 +236,7 @@ class Conv2d(Conv):
             stride=stride,
             padding=padding,
             dilation=dilation,
+            num_feature_groups=num_feature_groups,
             use_bias=use_bias,
             key=key,
             **kwargs,
@@ -237,6 +254,7 @@ class Conv3d(Conv):
         stride=(1, 1, 1),
         padding=(0, 0, 0),
         dilation=(1, 1, 1),
+        num_feature_groups=1,
         use_bias=True,
         *,
         key,
@@ -250,6 +268,7 @@ class Conv3d(Conv):
             stride=stride,
             padding=padding,
             dilation=dilation,
+            num_feature_groups=num_feature_groups,
             use_bias=use_bias,
             key=key,
             **kwargs,
