@@ -77,10 +77,10 @@ class Conv(Module):
         - `padding`: The amount of padding to apply before and after each spatial
             dimension. The same amount of padding is applied both before and after.
         - `dilation`: The dilation of the convolution.
-        - `groups`: The number of input channel groups. At `groups`
-            equal to 1, all input channels contribute to all output channels. Values
-            higher than 1 are equivalent to running `groups` independent
-            Conv operations side-by-side, each having access only to
+        - `groups`: The number of input channel groups. At `groups=1`,
+            all input channels contribute to all output channels. Values
+            higher than `1` are equivalent to running `groups` independent
+            `Conv` operations side-by-side, each having access only to
             `in_channels` // `groups` input channels, and
             concatenating the results along the output channel dimension.
             `in_channels` must be divisible by `groups`.
@@ -323,10 +323,10 @@ class ConvTranspose(Module):
         - `padding`: The amount of padding used on the equivalent [`equinox.nn.Conv`][].
         - `output_padding`: Additional padding for the output shape.
         - `dilation`: The spacing between kernel points.
-        - `groups`: The number of input channel groups. At `groups`
-            equal to 1, all input channels contribute to all output channels. Values
+        - `groups`: The number of input channel groups. At `groups=1`,
+            all input channels contribute to all output channels. Values
             higher than 1 are equivalent to running `groups` independent
-            Conv operations side-by-side, each having access only to
+            `ConvTranspose` operations side-by-side, each having access only to
             `in_channels` // `groups` input channels, and
             concatenating the results along the output channel dimension.
             `in_channels` must be divisible by `groups`.
@@ -353,7 +353,7 @@ class ConvTranspose(Module):
 
             Relative to an [`equinox.nn.Conv`][] layer, this can be accomplished by
             switching the values of `in_channels` and `out_channels`, whilst keeping
-            `kernel_size`, `stride, `padding`, and `dilation` the same.
+            `kernel_size`, `stride`, `padding`, `dilation`, and `groups` the same.
 
             When `stride > 1` then [`equinox.nn.Conv`][] maps multiple input shapes to the
             same output shape. `output_padding` is provided to resolve this ambiguity,
