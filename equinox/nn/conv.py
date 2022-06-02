@@ -77,8 +77,13 @@ class Conv(Module):
         - `padding`: The amount of padding to apply before and after each spatial
             dimension. The same amount of padding is applied both before and after.
         - `dilation`: The dilation of the convolution.
-        - `num_feature_groups`: The number of input channels contributing to each
-            output channel. `in_channels` must be divisible by `num_feature_groups`.
+        - `num_feature_groups`: The number of input channel groups. At `num_feature_groups`
+            equal to 1, all input channels contribute to all output channels. Values
+            higher than 1 are equivalent to running `num_channels_groups` independent
+            Conv operations side-by-side, each having access only to
+            `in_channels` // `num_feature_groups` input channels, and
+            concatenating the results along the output channel dimension.
+            `in_channels` must be divisible by `num_feature_groups`.
         - `use_bias`: Whether to add on a bias after the convolution.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
