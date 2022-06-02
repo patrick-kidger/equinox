@@ -409,6 +409,42 @@ def test_convtranspose2d(getkey):
     answer = jnp.array([-37, -31, -9, 25, 61, 49, 23, 41, 27]).reshape(1, 3, 3)
     assert jnp.all(conv(data) == answer)
 
+    # Test groups
+    conv = eqx.nn.ConvTranspose2d(
+        2, 2, kernel_size=3, padding=1, key=getkey(), groups=2
+    )
+    # we will duplicate the weights from the "value matches" case
+    # and multiply one copy by 2. Also, we modify the bias
+    new_weight = jnp.concatenate(
+        [
+            1 * jnp.arange(9).reshape(1, 1, 3, 3),
+            2 * jnp.arange(9).reshape(1, 1, 3, 3),
+        ],
+        axis=0,
+    )
+    new_bias = jnp.array([1, 2]).reshape(2, 1, 1)
+
+    data = jnp.broadcast_to(
+        jnp.arange(-4, 5).reshape(1, 3, 3),
+        (2, 3, 3),
+    )
+    assert new_weight.shape == conv.weight.shape
+    assert new_bias.shape == conv.bias.shape
+    conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
+    # this is the multiplication part, without the bias
+    answer_part = jnp.array([-38, -32, -10, 24, 60, 48, 22, 40, 26]).reshape(1, 3, 3)
+    answer = (
+        jnp.concatenate(
+            [
+                1 * answer_part,
+                2 * answer_part,
+            ],
+            axis=0,
+        )
+        + new_bias
+    )
+    assert jnp.allclose(conv(data), answer)
+
 
 def test_convtranspose3d(getkey):
     # Positional arguments
