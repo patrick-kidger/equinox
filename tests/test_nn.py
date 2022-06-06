@@ -563,7 +563,7 @@ def test_layer_norm(getkey):
     x = jrandom.uniform(getkey(), (128,))
     assert ln(x).shape == (128,)
 
-    ln = eqx.nn.LayerNorm(shape=(128, 128))
+    ln = eqx.nn.LayerNorm(shape=(128, 128), elementwise_affine=False)
     x = jrandom.uniform(getkey(), (128, 128))
     assert ln(x).shape == (128, 128)
 
@@ -573,6 +573,34 @@ def test_layer_norm(getkey):
     x3 = (x1 - x1.mean()) / jnp.sqrt(x1.var() + 1e-5)
     assert jnp.allclose(ln(x1), ln(x2), atol=1e-4)
     assert jnp.allclose(ln(x1), x3, atol=1e-4)
+
+
+def test_group_norm(getkey):
+    gn = eqx.nn.GroupNorm(groups=4, channels=128)
+    x = jrandom.uniform(getkey(), (128,))
+    assert gn(x).shape == (128,)
+
+    gn = eqx.nn.GroupNorm(groups=4, channels=128, channelwise_affine=False)
+    x = jrandom.uniform(getkey(), (128, 4, 5))
+    assert gn(x).shape == (128, 4, 5)
+
+    gn = eqx.nn.GroupNorm(1, 10)
+    x1 = jnp.linspace(0.1, 1, 10)
+    x2 = jnp.linspace(0, 1, 10)
+    x3 = (x1 - x1.mean()) / jnp.sqrt(x1.var() + 1e-5)
+    assert jnp.allclose(gn(x1), gn(x2), atol=1e-4)
+    assert jnp.allclose(gn(x1), x3, atol=1e-4)
+
+    gn = eqx.nn.GroupNorm(2, 10)
+    x1 = jnp.linspace(0.1, 1, 10)
+    x2 = jnp.linspace(0, 1, 10)
+    x1_ = x1.reshape(2, 5)
+    x3_ = (x1_ - x1_.mean(axis=1, keepdims=True)) / jnp.sqrt(
+        x1_.var(axis=1, keepdims=True) + 1e-5
+    )
+    x3 = x3_.reshape(10)
+    assert jnp.allclose(gn(x1), gn(x2), atol=1e-4)
+    assert jnp.allclose(gn(x1), x3, atol=1e-4)
 
 
 def test_batch_norm(getkey):

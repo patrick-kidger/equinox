@@ -8,6 +8,14 @@
 
 ---
 
+::: equinox.nn.GroupNorm
+    selection:
+        members:
+            - __init__
+            - __call__
+
+---
+
 ::: equinox.experimental.BatchNorm
     selection:
         members:
