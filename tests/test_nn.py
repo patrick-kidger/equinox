@@ -580,6 +580,10 @@ def test_group_norm(getkey):
     x = jrandom.uniform(getkey(), (128,))
     assert gn(x).shape == (128,)
 
+    gn = eqx.nn.GroupNorm(groups=4, channels=128)
+    x = jrandom.uniform(getkey(), (128, 4, 5))
+    assert gn(x).shape == (128, 4, 5)
+
     gn = eqx.nn.GroupNorm(groups=4, channels=128, channelwise_affine=False)
     x = jrandom.uniform(getkey(), (128, 4, 5))
     assert gn(x).shape == (128, 4, 5)
