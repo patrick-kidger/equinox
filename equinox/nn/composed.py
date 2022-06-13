@@ -27,8 +27,8 @@ class MLP(Module):
     """Standard Multi-Layer Perceptron; also known as a feed-forward network."""
 
     layers: List[Linear]
-    activation: Callable
-    final_activation: Callable
+    activation: Callable = static_field()
+    final_activation: Callable = static_field()
     in_size: int = static_field()
     out_size: int = static_field()
     width_size: int = static_field()
