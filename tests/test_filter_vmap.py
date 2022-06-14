@@ -1,5 +1,6 @@
 from typing import Union
 
+import jax
 import jax.numpy as jnp
 import jax.random as jr
 import pytest
@@ -167,3 +168,13 @@ def test_args_kwargs():
     # check we can use other args
     assert h(1, jnp.array([2])) == 1
     assert shaped_allclose(h(jnp.array([2]), 3), jnp.array([2]))
+
+def test_named_reduction():
+    def f(x):
+        y = x + 1
+        return jax.lax.psum(y, axis_name='device')
+
+    n = 2
+    output = eqx.filter_vmap(f, axis_name='device')(jnp.zeros(n))
+
+    assert shaped_allclose(output, n * jnp.ones(n))
