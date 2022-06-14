@@ -436,7 +436,6 @@ class _PmapWrapper(Module):
 @doc_strip_annotations
 def filter_pmap(
     fun: Callable = sentinel,
-    axis_name=None,
     *,
     default: AxisSpec = _zero_if_array_else_none,
     fn: PyTree[AxisSpec] = None,
@@ -540,7 +539,6 @@ def filter_pmap(
     if fun is sentinel:
         return ft.partial(
             filter_pmap,
-            axis_name=axis_name,
             default=default,
             fn=fn,
             args=args,
