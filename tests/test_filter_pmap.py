@@ -240,12 +240,13 @@ def test_args_kwargs():
 
     assert h(1, 2) == 1  # check we can use other args
 
+
 def test_named_reduction():
     def f(x):
         y = x + 1
-        return jax.lax.psum(y, axis_name='device')
+        return jax.lax.psum(y, axis_name="device")
 
     n = jax.local_device_count()
-    output = eqx.filter_pmap(f, axis_name='device')(jnp.zeros(n))
+    output = eqx.filter_pmap(f, axis_name="device")(jnp.zeros(n))
 
     assert shaped_allclose(output, n * jnp.ones(n))
