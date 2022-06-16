@@ -142,7 +142,7 @@ class _VmapWrapper(Module):
         if __self._callable_out_axes:  # `out` of type AxisSpec
             out_axes = (jax.tree_map(_VmapFilter, __self._out), None)
         else:  # `out` of type ResolvedAxisSpec
-            out_axes = _map_axes(__self._out)
+            out_axes = (_map_axes(__self._out), None)
         vmapd, nonvmapd = jax.vmap(
             _fun_wrapper, in_axes=in_axes, out_axes=out_axes, **__self._vmapkwargs
         )(__self._fun, bound.args, bound.kwargs)
