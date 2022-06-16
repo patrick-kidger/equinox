@@ -239,3 +239,39 @@ def test_args_kwargs():
         return args[0]
 
     assert h(1, 2) == 1  # check we can use other args
+
+
+def test_map_non_jax():
+    devices = jax.local_devices()
+
+    # this contains a non-jax value for the `activation` field
+    # and will therefore break filter_pmap if not filtered out
+    # at input and output
+    pytree = eqx.nn.MLP(
+        2,
+        2,
+        2,
+        2,
+        activation=jax.nn.relu,
+        key=jax.random.PRNGKey(42),
+    )
+
+    def maybe_replicate(value):
+        if eqx.is_array(value):
+            return jax.device_put_replicated(value, devices)
+        else:
+            return value
+
+    pytree_sharded = jax.tree_map(maybe_replicate, pytree)
+
+    def identity(x):
+        """will return a pytree with non-jax fields, which could break filter_pmap"""
+        return x
+
+    _ = eqx.filter_pmap(
+        identity,
+        out=jax.tree_map(
+            lambda value: 0 if eqx.is_array(value) else None,
+            pytree_sharded,
+        ),
+    )(pytree_sharded)

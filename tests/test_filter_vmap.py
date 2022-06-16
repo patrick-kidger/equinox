@@ -1,5 +1,6 @@
 from typing import Union
 
+import jax
 import jax.numpy as jnp
 import jax.random as jr
 import pytest
@@ -167,3 +168,29 @@ def test_args_kwargs():
     # check we can use other args
     assert h(1, jnp.array([2])) == 1
     assert shaped_allclose(h(jnp.array([2]), 3), jnp.array([2]))
+
+
+def test_map_non_jax():
+    # this contains a non-jax value for the `activation` field
+    # and will therefore break filter_vmap if not filtered out
+    # at input and output
+    pytree = eqx.nn.MLP(
+        2,
+        2,
+        2,
+        2,
+        activation=jax.nn.relu,
+        key=jax.random.PRNGKey(42),
+    )
+
+    def identity(x):
+        """will return a pytree with non-jax fields, which could break filter_vmap"""
+        return x
+
+    _ = eqx.filter_vmap(
+        identity,
+        out=jax.tree_map(
+            lambda value: 0 if eqx.is_array(value) else None,
+            pytree,
+        ),
+    )(pytree)
