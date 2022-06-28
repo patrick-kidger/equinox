@@ -1,4 +1,4 @@
-from typing import Optional, Sequence, Union
+from typing import Hashable, Optional, Sequence, Union
 
 import jax
 import jax.lax as lax
@@ -60,7 +60,7 @@ class BatchNorm(Module):
     bias: Optional[Array["input_size"]]
     first_time_index: StateIndex
     state_index: StateIndex
-    axis_name: Union[str, Sequence[str]]
+    axis_name: Union[Hashable, Sequence[Hashable]]
     inference: bool
     input_size: int = static_field()
     eps: float = static_field()
@@ -81,8 +81,8 @@ class BatchNorm(Module):
 
         - `input_size`: The number of channels in the input array.
         - `axis_name`: The name of the batch axis to compute statistics over, as passed
-            to `axis_name` in `jax.vmap` or `jax.pmap`. Can also be a sequence (tuple,
-            list) of strings to compute statistics over multiple named axes.
+            to `axis_name` in `jax.vmap` or `jax.pmap`. Can also be a sequence (e.g. a
+            tuple or a list) of names, to compute statistics over multiple named axes.
         - `eps`: Value added to the denominator for numerical stability.
         - `channelwise_affine`: Whether the module has learnable channel-wise affine
             parameters.
