@@ -352,9 +352,11 @@ def test_jit_vmap():
 
     out = eqx.filter_jit(eqx.filter_vmap(f))(jnp.array([1, 2]))
     assert shaped_allclose(out, jnp.array([2, 3]))
+    assert num_traces == 2
+
     out = eqx.filter_jit(eqx.filter_vmap(f))(jnp.array([2, 3]))
     assert shaped_allclose(out, jnp.array([3, 4]))
-    assert num_traces == 1
+    assert num_traces == 2
 
 
 @pytest.fixture
@@ -422,3 +424,12 @@ def test_function_name_warning(log_compiles_config, caplog):
     warning_text = caplog.text
 
     assert "Finished XLA compilation of wrapped_fun in" in warning_text
+
+
+def test_wrap_jax_partial(getkey):
+    def f(x, y):
+        return x + y
+
+    g = jax.tree_util.Partial(f, jrandom.normal(getkey(), ()))
+    fn = jax.tree_util.Partial(f, True)
+    eqx.filter_jit(g, fn=fn)

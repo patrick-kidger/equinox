@@ -1,4 +1,5 @@
 from . import experimental, nn
+from .eval_shape import filter_eval_shape
 from .filters import (
     combine,
     filter,
