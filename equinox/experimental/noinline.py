@@ -194,7 +194,8 @@ def _monkey_patch():
                     *args_flat,
                     arg_treedef=arg_treedef,
                     result_treedef=result_treedef,
-                    callback=callback**params
+                    callback=callback,
+                    **params
                 )
 
         class _Vmap(Module):
@@ -293,7 +294,8 @@ def _monkey_patch():
                     batch_axes_flat,
                     arg_treedef=arg_treedef,
                     result_treedef=result_treedef,
-                    callback=callback**params,
+                    callback=callback,
+                    **params
                 )
 
         ad.primitive_jvps[hcb.outside_call_p] = _outside_call_jvp_rule
