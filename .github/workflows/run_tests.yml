@@ -2,8 +2,6 @@ name: Run tests
 
 on:
   pull_request:
-  schedule:
-    - cron: "0 2 * * 6"
 
 jobs:
   run-test:

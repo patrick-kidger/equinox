@@ -23,12 +23,20 @@ class Static(Module):
     value: Any = static_field()
 
 
-def strip_wrapped_partial(fun):
+def _strip_wrapped_partial(fun):
     if hasattr(fun, "__wrapped__"):  # ft.wraps
-        return strip_wrapped_partial(fun.__wrapped__)
+        return _strip_wrapped_partial(fun.__wrapped__)
     if isinstance(fun, ft.partial):
-        return strip_wrapped_partial(fun.func)
+        return _strip_wrapped_partial(fun.func)
     return fun
+
+
+def get_fun_names(fun):
+    fun = _strip_wrapped_partial(fun)
+    try:
+        return fun.__name__, fun.__qualname__
+    except AttributeError:
+        return type(fun).__name__, type(fun).__qualname__
 
 
 def compile_cache(fun):

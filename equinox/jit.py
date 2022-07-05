@@ -8,21 +8,19 @@ import jax
 
 from .compile_utils import (
     compile_cache,
+    get_fun_names,
     hashable_combine,
     hashable_partition,
     Static,
-    strip_wrapped_partial,
 )
 from .custom_types import BoolAxisSpec, PyTree, sentinel, TreeDef
 from .doc_utils import doc_strip_annotations
-from .filters import combine, filter, is_array, partition
+from .filters import combine, is_array, partition
 from .module import Module, module_update_wrapper
 
 
 @compile_cache
-def _filter_jit_cache(unwrapped_fun, **jitkwargs):
-    @ft.partial(jax.jit, static_argnums=1, **jitkwargs)
-    @ft.wraps(unwrapped_fun)
+def _filter_jit_cache(fun_names, **jitkwargs):
     def fun_wrapped(dynamic, static):
         dynamic_fun, dynamic_spec = dynamic
         (
@@ -40,7 +38,11 @@ def _filter_jit_cache(unwrapped_fun, **jitkwargs):
         dynamic_out, static_out = partition(out, filter_out)
         return dynamic_out, Static(static_out)
 
-    return fun_wrapped
+    fun_name, fun_qualname = fun_names
+    fun_wrapped.__name__ = fun_name
+    fun_wrapped.__qualname__ = fun_qualname
+
+    return jax.jit(fun_wrapped, static_argnums=1, **jitkwargs)
 
 
 class _JitWrapper(Module):
@@ -266,11 +268,10 @@ def filter_jit(
         new_style = True
     # ~Backward compatibility
 
-    unwrapped_fun = filter(strip_wrapped_partial(fun), filter_fn, inverse=True)
     dynamic_fun, static_fun_leaves, static_fun_treedef = hashable_partition(
         fun, filter_fn
     )
-    cached = _filter_jit_cache(unwrapped_fun, **jitkwargs)
+    cached = _filter_jit_cache(get_fun_names(fun), **jitkwargs)
 
     jit_wrapper = _JitWrapper(
         _new_style=new_style,

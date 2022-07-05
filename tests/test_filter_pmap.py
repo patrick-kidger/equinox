@@ -99,13 +99,18 @@ def test_bool():
         return x + y
 
     assert shaped_allclose(f(1, 2), jnp.array([3]))
-    assert num_traces == 1
+    assert num_traces == 2  # eval_shape + pmap
     assert shaped_allclose(f(3, 2), jnp.array([5]))
-    assert num_traces == 1
+    assert num_traces == 3  # eval_shape (pmap cached)
     assert shaped_allclose(f(1, 3), jnp.array([4]))
-    assert num_traces == 2
+    assert num_traces == 5  # eval_shape + pmap
     assert shaped_allclose(f(3, 3), jnp.array([6]))
-    assert num_traces == 2
+    assert num_traces == 6  # eval_shape (pmap cached)
+
+    assert shaped_allclose(f(jnp.array([3]), 3), jnp.array([[6]]))
+    assert num_traces == 8  # eval_shape + pmap
+    assert shaped_allclose(f(jnp.array([4]), 3), jnp.array([[7]]))
+    assert num_traces == 8  # (eval_shape cached; pmap cached)
 
 
 @pytest.mark.parametrize("call", [False, True])
@@ -151,21 +156,25 @@ def test_methods(call, outer):
 
     m = M(1)
     assert shaped_allclose(run(m), jnp.array([2]))
+    assert num_traces == 2
     assert shaped_allclose(run(m), jnp.array([2]))
-    assert num_traces == 1
+    assert num_traces == 2
     n = M(2)
     assert shaped_allclose(run(n), jnp.array([3]))
+    assert num_traces == 4
     assert shaped_allclose(run(n), jnp.array([3]))
-    assert num_traces == 2
+    assert num_traces == 4
     o = M(jnp.array([5]))
     p = M(jnp.array([6]))
     if outer:
         assert shaped_allclose(run(o), jnp.array([[6]]))
+        assert num_traces == 6
         assert shaped_allclose(run(p), jnp.array([[7]]))
     else:
         assert shaped_allclose(run(o), jnp.array([6]))
+        assert num_traces == 6
         assert shaped_allclose(run(p), jnp.array([7]))
-    assert num_traces == 3
+    assert num_traces == 6
 
 
 def test_pmap_grad():
@@ -178,17 +187,21 @@ def test_pmap_grad():
 
     grad = eqx.filter_pmap(eqx.filter_grad(f))(jnp.array([1.0]))
     assert shaped_allclose(grad, jnp.array([1.0]))
+    assert num_traces == 2  # eval_shape + pmap
+
     grad = eqx.filter_pmap(eqx.filter_grad(f))(jnp.array([2.0]))
     assert shaped_allclose(grad, jnp.array([1.0]))
-    assert num_traces == 1
+    assert num_traces == 2  # (eval_shape cached, pmap cached)
 
     value, grad = eqx.filter_pmap(eqx.filter_value_and_grad(f))(jnp.array([1.0]))
     assert shaped_allclose(value, jnp.array([2.0]))
     assert shaped_allclose(grad, jnp.array([1.0]))
+    assert num_traces == 4  # eval_shape + pmap
+
     value, grad = eqx.filter_pmap(eqx.filter_value_and_grad(f))(jnp.array([2.0]))
     assert shaped_allclose(value, jnp.array([3.0]))
     assert shaped_allclose(grad, jnp.array([1.0]))
-    assert num_traces == 2
+    assert num_traces == 4  # (eval_shape cached, pmap cached)
 
 
 def test_pmap_vmap():
@@ -201,9 +214,11 @@ def test_pmap_vmap():
 
     out = eqx.filter_pmap(eqx.filter_vmap(f))(jnp.array([[1, 2]]))
     assert shaped_allclose(out, jnp.array([[2, 3]]))
+    assert num_traces == 4  # eval_shape in vmap + vmap + eval_shape in pmap + pmap
+
     out = eqx.filter_pmap(eqx.filter_vmap(f))(jnp.array([[2, 3]]))
     assert shaped_allclose(out, jnp.array([[3, 4]]))
-    assert num_traces == 1
+    assert num_traces == 4  # all cached
 
 
 def test_args_kwargs():
@@ -215,12 +230,13 @@ def test_args_kwargs():
         num_traces += 1
         return kwargs["x"]
 
-    assert f(x=2) == 2
-    assert f(x=3) == 3
-    assert num_traces == 1
-
-    assert f(x=3, y=4) == 3  # check we can use other kwargs
+    assert f(x=jnp.array(2)) == 2
     assert num_traces == 2
+    assert f(x=jnp.array(3)) == 3
+    assert num_traces == 2
+
+    assert f(x=jnp.array(3), y=4) == 3  # check we can use other kwargs
+    assert num_traces == 4
 
     @eqx.filter_pmap(default=eqx.is_array_like, axis_size=1)
     def g(*args, **kwargs):
@@ -228,9 +244,10 @@ def test_args_kwargs():
         num_traces += 1
         return kwargs["x"]
 
-    assert g(x=1, y=1) == 1
-    assert g(x=1, y=2) == 1
-    assert num_traces == 3
+    assert g(x=jnp.array(1), y=jnp.array(1)) == 1
+    assert num_traces == 6
+    assert g(x=jnp.array(1), y=jnp.array(2)) == 1
+    assert num_traces == 6
 
     @eqx.filter_pmap(args=(eqx.is_array,), axis_size=1)
     def h(*args, **kwargs):
@@ -239,6 +256,7 @@ def test_args_kwargs():
         return args[0]
 
     assert h(1, 2) == 1  # check we can use other args
+    assert num_traces == 8
 
 
 def test_named_reduction():

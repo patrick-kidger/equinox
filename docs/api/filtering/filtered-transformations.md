@@ -27,3 +27,7 @@ Practically speaking these are usually the only kind of filtering you ever have 
 ---
 
 ::: equinox.filter_pmap
+
+---
+
+::: equinox.filter_eval_shape
