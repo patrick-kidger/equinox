@@ -207,7 +207,7 @@ class MaxPool1D(Pool):
 
         A JAX array of shape `(channels, new_dim)`.
         """
-        
+
         return super().__call__(x)
 
 
@@ -298,7 +298,7 @@ class MaxPool2D(Pool):
 
         A JAX array of shape `(channels, new_dim_1, new_dim_2)`.
         """
-        
+
         return super().__call__(x)
 
 
@@ -390,5 +390,5 @@ class MaxPool3D(Pool):
 
         A JAX array of shape `(channels, new_dim_1, new_dim_2, new_dim_3)`.
         """
-        
+
         return super().__call__(x)
