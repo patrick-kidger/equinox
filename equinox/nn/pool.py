@@ -89,11 +89,14 @@ class Pool(Module):
         self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
         """**Arguments:**
+
         - `x`: The input. Should be a JAX array of shape `(channels, dim_1, ..., dim_N)`, where
             `N = num_spatial_dims`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
+
         **Returns:**
+
         A JAX array of shape `(channels, new_dim_1, ..., new_dim_N)`.
         """
         assert len(x.shape) == self.num_spatial_dims + 1, (
@@ -127,6 +130,14 @@ class AvgPool1D(Pool):
         padding=0,
         **kwargs,
     ):
+        """**Arguments:**
+
+        - `kernel_size`: The size of the convolutional kernel.
+        - `stride`: The stride of the convolution.
+        - `padding`: The amount of padding to apply before and after each
+            spatial dimension.
+        """
+
         super().__init__(
             init=0,
             operation=lax.add,
@@ -140,6 +151,17 @@ class AvgPool1D(Pool):
     def __call__(
         self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
+        """**Arguments:**
+
+        - `x`: The input. Should be a JAX array of shape `(channels, dim)`.
+        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
+            (Keyword only argument.)
+
+        **Returns:**
+
+        A JAX array of shape `(channels, new_dim)`.
+        """
+
         return super().__call__(x) / np.prod(self.kernel_size)
 
 
@@ -153,6 +175,14 @@ class MaxPool1D(Pool):
         padding=0,
         **kwargs,
     ):
+        """**Arguments:**
+
+        - `kernel_size`: The size of the convolutional kernel.
+        - `stride`: The stride of the convolution.
+        - `padding`: The amount of padding to apply before and after each
+            spatial dimension.
+        """
+
         super().__init__(
             init=-jnp.inf,
             operation=lax.max,
@@ -162,6 +192,23 @@ class MaxPool1D(Pool):
             padding=padding,
             **kwargs,
         )
+
+    # Redefined to get them in the right order in docs
+    def __call__(
+        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
+    ) -> Array:
+        """**Arguments:**
+
+        - `x`: The input. Should be a JAX array of shape `(channels, dim)`.
+        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
+            (Keyword only argument.)
+
+        **Returns:**
+
+        A JAX array of shape `(channels, new_dim)`.
+        """
+
+        return super().__call__(x)
 
 
 class AvgPool2D(Pool):
@@ -174,6 +221,14 @@ class AvgPool2D(Pool):
         padding=0,
         **kwargs,
     ):
+        """**Arguments:**
+
+        - `kernel_size`: The size of the convolutional kernel.
+        - `stride`: The stride of the convolution.
+        - `padding`: The amount of padding to apply before and after each
+            spatial dimension.
+        """
+
         super().__init__(
             init=0,
             operation=lax.add,
@@ -187,6 +242,17 @@ class AvgPool2D(Pool):
     def __call__(
         self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
+        """**Arguments:**
+
+        - `x`: The input. Should be a JAX array of shape `(channels, dim_1, dim_2)`.
+        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
+            (Keyword only argument.)
+
+        **Returns:**
+
+        A JAX array of shape `(channels, new_dim_1, new_dim_2)`.
+        """
+
         return super().__call__(x) / np.prod(self.kernel_size)
 
 
@@ -200,6 +266,14 @@ class MaxPool2D(Pool):
         padding=0,
         **kwargs,
     ):
+        """**Arguments:**
+
+        - `kernel_size`: The size of the convolutional kernel.
+        - `stride`: The stride of the convolution.
+        - `padding`: The amount of padding to apply before and after each
+            spatial dimension.
+        """
+
         super().__init__(
             init=-jnp.inf,
             operation=lax.max,
@@ -209,6 +283,23 @@ class MaxPool2D(Pool):
             padding=padding,
             **kwargs,
         )
+
+    # Redefined to get them in the right order in docs
+    def __call__(
+        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
+    ) -> Array:
+        """**Arguments:**
+
+        - `x`: The input. Should be a JAX array of shape `(channels, dim_1, dim_2)`.
+        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
+            (Keyword only argument.)
+
+        **Returns:**
+
+        A JAX array of shape `(channels, new_dim_1, new_dim_2)`.
+        """
+
+        return super().__call__(x)
 
 
 class AvgPool3D(Pool):
@@ -221,6 +312,14 @@ class AvgPool3D(Pool):
         padding=0,
         **kwargs,
     ):
+        """**Arguments:**
+
+        - `kernel_size`: The size of the convolutional kernel.
+        - `stride`: The stride of the convolution.
+        - `padding`: The amount of padding to apply before and after each
+            spatial dimension.
+        """
+
         super().__init__(
             init=0,
             operation=lax.add,
@@ -234,6 +333,18 @@ class AvgPool3D(Pool):
     def __call__(
         self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
+        """**Arguments:**
+
+        - `x`: The input. Should be a JAX array of shape
+            `(channels, dim_1, dim_2, dim_3)`.
+        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
+            (Keyword only argument.)
+
+        **Returns:**
+
+        A JAX array of shape `(channels, new_dim_1, new_dim_2, new_dim_3)`.
+        """
+
         return super().__call__(x) / np.prod(self.kernel_size)
 
 
@@ -247,6 +358,14 @@ class MaxPool3D(Pool):
         padding=0,
         **kwargs,
     ):
+        """**Arguments:**
+
+        - `kernel_size`: The size of the convolutional kernel.
+        - `stride`: The stride of the convolution.
+        - `padding`: The amount of padding to apply before and after each
+            spatial dimension.
+        """
+
         super().__init__(
             init=-jnp.inf,
             operation=lax.max,
@@ -256,3 +375,20 @@ class MaxPool3D(Pool):
             padding=padding,
             **kwargs,
         )
+
+    def __call__(
+        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
+    ) -> Array:
+        """**Arguments:**
+
+        - `x`: The input. Should be a JAX array of shape
+            `(channels, dim_1, dim_2, dim_3)`.
+        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
+            (Keyword only argument.)
+
+        **Returns:**
+
+        A JAX array of shape `(channels, new_dim_1, new_dim_2, new_dim_3)`.
+        """
+
+        return super().__call__(x)
