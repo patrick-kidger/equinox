@@ -41,8 +41,8 @@ class Pool(Module):
 
         !!! info
 
-            In order for `Pool` to be differentiable, `operation(init, x) == x' needs to
-            be true for all finite `x'. For further details see
+            In order for `Pool` to be differentiable, `operation(init, x) == x` needs to
+            be true for all finite `x`. For further details see
             [https://www.tensorflow.org/xla/operation_semantics#reducewindow](https://www.tensorflow.org/xla/operation_semantics#reducewindow)
             and [https://github.com/google/jax/issues/7718](https://github.com/google/jax/issues/7718).
         """
