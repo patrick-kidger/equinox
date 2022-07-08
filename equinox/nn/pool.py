@@ -30,6 +30,7 @@ class Pool(Module):
         **kwargs,
     ):
         """**Arguments:**
+
         - `init`: The initial value for the reduction.
         - `operation`: The operation applied to the inputs of each window.
         - `num_spatial_dims`: The number of spatial dimensions.
@@ -37,7 +38,9 @@ class Pool(Module):
         - `stride`: The stride of the convolution.
         - `padding`: The amount of padding to apply before and after each
             spatial dimension.
+
         !!! info
+
             In order for `Pool` to be differentiable, `operation(init, x) == x' needs to
             be true for all finite `x'. For further details see
             [https://www.tensorflow.org/xla/operation_semantics#reducewindow](https://www.tensorflow.org/xla/operation_semantics#reducewindow)
