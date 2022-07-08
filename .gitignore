@@ -7,3 +7,4 @@ site/
 examples/data
 .all_objects.cache
 .pymon
+.idea

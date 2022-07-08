@@ -20,14 +20,14 @@ class Pool(Module):
     padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = static_field()
 
     def __init__(
-        self,
-        init: Union[int, float, Array],
-        operation: Callable[[Array, Array], Array],
-        num_spatial_dims: int,
-        kernel_size: Union[int, Sequence[int]],
-        stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
-        **kwargs,
+            self,
+            init: Union[int, float, Array],
+            operation: Callable[[Array, Array], Array],
+            num_spatial_dims: int,
+            kernel_size: Union[int, Sequence[int]],
+            stride: Union[int, Sequence[int]] = 1,
+            padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
+            **kwargs,
     ):
         """**Arguments:**
 
@@ -86,7 +86,7 @@ class Pool(Module):
             )
 
     def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
+            self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
         """**Arguments:**
         - `x`: The input. Should be a JAX array of shape `(channels, dim_1, ..., dim_N)`, where
@@ -121,11 +121,11 @@ class AvgPool1D(Pool):
     """One-dimensional downsample using an average over a sliding window."""
 
     def __init__(
-        self,
-        kernel_size,
-        stride=None,
-        padding=0,
-        **kwargs,
+            self,
+            kernel_size,
+            stride=None,
+            padding=0,
+            **kwargs,
     ):
         super().__init__(
             init=0,
@@ -138,7 +138,7 @@ class AvgPool1D(Pool):
         )
 
     def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
+            self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
         return super().__call__(x) / np.prod(self.kernel_size)
 
@@ -147,11 +147,11 @@ class MaxPool1D(Pool):
     """One-dimensional downsample using the maximum over a sliding window."""
 
     def __init__(
-        self,
-        kernel_size,
-        stride=None,
-        padding=0,
-        **kwargs,
+            self,
+            kernel_size,
+            stride=None,
+            padding=0,
+            **kwargs,
     ):
         super().__init__(
             init=-jnp.inf,
@@ -168,11 +168,11 @@ class AvgPool2D(Pool):
     """Two-dimensional downsample using an average over a sliding window."""
 
     def __init__(
-        self,
-        kernel_size,
-        stride=None,
-        padding=0,
-        **kwargs,
+            self,
+            kernel_size,
+            stride=None,
+            padding=0,
+            **kwargs,
     ):
         super().__init__(
             init=0,
@@ -185,7 +185,7 @@ class AvgPool2D(Pool):
         )
 
     def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
+            self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
         return super().__call__(x) / np.prod(self.kernel_size)
 
@@ -194,11 +194,11 @@ class MaxPool2D(Pool):
     """Two-dimensional downsample using the maximum over a sliding window."""
 
     def __init__(
-        self,
-        kernel_size,
-        stride=None,
-        padding=0,
-        **kwargs,
+            self,
+            kernel_size,
+            stride=None,
+            padding=0,
+            **kwargs,
     ):
         super().__init__(
             init=-jnp.inf,
@@ -215,11 +215,11 @@ class AvgPool3D(Pool):
     """Three-dimensional downsample using an average over a sliding window."""
 
     def __init__(
-        self,
-        kernel_size,
-        stride=None,
-        padding=0,
-        **kwargs,
+            self,
+            kernel_size,
+            stride=None,
+            padding=0,
+            **kwargs,
     ):
         super().__init__(
             init=0,
@@ -232,7 +232,7 @@ class AvgPool3D(Pool):
         )
 
     def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
+            self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
         return super().__call__(x) / np.prod(self.kernel_size)
 
@@ -241,11 +241,11 @@ class MaxPool3D(Pool):
     """Three-dimensional downsample using the maximum over a sliding window."""
 
     def __init__(
-        self,
-        kernel_size,
-        stride=None,
-        padding=0,
-        **kwargs,
+            self,
+            kernel_size,
+            stride=None,
+            padding=0,
+            **kwargs,
     ):
         super().__init__(
             init=-jnp.inf,
@@ -256,3 +256,32 @@ class MaxPool3D(Pool):
             padding=padding,
             **kwargs,
         )
+
+
+class AdaptiveAvgPool1d(eqx.Module):
+    """Adaptive 1D downsampling for a target shape."""
+
+    target_size: int = static_field()
+
+    def __init__(self, target_size: int):
+        """**Arguments:**
+                - `target_size`: The target output size.
+        """
+
+        self.target_size = target_size
+
+    def __call__(self, x: Array):
+        assert x.ndim == 1, f'Only supports 1D input, received input with {x.ndim} dimensions.'
+        channels = jnp.size(x)
+        assert channels >= self.target_size, \
+            f'Final Pooled size {self.target_size} cannot be greater than input size {channels}.'
+
+        splits = jnp.array_split(x, self.target_size)
+        num_head_arrays = channels % self.target_size
+        if num_head_arrays:
+            head_mean = jax.vmap(jnp.mean)(jnp.asarray(splits[:num_head_arrays]))
+            tail_mean = jax.vmap(jnp.mean)(jnp.asarray(splits[num_head_arrays:]))
+            mean = jnp.concatenate([head_mean, tail_mean])
+        else:
+            mean = jax.vmap(jnp.mean)(jnp.asarray(splits))
+        return mean
