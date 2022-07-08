@@ -380,7 +380,7 @@ class MaxPool3D(Pool):
         self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
         """**Arguments:**
-        
+
         - `x`: The input. Should be a JAX array of shape
             `(channels, dim_1, dim_2, dim_3)`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
