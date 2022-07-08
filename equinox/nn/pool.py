@@ -258,23 +258,26 @@ class MaxPool3D(Pool):
         )
 
 
-class AdaptiveAvgPool1d(eqx.Module):
+class AdaptiveAvgPool1d(Module):
     """Adaptive 1D downsampling for a target shape."""
 
     target_size: int = static_field()
 
     def __init__(self, target_size: int):
         """**Arguments:**
-                - `target_size`: The target output size.
+        - `target_size`: The target output size.
         """
 
         self.target_size = target_size
 
     def __call__(self, x: Array):
-        assert x.ndim == 1, f'Only supports 1D input, received input with {x.ndim} dimensions.'
+        assert (
+            x.ndim == 1
+        ), f"Only supports 1D input, received input with {x.ndim} dimensions."
         channels = jnp.size(x)
-        assert channels >= self.target_size, \
-            f'Final Pooled size {self.target_size} cannot be greater than input size {channels}.'
+        assert (
+            channels >= self.target_size
+        ), f"Final Pooled size {self.target_size} cannot be greater than input size {channels}."
 
         splits = jnp.array_split(x, self.target_size)
         num_head_arrays = channels % self.target_size
