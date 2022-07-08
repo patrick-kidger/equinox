@@ -94,7 +94,9 @@ class Pool(Module):
             `N = num_spatial_dims`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
+
         **Returns:**
+
         A JAX array of shape `(channels, new_dim_1, ..., new_dim_N)`.
         """
         assert len(x.shape) == self.num_spatial_dims + 1, (
@@ -154,7 +156,9 @@ class AvgPool1D(Pool):
         - `x`: The input. Should be a JAX array of shape `(channels, dim)`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
+
         **Returns:**
+
         A JAX array of shape `(channels, new_dim)`.
         """
         
@@ -198,7 +202,9 @@ class MaxPool1D(Pool):
         - `x`: The input. Should be a JAX array of shape `(channels, dim)`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
+
         **Returns:**
+
         A JAX array of shape `(channels, new_dim)`.
         """
         
@@ -241,7 +247,9 @@ class AvgPool2D(Pool):
         - `x`: The input. Should be a JAX array of shape `(channels, dim_1, dim_2)`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
+
         **Returns:**
+
         A JAX array of shape `(channels, new_dim_1, new_dim_2)`.
         """
         
@@ -285,7 +293,9 @@ class MaxPool2D(Pool):
         - `x`: The input. Should be a JAX array of shape `(channels, dim_1, dim_2)`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
+
         **Returns:**
+
         A JAX array of shape `(channels, new_dim_1, new_dim_2)`.
         """
         
@@ -329,7 +339,9 @@ class AvgPool3D(Pool):
             `(channels, dim_1, dim_2, dim_3)`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
+
         **Returns:**
+
         A JAX array of shape `(channels, new_dim_1, new_dim_2, new_dim_3)`.
         """
         
@@ -373,7 +385,9 @@ class MaxPool3D(Pool):
             `(channels, dim_1, dim_2, dim_3)`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
+
         **Returns:**
+
         A JAX array of shape `(channels, new_dim_1, new_dim_2, new_dim_3)`.
         """
         
