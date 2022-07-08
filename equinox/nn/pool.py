@@ -89,7 +89,7 @@ class Pool(Module):
         self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
         """**Arguments:**
-        
+
         - `x`: The input. Should be a JAX array of shape `(channels, dim_1, ..., dim_N)`, where
             `N = num_spatial_dims`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
@@ -137,7 +137,7 @@ class AvgPool1D(Pool):
         - `padding`: The amount of padding to apply before and after each
             spatial dimension.
         """
-        
+
         super().__init__(
             init=0,
             operation=lax.add,
@@ -152,7 +152,7 @@ class AvgPool1D(Pool):
         self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
         """**Arguments:**
-        
+
         - `x`: The input. Should be a JAX array of shape `(channels, dim)`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
@@ -161,7 +161,7 @@ class AvgPool1D(Pool):
 
         A JAX array of shape `(channels, new_dim)`.
         """
-        
+
         return super().__call__(x) / np.prod(self.kernel_size)
 
 
@@ -182,7 +182,7 @@ class MaxPool1D(Pool):
         - `padding`: The amount of padding to apply before and after each
             spatial dimension.
         """
-        
+
         super().__init__(
             init=-jnp.inf,
             operation=lax.max,
@@ -198,7 +198,7 @@ class MaxPool1D(Pool):
         self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
         """**Arguments:**
-        
+
         - `x`: The input. Should be a JAX array of shape `(channels, dim)`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
@@ -228,7 +228,7 @@ class AvgPool2D(Pool):
         - `padding`: The amount of padding to apply before and after each
             spatial dimension.
         """
-        
+
         super().__init__(
             init=0,
             operation=lax.add,
@@ -243,7 +243,7 @@ class AvgPool2D(Pool):
         self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
         """**Arguments:**
-        
+
         - `x`: The input. Should be a JAX array of shape `(channels, dim_1, dim_2)`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
@@ -252,7 +252,7 @@ class AvgPool2D(Pool):
 
         A JAX array of shape `(channels, new_dim_1, new_dim_2)`.
         """
-        
+
         return super().__call__(x) / np.prod(self.kernel_size)
 
 
@@ -273,7 +273,7 @@ class MaxPool2D(Pool):
         - `padding`: The amount of padding to apply before and after each
             spatial dimension.
         """
-        
+
         super().__init__(
             init=-jnp.inf,
             operation=lax.max,
@@ -289,7 +289,7 @@ class MaxPool2D(Pool):
         self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
         """**Arguments:**
-        
+
         - `x`: The input. Should be a JAX array of shape `(channels, dim_1, dim_2)`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
@@ -319,7 +319,7 @@ class AvgPool3D(Pool):
         - `padding`: The amount of padding to apply before and after each
             spatial dimension.
         """
-        
+
         super().__init__(
             init=0,
             operation=lax.add,
@@ -334,7 +334,7 @@ class AvgPool3D(Pool):
         self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
         """**Arguments:**
-        
+
         - `x`: The input. Should be a JAX array of shape
             `(channels, dim_1, dim_2, dim_3)`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
@@ -344,7 +344,7 @@ class AvgPool3D(Pool):
 
         A JAX array of shape `(channels, new_dim_1, new_dim_2, new_dim_3)`.
         """
-        
+
         return super().__call__(x) / np.prod(self.kernel_size)
 
 
@@ -365,7 +365,7 @@ class MaxPool3D(Pool):
         - `padding`: The amount of padding to apply before and after each
             spatial dimension.
         """
-        
+
         super().__init__(
             init=-jnp.inf,
             operation=lax.max,
@@ -375,7 +375,7 @@ class MaxPool3D(Pool):
             padding=padding,
             **kwargs,
         )
-        
+
     def __call__(
         self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
