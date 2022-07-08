@@ -265,26 +265,48 @@ class AdaptiveAvgPool1d(Module):
 
     def __init__(self, target_size: int):
         """**Arguments:**
+
         - `target_size`: The target output size.
         """
 
         self.target_size = target_size
 
-    def __call__(self, x: Array):
-        assert (
-            x.ndim == 1
-        ), f"Only supports 1D input, received input with {x.ndim} dimensions."
-        channels = jnp.size(x)
-        assert (
-            channels >= self.target_size
-        ), f"Final Pooled size {self.target_size} cannot be greater than input size {channels}."
+    def __call__(
+        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
+    ) -> Array:
+        """**Arguments:**
 
-        splits = jnp.array_split(x, self.target_size)
+        - `x`: The input. Should be a JAX array of shape `(channels)`.
+        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
+            (Keyword only argument.)
+
+        **Returns:**
+
+        A JAX array of shape `(target_size)`.
+        """
+        if x.ndim != 1:
+            raise ValueError(
+                f"1D input expected, received input with {x.ndim} dimensions."
+            )
+
+        channels = jnp.size(x)
+        if channels < self.target_size:
+            raise ValueError(
+                "`target_size` cannot be larger than the input channels."
+                f"Expected atleast {self.target_size} but received {channels}."
+            )
         num_head_arrays = channels % self.target_size
-        if num_head_arrays:
-            head_mean = jax.vmap(jnp.mean)(jnp.asarray(splits[:num_head_arrays]))
-            tail_mean = jax.vmap(jnp.mean)(jnp.asarray(splits[num_head_arrays:]))
+        if num_head_arrays != 0:
+            head_end_index = num_head_arrays * (channels // self.target_size + 1)
+            head_mean = jax.vmap(jnp.mean)(
+                x[:head_end_index].reshape(num_head_arrays, -1)
+            )
+            tail_mean = jax.vmap(jnp.mean)(
+                x[head_end_index:].reshape(-1, channels // self.target_size)
+            )
             mean = jnp.concatenate([head_mean, tail_mean])
         else:
-            mean = jax.vmap(jnp.mean)(jnp.asarray(splits))
+            mean = jax.vmap(jnp.mean)(
+                jax.vmap(jnp.mean)(x.reshape(-1, channels // self.target_size))
+            )
         return mean
