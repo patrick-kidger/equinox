@@ -395,6 +395,7 @@ class MaxPool3D(Pool):
 
 
 def adaptive_avg_pool1d(x: Array, target_size: int):
+    """See `equinox.nn.pool.AdaptiveAvgPool1D` for details on the arguments"""
     if x.ndim != 1:
         raise ValueError(f"1D input expected, received input with {x.ndim} dimensions.")
 
@@ -419,7 +420,7 @@ def adaptive_avg_pool1d(x: Array, target_size: int):
     return mean
 
 
-class AdaptiveAvgPool1d(Module):
+class AdaptiveAvgPool1D(Module):
     """Adaptive 1D downsampling for a target shape."""
 
     target_size: int = static_field()
@@ -449,7 +450,7 @@ class AdaptiveAvgPool1d(Module):
         return mean
 
 
-class AdaptiveAvgPool2d(Module):
+class AdaptiveAvgPool2D(Module):
     """Adaptive 2D downsampling for a target shape."""
 
     target_size: Union[int, Sequence[int]] = static_field()
