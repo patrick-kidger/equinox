@@ -394,104 +394,135 @@ class MaxPool3D(Pool):
         return super().__call__(x)
 
 
-def adaptive_avg_pool1d(x: Array, target_size: int):
+def _adaptive_avg_pool1d(x: Array, target_size: int):
     """See `equinox.nn.pool.AdaptiveAvgPool1D` for details on the arguments"""
-    if x.ndim != 1:
-        raise ValueError(f"1D input expected, received input with {x.ndim} dimensions.")
 
-    channels = jnp.size(x)
-    if channels < target_size:
+    dims = jnp.size(x)
+    if dims < target_size:
         raise ValueError(
-            "`target_size` cannot be larger than the input channels."
-            f"Expected atleast {target_size} but received {channels}."
+            "`target_size` cannot be larger than the input dims. "
+            f"Expected atleast {target_size} but received {dims}."
         )
-    num_head_arrays = channels % target_size
+
+    num_head_arrays = dims % target_size
     if num_head_arrays != 0:
-        head_end_index = num_head_arrays * (channels // target_size + 1)
+        head_end_index = num_head_arrays * (dims // target_size + 1)
         head_mean = jax.vmap(jnp.mean)(x[:head_end_index].reshape(num_head_arrays, -1))
         tail_mean = jax.vmap(jnp.mean)(
-            x[head_end_index:].reshape(-1, channels // target_size)
+            x[head_end_index:].reshape(-1, dims // target_size)
         )
         mean = jnp.concatenate([head_mean, tail_mean])
     else:
         mean = jax.vmap(jnp.mean)(
-            jax.vmap(jnp.mean)(x.reshape(-1, channels // target_size))
+            jax.vmap(jnp.mean)(x.reshape(-1, dims // target_size))
         )
     return mean
 
 
-class AdaptiveAvgPool1D(Module):
+def _adaptive_avg_pool2d(x: Array, target_size: Sequence[int]):
+    """See `equinox.nn.pool.AdaptiveAvgPool2D` for details on the arguments"""
+
+    dim_0, dim_1 = x.shape
+    if dim_0 < target_size[0] or dim_1 < target_size[1]:
+        raise ValueError(
+            "`target_size` cannot be larger than the input dims. "
+            f"Expected atleast {target_size} but received ({dim_0},{dim_1})."
+        )
+
+    x = jax.vmap(_adaptive_avg_pool1d, (0, None))(x, target_size[0])
+    x = jax.vmap(_adaptive_avg_pool1d, (1, None), out_axes=1)(x, target_size[1])
+
+    return x
+
+
+class AdaptiveAvgPool(Module):
+    """General N dimensional Adaptive downsampling for a target shape."""
+
+    target_size: Union[int, Sequence[int]] = static_field()
+    num_spatial_dims: int = static_field()
+
+    def __init__(
+        self, target_size: Union[int, Sequence[int]], num_spatial_dims: int, **kwargs
+    ):
+        """**Arguments:**
+
+        - `target_size`: The target output size.
+        - `num_spatial_dims`: The number of spatial dimensions.
+        """
+        self.num_spatial_dims = num_spatial_dims
+
+        if isinstance(target_size, int):
+            target_size = (target_size,) * self.num_spatial_dims
+        elif isinstance(target_size, Sequence):
+            self.target_size = target_size
+        else:
+            raise ValueError(
+                "`target_size` must either be an int or tuple of length "
+                f"{num_spatial_dims} containing ints."
+            )
+        self.target_size = target_size
+
+    def _num_dimensions_check(self, input_dims):
+        if input_dims != self.num_spatial_dims + 1:
+            raise ValueError(
+                f"{self.num_spatial_dims+1} input expected, received input with {input_dims} dimensions."
+            )
+
+
+class AdaptiveAvgPool1D(AdaptiveAvgPool):
     """Adaptive 1D downsampling for a target shape."""
 
-    target_size: int = static_field()
-
-    def __init__(self, target_size: int):
+    def __init__(self, target_size, **kwargs):
         """**Arguments:**
 
         - `target_size`: The target output size.
         """
 
-        self.target_size = target_size
+        super().__init__(target_size, num_spatial_dims=1, **kwargs)
 
     def __call__(
         self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
         """**Arguments:**
 
-        - `x`: The input. Should be a JAX array of shape `(channels)`.
+        - `x`: The input. Should be a JAX array of shape `(channels, dim)`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
 
         **Returns:**
 
-        A JAX array of shape `(target_size)`.
+        A JAX array of shape `(channels, target_size)`.
         """
-        mean = adaptive_avg_pool1d(x, self.target_size)
+
+        self._num_dimensions_check(x.ndim)
+        mean = jax.vmap(_adaptive_avg_pool1d, (0, None))(x, self.target_size[0])
         return mean
 
 
-class AdaptiveAvgPool2D(Module):
+class AdaptiveAvgPool2D(AdaptiveAvgPool):
     """Adaptive 2D downsampling for a target shape."""
 
-    target_size: Union[int, Sequence[int]] = static_field()
-
-    def __init__(self, target_size: Union[int, Sequence[int]]):
+    def __init__(self, target_size, **kwargs):
         """**Arguments:**
 
         - `target_size`: The target output size.
         """
-        if isinstance(target_size, int):
-            target_size = (target_size, target_size)
-        self.target_size = target_size
+        super().__init__(target_size, num_spatial_dims=2, **kwargs)
 
     def __call__(
         self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
         """**Arguments:**
 
-        - `x`: The input. Should be a JAX array of shape `(channel, dims)`.
+        - `x`: The input. Should be a JAX array of shape `(channels, dim_0, dim_1)`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
 
         **Returns:**
 
-        A JAX array of shape `(target_size)`.
+        A JAX array of shape `(channels, target_size[0], target_size[1])`.
         """
-        if x.ndim != 2:
-            raise ValueError(
-                f"2D input expected, received input with {x.ndim} dimensions."
-            )
 
-        channels, dims = x.shape
-        if channels < self.target_size[0] or dims < self.target_size[1]:
-            raise ValueError(
-                "`target_size` cannot be larger than the input channels."
-                f"Expected atleast {self.target_size} but received {channels}x{dims}."
-            )
-        target_channels, target_dims = self.target_size
-
-        x = jax.vmap(adaptive_avg_pool1d, in_axes=(0, None))(x, target_dims)
-        x = jax.vmap(adaptive_avg_pool1d, in_axes=(0, None))(
-            jnp.transpose(x), target_channels
-        )
-        return jnp.transpose(x)
+        self._num_dimensions_check(x.ndim)
+        x = jax.vmap(_adaptive_avg_pool2d, in_axes=(0, None))(x, self.target_size)
+        return x

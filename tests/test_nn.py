@@ -778,6 +778,15 @@ def test_avgpool1d():
     assert jnp.all(output == answer)
 
 
+def test_adaptivepool1d():
+    x = jnp.arange(14).reshape(1, 14)
+    adaptive_pool = eqx.nn.AdaptiveAvgPool1D(4)
+    output = adaptive_pool(x)
+    answer = jnp.array([[1.5, 5.5, 9.0, 12.0]])
+
+    assert jnp.all(output == answer)
+
+
 def test_maxpool2d():
 
     x = jnp.arange(36).reshape(1, 6, 6)
@@ -794,6 +803,15 @@ def test_avgpool2d():
     avg_pool = eqx.nn.AvgPool2D((1, 3), 2)
     output = avg_pool(x)
     answer = jnp.array([[1, 3], [13, 15], [25, 27]])
+
+    assert jnp.all(output == answer)
+
+
+def test_adaptivepool2d():
+    x = jnp.arange(24).reshape(1, 4, 6)
+    adaptive_pool = eqx.nn.AdaptiveAvgPool2D(3)
+    output = adaptive_pool(x)
+    answer = jnp.array([[[3.5, 5.5, 7.5], [12.5, 14.5, 16.5], [18.5, 20.5, 22.5]]])
 
     assert jnp.all(output == answer)
 

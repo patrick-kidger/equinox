@@ -56,10 +56,6 @@
 
 ---
 
-::: equinox.nn.adaptive_avg_pool1d
-
----
-
 
 ::: equinox.nn.AdaptiveAvgPool1D
     selection:
