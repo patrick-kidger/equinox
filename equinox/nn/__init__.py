@@ -15,6 +15,7 @@ from .embedding import Embedding
 from .linear import Identity, Linear
 from .normalisation import GroupNorm, LayerNorm
 from .pool import (
+    AdaptiveAvgPool,
     AdaptiveAvgPool1D,
     AdaptiveAvgPool2D,
     AvgPool1D,

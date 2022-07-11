@@ -514,7 +514,7 @@ class AdaptiveAvgPool2D(AdaptiveAvgPool):
     ) -> Array:
         """**Arguments:**
 
-        - `x`: The input. Should be a JAX array of shape `(channels, dim_0, dim_1)`.
+        - `x`: The input. Should be a JAX array of shape `(channels, dim_1, dim_2)`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
 

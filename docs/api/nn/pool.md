@@ -57,6 +57,15 @@
 ---
 
 
+::: equinox.nn.AdaptiveAvgPool
+    selection:
+        members:
+            - __init__
+            - __call__
+
+
+---
+
 ::: equinox.nn.AdaptiveAvgPool1D
     selection:
         members:
