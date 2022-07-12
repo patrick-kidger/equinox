@@ -81,4 +81,8 @@ If you found this library to be useful in academic work, then please cite: ([arX
 
 ## See also
 
-See the related [Diffrax](https://github.com/patrick-kidger/diffrax) library for JAX-based differential equation solvers.
+Numerical differential equation solvers: [Diffrax](https://github.com/patrick-kidger/diffrax).
+
+Type annotations and runtime checking for PyTrees and shape/dtype of JAX arrays: [jaxtyping](https://github.com/google/jaxtyping).
+
+SymPy<->JAX conversion; train symbolic expressions via gradient descent: [sympy2jax](https://github.com/google/sympy2jax).
