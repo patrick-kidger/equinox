@@ -4,9 +4,10 @@ import jax
 import jax.numpy as jnp
 import jax.random as jr
 import pytest
-from helpers import shaped_allclose
 
 import equinox as eqx
+
+from .helpers import shaped_allclose
 
 
 def _zero_if_inexact_array_else_none(x):
