@@ -80,3 +80,11 @@
         members:
             - __init__
             - __call__
+
+---
+
+::: equinox.nn.AdaptiveAvgPool3D
+    selection:
+        members:
+            - __init__
+            - __call__

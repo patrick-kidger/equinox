@@ -398,12 +398,6 @@ def _adaptive_avg_pool1d(x: Array, target_size: int):
     """See `equinox.nn.pool.AdaptiveAvgPool1D` for details on the arguments"""
 
     dims = jnp.size(x)
-    if dims < target_size:
-        raise ValueError(
-            "`target_size` cannot be larger than the input dims. "
-            f"Expected atleast {target_size} but received {dims}."
-        )
-
     num_head_arrays = dims % target_size
     if num_head_arrays != 0:
         head_end_index = num_head_arrays * (dims // target_size + 1)
@@ -422,17 +416,21 @@ def _adaptive_avg_pool1d(x: Array, target_size: int):
 def _adaptive_avg_pool2d(x: Array, target_size: Sequence[int]):
     """See `equinox.nn.pool.AdaptiveAvgPool2D` for details on the arguments"""
 
-    dim_0, dim_1 = x.shape
-    if dim_0 < target_size[0] or dim_1 < target_size[1]:
-        raise ValueError(
-            "`target_size` cannot be larger than the input dims. "
-            f"Expected atleast {target_size} but received ({dim_0},{dim_1})."
-        )
-
-    x = jax.vmap(_adaptive_avg_pool1d, (0, None))(x, target_size[0])
-    x = jax.vmap(_adaptive_avg_pool1d, (1, None), out_axes=1)(x, target_size[1])
-
+    x = jax.vmap(_adaptive_avg_pool1d, (1, None), out_axes=1)(x, target_size[0])
+    x = jax.vmap(_adaptive_avg_pool1d, (0, None), out_axes=0)(x, target_size[1])
     return x
+
+
+def _adaptive_avg_pool3d(x: Array, target_size: Sequence[int]):
+    """See `equinox.nn.pool.AdaptiveAvgPool3D` for details on the arguments"""
+
+    dim_0, dim_1, dim_2 = x.shape
+    x = jax.vmap(_adaptive_avg_pool2d, (0, None))(x, target_size[1:])
+    _, new_dim_1, new_dim_2 = x.shape
+    x = jax.vmap(_adaptive_avg_pool1d, (1, None), out_axes=1)(
+        x.reshape(dim_0, -1), target_size[0]
+    )
+    return x.reshape(-1, new_dim_1, new_dim_2)
 
 
 class AdaptiveAvgPool(Module):
@@ -452,7 +450,7 @@ class AdaptiveAvgPool(Module):
         self.num_spatial_dims = num_spatial_dims
 
         if isinstance(target_size, int):
-            target_size = (target_size,) * self.num_spatial_dims
+            self.target_size = (target_size,) * self.num_spatial_dims
         elif isinstance(target_size, Sequence):
             self.target_size = target_size
         else:
@@ -460,12 +458,19 @@ class AdaptiveAvgPool(Module):
                 "`target_size` must either be an int or tuple of length "
                 f"{num_spatial_dims} containing ints."
             )
-        self.target_size = target_size
 
     def _num_dimensions_check(self, input_dims):
         if input_dims != self.num_spatial_dims + 1:
             raise ValueError(
-                f"{self.num_spatial_dims+1} input expected, received input with {input_dims} dimensions."
+                f"{self.num_spatial_dims + 1} input expected, received input with {input_dims} dimensions."
+            )
+
+    def _target_size_compatibility_check(self, input_shape):
+        # drop the first dim for (N+1) dims input
+        if input_shape[1:] < self.target_size:
+            raise ValueError(
+                "`target_size` cannot be larger than the input dims. "
+                f"Expected atleast {self.target_size} but received {input_shape[1:]}."
             )
 
 
@@ -495,6 +500,8 @@ class AdaptiveAvgPool1D(AdaptiveAvgPool):
         """
 
         self._num_dimensions_check(x.ndim)
+        self._target_size_compatibility_check(x.shape)
+
         mean = jax.vmap(_adaptive_avg_pool1d, (0, None))(x, self.target_size[0])
         return mean
 
@@ -524,5 +531,38 @@ class AdaptiveAvgPool2D(AdaptiveAvgPool):
         """
 
         self._num_dimensions_check(x.ndim)
+        self._target_size_compatibility_check(x.shape)
+
         x = jax.vmap(_adaptive_avg_pool2d, in_axes=(0, None))(x, self.target_size)
+        return x
+
+
+class AdaptiveAvgPool3D(AdaptiveAvgPool):
+    """Adaptive 3D downsampling for a target shape."""
+
+    def __init__(self, target_size, **kwargs):
+        """**Arguments:**
+
+        - `target_size`: The target output size.
+        """
+        super().__init__(target_size, num_spatial_dims=3, **kwargs)
+
+    def __call__(
+        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
+    ) -> Array:
+        """**Arguments:**
+
+        - `x`: The input. Should be a JAX array of shape `(channels, dim_1, dim_2, dim_3)`.
+        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
+            (Keyword only argument.)
+
+        **Returns:**
+
+        A JAX array of shape `(channels, target_size[0], target_size[1], target_size[2])`.
+        """
+
+        self._num_dimensions_check(x.ndim)
+        self._target_size_compatibility_check(x.shape)
+
+        x = jax.vmap(_adaptive_avg_pool3d, in_axes=(0, None))(x, self.target_size)
         return x

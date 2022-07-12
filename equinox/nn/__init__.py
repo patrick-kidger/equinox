@@ -18,6 +18,7 @@ from .pool import (
     AdaptiveAvgPool,
     AdaptiveAvgPool1D,
     AdaptiveAvgPool2D,
+    AdaptiveAvgPool3D,
     AvgPool1D,
     AvgPool2D,
     AvgPool3D,
