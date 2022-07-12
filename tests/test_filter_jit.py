@@ -5,9 +5,10 @@ import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 import pytest
-from helpers import shaped_allclose
 
 import equinox as eqx
+
+from .helpers import shaped_allclose
 
 
 def _eq(a, b):

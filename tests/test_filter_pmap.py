@@ -4,9 +4,10 @@ from typing import Union
 import jax
 import jax.numpy as jnp
 import pytest
-from helpers import shaped_allclose as _shaped_allclose
 
 import equinox as eqx
+
+from .helpers import shaped_allclose as _shaped_allclose
 
 
 (cpu,) = jax.devices("cpu")
