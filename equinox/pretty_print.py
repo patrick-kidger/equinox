@@ -123,7 +123,7 @@ def _pformat_array(obj: Array, **kwargs) -> pp.Doc:
         backend = "(numpy)" if isinstance(obj, np.ndarray) else ""
         return pp.text(f"{dtype_str}[{shape_str}]{backend}")
     else:
-        return repr(obj)
+        return pp.text(repr(obj))
 
 
 def _pformat_function(obj: types.FunctionType, **kwargs) -> pp.Doc:
