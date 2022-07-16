@@ -394,175 +394,157 @@ class MaxPool3D(Pool):
         return super().__call__(x)
 
 
-def _adaptive_avg_pool1d(x: Array, target_size: int):
-    """See `equinox.nn.pool.AdaptiveAvgPool1D` for details on the arguments"""
+def _adaptive_pool1d(x: Array, target_size: int, operation: Callable) -> Array:
+    """**Arguments:**
 
+    - `x`: The input. Should be a JAX array of shape `(dim,)`.
+    - `target_size`: The shape of the output after the pooling operation `(target_size,)`.
+    - `operation`: The pooling operation to be performed on the input array.
+
+    **Returns:**
+
+    A JAX array of shape `(1, target_shape)`.
+    """
     dims = jnp.size(x)
     num_head_arrays = dims % target_size
     if num_head_arrays != 0:
         head_end_index = num_head_arrays * (dims // target_size + 1)
-        head_mean = jax.vmap(jnp.mean)(x[:head_end_index].reshape(num_head_arrays, -1))
-        tail_mean = jax.vmap(jnp.mean)(
+        head_op = jax.vmap(operation)(x[:head_end_index].reshape(num_head_arrays, -1))
+        tail_op = jax.vmap(operation)(
             x[head_end_index:].reshape(-1, dims // target_size)
         )
-        mean = jnp.concatenate([head_mean, tail_mean])
+        outputs = jnp.concatenate([head_op, tail_op])
     else:
-        mean = jax.vmap(jnp.mean)(
-            jax.vmap(jnp.mean)(x.reshape(-1, dims // target_size))
+        outputs = jax.vmap(operation)(
+            jax.vmap(operation)(x.reshape(-1, dims // target_size))
         )
-    return mean
+    return outputs
 
 
-def _adaptive_avg_pool2d(x: Array, target_size: Sequence[int]):
-    """See `equinox.nn.pool.AdaptiveAvgPool2D` for details on the arguments"""
+class AdaptivePool(Module):
+    """General N dimensional Adaptive downsampling for the target shape."""
 
-    x = jax.vmap(_adaptive_avg_pool1d, (1, None), out_axes=1)(x, target_size[0])
-    x = jax.vmap(_adaptive_avg_pool1d, (0, None), out_axes=0)(x, target_size[1])
-    return x
-
-
-def _adaptive_avg_pool3d(x: Array, target_size: Sequence[int]):
-    """See `equinox.nn.pool.AdaptiveAvgPool3D` for details on the arguments"""
-
-    dim_0, dim_1, dim_2 = x.shape
-    x = jax.vmap(_adaptive_avg_pool2d, (0, None))(x, target_size[1:])
-    _, new_dim_1, new_dim_2 = x.shape
-    x = jax.vmap(_adaptive_avg_pool1d, (1, None), out_axes=1)(
-        x.reshape(dim_0, -1), target_size[0]
-    )
-    return x.reshape(-1, new_dim_1, new_dim_2)
-
-
-class AdaptiveAvgPool(Module):
-    """General N dimensional Adaptive downsampling for a target shape."""
-
-    target_size: Union[int, Sequence[int]] = static_field()
+    target_shape: Union[int, Sequence[int]] = static_field()
     num_spatial_dims: int = static_field()
+    operation: Callable
 
     def __init__(
-        self, target_size: Union[int, Sequence[int]], num_spatial_dims: int, **kwargs
+        self,
+        target_shape: Union[int, Sequence[int]],
+        num_spatial_dims: int,
+        operation: Callable,
+        **kwargs,
     ):
         """**Arguments:**
 
         - `target_size`: The target output size.
         - `num_spatial_dims`: The number of spatial dimensions.
+        - `operation`: The operation applied for downsample.
         """
         self.num_spatial_dims = num_spatial_dims
-
-        if isinstance(target_size, int):
-            self.target_size = (target_size,) * self.num_spatial_dims
-        elif isinstance(target_size, Sequence):
-            self.target_size = target_size
+        self.operation = operation
+        if isinstance(target_shape, int):
+            self.target_shape = (target_shape,) * self.num_spatial_dims
+        elif isinstance(target_shape, Sequence):
+            self.target_shape = target_shape
         else:
             raise ValueError(
                 "`target_size` must either be an int or tuple of length "
                 f"{num_spatial_dims} containing ints."
             )
 
-    def _num_dimensions_check(self, input_dims):
-        if input_dims != self.num_spatial_dims + 1:
-            raise ValueError(
-                f"{self.num_spatial_dims + 1} input expected, received input with {input_dims} dimensions."
-            )
-
-    def _target_size_compatibility_check(self, input_shape):
-        # drop the first dim for (N+1) dims input
-        if input_shape[1:] < self.target_size:
-            raise ValueError(
-                "`target_size` cannot be larger than the input dims. "
-                f"Expected atleast {self.target_size} but received {input_shape[1:]}."
-            )
-
-
-class AdaptiveAvgPool1D(AdaptiveAvgPool):
-    """Adaptive 1D downsampling for a target shape."""
-
-    def __init__(self, target_size, **kwargs):
-        """**Arguments:**
-
-        - `target_size`: The target output size.
-        """
-
-        super().__init__(target_size, num_spatial_dims=1, **kwargs)
-
     def __call__(
         self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
         """**Arguments:**
 
-        - `x`: The input. Should be a JAX array of shape `(channels, dim)`.
+        - `x`: The input. Should be a JAX array of shape
+            `(channels, dim_1, dim_2, ... )`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
 
         **Returns:**
 
-        A JAX array of shape `(channels, target_size)`.
+        A JAX array of shape `(channels, target_shape)`.
         """
-
-        self._num_dimensions_check(x.ndim)
-        self._target_size_compatibility_check(x.shape)
-
-        mean = jax.vmap(_adaptive_avg_pool1d, (0, None))(x, self.target_size[0])
-        return mean
-
-
-class AdaptiveAvgPool2D(AdaptiveAvgPool):
-    """Adaptive 2D downsampling for a target shape."""
-
-    def __init__(self, target_size, **kwargs):
-        """**Arguments:**
-
-        - `target_size`: The target output size.
-        """
-        super().__init__(target_size, num_spatial_dims=2, **kwargs)
-
-    def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
-    ) -> Array:
-        """**Arguments:**
-
-        - `x`: The input. Should be a JAX array of shape `(channels, dim_1, dim_2)`.
-        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
-            (Keyword only argument.)
-
-        **Returns:**
-
-        A JAX array of shape `(channels, target_size[0], target_size[1])`.
-        """
-
-        self._num_dimensions_check(x.ndim)
-        self._target_size_compatibility_check(x.shape)
-
-        x = jax.vmap(_adaptive_avg_pool2d, in_axes=(0, None))(x, self.target_size)
+        if x.ndim - 1 != len(self.target_shape):
+            raise ValueError(
+                f"Expected input with {len(self.target_shape)} dimensions, "
+                f"received {x.ndim-1} instead."
+            )
+        for i in range(1, x.ndim):
+            op = jax.vmap(
+                _adaptive_pool1d, (0, None, None), 0
+            )  # batching over channels by default
+            for j in range(1, x.ndim):
+                if i == j:
+                    continue
+                op = jax.vmap(op, in_axes=(j, None, None), out_axes=j)
+            x = op(x, self.target_shape[i - 1], self.operation)
         return x
 
 
-class AdaptiveAvgPool3D(AdaptiveAvgPool):
-    """Adaptive 3D downsampling for a target shape."""
+class AdaptiveAvgPool1d(AdaptivePool):
+    """Adaptive one-dimensional downsampling using average for the target shape."""
 
-    def __init__(self, target_size, **kwargs):
+    def __init__(self, target_shape: Union[int, Sequence[int]], **kwargs):
         """**Arguments:**
 
-        - `target_size`: The target output size.
+        - `target_shape`: The target output shape.
         """
-        super().__init__(target_size, num_spatial_dims=3, **kwargs)
+        super().__init__(target_shape, num_spatial_dims=1, operation=jnp.mean, **kwargs)
 
-    def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
-    ) -> Array:
+
+class AdaptiveAvgPool2d(AdaptivePool):
+    """Adaptive two-dimensional downsampling using average for the target shape."""
+
+    def __init__(self, target_shape: Union[int, Sequence[int]], **kwargs):
         """**Arguments:**
 
-        - `x`: The input. Should be a JAX array of shape `(channels, dim_1, dim_2, dim_3)`.
-        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
-            (Keyword only argument.)
-
-        **Returns:**
-
-        A JAX array of shape `(channels, target_size[0], target_size[1], target_size[2])`.
+        - `target_shape`: The target output shape.
         """
+        super().__init__(target_shape, num_spatial_dims=2, operation=jnp.mean, **kwargs)
 
-        self._num_dimensions_check(x.ndim)
-        self._target_size_compatibility_check(x.shape)
 
-        x = jax.vmap(_adaptive_avg_pool3d, in_axes=(0, None))(x, self.target_size)
-        return x
+class AdaptiveAvgPool3d(AdaptivePool):
+    """Adaptive three-dimensional downsampling using average for the target shape."""
+
+    def __init__(self, target_shape: Union[int, Sequence[int]], **kwargs):
+        """**Arguments:**
+
+        - `target_shape`: The target output shape.
+        """
+        super().__init__(target_shape, num_spatial_dims=3, operation=jnp.mean, **kwargs)
+
+
+class AdaptiveMaxPool1d(AdaptivePool):
+    """Adaptive one-dimensional downsampling using maximum for the target shape."""
+
+    def __init__(self, target_shape: Union[int, Sequence[int]], **kwargs):
+        """**Arguments:**
+
+        - `target_shape`: The target output shape.
+        """
+        super().__init__(target_shape, num_spatial_dims=1, operation=jnp.max, **kwargs)
+
+
+class AdaptiveMaxPool2d(AdaptivePool):
+    """Adaptive two-dimensional downsampling using maximum for the target shape."""
+
+    def __init__(self, target_shape: Union[int, Sequence[int]], **kwargs):
+        """**Arguments:**
+
+        - `target_shape`: The target output shape.
+        """
+        super().__init__(target_shape, num_spatial_dims=2, operation=jnp.max, **kwargs)
+
+
+class AdaptiveMaxPool3d(AdaptivePool):
+    """Adaptive three-dimensional downsampling using maximum for the target shape."""
+
+    def __init__(self, target_shape: Union[int, Sequence[int]], **kwargs):
+        """**Arguments:**
+
+        - `target_shape`: The target output shape.
+        """
+        super().__init__(target_shape, num_spatial_dims=3, operation=jnp.max, **kwargs)

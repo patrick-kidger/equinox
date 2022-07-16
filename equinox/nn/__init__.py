@@ -15,10 +15,13 @@ from .embedding import Embedding
 from .linear import Identity, Linear
 from .normalisation import GroupNorm, LayerNorm
 from .pool import (
-    AdaptiveAvgPool,
-    AdaptiveAvgPool1D,
-    AdaptiveAvgPool2D,
-    AdaptiveAvgPool3D,
+    AdaptiveAvgPool1d,
+    AdaptiveAvgPool2d,
+    AdaptiveAvgPool3d,
+    AdaptiveMaxPool1d,
+    AdaptiveMaxPool2d,
+    AdaptiveMaxPool3d,
+    AdaptivePool,
     AvgPool1D,
     AvgPool2D,
     AvgPool3D,
