@@ -120,13 +120,13 @@ class Pool(Module):
         return x
 
 
-class AvgPool1D(Pool):
+class AvgPool1d(Pool):
     """One-dimensional downsample using an average over a sliding window."""
 
     def __init__(
         self,
         kernel_size,
-        stride=None,
+        stride,
         padding=0,
         **kwargs,
     ):
@@ -165,13 +165,13 @@ class AvgPool1D(Pool):
         return super().__call__(x) / np.prod(self.kernel_size)
 
 
-class MaxPool1D(Pool):
+class MaxPool1d(Pool):
     """One-dimensional downsample using the maximum over a sliding window."""
 
     def __init__(
         self,
         kernel_size,
-        stride=None,
+        stride,
         padding=0,
         **kwargs,
     ):
@@ -211,13 +211,13 @@ class MaxPool1D(Pool):
         return super().__call__(x)
 
 
-class AvgPool2D(Pool):
+class AvgPool2d(Pool):
     """Two-dimensional downsample using an average over a sliding window."""
 
     def __init__(
         self,
         kernel_size,
-        stride=None,
+        stride,
         padding=0,
         **kwargs,
     ):
@@ -256,13 +256,13 @@ class AvgPool2D(Pool):
         return super().__call__(x) / np.prod(self.kernel_size)
 
 
-class MaxPool2D(Pool):
+class MaxPool2d(Pool):
     """Two-dimensional downsample using the maximum over a sliding window."""
 
     def __init__(
         self,
         kernel_size,
-        stride=None,
+        stride,
         padding=0,
         **kwargs,
     ):
@@ -302,13 +302,13 @@ class MaxPool2D(Pool):
         return super().__call__(x)
 
 
-class AvgPool3D(Pool):
+class AvgPool3d(Pool):
     """Three-dimensional downsample using an average over a sliding window."""
 
     def __init__(
         self,
         kernel_size,
-        stride=None,
+        stride,
         padding=0,
         **kwargs,
     ):
@@ -348,13 +348,13 @@ class AvgPool3D(Pool):
         return super().__call__(x) / np.prod(self.kernel_size)
 
 
-class MaxPool3D(Pool):
+class MaxPool3d(Pool):
     """Three-dimensional downsample using the maximum over a sliding window."""
 
     def __init__(
         self,
         kernel_size,
-        stride=None,
+        stride,
         padding=0,
         **kwargs,
     ):
@@ -392,3 +392,169 @@ class MaxPool3D(Pool):
         """
 
         return super().__call__(x)
+
+
+# Backward compatability: these were originally misnamed.
+AvgPool1D = AvgPool1d
+AvgPool2D = AvgPool2d
+AvgPool3D = AvgPool3d
+MaxPool1D = MaxPool1d
+MaxPool2D = MaxPool2d
+MaxPool3D = MaxPool3d
+
+
+def _adaptive_pool1d(x: Array, target_size: int, operation: Callable) -> Array:
+    """**Arguments:**
+
+    - `x`: The input. Should be a JAX array of shape `(dim,)`.
+    - `target_size`: The shape of the output after the pooling operation `(target_size,)`.
+    - `operation`: The pooling operation to be performed on the input array.
+
+    **Returns:**
+
+    A JAX array of shape `(1, target_shape)`.
+    """
+    dims = jnp.size(x)
+    num_head_arrays = dims % target_size
+    if num_head_arrays != 0:
+        head_end_index = num_head_arrays * (dims // target_size + 1)
+        head_op = jax.vmap(operation)(x[:head_end_index].reshape(num_head_arrays, -1))
+        tail_op = jax.vmap(operation)(
+            x[head_end_index:].reshape(-1, dims // target_size)
+        )
+        outputs = jnp.concatenate([head_op, tail_op])
+    else:
+        outputs = jax.vmap(operation)(
+            jax.vmap(operation)(x.reshape(-1, dims // target_size))
+        )
+    return outputs
+
+
+class AdaptivePool(Module):
+    """General N dimensional Adaptive downsampling for the target shape."""
+
+    target_shape: Sequence[int] = static_field()
+    operation: Callable
+
+    def __init__(
+        self,
+        target_shape: Union[int, Sequence[int]],
+        num_spatial_dims: int,
+        operation: Callable,
+        **kwargs,
+    ):
+        """**Arguments:**
+
+        - `target_size`: The target output size.
+        - `num_spatial_dims`: The number of spatial dimensions.
+        - `operation`: The operation applied for downsample.
+        """
+        super().__init__(**kwargs)
+        self.operation = operation
+        if isinstance(target_shape, int):
+            self.target_shape = (target_shape,) * num_spatial_dims
+        elif (
+            isinstance(target_shape, Sequence) and len(target_shape) == num_spatial_dims
+        ):
+            self.target_shape = target_shape
+        else:
+            raise ValueError(
+                "`target_size` must either be an int or tuple of length "
+                f"{num_spatial_dims} containing ints."
+            )
+
+    def __call__(
+        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
+    ) -> Array:
+        """**Arguments:**
+
+        - `x`: The input. Should be a JAX array of shape
+            `(channels, dim_1, dim_2, ... )`.
+        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
+            (Keyword only argument.)
+
+        **Returns:**
+
+        A JAX array of shape `(channels, target_shape)`.
+        """
+        if x.ndim - 1 != len(self.target_shape):
+            raise ValueError(
+                f"Expected input with {len(self.target_shape)} dimensions, "
+                f"received {x.ndim-1} instead."
+            )
+        for i in range(1, x.ndim):
+            op = jax.vmap(
+                _adaptive_pool1d, (0, None, None), 0
+            )  # batching over channels by default
+            for j in range(1, x.ndim):
+                if i == j:
+                    continue
+                op = jax.vmap(op, in_axes=(j, None, None), out_axes=j)
+            x = op(x, self.target_shape[i - 1], self.operation)
+        return x
+
+
+class AdaptiveAvgPool1d(AdaptivePool):
+    """Adaptive one-dimensional downsampling using average for the target shape."""
+
+    def __init__(self, target_shape: Union[int, Sequence[int]], **kwargs):
+        """**Arguments:**
+
+        - `target_shape`: The target output shape.
+        """
+        super().__init__(target_shape, num_spatial_dims=1, operation=jnp.mean, **kwargs)
+
+
+class AdaptiveAvgPool2d(AdaptivePool):
+    """Adaptive two-dimensional downsampling using average for the target shape."""
+
+    def __init__(self, target_shape: Union[int, Sequence[int]], **kwargs):
+        """**Arguments:**
+
+        - `target_shape`: The target output shape.
+        """
+        super().__init__(target_shape, num_spatial_dims=2, operation=jnp.mean, **kwargs)
+
+
+class AdaptiveAvgPool3d(AdaptivePool):
+    """Adaptive three-dimensional downsampling using average for the target shape."""
+
+    def __init__(self, target_shape: Union[int, Sequence[int]], **kwargs):
+        """**Arguments:**
+
+        - `target_shape`: The target output shape.
+        """
+        super().__init__(target_shape, num_spatial_dims=3, operation=jnp.mean, **kwargs)
+
+
+class AdaptiveMaxPool1d(AdaptivePool):
+    """Adaptive one-dimensional downsampling using maximum for the target shape."""
+
+    def __init__(self, target_shape: Union[int, Sequence[int]], **kwargs):
+        """**Arguments:**
+
+        - `target_shape`: The target output shape.
+        """
+        super().__init__(target_shape, num_spatial_dims=1, operation=jnp.max, **kwargs)
+
+
+class AdaptiveMaxPool2d(AdaptivePool):
+    """Adaptive two-dimensional downsampling using maximum for the target shape."""
+
+    def __init__(self, target_shape: Union[int, Sequence[int]], **kwargs):
+        """**Arguments:**
+
+        - `target_shape`: The target output shape.
+        """
+        super().__init__(target_shape, num_spatial_dims=2, operation=jnp.max, **kwargs)
+
+
+class AdaptiveMaxPool3d(AdaptivePool):
+    """Adaptive three-dimensional downsampling using maximum for the target shape."""
+
+    def __init__(self, target_shape: Union[int, Sequence[int]], **kwargs):
+        """**Arguments:**
+
+        - `target_shape`: The target output shape.
+        """
+        super().__init__(target_shape, num_spatial_dims=3, operation=jnp.max, **kwargs)
