@@ -120,13 +120,13 @@ class Pool(Module):
         return x
 
 
-class AvgPool1D(Pool):
+class AvgPool1d(Pool):
     """One-dimensional downsample using an average over a sliding window."""
 
     def __init__(
         self,
         kernel_size,
-        stride=None,
+        stride,
         padding=0,
         **kwargs,
     ):
@@ -165,13 +165,13 @@ class AvgPool1D(Pool):
         return super().__call__(x) / np.prod(self.kernel_size)
 
 
-class MaxPool1D(Pool):
+class MaxPool1d(Pool):
     """One-dimensional downsample using the maximum over a sliding window."""
 
     def __init__(
         self,
         kernel_size,
-        stride=None,
+        stride,
         padding=0,
         **kwargs,
     ):
@@ -211,13 +211,13 @@ class MaxPool1D(Pool):
         return super().__call__(x)
 
 
-class AvgPool2D(Pool):
+class AvgPool2d(Pool):
     """Two-dimensional downsample using an average over a sliding window."""
 
     def __init__(
         self,
         kernel_size,
-        stride=None,
+        stride,
         padding=0,
         **kwargs,
     ):
@@ -256,13 +256,13 @@ class AvgPool2D(Pool):
         return super().__call__(x) / np.prod(self.kernel_size)
 
 
-class MaxPool2D(Pool):
+class MaxPool2d(Pool):
     """Two-dimensional downsample using the maximum over a sliding window."""
 
     def __init__(
         self,
         kernel_size,
-        stride=None,
+        stride,
         padding=0,
         **kwargs,
     ):
@@ -302,13 +302,13 @@ class MaxPool2D(Pool):
         return super().__call__(x)
 
 
-class AvgPool3D(Pool):
+class AvgPool3d(Pool):
     """Three-dimensional downsample using an average over a sliding window."""
 
     def __init__(
         self,
         kernel_size,
-        stride=None,
+        stride,
         padding=0,
         **kwargs,
     ):
@@ -348,13 +348,13 @@ class AvgPool3D(Pool):
         return super().__call__(x) / np.prod(self.kernel_size)
 
 
-class MaxPool3D(Pool):
+class MaxPool3d(Pool):
     """Three-dimensional downsample using the maximum over a sliding window."""
 
     def __init__(
         self,
         kernel_size,
-        stride=None,
+        stride,
         padding=0,
         **kwargs,
     ):
@@ -392,6 +392,15 @@ class MaxPool3D(Pool):
         """
 
         return super().__call__(x)
+
+
+# Backward compatability: these were originally misnamed.
+AvgPool1D = AvgPool1d
+AvgPool2D = AvgPool2d
+AvgPool3D = AvgPool3d
+MaxPool1D = MaxPool1d
+MaxPool2D = MaxPool2d
+MaxPool3D = MaxPool3d
 
 
 def _adaptive_pool1d(x: Array, target_size: int, operation: Callable) -> Array:
