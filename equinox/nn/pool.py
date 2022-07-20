@@ -433,8 +433,7 @@ def _adaptive_pool1d(x: Array, target_size: int, operation: Callable) -> Array:
 class AdaptivePool(Module):
     """General N dimensional Adaptive downsampling for the target shape."""
 
-    target_shape: Union[int, Sequence[int]] = static_field()
-    num_spatial_dims: int = static_field()
+    target_shape: Sequence[int] = static_field()
     operation: Callable
 
     def __init__(
@@ -450,11 +449,13 @@ class AdaptivePool(Module):
         - `num_spatial_dims`: The number of spatial dimensions.
         - `operation`: The operation applied for downsample.
         """
-        self.num_spatial_dims = num_spatial_dims
+        super().__init__(**kwargs)
         self.operation = operation
         if isinstance(target_shape, int):
-            self.target_shape = (target_shape,) * self.num_spatial_dims
-        elif isinstance(target_shape, Sequence):
+            self.target_shape = (target_shape,) * num_spatial_dims
+        elif (
+            isinstance(target_shape, Sequence) and len(target_shape) == num_spatial_dims
+        ):
             self.target_shape = target_shape
         else:
             raise ValueError(
