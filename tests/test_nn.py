@@ -761,7 +761,7 @@ def test_spectral_norm(getkey):
 def test_maxpool1d():
 
     x = jnp.arange(14).reshape(1, 14)
-    max_pool = eqx.nn.MaxPool1D(2, 3)
+    max_pool = eqx.nn.MaxPool1d(2, 3)
     output = max_pool(x)
     answer = jnp.array([1, 4, 7, 10, 13])
 
@@ -771,7 +771,7 @@ def test_maxpool1d():
 def test_avgpool1d():
 
     x = jnp.arange(14).reshape(1, 14)
-    avg_pool = eqx.nn.AvgPool1D(2, 3)
+    avg_pool = eqx.nn.AvgPool1d(2, 3)
     output = avg_pool(x)
     answer = jnp.array([0.5, 3.5, 6.5, 9.5, 12.5])
 
@@ -805,7 +805,7 @@ def test_adaptive_maxpool1d():
 def test_maxpool2d():
 
     x = jnp.arange(36).reshape(1, 6, 6)
-    max_pool = eqx.nn.MaxPool2D(2, (3, 2))
+    max_pool = eqx.nn.MaxPool2d(2, (3, 2))
     output = max_pool(x)
     answer = jnp.array([[7, 9, 11], [25, 27, 29]])
 
@@ -815,7 +815,7 @@ def test_maxpool2d():
 def test_avgpool2d():
 
     x = jnp.arange(36).reshape(1, 6, 6)
-    avg_pool = eqx.nn.AvgPool2D((1, 3), 2)
+    avg_pool = eqx.nn.AvgPool2d((1, 3), 2)
     output = avg_pool(x)
     answer = jnp.array([[1, 3], [13, 15], [25, 27]])
 
@@ -849,7 +849,7 @@ def test_adaptive_maxpool2d():
 def test_maxpool3d():
 
     x = jnp.arange(64).reshape(1, 4, 4, 4)
-    max_pool = eqx.nn.MaxPool3D(2, (3, 2, 1))
+    max_pool = eqx.nn.MaxPool3d(2, (3, 2, 1))
     output = max_pool(x)
     answer = jnp.array([[[21, 22, 23], [29, 30, 31]]])
 
@@ -859,7 +859,7 @@ def test_maxpool3d():
 def test_avgpool3d():
 
     x = jnp.arange(64).reshape(1, 4, 4, 4)
-    avg_pool = eqx.nn.AvgPool3D((1, 3, 1), 2)
+    avg_pool = eqx.nn.AvgPool3d((1, 3, 1), 2)
     output = avg_pool(x)
     answer = jnp.array([[[4, 6]], [[36, 38]]])
 
@@ -892,7 +892,7 @@ def test_adaptive_maxpool3d():
 
 def test_poolpadding():
     x = jnp.arange(64).reshape(1, 4, 4, 4)
-    max_pool = eqx.nn.MaxPool3D(2, 1, ((0, 1), (0, 1), (0, 1)))
+    max_pool = eqx.nn.MaxPool3d(2, 1, ((0, 1), (0, 1), (0, 1)))
     output = max_pool(x)
 
     assert output.shape == (1, 4, 4, 4)
@@ -900,7 +900,7 @@ def test_poolpadding():
 
 def test_poolbackprop():
     def max_pool_mean(x):
-        max_pool = eqx.nn.MaxPool3D((2, 2, 2), (1, 1, 1), ((0, 1), (0, 1), (0, 1)))
+        max_pool = eqx.nn.MaxPool3d((2, 2, 2), (1, 1, 1), ((0, 1), (0, 1), (0, 1)))
         return jnp.mean(max_pool(x))
 
     x = jnp.arange(64, dtype=jnp.float32).reshape(1, 4, 4, 4)
@@ -911,12 +911,12 @@ def test_poolbackprop():
 
 def test_poolnetworkbackprop(getkey):
     class CNN(eqx.Module):
-        conv_layer: List[Union[eqx.nn.Conv2d, eqx.nn.MaxPool2D]]
+        conv_layer: List[Union[eqx.nn.Conv2d, eqx.nn.MaxPool2d]]
         linear_layers: List[eqx.nn.Linear]
 
         def __init__(self, key):
             key1, key2, key3 = jax.random.split(key, 3)
-            self.conv_layer = [eqx.nn.Conv2d(3, 2, 3, key=key1), eqx.nn.MaxPool2D(2, 2)]
+            self.conv_layer = [eqx.nn.Conv2d(3, 2, 3, key=key1), eqx.nn.MaxPool2d(2, 2)]
             self.linear_layers = [
                 eqx.nn.Linear(450, 256, key=key2),
                 eqx.nn.Linear(256, 10, key=key3),

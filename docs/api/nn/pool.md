@@ -8,7 +8,7 @@
 
 ---
 
-::: equinox.nn.AvgPool1D
+::: equinox.nn.AvgPool1d
     selection:
         members:
             - __init__
@@ -16,7 +16,7 @@
 
 ---
 
-::: equinox.nn.AvgPool2D
+::: equinox.nn.AvgPool2d
     selection:
         members:
             - __init__
@@ -24,7 +24,7 @@
 
 ---
 
-::: equinox.nn.AvgPool3D
+::: equinox.nn.AvgPool3d
     selection:
         members:
             - __init__
@@ -32,7 +32,7 @@
 
 ---
 
-::: equinox.nn.MaxPool1D
+::: equinox.nn.MaxPool1d
     selection:
         members:
             - __init__
@@ -40,7 +40,7 @@
 
 ---
 
-::: equinox.nn.MaxPool2D
+::: equinox.nn.MaxPool2d
     selection:
         members:
             - __init__
@@ -48,7 +48,7 @@
 
 ---
 
-::: equinox.nn.MaxPool3D
+::: equinox.nn.MaxPool3d
     selection:
         members:
             - __init__

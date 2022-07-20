@@ -23,11 +23,17 @@ from .pool import (
     AdaptiveMaxPool3d,
     AdaptivePool,
     AvgPool1D,
+    AvgPool1d,
     AvgPool2D,
+    AvgPool2d,
     AvgPool3D,
+    AvgPool3d,
     MaxPool1D,
+    MaxPool1d,
     MaxPool2D,
+    MaxPool2d,
     MaxPool3D,
+    MaxPool3d,
     Pool,
 )
 from .rnn import GRUCell, LSTMCell
