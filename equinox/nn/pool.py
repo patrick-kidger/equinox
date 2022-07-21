@@ -431,7 +431,7 @@ def _adaptive_pool1d(x: Array, target_size: int, operation: Callable) -> Array:
 
 
 class AdaptivePool(Module):
-    """General N dimensional Adaptive downsampling for the target shape."""
+    """General N dimensional adaptive downsampling to a target shape."""
 
     target_shape: Sequence[int] = static_field()
     operation: Callable
@@ -445,7 +445,7 @@ class AdaptivePool(Module):
     ):
         """**Arguments:**
 
-        - `target_size`: The target output size.
+        - `target_shape`: The target output shape.
         - `num_spatial_dims`: The number of spatial dimensions.
         - `operation`: The operation applied for downsample.
         """
@@ -475,7 +475,7 @@ class AdaptivePool(Module):
 
         **Returns:**
 
-        A JAX array of shape `(channels, target_shape)`.
+        A JAX array of shape `(channels,) + target_shape`.
         """
         if x.ndim - 1 != len(self.target_shape):
             raise ValueError(
