@@ -606,6 +606,19 @@ def test_group_norm(getkey):
     assert jnp.allclose(gn(x1), gn(x2), atol=1e-4)
     assert jnp.allclose(gn(x1), x3, atol=1e-4)
 
+    # channels not divisible by groups
+    with pytest.raises(ValueError):
+        gn = eqx.nn.GroupNorm(groups=3, channels=4)
+
+    # test w/ channels=None
+    gn = eqx.nn.GroupNorm(groups=4, channelwise_affine=False)
+    x = jrandom.uniform(getkey(), (128,))
+    assert gn(x).shape == (128,)
+
+    # Unknown channels w/ channelwise_affine=True
+    with pytest.raises(ValueError):
+        gn = eqx.nn.GroupNorm(groups=4, channels=None, channelwise_affine=True)
+
 
 def test_batch_norm(getkey):
     x0 = jrandom.uniform(getkey(), (5,))

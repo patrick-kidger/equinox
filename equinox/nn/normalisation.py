@@ -134,23 +134,23 @@ class GroupNorm(Module):
     def __init__(
         self,
         groups: int,
-        channels: int,
+        channels: Optional[int]=None,
         eps: float = 1e-5,
         channelwise_affine: bool = True,
         **kwargs,
     ):
         """**Arguments:**
 
-        - `shape`: Input shape. May be left unspecified (e.g. just `None`) if
-            `elementwise_affine=False`.
         - `groups`: The number of groups to split the input into.
         - `channels`: The number of input channels. May be left unspecified (e.g. just
             `None`) if `channelwise_affine=False`.
         - `eps`: Value added to denominator for numerical stability.
         - `channelwise_affine`: Whether the module has learnable affine parameters.
         """
-        if channels % groups != 0:
+        if (channels is not None) and (channels % groups != 0):
             raise ValueError("The number of groups must divide the number of channels.")
+        if (channels is None) and (channelwise_affine==True):
+            raise ValueError("The number of channels should be specified if `channel_wise_affine=True`")
         super().__init__(**kwargs)
         self.groups = groups
         self.channels = channels
@@ -172,7 +172,8 @@ class GroupNorm(Module):
 
         A JAX array of shape `(channels, ...)`.
         """
-        y = x.reshape(self.groups, self.channels // self.groups, *x.shape[1:])
+        channels = x.shape[0] if self.channels is None else self.channels
+        y = x.reshape(self.groups, channels // self.groups, *x.shape[1:])
         mean = jax.vmap(ft.partial(jnp.mean, keepdims=True))(y)
         variance = jax.vmap(ft.partial(jnp.var, keepdims=True))(y)
         inv = jax.lax.rsqrt(variance + self.eps)
