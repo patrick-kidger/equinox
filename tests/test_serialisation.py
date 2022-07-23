@@ -54,11 +54,7 @@ def test_leaf_serialisation(getkey, tmp_path):
     tree_serialisable = tree[:-3]
     tree_loaded_serialisable = tree_loaded[:-3]
     tree_loaded_index, tree_loaded_func, tree_loaded_obj = tree_loaded[-3:]
-    import jax
 
-    print(jax.tree_leaves(tree_loaded))
-    print(jax.tree_leaves(tree_serialisable))
-    print("*" * 50)
     assert eqx.tree_equal(tree_serialisable, tree_loaded_serialisable)
     assert tree_loaded_index is like_index
     assert jnp.array_equal(
