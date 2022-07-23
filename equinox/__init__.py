@@ -13,7 +13,12 @@ from .grad import filter_custom_vjp, filter_grad, filter_value_and_grad
 from .jit import filter_jit
 from .module import Module, static_field
 from .pretty_print import tree_pformat
-from .serialisation import tree_deserialise_leaves, tree_serialise_leaves
+from .serialisation import (
+    default_deserialise_filter_spec,
+    default_serialise_filter_spec,
+    tree_deserialise_leaves,
+    tree_serialise_leaves,
+)
 from .tree import tree_at, tree_equal, tree_inference
 from .update import apply_updates
 from .vmap_pmap import filter_pmap, filter_vmap

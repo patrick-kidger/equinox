@@ -118,6 +118,7 @@ def tree_at(
     node_or_nodes = where(pytree)
     leaves1, structure1 = jax.tree_flatten(node_or_nodes_nowrapper, is_leaf=is_leaf)
     leaves2, structure2 = jax.tree_flatten(node_or_nodes)
+    print(leaves1, leaves2, "leaves 1 2")
     leaves2 = [_remove_leaf_wrapper(x) for x in leaves2]
     if (
         structure1 != structure2
