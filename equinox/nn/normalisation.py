@@ -134,7 +134,7 @@ class GroupNorm(Module):
     def __init__(
         self,
         groups: int,
-        channels: Optional[int]=None,
+        channels: Optional[int] = None,
         eps: float = 1e-5,
         channelwise_affine: bool = True,
         **kwargs,
@@ -150,7 +150,9 @@ class GroupNorm(Module):
         if (channels is not None) and (channels % groups != 0):
             raise ValueError("The number of groups must divide the number of channels.")
         if (channels is None) and channelwise_affine:
-            raise ValueError("The number of channels should be specified if `channelwise_affine=True`")
+            raise ValueError(
+                "The number of channels should be specified if `channelwise_affine=True`"
+            )
         super().__init__(**kwargs)
         self.groups = groups
         self.channels = channels
