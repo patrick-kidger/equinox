@@ -204,7 +204,6 @@ def tree_deserialise_leaves(
         value from `like`).
     - `is_leaf`: Called on every node of `like`; if `True` then this node will be
         treated as a leaf.
-            print('_deserialize', spec, x)
 
     **Returns:**
 

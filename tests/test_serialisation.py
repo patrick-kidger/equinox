@@ -2,7 +2,6 @@ import jax.numpy as jnp
 import numpy as np
 
 import equinox as eqx
-import equinox.serialisation
 
 
 def test_leaf_serialisation(getkey, tmp_path):
@@ -90,7 +89,7 @@ def test_custom_leaf_serialisation(getkey, tmp_path):
         if isinstance(x, jnp.ndarray):
             pass
         else:
-            return equinox.serialisation.default_serialise_filter_spec(f, x)
+            return eqx.default_serialise_filter_spec(f, x)
 
     eqx.tree_serialise_leaves(tmp_path, tree, filter_spec=ser_filter_spec)
 
@@ -116,7 +115,7 @@ def test_custom_leaf_serialisation(getkey, tmp_path):
         if callable(x):
             return unlike_func
         else:
-            return equinox.serialisation.default_deserialise_filter_spec(f, x)
+            return eqx.default_deserialise_filter_spec(f, x)
 
     tree_loaded = eqx.tree_deserialise_leaves(
         tmp_path, like, filter_spec=deser_filter_spec
