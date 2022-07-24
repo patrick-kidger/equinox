@@ -149,8 +149,8 @@ class GroupNorm(Module):
         """
         if (channels is not None) and (channels % groups != 0):
             raise ValueError("The number of groups must divide the number of channels.")
-        if (channels is None) and (channelwise_affine==True):
-            raise ValueError("The number of channels should be specified if `channel_wise_affine=True`")
+        if (channels is None) and channelwise_affine:
+            raise ValueError("The number of channels should be specified if `channelwise_affine=True`")
         super().__init__(**kwargs)
         self.groups = groups
         self.channels = channels
@@ -172,7 +172,7 @@ class GroupNorm(Module):
 
         A JAX array of shape `(channels, ...)`.
         """
-        channels = x.shape[0] if self.channels is None else self.channels
+        channels = x.shape[0]
         y = x.reshape(self.groups, channels // self.groups, *x.shape[1:])
         mean = jax.vmap(ft.partial(jnp.mean, keepdims=True))(y)
         variance = jax.vmap(ft.partial(jnp.var, keepdims=True))(y)
