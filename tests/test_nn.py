@@ -125,6 +125,14 @@ def test_sequential(getkey):
     )
     x = jrandom.normal(getkey(), (2,))
     assert seq(x).shape == (3,)
+    # Test indexing
+    assert isinstance(seq[0], eqx.nn.Linear)
+    assert isinstance(seq[1:], eqx.nn.Sequential)
+    x = jrandom.normal(getkey(), (4,))
+    assert seq[1:](x).shape == (3,)
+
+    with pytest.raises(TypeError):
+        seq[[0, 1, 2]]
 
 
 def test_mlp(getkey):
