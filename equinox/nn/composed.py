@@ -1,5 +1,5 @@
 import typing
-from typing import Any, Callable, List, Optional, Sequence
+from typing import Any, Callable, List, Optional, Sequence, Union
 
 import jax
 import jax.nn as jnn
@@ -44,7 +44,7 @@ class MLP(Module):
         final_activation: Callable = _identity,
         *,
         key: "jax.random.PRNGKey",
-        **kwargs
+        **kwargs,
     ):
         """**Arguments**:
 
@@ -123,6 +123,14 @@ class Sequential(Module):
         for layer, key in zip(self.layers, keys):
             x = layer(x, key=key)
         return x
+
+    def __getitem__(self, i: Union[int, slice]) -> Module:
+        if isinstance(i, int):
+            return self.layers[i]
+        elif isinstance(i, slice):
+            return Sequential(self.layers[i])
+        else:
+            raise TypeError(f"Indexing with type {type(i)} is not supported")
 
 
 Sequential.__init__.__doc__ = """**Arguments:**
