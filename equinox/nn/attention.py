@@ -16,7 +16,6 @@ def dot_product_attention_weights(
     key_: Array,
     bias: Optional[Array] = None,
     mask: Optional[Array] = None,
-    dropout_p: float = 0.0,
     *,
     dropout: Optional[Dropout] = None,
     key: Optional["jax.random.PRNGKey"] = None,
@@ -29,43 +28,34 @@ def dot_product_attention_weights(
     But if you want access to the attention weights for introspection, then
     you can directly call this function and call einsum yourself.
     This also supports multi-query attention (https://arxiv.org/pdf/1911.02150).
+
     **Arguments:**
 
-        - `query`: Query vectors. Should be a JAX array of shape
-            `(batch ... query_seq_length, num_heads, qk_size)`.
-        - `key_`: Key vectors. Should be a JAX array of shape
-            `(batch ... kv_seq_length, num_heads, qk_size)`.
-        - `mask`: Optional mask preventing attention to certain positions. Should be a
+    - `query`: Query vectors. Should be a JAX array of shape
+            `(query_seq_length, num_heads, qk_size)`.
+    - `key_`: Key vectors. Should be a JAX array of shape
+            `(kv_seq_length, num_heads, qk_size)`.
+    - `mask`: Optional mask preventing attention to certain positions. Should be a
             JAX array of shape `(num_heads, query_seq_length, kv_seq_length)`.
-        - `dropout_p`: Dropout probability on attention weights.
-        - `dropout`: Already initialized Dropout module. Unused if `dropout_p != 0.`
-          (Keyword only argument).
-        - `key`: A `jax.random.PRNGKey` used for dropout. Unused if `dropout_p = 0.`.
-            (Keyword only argument.)
-        - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
-            argument.)
-        - `deterministic`: (Deprecated in favour of `inference`.)
+    - `dropout`: Already initialized Dropout module.` (Keyword only argument).
+    - `key`: A `jax.random.PRNGKey` used for dropout.`. (Keyword only argument.)
+    - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only argument.)
+    - `deterministic`: (Deprecated in favour of `inference`.)
 
-        **Returns:**
+     **Returns:**
 
-        A JAX array of shape `(batch..., num_heads, query_seq_length, kv_seq_length)`.
+    A JAX array of shape `(num_heads, query_seq_length, kv_seq_length)`.
     """
     if query.ndim == key_.ndim:
-        assert query.shape[:-3] == key_.shape[:-3], "q, k batch dims must match."
         assert query.shape[-2] == key_.shape[-2], "q, k num_heads must match."
         assert query.shape[-1] == key_.shape[-1], "q, k depths must match."
     elif query.ndim > key_.ndim:
         # support for multi-query attention
-        assert query.shape[:-3] == key_.shape[:-2], "q, k batch dims must match."
         assert query.shape[-1] == key_.shape[-1], "q, k depths must match."
     else:
         raise ValueError("q must have equal or more dimensions than k.")
 
-    query_seq_length, num_heads, depth = (
-        query.shape[-3],
-        query.shape[-2],
-        query.shape[-1],
-    )
+    query_seq_length, num_heads, depth = query.shape
     kv_seq_length = key_.shape[-2] if key_.ndim < query.ndim else key_.shape[-3]
 
     query = query / jnp.sqrt(depth)
@@ -93,9 +83,6 @@ def dot_product_attention_weights(
     attn_weights = jax.nn.softmax(attn_weights, axis=-1)
 
     # apply dropout
-    if dropout_p > 0.0:
-        dropout = Dropout(dropout_p, inference=inference)
-
     if dropout is not None:
         attn_weights = dropout(
             attn_weights, key=key, inference=inference, deterministic=deterministic
@@ -110,7 +97,6 @@ def dot_product_attention(
     value: Array,
     bias: Optional[Array] = None,
     mask: Optional[Array] = None,
-    dropout_p: float = 0.0,
     *,
     dropout: Optional[Dropout] = None,
     key: Optional["jax.random.PRNGKey"] = None,
@@ -128,19 +114,18 @@ def dot_product_attention(
                              {\sqrt{d_\text{qk}}})\widetilde{V}$.
 
     This also supports multi-query attention (https://arxiv.org/pdf/1911.02150).
+
     **Arguments:**
 
     - `query`: Query vectors. Should be a JAX array of shape
-            `(batch ... query_seq_length, num_heads, qk_size)`.
+            `(query_seq_length, num_heads, qk_size)`.
     - `key_`: Key vectors. Should be a JAX array of shape
-            `(batch ... kv_seq_length, num_heads, qk_size)`.
+            `(kv_seq_length, num_heads, qk_size)`.
     - `value`: Value vectors. Should be a JAX array of shape
-            `(batch ... kv_seq_length, num_heads, vo_size)`.
+            `(kv_seq_length, num_heads, vo_size)`.
     - `mask`: Optional mask preventing attention to certain positions. Should be a
             JAX array of shape `(num_heads, query_seq_length, kv_seq_length)`.
-    - `dropout_p`: Dropout probability on attention weights.
-    - `dropout`: Already initialized Dropout module. Unused if `dropout_p != 0.`
-          (Keyword only argument).
+    - `dropout`: Already initialized Dropout module. (Keyword only argument).
     - `key`: A `jax.random.PRNGKey` used for dropout. Unused if `dropout_p = None`.
             (Keyword only argument.)
     - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
@@ -149,22 +134,14 @@ def dot_product_attention(
 
     **Returns:**
 
-    A JAX array of shape `(batch..., query_seq_length, num_heads, vo_size)`.
+    A JAX array of shape `(query_seq_length, num_heads, vo_size)`.
     """
     assert key_.ndim == value.ndim, "k, v must have same rank."
     if query.ndim == key_.ndim == value.ndim:
-        assert (
-            query.shape[:-3] == key_.shape[:-3] == value.shape[:-3]
-        ), "q, k, v batch dims must match."
-        assert (
-            query.shape[-2] == key_.shape[-2] == value.shape[-2]
-        ), "q, k, v num_heads must match."
+        assert key_.shape[-2] == value.shape[-2], "k, v num_heads must match."
         assert key_.shape[-3] == value.shape[-3], "k, v lengths must match"
     elif query.ndim > key_.ndim and query.ndim > value.ndim:
         # support for multi-query attention
-        assert (
-            query.shape[:-3] == key_.shape[:-2] == value.shape[:-2]
-        ), "q, k batch dims must match."
         assert key_.shape[-2] == value.shape[-2], "k, v lengths must match"
     else:
         raise ValueError("q must have equal or more dimensions than k, v.")
@@ -174,7 +151,6 @@ def dot_product_attention(
         key_=key_,
         bias=bias,
         mask=mask,
-        dropout_p=dropout_p,
         dropout=dropout,
         key=key,
         inference=inference,
