@@ -16,7 +16,8 @@ def dot_product_attention_weights(
     key_: Array,
     bias: Optional[Array] = None,
     mask: Optional[Array] = None,
-    dropout_p: float = 0.0,
+    dropout_p: Optional[float] = None,
+    dropout: Optional[Dropout] = None,
     *,
     key: Optional["jax.random.PRNGKey"] = None,
     inference: Optional[bool] = None,
@@ -41,9 +42,8 @@ def dot_product_attention_weights(
         This can be used for incorporating causal masks.
         Attention weights are masked out if their corresponding mask value
         is `False`.
-      broadcast_dropout: bool: use a broadcasted dropout along batch dims.
       dropout_rng: JAX PRNGKey: to be used for dropout
-      dropout_rate: dropout rate
+      dropout_p: dropout probability
       deterministic: bool, deterministic or not (to apply dropout)
       dtype: the dtype of the computation (default: infer from inputs and params)
       precision: numerical precision of the computation see `jax.lax.Precision`
@@ -52,13 +52,11 @@ def dot_product_attention_weights(
       Output of shape `[batch..., num_heads, q_length, kv_length]`.
     """
     if query.ndim == key_.ndim:
-        assert query.shape[-4] == key_.shape[-4], "q, k batch dims must match."
+        assert query.shape[:-3] == key_.shape[:-3], "q, k batch dims must match."
         assert query.shape[-2] == key_.shape[-2], "q, k num_heads must match."
-        assert query.shape[-1] == key_.shape[-1], "q, k depths must match."
     elif query.ndim > key_.ndim:
         # support for multi-query attention
-        assert query.shape[-4] == key_.shape[-3], "q, k batch dims must match."
-        assert query.shape[-1] == key_.shape[-1], "q, k depths must match."
+        assert query.shape[:-3] == key_.shape[:-2], "q, k batch dims must match."
     else:
         raise ValueError("q must have equal or more dimensions than k.")
 
@@ -67,7 +65,7 @@ def dot_product_attention_weights(
         query.shape[-2],
         query.shape[-1],
     )
-    kv_seq_length = key_.shape[-2] if key_.ndims < query.ndims else key_.shape[-3]
+    kv_seq_length = key_.shape[-2] if key_.ndim < query.ndim else key_.shape[-3]
 
     query = query / jnp.sqrt(depth)
     if query.ndim == key_.ndim:
@@ -91,14 +89,19 @@ def dot_product_attention_weights(
         attn_weights = jnp.where(mask, attn_weights, -jnp.inf)
 
     # apply softmax to normalize
-    attn_weights = jax.nn.softmax(attn_weights, dim=-1)
+    attn_weights = jax.nn.softmax(attn_weights, axis=-1)
 
     # apply dropout
-    if dropout_p > 0.0:
+    assert (dropout_p is not None and dropout is None) or (
+        dropout_p is None and dropout is not None
+    ), "May only pass dropout probability parameter or dropout layer."
+
+    if dropout_p:
         dropout = Dropout(dropout_p, inference=inference)
-        attn_weights = dropout(
-            attn_weights, key=key, inference=inference, deterministic=deterministic
-        )
+
+    attn_weights = dropout(
+        attn_weights, key=key, inference=inference, deterministic=deterministic
+    )
 
     return attn_weights
 
@@ -109,7 +112,8 @@ def dot_product_attention(
     value: Array,
     bias: Optional[Array] = None,
     mask: Optional[Array] = None,
-    dropout_p: float = 0.0,
+    dropout_p: Optional[float] = None,
+    dropout: Optional[Dropout] = None,
     *,
     key: Optional["jax.random.PRNGKey"] = None,
     inference: Optional[bool] = None,
@@ -147,25 +151,23 @@ def dot_product_attention(
     Returns:
       Output of shape `[batch..., q_length, num_heads, v_depth_per_head]`.
     """
-    assert key.ndim == value.ndim, "k, v must have same rank."
+    print(query.shape)
+    print(value.shape)
+    assert key_.ndim == value.ndim, "k, v must have same rank."
     if query.ndim == key_.ndim == value.ndim:
         assert (
-            query.shape[-4] == key_.shape[-4] == value.shape[-3]
+            query.shape[:-3] == key_.shape[:-3] == value.shape[:-3]
         ), "q, k, v batch dims must match."
         assert (
             query.shape[-2] == key_.shape[-2] == value.shape[-2]
         ), "q, k, v num_heads must match."
-        assert (
-            query.shape[-1] == key_.shape[-1] == value.shape[-1]
-        ), "q, k, v depths must match."
+        assert key_.shape[-3] == value.shape[-3], "k, v lengths must match"
     elif query.ndim > key_.ndim and query.ndim > value.ndim:
         # support for multi-query attention
         assert (
-            query.shape[-4] == key_.shape[-3] == value.shape[-2]
+            query.shape[:-3] == key_.shape[:-2] == value.shape[-2]
         ), "q, k batch dims must match."
-        assert (
-            query.shape[-1] == key_.shape[-1] == value.shape[-1]
-        ), "q, k depths must match."
+        assert key_.shape[-2] == value.shape[-2], "k, v lengths must match"
     else:
         raise ValueError("q must have equal or more dimensions than k, v.")
 
@@ -175,6 +177,7 @@ def dot_product_attention(
         bias=bias,
         mask=mask,
         dropout_p=dropout_p,
+        dropout=dropout,
         key=key,
         inference=inference,
         deterministic=deterministic,
@@ -337,8 +340,8 @@ class MultiheadAttention(Module):
             num_heads * vo_size, output_size, use_bias=use_output_bias, key=okey
         )
 
-        self.dropout_p = dropout_p
-        self.inference = inference
+        self.dropout = Dropout(dropout_p, inference=inference)
+
         self.num_heads = num_heads
         self.query_size = query_size
         self.key_size = key_size
@@ -401,7 +404,7 @@ class MultiheadAttention(Module):
             key_=key_heads,
             value=value_heads,
             mask=mask,
-            dropout_p=self.dropout_p,
+            dropout=self.dropout,
             key=key,
             inference=inference,
             deterministic=deterministic,
