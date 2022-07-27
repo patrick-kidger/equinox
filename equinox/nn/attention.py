@@ -17,8 +17,8 @@ def dot_product_attention_weights(
     bias: Optional[Array] = None,
     mask: Optional[Array] = None,
     dropout_p: Optional[float] = None,
-    dropout: Optional[Dropout] = None,
     *,
+    dropout: Optional[Dropout] = None,
     key: Optional["jax.random.PRNGKey"] = None,
     inference: Optional[bool] = None,
     deterministic: Optional[bool] = None,
@@ -28,28 +28,27 @@ def dot_product_attention_weights(
     Used by :func:`dot_product_attention`, which is what you'll most likely use.
     But if you want access to the attention weights for introspection, then
     you can directly call this function and call einsum yourself.
-    Args:
-      query: queries for calculating attention with shape of
-        `[batch..., q_length, num_heads, qk_depth_per_head]`.
-      key: keys for calculating attention with shape of
-        `[batch..., kv_length, num_heads, qk_depth_per_head]`.
-      bias: bias for the attention weights. This should be broadcastable to the
-        shape `[batch..., num_heads, q_length, kv_length]`.
-        This can be used for incorporating causal masks, padding masks,
-        proximity bias, etc.
-      mask: mask for the attention weights. This should be broadcastable to the
-        shape `[batch..., num_heads, q_length, kv_length]`.
-        This can be used for incorporating causal masks.
-        Attention weights are masked out if their corresponding mask value
-        is `False`.
-      dropout_rng: JAX PRNGKey: to be used for dropout
-      dropout_p: dropout probability
-      deterministic: bool, deterministic or not (to apply dropout)
-      dtype: the dtype of the computation (default: infer from inputs and params)
-      precision: numerical precision of the computation see `jax.lax.Precision`
-        for details.
-    Returns:
-      Output of shape `[batch..., num_heads, q_length, kv_length]`.
+    This also supports multi-query attention (https://arxiv.org/pdf/1911.02150).
+    **Arguments:**
+
+        - `query`: Query embedding. Should be a JAX array of shape
+            `(query_seq_length, query_size)`.
+        - `key_`: Key embedding. Should be a JAX array of shape
+            `(kv_seq_length, key_size)`.
+        - `mask`: Optional mask preventing attention to certain positions. Should be a
+            JAX array of shape `(num_heads, query_seq_length, kv_seq_length)`.
+        - `dropout_p`: Dropout probability on attention weights.
+        - `dropout`: Already initialized Dropout module. Only one of `dropout` or `dropout_p`
+           may be passed. (Keyword only argument.)
+        - `key`: A `jax.random.PRNGKey` used for dropout. Unused if `dropout_p = None`.
+            (Keyword only argument.)
+        - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
+            argument.)
+        - `deterministic`: (Deprecated in favour of `inference`.)
+
+        **Returns:**
+
+        A JAX array of shape `(query_seq_length, output_size)`.
     """
     if query.ndim == key_.ndim:
         assert query.shape[:-3] == key_.shape[:-3], "q, k batch dims must match."
@@ -78,7 +77,7 @@ def dot_product_attention_weights(
     if bias is not None:
         attn_weights = attn_weights + bias
 
-        # apply attention mask
+    # apply attention mask
     if mask is not None:
         if mask.shape != attn_weights.shape:
             raise ValueError(
@@ -113,8 +112,8 @@ def dot_product_attention(
     bias: Optional[Array] = None,
     mask: Optional[Array] = None,
     dropout_p: Optional[float] = None,
-    dropout: Optional[Dropout] = None,
     *,
+    dropout: Optional[Dropout] = None,
     key: Optional["jax.random.PRNGKey"] = None,
     inference: Optional[bool] = None,
     deterministic: Optional[bool] = None,
@@ -122,34 +121,36 @@ def dot_product_attention(
 
     r"""Computes dot-product attention given query, key, and value.
     This is the core function for applying attention based on
-    https://arxiv.org/abs/1706.03762. It calculates the attention weights given
-    query and key and combines the values using the attention weights.
-    Note: query, key, value needn't have any batch dimensions.
-    Args:
-      query: queries for calculating attention with shape of
-        `[batch..., q_length, num_heads, qk_depth_per_head]`.
-      key: keys for calculating attention with shape of
-        `[batch..., kv_length, num_heads, qk_depth_per_head]`.
-      value: values to be used in attention with shape of
-        `[batch..., kv_length, num_heads, v_depth_per_head]`.
-      bias: bias for the attention weights. This should be broadcastable to the
-        shape `[batch..., num_heads, q_length, kv_length]`.
-        This can be used for incorporating causal masks, padding masks,
-        proximity bias, etc.
-      mask: mask for the attention weights. This should be broadcastable to the
-        shape `[batch..., num_heads, q_length, kv_length]`.
-        This can be used for incorporating causal masks.
-        Attention weights are masked out if their corresponding mask value
-        is `False`.
-      broadcast_dropout: bool: use a broadcasted dropout along batch dims.
-      dropout_rng: JAX PRNGKey: to be used for dropout
-      dropout_rate: dropout rate
-      deterministic: bool, deterministic or not (to apply dropout)
-      dtype: the dtype of the computation (default: infer from inputs)
-      precision: numerical precision of the computation see `jax.lax.Precision`
-        for details.
-    Returns:
-      Output of shape `[batch..., q_length, num_heads, v_depth_per_head]`.
+    https://arxiv.org/abs/1706.03762.
+
+    - $\text{Attention}$ is defined as
+      $\text{Attention}(\widetilde{Q}, \widetilde{K}, \widetilde{V})
+       = \text{softmax}(\frac{\widetilde{Q}\widetilde{K}^\intercal}
+                             {\sqrt{d_\text{qk}}})\widetilde{V}$.
+
+    This also supports multi-query attention (https://arxiv.org/pdf/1911.02150).
+    **Arguments:**
+
+    - `query`: Query embedding. Should be a JAX array of shape
+            `(query_seq_length, query_size)`.
+    - `key_`: Key embedding. Should be a JAX array of shape
+            `(kv_seq_length, key_size)`.
+    - `value`: Value embedding. Should be a JAX array of shape
+            `(kv_seq_length, value_size)`.
+    - `mask`: Optional mask preventing attention to certain positions. Should be a
+            JAX array of shape `(num_heads, query_seq_length, kv_seq_length)`.
+    - `dropout_p`: Dropout probability on attention weights.
+    - `dropout`: Already initialized Dropout module. Only one of `dropout` or `dropout_p`
+           may be passed. (Keyword only argument.)
+    - `key`: A `jax.random.PRNGKey` used for dropout. Unused if `dropout_p = None`.
+            (Keyword only argument.)
+    - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
+            argument.)
+    - `deterministic`: (Deprecated in favour of `inference`.)
+
+    **Returns:**
+
+    A JAX array of shape `(query_seq_length, output_size)`.
     """
     print(query.shape)
     print(value.shape)
