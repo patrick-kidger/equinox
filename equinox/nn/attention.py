@@ -53,9 +53,11 @@ def dot_product_attention_weights(
     if query.ndim == key_.ndim:
         assert query.shape[:-3] == key_.shape[:-3], "q, k batch dims must match."
         assert query.shape[-2] == key_.shape[-2], "q, k num_heads must match."
+        assert query.shape[-1] == key_.shape[-1], "q, k depths must match."
     elif query.ndim > key_.ndim:
         # support for multi-query attention
         assert query.shape[:-3] == key_.shape[:-2], "q, k batch dims must match."
+        assert query.shape[-1] == key_.shape[-1], "q, k depths must match."
     else:
         raise ValueError("q must have equal or more dimensions than k.")
 
@@ -147,7 +149,7 @@ def dot_product_attention(
 
     **Returns:**
 
-    A JAX array of shape `(batch..., query_seq_length, num_heads, output_size)`.
+    A JAX array of shape `(batch..., query_seq_length, num_heads, vo_size)`.
     """
     assert key_.ndim == value.ndim, "k, v must have same rank."
     if query.ndim == key_.ndim == value.ndim:
