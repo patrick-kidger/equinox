@@ -10,6 +10,85 @@ from ..module import Module, static_field
 from .dropout import Dropout
 from .linear import Linear
 
+def dot_product_attention_weights(query: Array,
+                                  key_: Array,
+                                  bias: Optional[Array] = None,
+                                  mask: Optional[Array] = None,
+                                  dropout_p: float = 0.0,
+                                  *,
+                                  key: Optional["jax.random.PRNGKey"] = None,
+                                  inference: Optional[bool] = None,
+                                  deterministic: Optional[bool] = None,
+                                  ):
+
+  r"""Computes dot-product attention weights given query and key.
+  Used by :func:`dot_product_attention`, which is what you'll most likely use.
+  But if you want access to the attention weights for introspection, then
+  you can directly call this function and call einsum yourself.
+  Args:
+    query: queries for calculating attention with shape of
+      `[batch..., q_length, num_heads, qk_depth_per_head]`.
+    key: keys for calculating attention with shape of
+      `[batch..., kv_length, num_heads, qk_depth_per_head]`.
+    bias: bias for the attention weights. This should be broadcastable to the
+      shape `[batch..., num_heads, q_length, kv_length]`.
+      This can be used for incorporating causal masks, padding masks,
+      proximity bias, etc.
+    mask: mask for the attention weights. This should be broadcastable to the
+      shape `[batch..., num_heads, q_length, kv_length]`.
+      This can be used for incorporating causal masks.
+      Attention weights are masked out if their corresponding mask value
+      is `False`.
+    broadcast_dropout: bool: use a broadcasted dropout along batch dims.
+    dropout_rng: JAX PRNGKey: to be used for dropout
+    dropout_rate: dropout rate
+    deterministic: bool, deterministic or not (to apply dropout)
+    dtype: the dtype of the computation (default: infer from inputs and params)
+    precision: numerical precision of the computation see `jax.lax.Precision`
+      for details.
+  Returns:
+    Output of shape `[batch..., num_heads, q_length, kv_length]`.
+  """
+    if query.ndim == key_.ndim:
+        assert query.shape[-3] == key_.shape[-3], 'q, k batch dims must match.'
+        assert query.shape[-2] == key_.shape[-2], 'q, k num_heads must match.'
+        assert query.shape[-1] == key_.shape[-1], 'q, k depths must match.'
+    elif query.ndim > key_.ndim:
+        # support for multi-query attention
+        assert query.shape[-3] == key_.shape[-2], 'q, k batch dims must match.'
+        assert query.shape[-1] == key_.shape[-1], 'q, k depths must match.'
+    else:
+        raise ValueError("q must have equal or more dimensions than k.")
+
+    depth = query.shape[-1]
+    query = query / jnp.sqrt(depth)
+    if query.ndim == key_.ndim:
+        attn_weights = jnp.einsum("...qhd, ...khd->...hqk", query, key_)
+    else:
+        # multi-query attention
+        attn_weights = jnp.einsum("...qhd, ...kd->...hqk", query, key_)
+
+    # apply attention bias
+    if bias is not None:
+        attn_weights = attn_weights + bias
+
+    # apply attention mask
+    if mask is not None:
+        attn_weights = jnp.where(mask, attn_weights, -jnp.inf)
+
+    # apply softmax to normalize
+    attn_weights = jax.nn.softmax(attn_weights, dim=-1)
+
+    # apply dropout
+    if dropout_p > 0.:
+        dropout = Dropout(dropout_p, inference=inference)
+        attn_weights = dropout(attn_weights, key=key, inference=inference, deterministic=deterministic)
+
+    return attn_weights
+
+
+
+
 
 class MultiheadAttention(Module):
     r"""
