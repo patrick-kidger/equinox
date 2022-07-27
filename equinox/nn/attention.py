@@ -52,16 +52,23 @@ def dot_product_attention_weights(
       Output of shape `[batch..., num_heads, q_length, kv_length]`.
     """
     if query.ndim == key_.ndim:
-        assert query.shape[-3] == key_.shape[-3], "q, k batch dims must match."
+        assert query.shape[-4] == key_.shape[-4], "q, k batch dims must match."
         assert query.shape[-2] == key_.shape[-2], "q, k num_heads must match."
         assert query.shape[-1] == key_.shape[-1], "q, k depths must match."
     elif query.ndim > key_.ndim:
         # support for multi-query attention
-        assert query.shape[-3] == key_.shape[-2], "q, k batch dims must match."
+        assert query.shape[-4] == key_.shape[-3], "q, k batch dims must match."
         assert query.shape[-1] == key_.shape[-1], "q, k depths must match."
     else:
         raise ValueError("q must have equal or more dimensions than k.")
-    depth = query.shape[-1]
+
+    query_seq_length, num_heads, depth = (
+        query.shape[-3],
+        query.shape[-2],
+        query.shape[-1],
+    )
+    kv_seq_length = key_.shape[-2] if key_.ndims < query.ndims else key_.shape[-3]
+
     query = query / jnp.sqrt(depth)
     if query.ndim == key_.ndim:
         attn_weights = jnp.einsum("...qhd,...khd->...hqk", query, key_)
@@ -75,6 +82,12 @@ def dot_product_attention_weights(
 
         # apply attention mask
     if mask is not None:
+        if mask.shape != attn_weights.shape:
+            raise ValueError(
+                f"mask must have shape (num_heads, query_seq_length, "
+                f"kv_seq_length)=({num_heads}, {query_seq_length}, "
+                f"{kv_seq_length}). Got {mask.shape}."
+            )
         attn_weights = jnp.where(mask, attn_weights, -jnp.inf)
 
     # apply softmax to normalize
@@ -137,7 +150,7 @@ def dot_product_attention(
     assert key.ndim == value.ndim, "k, v must have same rank."
     if query.ndim == key_.ndim == value.ndim:
         assert (
-            query.shape[-3] == key_.shape[-3] == value.shape[-3]
+            query.shape[-4] == key_.shape[-4] == value.shape[-3]
         ), "q, k, v batch dims must match."
         assert (
             query.shape[-2] == key_.shape[-2] == value.shape[-2]
@@ -148,7 +161,7 @@ def dot_product_attention(
     elif query.ndim > key_.ndim and query.ndim > value.ndim:
         # support for multi-query attention
         assert (
-            query.shape[-3] == key_.shape[-2] == value.shape[-2]
+            query.shape[-4] == key_.shape[-3] == value.shape[-2]
         ), "q, k batch dims must match."
         assert (
             query.shape[-1] == key_.shape[-1] == value.shape[-1]
@@ -323,8 +336,9 @@ class MultiheadAttention(Module):
         self.output_proj = Linear(
             num_heads * vo_size, output_size, use_bias=use_output_bias, key=okey
         )
-        self.dropout = Dropout(dropout_p, inference=inference)
 
+        self.dropout_p = dropout_p
+        self.inference = inference
         self.num_heads = num_heads
         self.query_size = query_size
         self.key_size = key_size
@@ -382,22 +396,17 @@ class MultiheadAttention(Module):
         key_heads = self._project(self.key_proj, key_)
         value_heads = self._project(self.value_proj, value)
 
-        logits = jnp.einsum("shd,Shd->hsS", query_heads, key_heads)
-        logits = logits / math.sqrt(self.qk_size)
-        if mask is not None:
-            if mask.shape != logits.shape:
-                raise ValueError(
-                    f"mask must have shape (num_heads, query_seq_length, "
-                    f"kv_seq_length)=({self.num_heads}, {query_seq_length}, "
-                    f"{kv_seq_length}). Got {mask.shape}."
-                )
-            logits = jnp.where(mask, logits, -jnp.inf)
-
-        weights = jax.nn.softmax(logits, axis=-1)
-        weights = self.dropout(
-            weights, key=key, inference=inference, deterministic=deterministic
+        attn = dot_product_attention(
+            query=query_heads,
+            key_=key_heads,
+            value=value_heads,
+            mask=mask,
+            dropout_p=self.dropout_p,
+            key=key,
+            inference=inference,
+            deterministic=deterministic,
         )
-        attn = jnp.einsum("hsS,Shd->shd", weights, value_heads)
+
         attn = attn.reshape(query_seq_length, -1)
 
         return jax.vmap(self.output_proj)(attn)
