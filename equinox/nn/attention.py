@@ -16,7 +16,7 @@ def dot_product_attention_weights(
     key_: Array,
     bias: Optional[Array] = None,
     mask: Optional[Array] = None,
-    dropout_p: Optional[float] = None,
+    dropout_p: float = 0.0,
     *,
     dropout: Optional[Dropout] = None,
     key: Optional["jax.random.PRNGKey"] = None,
@@ -31,16 +31,16 @@ def dot_product_attention_weights(
     This also supports multi-query attention (https://arxiv.org/pdf/1911.02150).
     **Arguments:**
 
-        - `query`: Query embedding. Should be a JAX array of shape
-            `(query_seq_length, query_size)`.
-        - `key_`: Key embedding. Should be a JAX array of shape
-            `(kv_seq_length, key_size)`.
+        - `query`: Query vectors. Should be a JAX array of shape
+            `(batch ... query_seq_length, num_heads, qk_size)`.
+        - `key_`: Key vectors. Should be a JAX array of shape
+            `(batch ... kv_seq_length, num_heads, qk_size)`.
         - `mask`: Optional mask preventing attention to certain positions. Should be a
             JAX array of shape `(num_heads, query_seq_length, kv_seq_length)`.
         - `dropout_p`: Dropout probability on attention weights.
-        - `dropout`: Already initialized Dropout module. Only one of `dropout` or `dropout_p`
-           may be passed. (Keyword only argument.)
-        - `key`: A `jax.random.PRNGKey` used for dropout. Unused if `dropout_p = None`.
+        - `dropout`: Already initialized Dropout module. Unused if `dropout_p != 0.`
+          (Keyword only argument).
+        - `key`: A `jax.random.PRNGKey` used for dropout. Unused if `dropout_p = 0.`.
             (Keyword only argument.)
         - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
             argument.)
@@ -48,7 +48,7 @@ def dot_product_attention_weights(
 
         **Returns:**
 
-        A JAX array of shape `(query_seq_length, output_size)`.
+        A JAX array of shape `(batch..., num_heads, query_seq_length, kv_seq_length)`.
     """
     if query.ndim == key_.ndim:
         assert query.shape[:-3] == key_.shape[:-3], "q, k batch dims must match."
@@ -91,16 +91,13 @@ def dot_product_attention_weights(
     attn_weights = jax.nn.softmax(attn_weights, axis=-1)
 
     # apply dropout
-    assert (dropout_p is not None and dropout is None) or (
-        dropout_p is None and dropout is not None
-    ), "May only pass dropout probability parameter or dropout layer."
-
-    if dropout_p:
+    if dropout_p > 0.0:
         dropout = Dropout(dropout_p, inference=inference)
 
-    attn_weights = dropout(
-        attn_weights, key=key, inference=inference, deterministic=deterministic
-    )
+    if dropout is not None:
+        attn_weights = dropout(
+            attn_weights, key=key, inference=inference, deterministic=deterministic
+        )
 
     return attn_weights
 
@@ -111,7 +108,7 @@ def dot_product_attention(
     value: Array,
     bias: Optional[Array] = None,
     mask: Optional[Array] = None,
-    dropout_p: Optional[float] = None,
+    dropout_p: float = 0.0,
     *,
     dropout: Optional[Dropout] = None,
     key: Optional["jax.random.PRNGKey"] = None,
@@ -131,17 +128,17 @@ def dot_product_attention(
     This also supports multi-query attention (https://arxiv.org/pdf/1911.02150).
     **Arguments:**
 
-    - `query`: Query embedding. Should be a JAX array of shape
-            `(query_seq_length, query_size)`.
-    - `key_`: Key embedding. Should be a JAX array of shape
-            `(kv_seq_length, key_size)`.
-    - `value`: Value embedding. Should be a JAX array of shape
-            `(kv_seq_length, value_size)`.
+    - `query`: Query vectors. Should be a JAX array of shape
+            `(batch ... query_seq_length, num_heads, qk_size)`.
+    - `key_`: Key vectors. Should be a JAX array of shape
+            `(batch ... kv_seq_length, num_heads, qk_size)`.
+    - `value`: Value vectors. Should be a JAX array of shape
+            `(batch ... kv_seq_length, num_heads, vo_size)`.
     - `mask`: Optional mask preventing attention to certain positions. Should be a
             JAX array of shape `(num_heads, query_seq_length, kv_seq_length)`.
     - `dropout_p`: Dropout probability on attention weights.
-    - `dropout`: Already initialized Dropout module. Only one of `dropout` or `dropout_p`
-           may be passed. (Keyword only argument.)
+    - `dropout`: Already initialized Dropout module. Unused if `dropout_p != 0.`
+          (Keyword only argument).
     - `key`: A `jax.random.PRNGKey` used for dropout. Unused if `dropout_p = None`.
             (Keyword only argument.)
     - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
@@ -150,10 +147,8 @@ def dot_product_attention(
 
     **Returns:**
 
-    A JAX array of shape `(query_seq_length, output_size)`.
+    A JAX array of shape `(batch..., query_seq_length, num_heads, output_size)`.
     """
-    print(query.shape)
-    print(value.shape)
     assert key_.ndim == value.ndim, "k, v must have same rank."
     if query.ndim == key_.ndim == value.ndim:
         assert (
@@ -166,7 +161,7 @@ def dot_product_attention(
     elif query.ndim > key_.ndim and query.ndim > value.ndim:
         # support for multi-query attention
         assert (
-            query.shape[:-3] == key_.shape[:-2] == value.shape[-2]
+            query.shape[:-3] == key_.shape[:-2] == value.shape[:-2]
         ), "q, k batch dims must match."
         assert key_.shape[-2] == value.shape[-2], "k, v lengths must match"
     else:
@@ -188,7 +183,7 @@ def dot_product_attention(
         return jnp.einsum("...hqk,...khd->...qhd", attn_weights, value)
     else:
         # multi-query attention
-        return jnp.einsum("...hqk,...kd->qhd")
+        return jnp.einsum("...hqk,...kd->...qhd", attn_weights, value)
 
 
 class MultiheadAttention(Module):
