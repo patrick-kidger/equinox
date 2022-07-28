@@ -1,5 +1,5 @@
 from .attention import MultiheadAttention
-from .composed import MLP, Sequential
+from .composed import Lambda, MLP, Sequential
 from .conv import (
     Conv,
     Conv1d,

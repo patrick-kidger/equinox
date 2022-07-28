@@ -137,3 +137,29 @@ Sequential.__init__.__doc__ = """**Arguments:**
 
 - `layers`: A sequence of [`equinox.Module`][]s.
 """
+
+
+class Lambda(Module):
+    """Wraps a callable into `nn.Module`."""
+
+    fn: Callable
+
+    def __call__(
+        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
+    ) -> Array:
+        """**Arguments:**
+
+        - `x`: The input JAX array.
+        - `key`: Ignored.
+
+        **Returns:**
+
+        The output of the `fn(x)` operation.
+        """
+        return self.fn(x)
+
+
+Lambda.__init__.__doc__ = """**Arguments:**
+
+- `fn`: A callable to wrapped in `nn.Module`.
+"""
