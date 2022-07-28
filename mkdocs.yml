@@ -119,6 +119,7 @@ nav:
             - 'api/utilities/miscellaneous.md'
         - Experimental:
             - 'api/experimental/stateful.md'
+            - 'api/experimental/noinline.md'
     - Misc:
         - 'citation.md'
         - 'faq.md'
