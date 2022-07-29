@@ -100,7 +100,11 @@ class MLP(Module):
 
 
 class Sequential(Module):
-    """A sequence of [`equinox.Module`][]s applied in order."""
+    """A sequence of [`equinox.Module`][]s applied in order.
+    !!! note
+
+        Activation functions can be added by wrapping them in [`equinox.nn.Lambda`][].
+    """
 
     layers: Sequence[Module]
 
@@ -140,7 +144,20 @@ Sequential.__init__.__doc__ = """**Arguments:**
 
 
 class Lambda(Module):
-    """Wraps a callable into `nn.Module`."""
+    """Wraps a callable into [`equinox.Module`][].
+
+    !!! Example
+        Particularly useful for including activation functions in [`equinox.nn.Sequential`][]s.
+        ```python
+           model = nn.Sequential(
+               [
+                   nn.Linear(...),
+                   nn.Lambda(jax.nn.relu),
+                   ...
+               ]
+           )
+        ```
+    """
 
     fn: Callable
 
@@ -161,5 +178,5 @@ class Lambda(Module):
 
 Lambda.__init__.__doc__ = """**Arguments:**
 
-- `fn`: A callable to wrapped in `nn.Module`.
+- `fn`: A callable to be wrapped in [`equinox.Module`][].
 """
