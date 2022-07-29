@@ -11,6 +11,159 @@ from .dropout import Dropout
 from .linear import Linear
 
 
+def dot_product_attention_weights(
+    query: Array,
+    key_: Array,
+    bias: Optional[Array] = None,
+    mask: Optional[Array] = None,
+    *,
+    dropout: Optional[Dropout] = None,
+    key: Optional["jax.random.PRNGKey"] = None,
+    inference: Optional[bool] = None,
+    deterministic: Optional[bool] = None,
+):
+
+    r"""Computes dot-product attention weights given query and key.
+    Used by :func:`dot_product_attention`, which is what you'll most likely use.
+    But if you want access to the attention weights for introspection, then
+    you can directly call this function and call einsum yourself.
+    This also supports multi-query attention (https://arxiv.org/pdf/1911.02150).
+
+    **Arguments:**
+
+    - `query`: Query vectors. Should be a JAX array of shape
+            `(query_seq_length, num_heads, qk_size)`.
+    - `key_`: Key vectors. Should be a JAX array of shape
+            `(kv_seq_length, num_heads, qk_size)`.
+    - `mask`: Optional mask preventing attention to certain positions. Should be a
+            JAX array of shape `(num_heads, query_seq_length, kv_seq_length)`.
+    - `dropout`: Already initialized Dropout module.` (Keyword only argument).
+    - `key`: A `jax.random.PRNGKey` used for dropout.`. (Keyword only argument.)
+    - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only argument.)
+    - `deterministic`: (Deprecated in favour of `inference`.)
+
+     **Returns:**
+
+    A JAX array of shape `(num_heads, query_seq_length, kv_seq_length)`.
+    """
+    if query.ndim == key_.ndim:
+        assert query.shape[-2] == key_.shape[-2], "q, k num_heads must match."
+        assert query.shape[-1] == key_.shape[-1], "q, k depths must match."
+    elif query.ndim > key_.ndim:
+        # support for multi-query attention
+        assert query.shape[-1] == key_.shape[-1], "q, k depths must match."
+    else:
+        raise ValueError("q must have equal or more dimensions than k.")
+
+    query_seq_length, num_heads, depth = query.shape
+    kv_seq_length = key_.shape[-2] if key_.ndim < query.ndim else key_.shape[-3]
+
+    query = query / jnp.sqrt(depth)
+    if query.ndim == key_.ndim:
+        attn_weights = jnp.einsum("...qhd,...khd->...hqk", query, key_)
+    else:
+        # multi-query attention
+        attn_weights = jnp.einsum("...qhd,...kd->...hqk", query, key_)
+
+    # apply attention bias
+    if bias is not None:
+        attn_weights = attn_weights + bias
+
+    # apply attention mask
+    if mask is not None:
+        if mask.shape != attn_weights.shape:
+            raise ValueError(
+                f"mask must have shape (num_heads, query_seq_length, "
+                f"kv_seq_length)=({num_heads}, {query_seq_length}, "
+                f"{kv_seq_length}). Got {mask.shape}."
+            )
+        attn_weights = jnp.where(mask, attn_weights, -jnp.inf)
+
+    # apply softmax to normalize
+    attn_weights = jax.nn.softmax(attn_weights, axis=-1)
+
+    # apply dropout
+    if dropout is not None:
+        attn_weights = dropout(
+            attn_weights, key=key, inference=inference, deterministic=deterministic
+        )
+
+    return attn_weights
+
+
+def dot_product_attention(
+    query: Array,
+    key_: Array,
+    value: Array,
+    bias: Optional[Array] = None,
+    mask: Optional[Array] = None,
+    *,
+    dropout: Optional[Dropout] = None,
+    key: Optional["jax.random.PRNGKey"] = None,
+    inference: Optional[bool] = None,
+    deterministic: Optional[bool] = None,
+):
+
+    r"""Computes dot-product attention given query, key, and value.
+    This is the core function for applying attention based on
+    https://arxiv.org/abs/1706.03762.
+
+    - $\text{Attention}$ is defined as
+      $\text{Attention}(\widetilde{Q}, \widetilde{K}, \widetilde{V})
+       = \text{softmax}(\frac{\widetilde{Q}\widetilde{K}^\intercal}
+                             {\sqrt{d_\text{qk}}})\widetilde{V}$.
+
+    This also supports multi-query attention (https://arxiv.org/pdf/1911.02150).
+
+    **Arguments:**
+
+    - `query`: Query vectors. Should be a JAX array of shape
+            `(query_seq_length, num_heads, qk_size)`.
+    - `key_`: Key vectors. Should be a JAX array of shape
+            `(kv_seq_length, num_heads, qk_size)`.
+    - `value`: Value vectors. Should be a JAX array of shape
+            `(kv_seq_length, num_heads, vo_size)`.
+    - `mask`: Optional mask preventing attention to certain positions. Should be a
+            JAX array of shape `(num_heads, query_seq_length, kv_seq_length)`.
+    - `dropout`: Already initialized Dropout module. (Keyword only argument).
+    - `key`: A `jax.random.PRNGKey` used for dropout. Unused if `dropout_p = None`.
+            (Keyword only argument.)
+    - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
+            argument.)
+    - `deterministic`: (Deprecated in favour of `inference`.)
+
+    **Returns:**
+
+    A JAX array of shape `(query_seq_length, num_heads, vo_size)`.
+    """
+    assert key_.ndim == value.ndim, "k, v must have same rank."
+    if query.ndim == key_.ndim == value.ndim:
+        assert key_.shape[-2] == value.shape[-2], "k, v num_heads must match."
+        assert key_.shape[-3] == value.shape[-3], "k, v lengths must match"
+    elif query.ndim > key_.ndim and query.ndim > value.ndim:
+        # support for multi-query attention
+        assert key_.shape[-2] == value.shape[-2], "k, v lengths must match"
+    else:
+        raise ValueError("q must have equal or more dimensions than k, v.")
+
+    attn_weights = dot_product_attention_weights(
+        query=query,
+        key_=key_,
+        bias=bias,
+        mask=mask,
+        dropout=dropout,
+        key=key,
+        inference=inference,
+        deterministic=deterministic,
+    )
+
+    if query.ndim == value.ndim:
+        return jnp.einsum("...hqk,...khd->...qhd", attn_weights, value)
+    else:
+        # multi-query attention
+        return jnp.einsum("...hqk,...kd->...qhd", attn_weights, value)
+
+
 class MultiheadAttention(Module):
     r"""
     Computes
@@ -160,6 +313,7 @@ class MultiheadAttention(Module):
         self.output_proj = Linear(
             num_heads * vo_size, output_size, use_bias=use_output_bias, key=okey
         )
+
         self.dropout = Dropout(dropout_p, inference=inference)
 
         self.num_heads = num_heads
@@ -219,22 +373,17 @@ class MultiheadAttention(Module):
         key_heads = self._project(self.key_proj, key_)
         value_heads = self._project(self.value_proj, value)
 
-        logits = jnp.einsum("shd,Shd->hsS", query_heads, key_heads)
-        logits = logits / math.sqrt(self.qk_size)
-        if mask is not None:
-            if mask.shape != logits.shape:
-                raise ValueError(
-                    f"mask must have shape (num_heads, query_seq_length, "
-                    f"kv_seq_length)=({self.num_heads}, {query_seq_length}, "
-                    f"{kv_seq_length}). Got {mask.shape}."
-                )
-            logits = jnp.where(mask, logits, -jnp.inf)
-
-        weights = jax.nn.softmax(logits, axis=-1)
-        weights = self.dropout(
-            weights, key=key, inference=inference, deterministic=deterministic
+        attn = dot_product_attention(
+            query=query_heads,
+            key_=key_heads,
+            value=value_heads,
+            mask=mask,
+            dropout=self.dropout,
+            key=key,
+            inference=inference,
+            deterministic=deterministic,
         )
-        attn = jnp.einsum("hsS,Shd->shd", weights, value_heads)
+
         attn = attn.reshape(query_seq_length, -1)
 
         return jax.vmap(self.output_proj)(attn)
