@@ -3,6 +3,7 @@ import warnings
 from typing import List, Union
 
 import jax
+import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
 import jax.tree_util as jtu
@@ -963,3 +964,16 @@ def test_poolnetworkbackprop(getkey):
     x = jrandom.normal(getkey(), (10, 3, 32, 32))
     y = jrandom.normal(getkey(), (10, 10))
     loss_grad(x, y)
+
+
+def test_lambda_layer(getkey):
+    net = eqx.nn.Sequential(
+        [
+            eqx.nn.Identity(),
+            eqx.nn.Lambda(jnn.relu),
+        ]
+    )
+    x = jnp.array([[-1, -2, -3], [1, 2, 3]])
+    output = net(x)
+    assert output.shape == (2, 3)
+    assert (output >= 0).all()
