@@ -1,6 +1,6 @@
 from typing import Any
 
-import jax
+import jax.tree_util as jtu
 import pytest
 
 import equinox as eqx
@@ -140,10 +140,10 @@ def test_static_field():
         field3: int = eqx.static_field(default=3)
 
     m = MyModule(1, 2)
-    flat, treedef = jax.tree_flatten(m)
+    flat, treedef = jtu.tree_flatten(m)
     assert len(flat) == 1
     assert flat[0] == 1
-    rm = jax.tree_unflatten(treedef, flat)
+    rm = jtu.tree_unflatten(treedef, flat)
     assert rm.field1 == 1
     assert rm.field2 == 2
     assert rm.field3 == 3
@@ -157,11 +157,11 @@ def test_wrap_method():
             return self.a + b
 
     m = MyModule(13)
-    assert isinstance(m.f, jax.tree_util.Partial)
-    flat, treedef = jax.tree_flatten(m.f)
+    assert isinstance(m.f, jtu.Partial)
+    flat, treedef = jtu.tree_flatten(m.f)
     assert len(flat) == 1
     assert flat[0] == 13
-    assert jax.tree_unflatten(treedef, flat)(2) == 15
+    assert jtu.tree_unflatten(treedef, flat)(2) == 15
 
 
 def test_init_subclass():

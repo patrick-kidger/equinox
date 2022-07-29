@@ -1,4 +1,4 @@
-import jax
+import jax.tree_util as jtu
 
 from .custom_types import PyTree
 
@@ -15,7 +15,7 @@ def _is_none(x):
 
 
 def apply_updates(model: PyTree, updates: PyTree) -> PyTree:
-    """A `jax.tree_map`-broadcasted version of
+    """A `jtu.tree_map`-broadcasted version of
     ```python
     model = model if update is None else model + update
     ```
@@ -34,4 +34,4 @@ def apply_updates(model: PyTree, updates: PyTree) -> PyTree:
     The updated model.
     """
     # Assumes that updates is a prefix of model
-    return jax.tree_map(_apply_update, updates, model, is_leaf=_is_none)
+    return jtu.tree_map(_apply_update, updates, model, is_leaf=_is_none)

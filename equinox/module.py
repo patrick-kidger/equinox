@@ -4,7 +4,7 @@ import inspect
 from dataclasses import dataclass, field, fields
 from typing import Type
 
-import jax
+import jax.tree_util as jtu
 
 from .pretty_print import tree_pformat
 from .tree import tree_equal
@@ -23,7 +23,7 @@ def static_field(**kwargs):
             static_field: int = equinox.static_field()
 
         mymodule = MyModule("normal", "static")
-        leaves, treedef = jax.tree_flatten(mymodule)
+        leaves, treedef = jtu.tree_flatten(mymodule)
         assert leaves == ["normal"]
         assert "static" in str(treedef)
         ```
@@ -55,7 +55,7 @@ class _wrap_method:
     def __get__(self, instance, owner):
         if instance is None:
             return self.method
-        return jax.tree_util.Partial(self.method, instance)
+        return jtu.Partial(self.method, instance)
 
 
 def _not_magic(k: str) -> bool:
@@ -118,7 +118,7 @@ class _ModuleMeta(abc.ABCMeta):
         cls = dataclass(eq=False, repr=False, frozen=True, init=_init)(cls)
         if _init:
             cls.__init__.__doc__ = init_doc
-        jax.tree_util.register_pytree_node_class(cls)
+        jtu.register_pytree_node_class(cls)
         return cls
 
     def __call__(cls, *args, **kwargs):
@@ -229,7 +229,7 @@ class Module(metaclass=_ModuleMeta):
     _has_dataclass_init = True
 
     def __hash__(self):
-        return hash(tuple(jax.tree_leaves(self)))
+        return hash(tuple(jtu.tree_leaves(self)))
 
     def __eq__(self, other):
         return tree_equal(self, other)

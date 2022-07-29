@@ -5,6 +5,7 @@ import warnings
 from typing import Any, Callable, Dict
 
 import jax
+import jax.tree_util as jtu
 
 from .custom_types import BoolAxisSpec, PyTree, sentinel
 from .doc_utils import doc_strip_annotations
@@ -31,7 +32,7 @@ class _ValueAndGradWrapper(Module):
     def __get__(self, instance, owner):
         if instance is None:
             return self
-        return jax.tree_util.Partial(self, instance)
+        return jtu.Partial(self, instance)
 
 
 class _GradWrapper(Module):
@@ -49,7 +50,7 @@ class _GradWrapper(Module):
     def __get__(self, instance, owner):
         if instance is None:
             return self
-        return jax.tree_util.Partial(self, instance)
+        return jtu.Partial(self, instance)
 
 
 @doc_strip_annotations
@@ -233,7 +234,7 @@ class filter_custom_vjp:
             )
             args, kwargs = combine(nonarray_args_kwargs, array_args_kwargs)
             out = fn_bwd(residuals, grad_out, vjp_arg, *args, **kwargs)
-            if jax.tree_structure(out) != jax.tree_structure(diff_array_vjp_arg):
+            if jtu.tree_structure(out) != jtu.tree_structure(diff_array_vjp_arg):
                 raise RuntimeError(
                     "custom_vjp gradients must have the same structure as "
                     "`equinox.filter(vjp_arg, equinox.is_inexact_array)`, where "

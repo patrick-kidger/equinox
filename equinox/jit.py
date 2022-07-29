@@ -5,6 +5,7 @@ from types import FunctionType
 from typing import Any, Callable, Sequence
 
 import jax
+import jax.tree_util as jtu
 
 from .compile_utils import (
     compile_cache,
@@ -99,7 +100,7 @@ class _JitWrapper(Module):
     def __get__(self, instance, owner):
         if instance is None:
             return self
-        return jax.tree_util.Partial(self, instance)
+        return jtu.Partial(self, instance)
 
 
 @doc_strip_annotations

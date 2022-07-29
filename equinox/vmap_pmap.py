@@ -4,6 +4,7 @@ from typing import Any, Callable, Dict, Union
 
 import jax
 import jax.numpy as jnp
+import jax.tree_util as jtu
 
 from .compile_utils import (
     compile_cache,
@@ -33,7 +34,7 @@ def _resolve_axis(axis_spec: AxisSpec, elem: Any) -> PyTree[ResolvedAxisSpec]:
     if axis_spec is None or isinstance(axis_spec, (bool, int)):
         return axis_spec
     if callable(axis_spec):
-        return jax.tree_map(axis_spec, elem)
+        return jtu.tree_map(axis_spec, elem)
     else:
         raise ValueError(
             "`in_axes` and `out_axes` must consist of None, bools, ints, and callables only."
@@ -43,7 +44,7 @@ def _resolve_axis(axis_spec: AxisSpec, elem: Any) -> PyTree[ResolvedAxisSpec]:
 def _resolve_axes(
     pytree: PyTree[Any], axes_spec: PyTree[AxisSpec]
 ) -> PyTree[ResolvedAxisSpec]:
-    return jax.tree_map(_resolve_axis, axes_spec, pytree, is_leaf=_is_none)
+    return jtu.tree_map(_resolve_axis, axes_spec, pytree, is_leaf=_is_none)
 
 
 def _jit_axis(axis: ResolvedAxisSpec) -> BoolAxisSpec:  # not necessarily resolved
@@ -58,7 +59,7 @@ def _jit_axis(axis: ResolvedAxisSpec) -> BoolAxisSpec:  # not necessarily resolv
 
 
 def _jit_axes(axes: PyTree[ResolvedAxisSpec]) -> PyTree[BoolAxisSpec]:
-    return jax.tree_map(_jit_axis, axes, is_leaf=_is_none)
+    return jtu.tree_map(_jit_axis, axes, is_leaf=_is_none)
 
 
 def _map_axis(axis: ResolvedAxisSpec) -> ResolvedMapAxisSpec:
@@ -73,7 +74,7 @@ def _map_axis(axis: ResolvedAxisSpec) -> ResolvedMapAxisSpec:
 
 
 def _map_axes(axes: PyTree[ResolvedAxisSpec]) -> PyTree[ResolvedMapAxisSpec]:
-    return jax.tree_map(_map_axis, axes, is_leaf=_is_none)
+    return jtu.tree_map(_map_axis, axes, is_leaf=_is_none)
 
 
 def _zero_if_array_else_none(x: Any) -> ResolvedMapAxisSpec:
@@ -102,7 +103,7 @@ def _eval_and_return_arraylike(static, dynamic):
 
 
 def _eval_shape(leaves, treedef, axis_name, axis_size):
-    static, struct, in_axes = jax.tree_unflatten(treedef, leaves)
+    static, struct, in_axes = jtu.tree_unflatten(treedef, leaves)
     fn = ft.partial(_eval_and_return_arraylike, static)
     # To get just the number of dimensions we don't need to set out_axes; the batch
     # axis will always go at the front but we don't care.
@@ -113,7 +114,7 @@ def _eval_shape(leaves, treedef, axis_name, axis_size):
         mapkwargs["axis_size"] = axis_size
     fn = jax.vmap(fn, in_axes=(in_axes,), **mapkwargs)
     struct_out = jax.eval_shape(fn, struct)
-    return jax.tree_util.tree_reduce(lambda x, y: max(x, y.ndim), struct_out, 0)
+    return jtu.tree_reduce(lambda x, y: max(x, y.ndim), struct_out, 0)
 
 
 _eval_shape_cache = ft.lru_cache(maxsize=None)(_eval_shape)
@@ -140,12 +141,12 @@ def _get_max_out_size(fun, args, kwargs, in_axes, mapkwargs, cache) -> int:
         axis_size = mapkwargs["axis_size"]
     except KeyError:
         axis_size = sentinel
-    struct = jax.tree_map(lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype), dynamic)
+    struct = jtu.tree_map(lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype), dynamic)
     if cache:
         _eval_shape_fn = _eval_shape_cache
     else:
         _eval_shape_fn = _eval_shape
-    leaves, treedef = jax.tree_flatten((static, struct, in_axes))
+    leaves, treedef = jtu.tree_flatten((static, struct, in_axes))
     leaves = tuple(leaves)
     return _eval_shape_fn(leaves, treedef, axis_name, axis_size)
 
@@ -166,12 +167,12 @@ class _VmapWrapper(Module):
 
             _out_axes = _resolve_axes(_out, __self._out)
             _out_axes = _map_axes(_out_axes)
-            jax.tree_map(ft.partial(_check_map_out_axis, "v", max_out_size), _out_axes)
+            jtu.tree_map(ft.partial(_check_map_out_axis, "v", max_out_size), _out_axes)
             _vmapd = []
             for i in range(-max_out_size, max_out_size):
-                _i_axes = jax.tree_map(lambda a: a == i, _out_axes)
+                _i_axes = jtu.tree_map(lambda a: a == i, _out_axes)
                 _vmapd.append(filter(_out, _i_axes))
-            _none_axes = jax.tree_map(_is_none, _out_axes, is_leaf=_is_none)
+            _none_axes = jtu.tree_map(_is_none, _out_axes, is_leaf=_is_none)
             _nonvmapd = filter(_out, _none_axes)
             return _vmapd, Static(_nonvmapd)
 
@@ -208,7 +209,7 @@ class _VmapWrapper(Module):
     def __get__(self, instance, owner):
         if instance is None:
             return self
-        return jax.tree_util.Partial(self, instance)
+        return jtu.Partial(self, instance)
 
 
 # Note the use of AxisSpec rather than MapAxisSpec.
@@ -405,7 +406,7 @@ def _filter_pmap_cache(fun_names, map_in_axes, max_out_size, **pmapkwargs):
 
         _out_axes = _resolve_axes(_out, _out_axes)
         _map_out_axes = _map_axes(_out_axes)
-        jax.tree_map(ft.partial(_check_map_out_axis, "p", max_out_size), _map_out_axes)
+        jtu.tree_map(ft.partial(_check_map_out_axis, "p", max_out_size), _map_out_axes)
         _jit_out_axes = _jit_axes(_out_axes)
 
         _dynamic, _static_leaves, _static_treedef = hashable_partition(
@@ -414,9 +415,9 @@ def _filter_pmap_cache(fun_names, map_in_axes, max_out_size, **pmapkwargs):
 
         _pmapd = []
         for i in range(-max_out_size, max_out_size):
-            _i_axes = jax.tree_map(lambda a: a == i, _map_out_axes)
+            _i_axes = jtu.tree_map(lambda a: a == i, _map_out_axes)
             _pmapd.append(filter(_dynamic, _i_axes))
-        _none_axes = jax.tree_map(_is_none, _map_out_axes, is_leaf=_is_none)
+        _none_axes = jtu.tree_map(_is_none, _map_out_axes, is_leaf=_is_none)
         _nonpmapd = filter(_dynamic, _none_axes)
 
         return (
@@ -518,7 +519,7 @@ class _PmapWrapper(Module):
     def __get__(self, instance, owner):
         if instance is None:
             return self
-        return jax.tree_util.Partial(self, instance)
+        return jtu.Partial(self, instance)
 
 
 @doc_strip_annotations

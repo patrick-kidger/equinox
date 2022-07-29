@@ -1,7 +1,7 @@
 from typing import Any
 
-import jax
 import jax.numpy as jnp
+import jax.tree_util as jtu
 import numpy as np
 import pytest
 
@@ -95,12 +95,12 @@ def test_filter(getkey):
         [1, 1, 1, 1, "hi"],
     ):
         filtered = eqx.filter(pytree, filter_spec=filter_fn)
-        for arg in jax.tree_leaves(filtered):
+        for arg in jtu.tree_leaves(filtered):
             assert isinstance(arg, int)
         num_int_leaves = sum(
-            1 for leaf in jax.tree_leaves(filtered) if isinstance(leaf, int)
+            1 for leaf in jtu.tree_leaves(filtered) if isinstance(leaf, int)
         )
-        assert len(jax.tree_leaves(filtered)) == num_int_leaves
+        assert len(jtu.tree_leaves(filtered)) == num_int_leaves
 
     filter_spec = [False, True, [filter_fn, True]]
     sentinel = object()
@@ -110,7 +110,7 @@ def test_filter(getkey):
         [eqx.nn.Linear(1, 1, key=getkey()), sentinel],
     ]
     filtered = eqx.filter(pytree, filter_spec=filter_spec)
-    none_linear = jax.tree_map(lambda _: None, eqx.nn.Linear(1, 1, key=getkey()))
+    none_linear = jtu.tree_map(lambda _: None, eqx.nn.Linear(1, 1, key=getkey()))
     assert filtered[0] == none_linear
     assert filtered[1] == pytree[1]
     assert filtered[2][0] == none_linear
@@ -135,9 +135,9 @@ def test_partition_and_combine(getkey):
         [1, 1, 1, 1, "hi"],
     ):
         filtered, unfiltered = eqx.partition(pytree, filter_spec=filter_fn)
-        for arg in jax.tree_leaves(filtered):
+        for arg in jtu.tree_leaves(filtered):
             assert isinstance(arg, int)
-        for arg in jax.tree_leaves(unfiltered):
+        for arg in jtu.tree_leaves(unfiltered):
             assert not isinstance(arg, int)
         assert eqx.combine(filtered, unfiltered) == pytree
         assert eqx.combine(unfiltered, filtered) == pytree

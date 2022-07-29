@@ -3,6 +3,7 @@ from typing import Union
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
+import jax.tree_util as jtu
 import numpy as np
 import pytest
 
@@ -32,7 +33,7 @@ def test_filter_grad2(api_version, getkey):
 
     def f(x):
         sum = 0.0
-        for arg in jax.tree_leaves(x):
+        for arg in jtu.tree_leaves(x):
             if eqx.is_array_like(arg):
                 sum = sum + jnp.sum(arg)
         return sum
