@@ -6,6 +6,7 @@ import jax
 import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
+import jax.tree_util as jtu
 import pytest
 
 import equinox as eqx
@@ -766,7 +767,7 @@ def test_spectral_norm(getkey):
     def get_weights(m):
         is_linear = lambda x: isinstance(x, eqx.nn.Linear)
         return tuple(
-            k.weight for k in jax.tree_leaves(m, is_leaf=is_linear) if is_linear(k)
+            k.weight for k in jtu.tree_leaves(m, is_leaf=is_linear) if is_linear(k)
         )
 
     spectral_mlp = eqx.tree_at(get_weights, mlp, replace_fn=spectral)

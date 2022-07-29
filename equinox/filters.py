@@ -1,7 +1,7 @@
 from typing import Any, Callable, Optional
 
-import jax
 import jax.numpy as jnp
+import jax.tree_util as jtu
 import numpy as np
 
 from .custom_types import BoolAxisSpec, PyTree, ResolvedBoolAxisSpec
@@ -53,9 +53,9 @@ def is_inexact_array_like(element: Any) -> bool:
 def _make_filter_tree(is_leaf):
     def _filter_tree(mask: BoolAxisSpec, arg: Any) -> ResolvedBoolAxisSpec:
         if isinstance(mask, bool):
-            return jax.tree_map(lambda _: mask, arg, is_leaf=is_leaf)
+            return jtu.tree_map(lambda _: mask, arg, is_leaf=is_leaf)
         elif callable(mask):
-            return jax.tree_map(mask, arg, is_leaf=is_leaf)
+            return jtu.tree_map(mask, arg, is_leaf=is_leaf)
         else:
             raise ValueError(
                 "`filter_spec` must consist of booleans and callables only."
@@ -105,8 +105,8 @@ def filter(
     """
 
     inverse = bool(inverse)  # just in case, to make the != trick below work reliably
-    filter_tree = jax.tree_map(_make_filter_tree(is_leaf), filter_spec, pytree)
-    return jax.tree_map(
+    filter_tree = jtu.tree_map(_make_filter_tree(is_leaf), filter_spec, pytree)
+    return jtu.tree_map(
         lambda mask, x: x if bool(mask) != inverse else replace, filter_tree, pytree
     )
 
@@ -125,9 +125,9 @@ def partition(
         See also [`equinox.combine`][] to reconstitute the PyTree again.
     """
 
-    filter_tree = jax.tree_map(_make_filter_tree(is_leaf), filter_spec, pytree)
-    left = jax.tree_map(lambda mask, x: x if mask else replace, filter_tree, pytree)
-    right = jax.tree_map(lambda mask, x: replace if mask else x, filter_tree, pytree)
+    filter_tree = jtu.tree_map(_make_filter_tree(is_leaf), filter_spec, pytree)
+    left = jtu.tree_map(lambda mask, x: x if mask else replace, filter_tree, pytree)
+    right = jtu.tree_map(lambda mask, x: replace if mask else x, filter_tree, pytree)
     return left, right
 
 
@@ -169,4 +169,4 @@ def combine(*pytrees: PyTree) -> PyTree:
     iterated over.
     """
 
-    return jax.tree_map(_combine, *pytrees, is_leaf=_is_none)
+    return jtu.tree_map(_combine, *pytrees, is_leaf=_is_none)

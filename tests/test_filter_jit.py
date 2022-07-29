@@ -4,6 +4,7 @@ from typing import Union
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
+import jax.tree_util as jtu
 import pytest
 
 import equinox as eqx
@@ -29,7 +30,7 @@ def test_filter_jit1(api_version, getkey):
         eqx.nn.MLP(2, 2, 2, 2, key=getkey()),
     ]
     array_tree = [{"a": a, "b": b}, (c,)]
-    _mlp = jax.tree_map(lambda u: u if eqx.is_array_like(u) else None, general_tree[-1])
+    _mlp = jtu.tree_map(lambda u: u if eqx.is_array_like(u) else None, general_tree[-1])
 
     if api_version == 0:
 
@@ -53,7 +54,7 @@ def test_filter_jit1(api_version, getkey):
         f(general_tree)
 
     def g(x):
-        return jax.tree_map(lambda u: u if eqx.is_array_like(u) else None, x)
+        return jtu.tree_map(lambda u: u if eqx.is_array_like(u) else None, x)
 
     if api_version == 0:
         g = eqx.filter_jit(g, filter_spec=eqx.is_inexact_array)
@@ -76,7 +77,7 @@ def test_filter_jit1(api_version, getkey):
     assert _eq(g2[5], _mlp)
 
     def h(x):
-        return jax.tree_map(lambda u: u if eqx.is_array_like(u) else None, x)
+        return jtu.tree_map(lambda u: u if eqx.is_array_like(u) else None, x)
 
     if api_version == 0:
         h = eqx.filter_jit(h, filter_spec=eqx.is_array_like)
@@ -112,7 +113,7 @@ def test_filter_jit2(api_version, getkey):
         c,
         eqx.nn.MLP(2, 2, 2, 2, key=getkey()),
     ]
-    _mlp = jax.tree_map(lambda u: u if eqx.is_array_like(u) else None, general_tree[-1])
+    _mlp = jtu.tree_map(lambda u: u if eqx.is_array_like(u) else None, general_tree[-1])
 
     spec = [
         True,
@@ -124,7 +125,7 @@ def test_filter_jit2(api_version, getkey):
     ]
 
     def f(x):
-        return jax.tree_map(lambda u: u if eqx.is_array_like(u) else None, x)
+        return jtu.tree_map(lambda u: u if eqx.is_array_like(u) else None, x)
 
     if api_version == 0:
         wrappers = [ft.partial(eqx.filter_jit, filter_spec=((spec,), {}))]
@@ -431,6 +432,6 @@ def test_wrap_jax_partial(getkey):
     def f(x, y):
         return x + y
 
-    g = jax.tree_util.Partial(f, jrandom.normal(getkey(), ()))
-    fn = jax.tree_util.Partial(f, True)
+    g = jtu.Partial(f, jrandom.normal(getkey(), ()))
+    fn = jtu.Partial(f, True)
     eqx.filter_jit(g, fn=fn)

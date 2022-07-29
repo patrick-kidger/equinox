@@ -3,6 +3,7 @@ from typing import Union
 import jax
 import jax.numpy as jnp
 import jax.random as jr
+import jax.tree_util as jtu
 import pytest
 
 import equinox as eqx
@@ -201,7 +202,7 @@ def test_map_non_jax():
 
     _ = eqx.filter_vmap(
         identity,
-        out=jax.tree_map(
+        out=jtu.tree_map(
             lambda value: 0 if eqx.is_array(value) else None,
             pytree,
         ),

@@ -1,8 +1,8 @@
 import pathlib
 from typing import Any, Callable, Union
 
-import jax
 import jax.numpy as jnp
+import jax.tree_util as jtu
 import numpy as np
 
 from . import experimental
@@ -118,9 +118,9 @@ def tree_serialise_leaves(
             def __serialise(y):
                 spec(f, y)
 
-            jax.tree_map(__serialise, x, is_leaf=is_leaf)
+            jtu.tree_map(__serialise, x, is_leaf=is_leaf)
 
-        jax.tree_map(_serialise, filter_spec, pytree)
+        jtu.tree_map(_serialise, filter_spec, pytree)
 
 
 def tree_deserialise_leaves(
@@ -180,8 +180,8 @@ def tree_deserialise_leaves(
             def __deserialise(y):
                 return spec(f, y)
 
-            return jax.tree_map(__deserialise, x, is_leaf=is_leaf)
+            return jtu.tree_map(__deserialise, x, is_leaf=is_leaf)
 
-        out = jax.tree_map(_deserialise, filter_spec, like)
-    jax.tree_map(_assert_same, out, like, is_leaf=is_leaf)
+        out = jtu.tree_map(_deserialise, filter_spec, like)
+    jtu.tree_map(_assert_same, out, like, is_leaf=is_leaf)
     return out

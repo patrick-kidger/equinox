@@ -2,6 +2,7 @@ from typing import Any, Callable, Optional, Sequence, Union
 
 import jax
 import jax.numpy as jnp
+import jax.tree_util as jtu
 import numpy as np
 
 from .custom_types import PyTree, sentinel
@@ -66,7 +67,7 @@ def tree_at(
     - `replace_fn`: A function `Node -> Any`. It will be called on every node specified
         by `where`. The return value from `replace_fn` will be used in its place.
         Mutually exclusive with `replace`.
-    - `is_leaf`: As `jax.tree_flatten`. For example pass `is_leaf=lambda x: x is None`
+    - `is_leaf`: As `jtu.tree_flatten`. For example pass `is_leaf=lambda x: x is None`
         to be able to replace `None` values using `tree_at`.
 
     **Returns:**
@@ -84,7 +85,7 @@ def tree_at(
             ...
 
         model = eqx.nn.MLP(...)
-        trainable = jax.tree_map(lambda _: False, model)
+        trainable = jtu.tree_map(lambda _: False, model)
         trainable = equinox.tree_at(lambda mlp: mlp.layers[-1].linear.weight, model, replace=True)
         grad_loss = equinox.filter_grad(loss, arg=trainable)
         grads = grad_loss(model)
@@ -114,10 +115,10 @@ def tree_at(
     # Whilst we're here: we also double-check that `where` is well-formed and doesn't
     # use leaf information. (As else `node_or_nodes` will be wrong.)
     node_or_nodes_nowrapper = where(pytree)
-    pytree = jax.tree_map(_LeafWrapper, pytree, is_leaf=is_leaf)
+    pytree = jtu.tree_map(_LeafWrapper, pytree, is_leaf=is_leaf)
     node_or_nodes = where(pytree)
-    leaves1, structure1 = jax.tree_flatten(node_or_nodes_nowrapper, is_leaf=is_leaf)
-    leaves2, structure2 = jax.tree_flatten(node_or_nodes)
+    leaves1, structure1 = jtu.tree_flatten(node_or_nodes_nowrapper, is_leaf=is_leaf)
+    leaves2, structure2 = jtu.tree_flatten(node_or_nodes)
     leaves2 = [_remove_leaf_wrapper(x) for x in leaves2]
     if (
         structure1 != structure2
@@ -138,7 +139,7 @@ def tree_at(
         if x is node_or_nodes:  # noqa: F821
             in_pytree = True
 
-    jax.tree_map(_in_pytree, pytree, is_leaf=lambda x: x is node_or_nodes)  # noqa: F821
+    jtu.tree_map(_in_pytree, pytree, is_leaf=lambda x: x is node_or_nodes)  # noqa: F821
     if in_pytree:
         nodes = (node_or_nodes,)
         if replace is not sentinel:
@@ -156,7 +157,7 @@ def tree_at(
         else:
 
             def _replace_fn(x):
-                x = jax.tree_map(_remove_leaf_wrapper, x)
+                x = jtu.tree_map(_remove_leaf_wrapper, x)
                 return replace_fn(x)
 
             replace_fns = [_replace_fn] * len(nodes)
@@ -178,7 +179,7 @@ def tree_at(
     def _make_replacement(x: _Node) -> Any:
         return node_replace_fns.get(x, _remove_leaf_wrapper)(x)
 
-    out = jax.tree_map(
+    out = jtu.tree_map(
         _make_replacement, pytree, is_leaf=lambda x: x in node_replace_fns
     )
 
@@ -223,11 +224,11 @@ def tree_equal(*pytrees: PyTree) -> bool:
 
     A boolean.
     """
-    flat, treedef = jax.tree_flatten(pytrees[0])
+    flat, treedef = jtu.tree_flatten(pytrees[0])
     array_types = (jnp.ndarray, np.ndarray)
     out = True
     for pytree in pytrees[1:]:
-        flat_, treedef_ = jax.tree_flatten(pytree)
+        flat_, treedef_ = jtu.tree_flatten(pytree)
         if treedef_ != treedef:
             return False
         for elem, elem_ in zip(flat, flat_):
@@ -261,7 +262,7 @@ def _has_inference(leaf):
 def _inferences(pytree):
     return tuple(
         x.inference
-        for x in jax.tree_leaves(pytree, is_leaf=_has_inference)
+        for x in jtu.tree_leaves(pytree, is_leaf=_has_inference)
         if _has_inference(x)
     )
 
@@ -275,7 +276,7 @@ def tree_inference(pytree: PyTree, value: bool) -> PyTree:
 
     def where(pytree):
         return tuple(x.inference
-                     for x in jax.tree_leaves(pytree, is_leaf=has_inference)
+                     for x in jtu.tree_leaves(pytree, is_leaf=has_inference)
                      if has_inference(x))
 
     equinox.tree_at(where, pytree, replace_fn=lambda _: value)

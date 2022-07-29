@@ -2,6 +2,7 @@ import functools as ft
 
 import jax
 import jax.numpy as jnp
+import jax.tree_util as jtu
 import pytest
 
 import equinox as eqx
@@ -434,8 +435,8 @@ def test_inference_multi_vmap(with_jit, with_pytree):
 def test_equality():
     index = eqx.experimental.StateIndex()
     eqx.experimental.set_state(index, jnp.array(1))
-    leaves, treedef = jax.tree_flatten(index)
-    index2 = jax.tree_unflatten(treedef, leaves)
+    leaves, treedef = jtu.tree_flatten(index)
+    index2 = jtu.tree_unflatten(treedef, leaves)
     assert index == index2
 
     index3 = eqx.tree_at(lambda i: i.inference, index, True)

@@ -2,7 +2,7 @@ import inspect
 import typing
 from typing import Any, Callable, Generic, Tuple, TypeVar, Union
 
-import jax
+import jax.tree_util as jtu
 
 from .doc_utils import doc_repr
 
@@ -109,7 +109,7 @@ else:
 
 sentinel = doc_repr(object(), "sentinel")
 
-TreeDef = type(jax.tree_structure(0))
+TreeDef = type(jtu.tree_structure(0))
 
 ResolvedBoolAxisSpec = bool
 BoolAxisSpec = Union[ResolvedBoolAxisSpec, Callable[[Any], ResolvedBoolAxisSpec]]
