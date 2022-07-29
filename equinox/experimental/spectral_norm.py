@@ -61,6 +61,7 @@ class SpectralNorm(Module):
         import equinox.experimental as eqxe
         import jax
         import jax.random as jr
+        import jax.tree_util as jtu
         import functools as ft
 
         key = jr.PRNGKey(0)
@@ -76,7 +77,7 @@ class SpectralNorm(Module):
             return module
 
         def apply_sn(model):
-            return jax.tree_map(_apply_sn_to_linear, model, is_leaf=_is_linear)
+            return jtu.tree_map(_apply_sn_to_linear, model, is_leaf=_is_linear)
 
         model = eqx.nn.MLP(2, 2, 2, 2, key=model_key)
         model_with_sn = apply_sn(model)
@@ -99,7 +100,7 @@ class SpectralNorm(Module):
             return module
 
         def set_inference(model):
-            return jax.tree_map(_set_inference_on_sn, model, is_leaf=_is_sn)
+            return jtu.tree_map(_set_inference_on_sn, model, is_leaf=_is_sn)
 
         model = ...  # set up model, train it, etc.
         model = set_inference(model)

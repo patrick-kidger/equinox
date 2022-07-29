@@ -23,7 +23,7 @@ import jax
 class MyModule(eqx.Module):
     layers: list
     bias: jax.numpy.ndarray
-    
+
     def __init__(self, key):
         key1, key2, key3 = jax.random.split(key, 3)
         self.layers = [eqx.nn.Linear(2, 8, key=key1),
@@ -48,7 +48,7 @@ y = jax.random.normal(y_key, (100, 2))
 model = MyModule(model_key)
 grads = loss(model, x, y)
 learning_rate = 0.1
-model = jax.tree_map(lambda m, g: m - learning_rate * g, model, grads)
+model = jax.tree_util.tree_map(lambda m, g: m - learning_rate * g, model, grads)
 ```
 
 ## Filtering
@@ -147,4 +147,4 @@ See also the API reference on the left.
 
     One common question: a lot of other libraries introduce custom `library.jit` etc. operations, specifically to work with `library.Module`. What makes the filtered transformations of Equinox different?
 
-    The answer is that filter transformations are tools that apply to any PyTree. And models just happen to be PyTrees. The filtered transformations and `eqx.Module` are not coupled together. 
+    The answer is that filter transformations are tools that apply to any PyTree. And models just happen to be PyTrees. The filtered transformations and `eqx.Module` are not coupled together.

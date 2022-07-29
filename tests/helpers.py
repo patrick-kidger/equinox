@@ -1,8 +1,8 @@
 import functools as ft
 import operator
 
-import jax
 import jax.numpy as jnp
+import jax.tree_util as jtu
 import numpy as np
 
 
@@ -36,8 +36,8 @@ def shaped_allclose(x, y, **kwargs):
     - It also supports PyTree arguments.
     - It mandates that shapes match as well (no broadcasting)
     """
-    same_structure = jax.tree_structure(x) == jax.tree_structure(y)
+    same_structure = jtu.tree_structure(x) == jtu.tree_structure(y)
     allclose = ft.partial(_shaped_allclose, **kwargs)
-    return same_structure and jax.tree_util.tree_reduce(
-        operator.and_, jax.tree_map(allclose, x, y), True
+    return same_structure and jtu.tree_reduce(
+        operator.and_, jtu.tree_map(allclose, x, y), True
     )

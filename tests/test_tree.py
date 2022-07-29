@@ -2,6 +2,7 @@ import jax
 import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
+import jax.tree_util as jtu
 import pytest
 
 import equinox as eqx
@@ -97,7 +98,7 @@ def test_tree_at_dependent_where(getkey):
     mlp = eqx.nn.MLP(2, 2, 2, 2, key=getkey())
 
     def where(m):
-        return jax.tree_leaves(eqx.filter(m, eqx.is_array))
+        return jtu.tree_leaves(eqx.filter(m, eqx.is_array))
 
     with pytest.raises(ValueError):
         eqx.tree_at(where, mlp, where(mlp))

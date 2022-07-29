@@ -9,6 +9,7 @@ import jax.interpreters.mlir as mlir
 import jax.interpreters.xla as xla
 import jax.lax as lax
 import jax.numpy as jnp
+import jax.tree_util as jtu
 
 from ..custom_types import Array, PyTree
 from ..filters import is_array
@@ -179,7 +180,7 @@ class StateIndex(Module):
             self = super().tree_unflatten(aux, leaves)
             # Not using `tree_at` because that goes via flattening and we'd get an
             # infinite loop.
-            new_state = jax.tree_map(jnp.asarray, new_state)
+            new_state = jtu.tree_map(jnp.asarray, new_state)
             object.__setattr__(self, "_state", new_state)
             object.__setattr__(self, "_version", _FixedInt(new_version))
 
@@ -233,35 +234,35 @@ def _monkey_patch():
 
         def _outside_call_impl(*arg_flat, arg_treedef, **params):
             leaves = [None] * arg_treedef.num_leaves
-            call_type = type(jax.tree_unflatten(arg_treedef, leaves))
+            call_type = type(jtu.tree_unflatten(arg_treedef, leaves))
             # Not using isinstance for speed. (Questionable choice?)
             if call_type is _GetStateArg:
-                arg = jax.tree_unflatten(arg_treedef, arg_flat)
-                token_index = jax.tree_map(lambda _: jax.core.token, arg.index)
-                token_like = jax.tree_map(lambda _: jax.core.token, arg.like)
+                arg = jtu.tree_unflatten(arg_treedef, arg_flat)
+                token_index = jtu.tree_map(lambda _: jax.core.token, arg.index)
+                token_like = jtu.tree_map(lambda _: jax.core.token, arg.like)
                 arg = tree_at(
-                    lambda a: jax.tree_leaves((a.index, a.like)),
+                    lambda a: jtu.tree_leaves((a.index, a.like)),
                     arg,
-                    jax.tree_leaves((token_index, token_like)),
+                    jtu.tree_leaves((token_index, token_like)),
                 )
-                arg_flat = jax.tree_leaves(arg)
+                arg_flat = jtu.tree_leaves(arg)
             return _old_outside_call_impl(*arg_flat, arg_treedef=arg_treedef, **params)
 
         def _outside_call_translation_rule(ctx, avals_in, *args, arg_treedef, **kwargs):
             leaves = [None] * arg_treedef.num_leaves
-            call_type = type(jax.tree_unflatten(arg_treedef, leaves))
+            call_type = type(jtu.tree_unflatten(arg_treedef, leaves))
             if call_type is _GetStateArg:
                 arg_flat = avals_in[:-2]
                 extra_tokens = avals_in[-2:]
-                arg = jax.tree_unflatten(arg_treedef, arg_flat)
-                token_index = jax.tree_map(lambda _: jax.core.abstract_token, arg.index)
-                token_like = jax.tree_map(lambda _: jax.core.abstract_token, arg.like)
+                arg = jtu.tree_unflatten(arg_treedef, arg_flat)
+                token_index = jtu.tree_map(lambda _: jax.core.abstract_token, arg.index)
+                token_like = jtu.tree_map(lambda _: jax.core.abstract_token, arg.like)
                 arg = tree_at(
-                    lambda a: jax.tree_leaves((a.index, a.like)),
+                    lambda a: jtu.tree_leaves((a.index, a.like)),
                     arg,
-                    jax.tree_leaves((token_index, token_like)),
+                    jtu.tree_leaves((token_index, token_like)),
                 )
-                arg_flat = jax.tree_leaves(arg)
+                arg_flat = jtu.tree_leaves(arg)
                 avals_in = arg_flat + extra_tokens
             return _old_outside_call_translation_rule(
                 ctx, avals_in, *args, arg_treedef=arg_treedef, **kwargs
@@ -275,11 +276,11 @@ def _monkey_patch():
 
         def _target_batch_axes(batch_axes_flat, arg_treedef, target):
             batch_axes_leaves_flat = [_Leaf(b) for b in batch_axes_flat]
-            batch_axes_leaves_tree = jax.tree_unflatten(
+            batch_axes_leaves_tree = jtu.tree_unflatten(
                 arg_treedef, batch_axes_leaves_flat
             )
             batch_axes_target_leaves_tree = getattr(batch_axes_leaves_tree, target)
-            batch_axes_target_leaves_flat = jax.tree_leaves(
+            batch_axes_target_leaves_flat = jtu.tree_leaves(
                 batch_axes_target_leaves_tree
             )
             batch_axes_target_flat = [b.value for b in batch_axes_target_leaves_flat]
@@ -288,7 +289,7 @@ def _monkey_patch():
         def _outside_call_batching_rule(
             arg_flat, batch_axes_flat, *, arg_treedef, result_treedef, **params
         ):
-            arg = jax.tree_unflatten(arg_treedef, arg_flat)
+            arg = jtu.tree_unflatten(arg_treedef, arg_flat)
             if type(arg) is _GetStateArg:
                 batch_axes_like_flat = _target_batch_axes(
                     batch_axes_flat, arg_treedef, "like"
@@ -296,7 +297,7 @@ def _monkey_patch():
                 state = _get_state(
                     arg.index, arg.like, arg.batch_axes + batch_axes_like_flat
                 )
-                state_leaves, state_treedef = jax.tree_flatten(state)
+                state_leaves, state_treedef = jtu.tree_flatten(state)
                 assert state_treedef == result_treedef
                 assert len(state_leaves) == len(batch_axes_like_flat)
                 return state_leaves, batch_axes_like_flat
@@ -323,25 +324,25 @@ def _monkey_patch():
 def _batchify_impl(*flat, treedef, like_batch_axes, current_batch_axes):
     if current_batch_axes != like_batch_axes:
         raise RuntimeError("`like` and the saved state have different batch axes")
-    state, like = jax.tree_unflatten(treedef, flat)
-    return jax.tree_leaves(state)
+    state, like = jtu.tree_unflatten(treedef, flat)
+    return jtu.tree_leaves(state)
 
 
 def _batchify_abstract_eval(*flat, treedef, like_batch_axes, current_batch_axes):
-    state, like = jax.tree_unflatten(treedef, flat)
-    like_avals = jax.tree_map(lambda l: jax.ShapedArray(l.shape, l.dtype), like)
-    return jax.tree_leaves(like_avals)
+    state, like = jtu.tree_unflatten(treedef, flat)
+    like_avals = jtu.tree_map(lambda l: jax.ShapedArray(l.shape, l.dtype), like)
+    return jtu.tree_leaves(like_avals)
 
 
 def _batchify_batching_rule(
     flat, batch_axes_flat, *, treedef, like_batch_axes, current_batch_axes
 ):
-    state, like = jax.tree_unflatten(treedef, flat)
+    state, like = jtu.tree_unflatten(treedef, flat)
     batch_axes_flat = [_Leaf(b) for b in batch_axes_flat]
-    state_batch_axis, like_batch_axis = jax.tree_unflatten(treedef, batch_axes_flat)
-    for b in jax.tree_leaves(state_batch_axis):
+    state_batch_axis, like_batch_axis = jtu.tree_unflatten(treedef, batch_axes_flat)
+    for b in jtu.tree_leaves(state_batch_axis):
         assert b.value is batching.not_mapped
-    like_batch_axis = jax.tree_leaves(like_batch_axis)
+    like_batch_axis = jtu.tree_leaves(like_batch_axis)
     like_batch_axis = [b.value for b in like_batch_axis]
     return (
         _batchify_p.bind(
@@ -426,7 +427,7 @@ def get_state(index: StateIndex, like: PyTree[Array]) -> PyTree[Array]:
 
         This means that your operation will no longer be a pure function.
     """
-    if any(not is_array(x) for x in jax.tree_leaves(like)):
+    if any(not is_array(x) for x in jtu.tree_leaves(like)):
         raise TypeError("`like` must be a PyTree containing only JAX arrays")
 
     #
@@ -481,20 +482,20 @@ def get_state(index: StateIndex, like: PyTree[Array]) -> PyTree[Array]:
         if current_version == index._version.value:
             state = index._state
         else:
-            state = jax.tree_map(jnp.asarray, current_state)
-        _treedef = jax.tree_structure(state)
-        if _treedef != jax.tree_structure(state):
+            state = jtu.tree_map(jnp.asarray, current_state)
+        _treedef = jtu.tree_structure(state)
+        if _treedef != jtu.tree_structure(state):
             raise RuntimeError(
                 "`like` has different PyTree structure to the stored state"
             )
-        flat, treedef = jax.tree_flatten((state, like))
+        flat, treedef = jtu.tree_flatten((state, like))
         out = _batchify_p.bind(
             *flat,
             treedef=treedef,
             like_batch_axes=[],
             current_batch_axes=current_batch_axes
         )
-        return jax.tree_unflatten(_treedef, out)
+        return jtu.tree_unflatten(_treedef, out)
     else:
         _monkey_patch()
         return _get_state(index, like, [])
@@ -578,10 +579,10 @@ def set_state(index: StateIndex, state: PyTree[Array]) -> None:
         # We could technically allow this in the (inference=False, non-JIT) case, but
         # it's better to be consistent between JIT and non-JIT.
         raise RuntimeError("Cannot use `set_state` during inference.")
-    if any(not is_array(x) for x in jax.tree_leaves(state)):
+    if any(not is_array(x) for x in jtu.tree_leaves(state)):
         raise TypeError("`state` must be a PyTree containing only JAX arrays")
     _monkey_patch()
-    state = jax.tree_map(lax.stop_gradient, state)
+    state = jtu.tree_map(lax.stop_gradient, state)
     _set_state(index, state, [])
 
 
