@@ -1,5 +1,5 @@
 import pathlib
-from typing import Any, Callable, Union
+from typing import Any, BinaryIO, Callable, Union
 
 import jax.numpy as jnp
 import jax.tree_util as jtu
@@ -9,7 +9,37 @@ from . import experimental
 from .custom_types import PyTree
 
 
-def _default_serialise_filter_spec(f, x):
+def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
+    """Default filter specification for serializing a leaf.
+
+    **Arguments**
+
+    -   `f`: file-like object
+    -   `x`: The leaf to be saved on the disk.
+
+    **Returns**
+
+    Nothing.
+
+    !!! info
+
+        This function can be extended to customise the serialization behaviour for leaves.
+
+    !!! example
+
+        Skipping saving of jnp.ndarray.
+
+        ```python
+        import jax.numpy as jnp
+        import equinox as eqx
+
+        tree = (jnp.array([1,2,3]), [4,5,6])
+        new_filter_spec = lambda f,x: (
+            None if isinstance(x, jnp.ndarray) else eqx.default_serialise_filter_spec(f, x)
+        )
+        eqx.tree_serialise_leaves("some_filename.eqx", tree, filter_spec=new_filter_spec)
+        ```
+    """
     if isinstance(x, jnp.ndarray):
         jnp.save(f, x)
     elif isinstance(x, np.ndarray):
@@ -23,7 +53,37 @@ def _default_serialise_filter_spec(f, x):
         pass
 
 
-def _default_deserialise_filter_spec(f, x):
+def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
+    """Default filter specification for deserializing saved data.
+
+    **Arguments**
+
+    -   `f`: file-like object
+    -   `x`: The leaf for which the data needs to be loaded.
+
+    **Returns**
+
+    The new value for datatype `x`.
+
+    !!! info
+
+        This function can be extended to customise the serialization behaviour for leaves.
+
+    !!! example
+
+        Skipping loading of jnp.ndarray.
+
+        ```python
+        import jax.numpy as jnp
+        import equinox as eqx
+
+        tree = (jnp.array([4,5,6]), [1,2,3])
+        new_filter_spec = lambda f,x: (
+            x if isinstance(x, jnp.ndarray) else eqx.default_deserialise_filter_spec(f, x)
+        )
+        new_tree = eqx.tree_deserialise_leaves("some_filename.eqx", tree, filter_spec=new_filter_spec)
+        ```
+    """
     if isinstance(x, jnp.ndarray):
         return jnp.load(f)
     elif isinstance(x, np.ndarray):
@@ -69,7 +129,7 @@ def _is_index(x):
 def tree_serialise_leaves(
     path: Union[str, pathlib.Path],
     pytree: PyTree,
-    filter_spec=_default_serialise_filter_spec,
+    filter_spec=default_serialise_filter_spec,
     is_leaf: Callable[[Any], bool] = _is_index,
 ) -> None:
     """Save the leaves of a PyTree to file.
@@ -126,7 +186,7 @@ def tree_serialise_leaves(
 def tree_deserialise_leaves(
     path: Union[str, pathlib.Path],
     like: PyTree,
-    filter_spec=_default_deserialise_filter_spec,
+    filter_spec=default_deserialise_filter_spec,
     is_leaf: Callable[[Any], bool] = _is_index,
 ) -> PyTree:
     """Load the leaves of a PyTree from a file.
