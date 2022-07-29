@@ -101,6 +101,7 @@ class MLP(Module):
 
 class Sequential(Module):
     """A sequence of [`equinox.Module`][]s applied in order.
+
     !!! note
 
         Activation functions can be added by wrapping them in [`equinox.nn.Lambda`][].
@@ -144,15 +145,19 @@ Sequential.__init__.__doc__ = """**Arguments:**
 
 
 class Lambda(Module):
-    """Wraps a callable into [`equinox.Module`][].
+    """Wraps a callable (e.g. an activation function) for use with
+    [`equinox.nn.Sequential`][].
+
+    Precisely, this just adds an extra `key` argument (that is ignored). Given some
+    function `fn`, then `Lambda` is essentially a convenience for `lambda x, key: f(x)`.
 
     !!! Example
-        Particularly useful for including activation functions in [`equinox.nn.Sequential`][]s.
+
         ```python
-           model = nn.Sequential(
+           model = eqx.nn.Sequential(
                [
-                   nn.Linear(...),
-                   nn.Lambda(jax.nn.relu),
+                   eqx.nn.Linear(...),
+                   eqx.nn.Lambda(jax.nn.relu),
                    ...
                ]
            )
