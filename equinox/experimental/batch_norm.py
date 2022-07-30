@@ -158,7 +158,9 @@ class BatchNorm(Module):
             running_state = lax.cond(
                 first_time,
                 lambda: batch_state,
-                lambda: get_state(self.state_index, like=batch_state),
+                lambda: get_state(
+                    self.state_index, like=lax.stop_gradient(batch_state)
+                ),
             )
             set_state(self.first_time_index, jnp.array(False))
             running_mean, running_var = running_state
