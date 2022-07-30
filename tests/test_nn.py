@@ -731,6 +731,15 @@ def test_batch_norm(getkey):
     assert jnp.allclose(running_mean, running_mean2)
     assert jnp.allclose(running_var, running_var2)
 
+    # Test that we can differentiate through it
+
+    bn = eqx.experimental.BatchNorm(5, "batch")
+
+    def f(x):
+        return jnp.sum(jax.vmap(bn, axis_name="batch")(x))
+
+    jax.grad(f)(jnp.array(jrandom.normal(getkey(), (1, 5))))
+
 
 def test_spectral_norm(getkey):
     weight = jrandom.normal(getkey(), (5, 6))
