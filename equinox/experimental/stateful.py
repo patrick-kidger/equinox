@@ -71,8 +71,8 @@ class StateIndex(Module):
         y = jnp.array([3., 4.])
         shape = x.shape
         ci = CacheInput(shape)
-        ci(x)
-        ci(y)
+        ci(x)  # last_x=[0. 0.], x=[1. 2.]
+        ci(y)  # last_x=[1. 2.], x=[3. 4.]
         ```
     """
 
