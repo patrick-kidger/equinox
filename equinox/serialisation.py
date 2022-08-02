@@ -2,11 +2,11 @@ import pathlib
 from typing import Any, BinaryIO, Callable, Union
 
 import jax.numpy as jnp
-import jax.tree_util as jtu
 import numpy as np
 
 from . import experimental
 from .custom_types import PyTree
+from .tree import _ordered_tree_map
 
 
 def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
@@ -23,7 +23,7 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
 
     !!! info
 
-        This function can be extended to customise the serialization behaviour for leaves.
+        This function can be extended to customise the serialisation behaviour for leaves.
 
     !!! example
 
@@ -67,7 +67,7 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
 
     !!! info
 
-        This function can be extended to customise the serialization behaviour for leaves.
+        This function can be extended to customise the deserialisation behaviour for leaves.
 
     !!! example
 
@@ -178,9 +178,9 @@ def tree_serialise_leaves(
             def __serialise(y):
                 spec(f, y)
 
-            jtu.tree_map(__serialise, x, is_leaf=is_leaf)
+            _ordered_tree_map(__serialise, x, is_leaf=is_leaf)
 
-        jtu.tree_map(_serialise, filter_spec, pytree)
+        _ordered_tree_map(_serialise, filter_spec, pytree)
 
 
 def tree_deserialise_leaves(
@@ -194,9 +194,9 @@ def tree_deserialise_leaves(
     **Arguments:**
 
     - `path`: The file location to load values from.
-    - `like`: A PyTree of the same structure, and with leaves of the same type, as the
-        PyTree being loaded. Those leaves which are loaded will replace the
-        corresponding leaves of `like`.
+    - `like`: A PyTree of the same structure, a prefix or a compatible partial structure
+        of the saved PyTree. The leaves are required to be of the same type.
+        Those leaves which are loaded will replace the corresponding leaves of `like`.
     - `filter_spec`: Specifies how to load each kind of leaf. By default all JAX
         arrays, NumPy arrays, Python bool/int/float/complexes are loaded, and
         [`equinox.experimental.StateIndex`][] instances have their value looked up
@@ -204,7 +204,6 @@ def tree_deserialise_leaves(
         value from `like`).
     - `is_leaf`: Called on every node of `like`; if `True` then this node will be
         treated as a leaf.
-
     **Returns:**
 
     The loaded PyTree, formed by iterating over `like` and replacing some of its leaves
@@ -218,11 +217,13 @@ def tree_deserialise_leaves(
         import equinox as eqx
         import jax.random as jr
 
-        model = eqx.nn.MLP(2, 2, 2, 2, key=jr.PRNGKey(0))
+        model_original = eqx.nn.MLP(2, 2, 2, 2, key=jr.PRNGKey(0))
         eqx.tree_serialise_leaves("some_filename.eqx", model)
-        model2 = eqx.tree_deserialise_leaves("some_filename.eqx", model)
-        ```
+        model_loaded = eqx.tree_deserialise_leaves("some_filename.eqx", model)
 
+        # To partially load weights
+        model_partial = eqx.tree_at(lambda m: m.final_linear, model_loaded, model_original)
+        ```
     !!! info
 
         `filter_spec` should typically be a function `(File, Any) -> Any`, which takes
@@ -232,6 +233,7 @@ def tree_deserialise_leaves(
         It can also be a PyTree of such functions, in which case the PyTree structure
         should be a prefix of `pytree`, and each function will be mapped over the
         corresponding sub-PyTree of `pytree`.
+
     """
 
     with open(_with_suffix(path), "rb") as f:
@@ -240,8 +242,8 @@ def tree_deserialise_leaves(
             def __deserialise(y):
                 return spec(f, y)
 
-            return jtu.tree_map(__deserialise, x, is_leaf=is_leaf)
+            return _ordered_tree_map(__deserialise, x, is_leaf=is_leaf)
 
-        out = jtu.tree_map(_deserialise, filter_spec, like)
-    jtu.tree_map(_assert_same, out, like, is_leaf=is_leaf)
+        out = _ordered_tree_map(_deserialise, filter_spec, like)
+    _ordered_tree_map(_assert_same, out, like, is_leaf=is_leaf)
     return out

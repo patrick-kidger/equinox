@@ -19,7 +19,7 @@ from .serialisation import (
     tree_deserialise_leaves,
     tree_serialise_leaves,
 )
-from .tree import tree_at, tree_equal, tree_inference
+from .tree import _ordered_tree_map, tree_at, tree_equal, tree_inference
 from .update import apply_updates
 from .vmap_pmap import filter_pmap, filter_vmap
 
