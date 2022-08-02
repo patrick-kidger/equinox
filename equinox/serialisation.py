@@ -225,7 +225,7 @@ def tree_deserialise_leaves(
         model_partial = eqx.tree_at(lambda mlp: mlp.layers[-1], model_loaded, model_original)
 
         # Alternatively,
-        sub_model = eqx.nn.MLP(2, 2, 2, 1, key=jr.PRNGKey(0))
+        sub_model = eqx.nn.MLP(2, 2, 2, 1, key=jr.PRNGKey(1))
         model_partial = eqx.tree_deserialise_leaves("some_filename.eqx", sub_model)
         ```
     !!! info
