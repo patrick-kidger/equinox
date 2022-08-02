@@ -194,8 +194,8 @@ def tree_deserialise_leaves(
     **Arguments:**
 
     - `path`: The file location to load values from.
-    - `like`: A PyTree of the same structure, a prefix or a compatible partial structure
-        of the saved PyTree. The leaves are required to be of the same type.
+    - `like`: A PyTree of same, prefix or compatible-partial structure
+        of the saved PyTree. The matching leaves are required to be of the same type.
         Those leaves which are loaded will replace the corresponding leaves of `like`.
     - `filter_spec`: Specifies how to load each kind of leaf. By default all JAX
         arrays, NumPy arrays, Python bool/int/float/complexes are loaded, and
@@ -218,11 +218,15 @@ def tree_deserialise_leaves(
         import jax.random as jr
 
         model_original = eqx.nn.MLP(2, 2, 2, 2, key=jr.PRNGKey(0))
-        eqx.tree_serialise_leaves("some_filename.eqx", model)
-        model_loaded = eqx.tree_deserialise_leaves("some_filename.eqx", model)
+        eqx.tree_serialise_leaves("some_filename.eqx", model_original)
+        model_loaded = eqx.tree_deserialise_leaves("some_filename.eqx", model_original)
 
-        # To partially load weights
-        model_partial = eqx.tree_at(lambda m: m.final_linear, model_loaded, model_original)
+        # (Recommended) To partially load weights
+        model_partial = eqx.tree_at(lambda mlp: mlp.layers[-1], model_loaded, model_original)
+
+        # Alternatively,
+        sub_model = eqx.nn.MLP(2, 2, 2, 1, key=jr.PRNGKey(0))
+        model_partial = eqx.tree_deserialise_leaves("some_filename.eqx", sub_model)
         ```
     !!! info
 

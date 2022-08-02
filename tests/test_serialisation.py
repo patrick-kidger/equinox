@@ -34,7 +34,7 @@ def test_leaf_serialisation(getkey, tmp_path):
     like_numpy_array2 = np.array([6.0, 7.0])
     like_scalars = (False, 6, 6.0, 6 + 6j)
     like_index = eqx.experimental.StateIndex()
-    eqx.experimental.set_state(index, jnp.array(6))
+    eqx.experimental.set_state(like_index, jnp.array(6))
     like_func = lambda x: x
     like_obj = object()
     like = (
@@ -132,3 +132,24 @@ def test_custom_leaf_serialisation(getkey, tmp_path):
     assert tree_loaded_func is unlike_func
     assert tree_loaded_obj is like_obj
     assert tree_loaded_obj is not tree_ser_obj
+
+
+def test_partial_deserialisation(getkey, tmp_path):
+    tree_saved = eqx.nn.MLP(2, 2, 2, 2, key=getkey())
+    eqx.tree_serialise_leaves(tmp_path, tree_saved)
+
+    tree = eqx.nn.MLP(2, 2, 2, 2, key=getkey())
+    tree_loaded = eqx.tree_deserialise_leaves(tmp_path, tree)
+
+    assert tree != tree_loaded
+    assert tree_saved == tree_loaded
+
+    sub_tree = eqx.nn.MLP(2, 2, 2, 1, key=getkey())
+    sub_tree_loaded = eqx.tree_deserialise_leaves(tmp_path, sub_tree)
+
+    assert sub_tree_loaded.layers == tree_saved.layers[0:-1]
+
+    no_fc_tree = eqx.tree_at(lambda mlp: mlp.layers[-1], tree_loaded, tree.layers[-1])
+
+    assert no_fc_tree.layers[-1] == tree.layers[-1]
+    assert no_fc_tree.layers[0:-1] == tree_loaded.layers[0:-1]
