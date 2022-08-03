@@ -141,7 +141,8 @@ def tree_serialise_leaves(
     - `filter_spec`: Specifies how to save each kind of leaf. By default all JAX
         arrays, NumPy arrays, Python bool/int/float/complexes are saved,
         [`equinox.experimental.StateIndex`][] instances have their value looked up
-        and saved, and all other leaf types are ignored.
+        and saved, and all other leaf types are ignored. (See
+        [`equinox.default_serialise_filter_spec`][].)
     - `is_leaf`: Called on every node of `pytree`; if `True` then this node will be
         treated as a leaf.
 
@@ -200,8 +201,8 @@ def tree_deserialise_leaves(
     - `filter_spec`: Specifies how to load each kind of leaf. By default all JAX
         arrays, NumPy arrays, Python bool/int/float/complexes are loaded, and
         [`equinox.experimental.StateIndex`][] instances have their value looked up
-        and stored, and all other leaf types are not loaded (and will retain their
-        value from `like`).
+        and stored, and all other leaf types are not loaded, and will retain their
+        value from `like`. (See [`equinox.default_deserialise_filter_spec`][].)
     - `is_leaf`: Called on every node of `like`; if `True` then this node will be
         treated as a leaf.
 
