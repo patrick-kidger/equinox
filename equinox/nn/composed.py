@@ -100,7 +100,12 @@ class MLP(Module):
 
 
 class Sequential(Module):
-    """A sequence of [`equinox.Module`][]s applied in order."""
+    """A sequence of [`equinox.Module`][]s applied in order.
+
+    !!! note
+
+        Activation functions can be added by wrapping them in [`equinox.nn.Lambda`][].
+    """
 
     layers: Sequence[Module]
 
@@ -136,4 +141,47 @@ class Sequential(Module):
 Sequential.__init__.__doc__ = """**Arguments:**
 
 - `layers`: A sequence of [`equinox.Module`][]s.
+"""
+
+
+class Lambda(Module):
+    """Wraps a callable (e.g. an activation function) for use with
+    [`equinox.nn.Sequential`][].
+
+    Precisely, this just adds an extra `key` argument (that is ignored). Given some
+    function `fn`, then `Lambda` is essentially a convenience for `lambda x, key: f(x)`.
+
+    !!! Example
+
+        ```python
+           model = eqx.nn.Sequential(
+               [
+                   eqx.nn.Linear(...),
+                   eqx.nn.Lambda(jax.nn.relu),
+                   ...
+               ]
+           )
+        ```
+    """
+
+    fn: Callable
+
+    def __call__(
+        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
+    ) -> Array:
+        """**Arguments:**
+
+        - `x`: The input JAX array.
+        - `key`: Ignored.
+
+        **Returns:**
+
+        The output of the `fn(x)` operation.
+        """
+        return self.fn(x)
+
+
+Lambda.__init__.__doc__ = """**Arguments:**
+
+- `fn`: A callable to be wrapped in [`equinox.Module`][].
 """

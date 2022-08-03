@@ -6,13 +6,13 @@ So as the title suggests, this page tells you essentially everything you need to
 
 ## Parameterised functions as PyTrees
 
-As we saw on the [Getting Started](./index.md) page, Equinox represents parameterised functions as PyTrees.
+As we saw on the [Getting Started](./index.md) page, Equinox represents parameterised functions as [PyTrees](https://jax.readthedocs.io/en/latest/pytrees.html).
 
 !!! example
 
     A neural network is a function parameterised by its weights, biases, etc.
 
-    (But you can use Equinox to represent any kind of parameterised function.)
+    But you can use Equinox to represent any kind of parameterised function! For example [Diffrax](http://github.com/patrick-kidger/diffrax) uses Equinox to represent numerical differential equation solvers.
 
 And now you can JIT/grad/etc. with respect to your model. For example, using a few built-in layers by way of demonstration:
 
@@ -59,22 +59,23 @@ But Equinox supports using arbitrary Python objects too! If you choose to includ
 
 !!! example
 
-    You might have a `bool`-ean flag in your model-as-a-PyTree, specifying whether to enable some extra piece of behaviour. You might want to treat that as a `static_argnum` to `jax.jit`.
+    The activation function in [`equinox.nn.MLP`][] isn't a JAX array -- it's an arbitrary Python function.
 
 !!! example
 
-    The activation function in a multi-layer perceptron isn't a JAX array -- it's an arbitrary Python function -- but you may reasonably wish to make that part of your model's parameterisation. (Rather than just baking in a particular choice into your forward pass.)
+    You might have a `bool`-ean flag in your model-as-a-PyTree, specifying whether to enable some extra piece of behaviour. You might want to treat that as a `static_argnum` to `jax.jit`.
 
-If you want to do this, then Equinox offers *filtering*, like follows.
+If you want to do this, then Equinox offers *filtering*, as follows.
+
+**Create a model**
+
+Start off by creating a model just like normal, but with some arbitrary Python objects as part of its parameterisation. In this case, we have `jax.nn.relu`, which is a Python function.
 
 ```python
 import equinox as eqx
 import functools as ft
 import jax
 
-# Start off by creating a model just like normal, but with some arbitrary Python
-# objects as part of its parameterisation. In this case, we have `jax.nn.relu`, which
-# is a Python function.
 class AnotherModule(eqx.Module):
     layers: list
 
@@ -92,9 +93,11 @@ class AnotherModule(eqx.Module):
 x_key, y_key, model_key = jax.random.split(jax.random.PRNGKey(0), 3)
 x, y = jax.random.normal(x_key, (100, 2)), jax.random.normal(y_key, (100, 2))
 model = AnotherModule(model_key)
+```
 
-# Option 1: manually filter out anything that isn't JIT/grad-able.
+**Option 1: manually filter out anything that isn't JIT/grad-able.**
 
+```python
 @ft.partial(jax.jit, static_argnums=1)
 @jax.grad
 def loss(params, static, x, y):
@@ -104,9 +107,15 @@ def loss(params, static, x, y):
 
 params, static = eqx.partition(model, eqx.is_array)
 loss(params, static, x, y)
+```
 
-# Option 2: use filtered transformations, which automates the above process for you.
+Here, `params` and `static` are both instances of `AnotherModule`: `params` keeps just the leaves that are JAX arrays; `static` keeps everything else. Then `combine` merges the two PyTrees back together after crossing the `jax.jit` and `jax.grad` API boundaries.
 
+The choice of `eqx.is_array` is a *filter function*: a boolean function specifying whether each leaf should go into `params` or into `static`. In this case very simply `eqx.is_array(x) == isinstance(x, jax.numpy.ndarray)`.
+
+**Option 2: use filtered transformations, which automate the above process for you.**
+
+```python
 @eqx.filter_jit
 @eqx.filter_grad
 def loss(model, x, y):
@@ -116,11 +125,9 @@ def loss(model, x, y):
 loss(model, x, y)
 ```
 
-Here, `params` and `static` are both instances of `AnotherModule`: `params` keeps just the leaves that are JAX arrays; `static` keeps everything else. Then `combine` merges the two PyTrees back together after crossing the `jax.jit` and `jax.grad` API boundaries.
+As a convenience, `eqx.filter_jit` and `eqx.filter_grad` wrap filtering and transformation together. It turns out to be really common to only need to filter around JAX transformations.
 
-The choice of `eqx.is_array` is a *filter function*: a boolean function specifying whether each leaf should go into `params` or into `static`. In this case very simply `eqx.is_array(x) == isinstance(x, jax.numpy.ndarray)`.
-
-As a convenience, `eqx.filter_jit` and `eqx.filter_grad` just wrap filtering and transformation together. It turns out to be really common to only need to filter around JAX transformations.
+If your models only use JAX arrays, then `eqx.filter_{jit,grad,...}` will do exactly the same as `jax.{jit,grad,...}`. So if you just want to keep things simple, it is safe to just always use `eqx.filter_{jit,grad,...}`.
 
 ## Integrates smoothly with JAX
 
@@ -147,4 +154,4 @@ See also the API reference on the left.
 
     One common question: a lot of other libraries introduce custom `library.jit` etc. operations, specifically to work with `library.Module`. What makes the filtered transformations of Equinox different?
 
-    The answer is that filter transformations are tools that apply to any PyTree. And models just happen to be PyTrees. The filtered transformations and `eqx.Module` are not coupled together.
+    The answer is that filter transformations are tools that apply to any PyTree. And models just happen to be PyTrees. The filtered transformations and `eqx.Module` are not coupled together; they are independent tools.
