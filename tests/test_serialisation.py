@@ -34,7 +34,6 @@ def test_leaf_serialisation(getkey, tmp_path):
     like_numpy_array2 = np.array([6.0, 7.0])
     like_scalars = (False, 6, 6.0, 6 + 6j)
     like_index = eqx.experimental.StateIndex()
-    eqx.experimental.set_state(index, jnp.array(6))
     like_func = lambda x: x
     like_obj = object()
     like = (
@@ -132,3 +131,8 @@ def test_custom_leaf_serialisation(getkey, tmp_path):
     assert tree_loaded_func is unlike_func
     assert tree_loaded_obj is like_obj
     assert tree_loaded_obj is not tree_ser_obj
+
+
+def test_serialise_empty_state(getkey, tmp_path):
+    index = eqx.experimental.StateIndex()
+    eqx.tree_serialise_leaves(tmp_path, index)

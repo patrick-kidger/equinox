@@ -47,8 +47,13 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
     elif isinstance(x, (bool, float, complex, int)):
         np.save(f, x)
     elif isinstance(x, experimental.StateIndex):
-        value, _, _ = x.unsafe_get()
-        jnp.save(f, value)
+        try:
+            value, _, _ = x.unsafe_get()
+        except KeyError:
+            np.save(f, False)
+        else:
+            np.save(f, True)
+            jnp.save(f, value)
     else:
         pass
 
@@ -91,8 +96,10 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
     elif isinstance(x, (bool, float, complex, int)):
         return np.load(f).item()
     elif isinstance(x, experimental.StateIndex):
-        value = jnp.load(f)
-        experimental.set_state(x, value)
+        saved_value = np.load(f)
+        if saved_value:
+            value = jnp.load(f)
+            experimental.set_state(x, value)
         return x
     else:
         return x
