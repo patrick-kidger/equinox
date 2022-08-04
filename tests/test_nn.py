@@ -532,17 +532,6 @@ def test_dot_product_attention_weights(getkey):
 
     assert attn_weights.shape == (4, 19, 23)
 
-    # multi-query attention
-    query_2 = jrandom.uniform(getkey(), (19, 4, 3))
-    key_2 = jrandom.uniform(getkey(), (23, 3))
-
-    attn_weights_2 = eqx.nn.attention.dot_product_attention_weights(
-        query=query_2,
-        key_=key_2,
-    )
-
-    assert attn_weights_2.shape == (4, 19, 23)
-
 
 def test_dot_product_attention(getkey):
     query = jrandom.uniform(getkey(), (19, 4, 3))
@@ -556,19 +545,6 @@ def test_dot_product_attention(getkey):
     )
 
     assert attn.shape == (19, 4, 7)
-
-    # multi-query attention
-    query_2 = jrandom.uniform(getkey(), (19, 4, 3))
-    key_2 = jrandom.uniform(getkey(), (23, 3))
-    value_2 = jrandom.uniform(getkey(), (23, 7))
-
-    attn_2 = eqx.nn.attention.dot_product_attention(
-        query=query_2,
-        key_=key_2,
-        value=value_2,
-    )
-
-    assert attn_2.shape == (19, 4, 7)
 
 
 def test_multihead_attention(getkey):

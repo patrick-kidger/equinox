@@ -49,21 +49,15 @@ def dot_product_attention_weights(
     if query.ndim == key_.ndim:
         assert query.shape[-2] == key_.shape[-2], "q, k num_heads must match."
         assert query.shape[-1] == key_.shape[-1], "q, k depths must match."
-    elif query.ndim > key_.ndim:
-        # support for multi-query attention
-        assert query.shape[-1] == key_.shape[-1], "q, k depths must match."
     else:
-        raise ValueError("q must have equal or more dimensions than k.")
+        raise ValueError("q must have equal dimensions to k.")
 
     query_seq_length, num_heads, depth = query.shape
-    kv_seq_length = key_.shape[-2] if key_.ndim < query.ndim else key_.shape[-3]
+    kv_seq_length = key_.shape[-3]
 
     query = query / jnp.sqrt(depth)
-    if query.ndim == key_.ndim:
-        attn_weights = jnp.einsum("...qhd,...khd->...hqk", query, key_)
-    else:
-        # multi-query attention
-        attn_weights = jnp.einsum("...qhd,...kd->...hqk", query, key_)
+
+    attn_weights = jnp.einsum("...qhd,...khd->...hqk", query, key_)
 
     # apply attention bias
     if bias is not None:
@@ -140,11 +134,8 @@ def dot_product_attention(
     if query.ndim == key_.ndim == value.ndim:
         assert key_.shape[-2] == value.shape[-2], "k, v num_heads must match."
         assert key_.shape[-3] == value.shape[-3], "k, v lengths must match"
-    elif query.ndim > key_.ndim and query.ndim > value.ndim:
-        # support for multi-query attention
-        assert key_.shape[-2] == value.shape[-2], "k, v lengths must match"
     else:
-        raise ValueError("q must have equal or more dimensions than k, v.")
+        raise ValueError("q must have equal dimensions to k and v.")
 
     attn_weights = dot_product_attention_weights(
         query=query,
@@ -157,11 +148,7 @@ def dot_product_attention(
         deterministic=deterministic,
     )
 
-    if query.ndim == value.ndim:
-        return jnp.einsum("...hqk,...khd->...qhd", attn_weights, value)
-    else:
-        # multi-query attention
-        return jnp.einsum("...hqk,...kd->...qhd", attn_weights, value)
+    return jnp.einsum("...hqk,...khd->...qhd", attn_weights, value)
 
 
 class MultiheadAttention(Module):
