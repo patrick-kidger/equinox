@@ -304,37 +304,3 @@ def tree_inference(pytree: PyTree, value: bool) -> PyTree:
         )
 
     return tree_at(_inferences, pytree, replace_fn=lambda _: value)
-
-
-def _ordered_tree_map(
-    f: Callable[..., Any],
-    tree: Any,
-    *rest: Any,
-    is_leaf: Optional[Callable[[Any], bool]] = None
-) -> Any:
-    """In an orderly fashion, maps a multi-input function over pytree args to produce a new pytree.
-    The ordering is determined by the traversal rule of `jax.tree_util.flatten`.
-
-    **Arguments:**
-
-    f: function that takes ``1 + len(rest)`` arguments, to be applied at the
-      corresponding leaves of the pytrees.
-    tree: a pytree to be mapped over, with each leaf providing the first
-      positional argument to ``f``.
-    rest: a tuple of pytrees, each of which has the same structure as ``tree``
-      or has ``tree`` as a prefix.
-    is_leaf: an optionally specified function that will be called at each
-      flattening step. It should return a boolean, which indicates whether
-      the flattening should traverse the current object, or if it should be
-      stopped immediately, with the whole subtree being treated as a leaf.
-
-    **Returns:**
-    A new pytree with the same structure as ``tree`` but with the value at each
-    leaf given by ``f(x, *xs)`` where ``x`` is the value at the corresponding
-    leaf in ``tree`` and ``xs`` is the tuple of values at corresponding nodes in
-    ``rest``.
-    """
-    # Discussion: https://github.com/patrick-kidger/equinox/issues/136
-    leaves, treedef = jtu.tree_flatten(tree, is_leaf)
-    all_leaves = [leaves] + [treedef.flatten_up_to(r) for r in rest]
-    return treedef.unflatten(f(*xs) for xs in zip(*all_leaves))

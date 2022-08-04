@@ -135,21 +135,35 @@ def test_custom_leaf_serialisation(getkey, tmp_path):
 
 
 def test_partial_deserialisation(getkey, tmp_path):
-    tree_saved = eqx.nn.MLP(2, 2, 2, 2, key=getkey())
+
+    tree_saved = (jnp.array([1, 2, 3]), np.array([4, 5, 6]))
     eqx.tree_serialise_leaves(tmp_path, tree_saved)
 
-    tree = eqx.nn.MLP(2, 2, 2, 2, key=getkey())
+    sub_tree = (jnp.asarray([4, 5, 6]),)
+    tree_loaded = eqx.tree_deserialise_leaves(tmp_path, sub_tree)
+
+    assert (tree_saved[0] == tree_loaded[0]).all()
+
+    tree = (jnp.asarray([4, 5, 6]), np.array([1, 2, 3]))
     tree_loaded = eqx.tree_deserialise_leaves(tmp_path, tree)
 
-    assert tree != tree_loaded
-    assert tree_saved == tree_loaded
+    no_np_tree = eqx.tree_at(lambda t: t[1], tree_loaded, tree[1])
 
-    sub_tree = eqx.nn.MLP(2, 2, 2, 1, key=getkey())
-    sub_tree_loaded = eqx.tree_deserialise_leaves(tmp_path, sub_tree)
+    assert (no_np_tree[0] == tree_saved[0]).all()
+    assert (no_np_tree[1] == tree[1]).all()
 
-    assert sub_tree_loaded.layers == tree_saved.layers[0:-1]
 
-    no_fc_tree = eqx.tree_at(lambda mlp: mlp.layers[-1], tree_loaded, tree.layers[-1])
-
-    assert no_fc_tree.layers[-1] == tree.layers[-1]
-    assert no_fc_tree.layers[0:-1] == tree_loaded.layers[0:-1]
+def test_ordered_tree_map(getkey):
+    obj_1 = object()
+    obj_2 = object()
+    fun_1 = lambda x: x
+    fun_2 = lambda x: -x
+    x = ((1, fun_1), (obj_1, 4, 5), (obj_1))
+    y = (([3], fun_2), ({"foo": "bar"}, 7, [5, 6]), (obj_2))
+    out = eqx.serialisation._ordered_tree_map(lambda *xs: tuple(xs), x, y)
+    answer = (
+        ((1, [3]), (fun_1, fun_2)),
+        ((obj_1, {"foo": "bar"}), (4, 7), (5, [5, 6])),
+        (obj_1, obj_2),
+    )
+    assert eqx.tree_equal(out, answer)

@@ -167,19 +167,3 @@ def test_tree_inference(getkey):
 
     with pytest.raises(RuntimeError):
         f()
-
-
-def test_ordered_tree_map(getkey):
-    obj_1 = object()
-    obj_2 = object()
-    fun_1 = lambda x: x
-    fun_2 = lambda x: -x
-    x = ((1, fun_1), (obj_1, 4, 5), (obj_1))
-    y = (([3], fun_2), ({"foo": "bar"}, 7, [5, 6]), (obj_2))
-    out = eqx._ordered_tree_map(lambda *xs: tuple(xs), x, y)
-    answer = (
-        ((1, [3]), (fun_1, fun_2)),
-        ((obj_1, {"foo": "bar"}), (4, 7), (5, [5, 6])),
-        (obj_1, obj_2),
-    )
-    assert eqx.tree_equal(out, answer)

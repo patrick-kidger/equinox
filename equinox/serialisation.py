@@ -1,16 +1,51 @@
 import pathlib
-from typing import Any, BinaryIO, Callable, Union
+from typing import Any, BinaryIO, Callable, Optional, Union
 
 import jax.numpy as jnp
+import jax.tree_util as jtu
 import numpy as np
 
 from . import experimental
 from .custom_types import PyTree
-from .tree import _ordered_tree_map
+
+
+def _ordered_tree_map(
+    f: Callable[..., Any],
+    tree: Any,
+    *rest: Any,
+    is_leaf: Optional[Callable[[Any], bool]] = None,
+) -> Any:
+    """Like jax.tree_util.tree_map, but guaranteed to iterate over the tree
+    in fixed order. (Namely depth-first left-to-right.)
+
+    **Arguments:**
+
+    f: function that takes ``1 + len(rest)`` arguments, to be applied at the
+      corresponding leaves of the pytrees.
+    tree: a pytree to be mapped over, with each leaf providing the first
+      positional argument to ``f``.
+    rest: a tuple of pytrees, each of which has the same structure as ``tree``
+      or has ``tree`` as a prefix.
+    is_leaf: an optionally specified function that will be called at each
+      flattening step. It should return a boolean, which indicates whether
+      the flattening should traverse the current object, or if it should be
+      stopped immediately, with the whole subtree being treated as a leaf.
+
+    **Returns:**
+
+    A new pytree with the same structure as ``tree`` but with the value at each
+    leaf given by ``f(x, *xs)`` where ``x`` is the value at the corresponding
+    leaf in ``tree`` and ``xs`` is the tuple of values at corresponding nodes in
+    ``rest``.
+    """
+    # Discussion: https://github.com/patrick-kidger/equinox/issues/136
+    leaves, treedef = jtu.tree_flatten(tree, is_leaf)
+    all_leaves = [leaves] + [treedef.flatten_up_to(r) for r in rest]
+    return treedef.unflatten(f(*xs) for xs in zip(*all_leaves))
 
 
 def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
-    """Default filter specification for serializing a leaf.
+    """Default filter specification for serialising a leaf.
 
     **Arguments**
 
@@ -54,7 +89,7 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
 
 
 def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
-    """Default filter specification for deserializing saved data.
+    """Default filter specification for deserialising saved data.
 
     **Arguments**
 
@@ -194,8 +229,8 @@ def tree_deserialise_leaves(
     **Arguments:**
 
     - `path`: The file location to load values from.
-    - `like`: A PyTree of same, prefix or compatible-partial structure
-        of the saved PyTree. The matching leaves are required to be of the same type.
+    - `like`: A PyTree of same or overlapping depth-first structure of the saved PyTree.
+        The matching leaves are required to be of the same type.
         Those leaves which are loaded will replace the corresponding leaves of `like`.
     - `filter_spec`: Specifies how to load each kind of leaf. By default all JAX
         arrays, NumPy arrays, Python bool/int/float/complexes are loaded, and
@@ -224,9 +259,6 @@ def tree_deserialise_leaves(
         # (Recommended) To partially load weights
         model_partial = eqx.tree_at(lambda mlp: mlp.layers[-1], model_loaded, model_original)
 
-        # Alternatively,
-        sub_model = eqx.nn.MLP(2, 2, 2, 1, key=jr.PRNGKey(1))
-        model_partial = eqx.tree_deserialise_leaves("some_filename.eqx", sub_model)
         ```
     !!! info
 
@@ -249,5 +281,5 @@ def tree_deserialise_leaves(
             return _ordered_tree_map(__deserialise, x, is_leaf=is_leaf)
 
         out = _ordered_tree_map(_deserialise, filter_spec, like)
-    _ordered_tree_map(_assert_same, out, like, is_leaf=is_leaf)
+    jtu.tree_map(_assert_same, out, like, is_leaf=is_leaf)
     return out
