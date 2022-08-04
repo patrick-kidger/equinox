@@ -35,6 +35,7 @@ def test_leaf_serialisation(getkey, tmp_path):
     like_scalars = (False, 6, 6.0, 6 + 6j)
     like_index = eqx.experimental.StateIndex()
     eqx.experimental.set_state(like_index, jnp.array(6))
+
     like_func = lambda x: x
     like_obj = object()
     like = (
@@ -167,3 +168,8 @@ def test_ordered_tree_map(getkey):
         (obj_1, obj_2),
     )
     assert eqx.tree_equal(out, answer)
+
+
+def test_serialise_empty_state(getkey, tmp_path):
+    index = eqx.experimental.StateIndex()
+    eqx.tree_serialise_leaves(tmp_path, index)

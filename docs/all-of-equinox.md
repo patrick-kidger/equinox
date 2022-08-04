@@ -97,7 +97,7 @@ model = AnotherModule(model_key)
 
 **Option 1: manually filter out anything that isn't JIT/grad-able.**
 
-```
+```python
 @ft.partial(jax.jit, static_argnums=1)
 @jax.grad
 def loss(params, static, x, y):
@@ -115,7 +115,7 @@ The choice of `eqx.is_array` is a *filter function*: a boolean function specifyi
 
 **Option 2: use filtered transformations, which automate the above process for you.**
 
-```
+```python
 @eqx.filter_jit
 @eqx.filter_grad
 def loss(model, x, y):
@@ -127,7 +127,7 @@ loss(model, x, y)
 
 As a convenience, `eqx.filter_jit` and `eqx.filter_grad` wrap filtering and transformation together. It turns out to be really common to only need to filter around JAX transformations.
 
-If your models do in fact only use JAX arrays, then `eqx.filter_{jit,grad,...}` will do exactly the same as `jax.{jit,grad,...}`. So if you wish (and just want to keep things simple), it's safe to just always use `eqx.filter_{jit,grad,...}`.
+If your models only use JAX arrays, then `eqx.filter_{jit,grad,...}` will do exactly the same as `jax.{jit,grad,...}`. So if you just want to keep things simple, it is safe to just always use `eqx.filter_{jit,grad,...}`.
 
 ## Integrates smoothly with JAX
 

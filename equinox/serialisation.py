@@ -82,8 +82,13 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
     elif isinstance(x, (bool, float, complex, int)):
         np.save(f, x)
     elif isinstance(x, experimental.StateIndex):
-        value, _, _ = x.unsafe_get()
-        jnp.save(f, value)
+        try:
+            value, _, _ = x.unsafe_get()
+        except KeyError:
+            np.save(f, False)
+        else:
+            np.save(f, True)
+            jnp.save(f, value)
     else:
         pass
 
@@ -126,8 +131,10 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
     elif isinstance(x, (bool, float, complex, int)):
         return np.load(f).item()
     elif isinstance(x, experimental.StateIndex):
-        value = jnp.load(f)
-        experimental.set_state(x, value)
+        saved_value = np.load(f)
+        if saved_value:
+            value = jnp.load(f)
+            experimental.set_state(x, value)
         return x
     else:
         return x
@@ -176,7 +183,8 @@ def tree_serialise_leaves(
     - `filter_spec`: Specifies how to save each kind of leaf. By default all JAX
         arrays, NumPy arrays, Python bool/int/float/complexes are saved,
         [`equinox.experimental.StateIndex`][] instances have their value looked up
-        and saved, and all other leaf types are ignored.
+        and saved, and all other leaf types are ignored. (See
+        [`equinox.default_serialise_filter_spec`][].)
     - `is_leaf`: Called on every node of `pytree`; if `True` then this node will be
         treated as a leaf.
 
@@ -235,8 +243,8 @@ def tree_deserialise_leaves(
     - `filter_spec`: Specifies how to load each kind of leaf. By default all JAX
         arrays, NumPy arrays, Python bool/int/float/complexes are loaded, and
         [`equinox.experimental.StateIndex`][] instances have their value looked up
-        and stored, and all other leaf types are not loaded (and will retain their
-        value from `like`).
+        and stored, and all other leaf types are not loaded, and will retain their
+        value from `like`. (See [`equinox.default_deserialise_filter_spec`][].)
     - `is_leaf`: Called on every node of `like`; if `True` then this node will be
         treated as a leaf.
     **Returns:**
