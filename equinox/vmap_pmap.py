@@ -6,13 +6,7 @@ import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 
-from .compile_utils import (
-    compile_cache,
-    get_fun_names,
-    hashable_combine,
-    hashable_partition,
-    Static,
-)
+from .compile_utils import compile_cache, hashable_combine, hashable_partition, Static
 from .custom_types import BoolAxisSpec, PyTree, ResolvedBoolAxisSpec, sentinel
 from .doc_utils import doc_strip_annotations
 from .filters import combine, filter, is_array, is_array_like, partition
@@ -452,7 +446,7 @@ class _PmapWrapper(Module):
     _out: PyTree[AxisSpec]
     _pmapkwargs: Dict[str, Any]
 
-    def _call(self, is_lower, args, kwargs):
+    def _call(self, which, args, kwargs):
         bound = self._signature.bind(*args, **kwargs)
         del args, kwargs
         bound.apply_defaults()
@@ -485,36 +479,46 @@ class _PmapWrapper(Module):
         )
 
         cached = _filter_pmap_cache(
-            get_fun_names(self._fun),
+            self._fun,
             map_in_axes=map_in_axes,
             max_out_size=max_out_size,
             **self._pmapkwargs,
         )
-
-        dynamic, static_leaves, static_treedef = hashable_partition(
-            (self._fun, bound.args, bound.kwargs, maybe_dummy), jit_in_axes
-        )
-        if is_lower:
-            return cached.lower(dynamic, static_leaves, static_treedef, self._out)
-        else:
-            (
-                pmapd,
-                dynamic_nonpmapd,
-                static_nonpmapd_leaves,
-                static_nonpmapd_treedef,
-            ) = cached(dynamic, static_leaves, static_treedef, self._out)
-            nonpmapd = hashable_combine(
-                dynamic_nonpmapd,
-                static_nonpmapd_leaves.value,
-                static_nonpmapd_treedef.value,
+        if which == "clear_cache":
+            raise NotImplementedError(
+                "`jax.pmap` does not yet support clearing its compilation cache, so "
+                "`equinox.filter_pmap` does not either"
             )
-            return combine(*pmapd, nonpmapd)
+        else:
+            dynamic, static_leaves, static_treedef = hashable_partition(
+                (self._fun, bound.args, bound.kwargs, maybe_dummy), jit_in_axes
+            )
+            if which == "lower":
+                return cached.lower(dynamic, static_leaves, static_treedef, self._out)
+            elif which == "__call__":
+                (
+                    pmapd,
+                    dynamic_nonpmapd,
+                    static_nonpmapd_leaves,
+                    static_nonpmapd_treedef,
+                ) = cached(dynamic, static_leaves, static_treedef, self._out)
+                nonpmapd = hashable_combine(
+                    dynamic_nonpmapd,
+                    static_nonpmapd_leaves.value,
+                    static_nonpmapd_treedef.value,
+                )
+                return combine(*pmapd, nonpmapd)
+            else:
+                assert False
 
     def __call__(__self, *args, **kwargs):
-        return __self._call(False, args, kwargs)
+        return __self._call("__call__", args, kwargs)
 
     def lower(__self, *args, **kwargs):
-        return __self._call(True, args, kwargs)
+        return __self._call("lower", args, kwargs)
+
+    def clear_cache(__self, *args, **kwargs):
+        __self._call("clear_cache", args, kwargs)
 
     def __get__(self, instance, owner):
         if instance is None:

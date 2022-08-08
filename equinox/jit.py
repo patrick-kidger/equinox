@@ -7,13 +7,7 @@ from typing import Any, Callable, Sequence
 import jax
 import jax.tree_util as jtu
 
-from .compile_utils import (
-    compile_cache,
-    get_fun_names,
-    hashable_combine,
-    hashable_partition,
-    Static,
-)
+from .compile_utils import compile_cache, hashable_combine, hashable_partition, Static
 from .custom_types import BoolAxisSpec, PyTree, sentinel, TreeDef
 from .doc_utils import doc_strip_annotations
 from .filters import combine, is_array, partition
@@ -96,6 +90,9 @@ class _JitWrapper(Module):
 
     def lower(__self, *args, **kwargs):
         return __self._fun_wrapper(True, args, kwargs)
+
+    def clear_cache(self):
+        return self._cached._clear_cache()
 
     def __get__(self, instance, owner):
         if instance is None:
@@ -272,7 +269,7 @@ def filter_jit(
     dynamic_fun, static_fun_leaves, static_fun_treedef = hashable_partition(
         fun, filter_fn
     )
-    cached = _filter_jit_cache(get_fun_names(fun), **jitkwargs)
+    cached = _filter_jit_cache(fun, **jitkwargs)
 
     jit_wrapper = _JitWrapper(
         _new_style=new_style,

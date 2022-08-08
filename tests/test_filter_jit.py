@@ -435,3 +435,11 @@ def test_wrap_jax_partial(getkey):
     g = jtu.Partial(f, jrandom.normal(getkey(), ()))
     fn = jtu.Partial(f, True)
     eqx.filter_jit(g, fn=fn)
+
+
+def test_clear_cache():
+    @eqx.filter_jit
+    def f(x):
+        return x
+
+    f.clear_cache()

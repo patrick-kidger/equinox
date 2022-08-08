@@ -1,4 +1,5 @@
 import functools as ft
+import weakref
 from typing import Any
 
 import jax.tree_util as jtu
@@ -31,7 +32,7 @@ def _strip_wrapped_partial(fun):
     return fun
 
 
-def get_fun_names(fun):
+def _get_fun_names(fun):
     fun = _strip_wrapped_partial(fun)
     try:
         return fun.__name__, fun.__qualname__
@@ -39,16 +40,33 @@ def get_fun_names(fun):
         return type(fun).__name__, type(fun).__qualname__
 
 
+class _WeakRefAble:
+    __slots__ = ("__weakref__",)
+
+
+_fallback_weakrefable = _WeakRefAble()
+
+
 def compile_cache(fun):
-    @ft.lru_cache(maxsize=None)
-    def _cache(leaves, treedef):
-        args, kwargs = jtu.tree_unflatten(treedef, leaves)
-        return fun(*args, **kwargs)
+    fun_cache = weakref.WeakKeyDictionary()
 
     @ft.wraps(fun)
-    def _fun(*args, **kwargs):
+    def _fun(wrapped_fun, *args, **kwargs):
+        wrapped_fun_name = _get_fun_names(wrapped_fun)
+        try:
+            weakref.ref(wrapped_fun)
+        except TypeError:
+            wrapped_fun = _fallback_weakrefable
+        try:
+            arg_cache = fun_cache[wrapped_fun]
+        except KeyError:
+            arg_cache = fun_cache[wrapped_fun] = {}
         leaves, treedef = jtu.tree_flatten((args, kwargs))
         leaves = tuple(leaves)
-        return _cache(leaves, treedef)
+        try:
+            result = arg_cache[leaves, treedef]
+        except KeyError:
+            result = arg_cache[leaves, treedef] = fun(wrapped_fun_name, *args, **kwargs)
+        return result
 
     return _fun

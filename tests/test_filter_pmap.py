@@ -306,3 +306,11 @@ def test_map_non_jax():
             pytree_sharded,
         ),
     )(pytree_sharded)
+
+
+def test_clear_cache():
+    @eqx.filter_pmap
+    def f(x):
+        return x
+
+    f.clear_cache()
