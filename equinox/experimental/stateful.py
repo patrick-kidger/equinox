@@ -313,7 +313,7 @@ def _monkey_patch():
                     batch_axes_flat,
                     arg_treedef=arg_treedef,
                     result_treedef=result_treedef,
-                    **params
+                    **params,
                 )
 
         hcb.outside_call_p.def_impl(_outside_call_impl)
@@ -349,7 +349,7 @@ def _batchify_batching_rule(
             *flat,
             treedef=treedef,
             like_batch_axes=like_batch_axes + like_batch_axis,
-            current_batch_axes=current_batch_axes
+            current_batch_axes=current_batch_axes,
         ),
         like_batch_axis,
     )
@@ -493,7 +493,7 @@ def get_state(index: StateIndex, like: PyTree[Array]) -> PyTree[Array]:
             *flat,
             treedef=treedef,
             like_batch_axes=[],
-            current_batch_axes=current_batch_axes
+            current_batch_axes=current_batch_axes,
         )
         return jtu.tree_unflatten(_treedef, out)
     else:
@@ -526,7 +526,8 @@ def _set_state_hcb(arg: _SetStateArg) -> None:
         state_shape = jax.eval_shape(lambda: state)
         if current_state_shape != state_shape:
             raise RuntimeError(
-                "New state and old state have different shape, dtype, or PyTree structure"
+                "New state and old state have different shape, dtype, or PyTree "
+                f"structure. New: {current_state_shape}. Old: {state_shape}."
             )
         if current_batch_axes != batch_axes:
             raise RuntimeError("New state and old state have different batch axes")

@@ -133,6 +133,18 @@ def test_custom_leaf_serialisation(getkey, tmp_path):
     assert tree_loaded_obj is not tree_ser_obj
 
 
-def test_serialise_empty_state(getkey, tmp_path):
+def test_serialise_empty_state(tmp_path):
     index = eqx.experimental.StateIndex()
     eqx.tree_serialise_leaves(tmp_path, index)
+
+
+def test_tuple_stateindex(tmp_path):
+    index = eqx.experimental.StateIndex()
+    x = jnp.array([0, 1])
+    y = jnp.array([2, 3])
+    z = (x, y)
+    eqx.experimental.set_state(index, z)
+    eqx.tree_serialise_leaves(tmp_path, index)
+    index2 = eqx.tree_deserialise_leaves(tmp_path, index)
+    assert index is index2
+    assert eqx.tree_equal(eqx.experimental.get_state(index2, z), z)
