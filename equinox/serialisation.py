@@ -17,26 +17,6 @@ def _ordered_tree_map(
 ) -> Any:
     """Like jax.tree_util.tree_map, but guaranteed to iterate over the tree
     in fixed order. (Namely depth-first left-to-right.)
-
-    **Arguments:**
-
-    f: function that takes ``1 + len(rest)`` arguments, to be applied at the
-      corresponding leaves of the pytrees.
-    tree: a pytree to be mapped over, with each leaf providing the first
-      positional argument to ``f``.
-    rest: a tuple of pytrees, each of which has the same structure as ``tree``
-      or has ``tree`` as a prefix.
-    is_leaf: an optionally specified function that will be called at each
-      flattening step. It should return a boolean, which indicates whether
-      the flattening should traverse the current object, or if it should be
-      stopped immediately, with the whole subtree being treated as a leaf.
-
-    **Returns:**
-
-    A new pytree with the same structure as ``tree`` but with the value at each
-    leaf given by ``f(x, *xs)`` where ``x`` is the value at the corresponding
-    leaf in ``tree`` and ``xs`` is the tuple of values at corresponding nodes in
-    ``rest``.
     """
     # Discussion: https://github.com/patrick-kidger/equinox/issues/136
     leaves, treedef = jtu.tree_flatten(tree, is_leaf)
@@ -237,7 +217,7 @@ def tree_deserialise_leaves(
     **Arguments:**
 
     - `path`: The file location to load values from.
-    - `like`: A PyTree of same or overlapping depth-first structure of the saved PyTree.
+    - `like`: A PyTree of same structure as the saved PyTree.
         The matching leaves are required to be of the same type.
         Those leaves which are loaded will replace the corresponding leaves of `like`.
     - `filter_spec`: Specifies how to load each kind of leaf. By default all JAX
@@ -247,6 +227,7 @@ def tree_deserialise_leaves(
         value from `like`. (See [`equinox.default_deserialise_filter_spec`][].)
     - `is_leaf`: Called on every node of `like`; if `True` then this node will be
         treated as a leaf.
+
     **Returns:**
 
     The loaded PyTree, formed by iterating over `like` and replacing some of its leaves
@@ -264,9 +245,8 @@ def tree_deserialise_leaves(
         eqx.tree_serialise_leaves("some_filename.eqx", model_original)
         model_loaded = eqx.tree_deserialise_leaves("some_filename.eqx", model_original)
 
-        # (Recommended) To partially load weights
+        # To partially load weights
         model_partial = eqx.tree_at(lambda mlp: mlp.layers[-1], model_loaded, model_original)
-
         ```
     !!! info
 
@@ -277,7 +257,6 @@ def tree_deserialise_leaves(
         It can also be a PyTree of such functions, in which case the PyTree structure
         should be a prefix of `pytree`, and each function will be mapped over the
         corresponding sub-PyTree of `pytree`.
-
     """
 
     with open(_with_suffix(path), "rb") as f:
