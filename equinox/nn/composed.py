@@ -137,6 +137,12 @@ class Sequential(Module):
         else:
             raise TypeError(f"Indexing with type {type(i)} is not supported")
 
+    def __iter__(self):
+        yield from self.layers
+
+    def __len__(self):
+        return len(self.layers)
+
 
 Sequential.__init__.__doc__ = """**Arguments:**
 
