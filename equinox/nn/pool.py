@@ -18,6 +18,7 @@ class Pool(Module):
     kernel_size: Union[int, Sequence[int]] = static_field()
     stride: Union[int, Sequence[int]] = static_field()
     padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = static_field()
+    use_ceil: bool = static_field()
 
     def __init__(
         self,
@@ -27,6 +28,7 @@ class Pool(Module):
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = 1,
         padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
+        use_ceil: bool = False,
         **kwargs,
     ):
         """**Arguments:**
@@ -38,6 +40,9 @@ class Pool(Module):
         - `stride`: The stride of the convolution.
         - `padding`: The amount of padding to apply before and after each
             spatial dimension.
+        - `use_ceil`: If `True`, then `ceil` is used to compute the final output
+            shape instead of `floor`. For `ceil`, if required, extra padding is added.
+            Defaults to `False`.
 
         !!! info
 
@@ -51,6 +56,7 @@ class Pool(Module):
         self.operation = operation
         self.init = init
         self.num_spatial_dims = num_spatial_dims
+        self.use_ceil = use_ceil
 
         if isinstance(kernel_size, int):
             self.kernel_size = (kernel_size,) * num_spatial_dims
@@ -85,6 +91,26 @@ class Pool(Module):
                 f"{num_spatial_dims} containing ints or tuples of length 2."
             )
 
+        for padding, kernel_size in zip(self.padding, self.kernel_size):
+            if kernel_size / 2 < padding[0] or kernel_size / 2 < padding[1]:
+                raise ValueError(
+                    "Padding should be less than or equal to half of the kernel size."
+                    f" Received kernel_size {kernel_size} and padding {padding}."
+                )
+
+    def _update_padding_for_ceil(self, input_shape):
+        new_padding = []
+        total_padding = np.sum(self.padding, axis=1)
+        for idx, (input_dim, padding, kernel_size, stride) in enumerate(
+            zip(input_shape[1:], total_padding, self.kernel_size, self.stride)
+        ):
+            target_out_dim = np.ceil(
+                (input_dim + padding - 1 * (kernel_size - 1) - 1) / stride + 1
+            ).item()
+            padding = int((target_out_dim - 1) * stride + kernel_size - input_dim)
+            new_padding.append((self.padding[idx][0], padding - self.padding[idx][0]))
+        return tuple(new_padding)
+
     def __call__(
         self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
@@ -104,6 +130,11 @@ class Pool(Module):
             f"but input has shape {x.shape}"
         )
 
+        if self.use_ceil:
+            padding = self._update_padding_for_ceil(x.shape)
+        else:
+            padding = self.padding
+
         x = jnp.moveaxis(x, 0, -1)
         x = jnp.expand_dims(x, axis=0)
         x = lax.reduce_window(
@@ -112,7 +143,7 @@ class Pool(Module):
             self.operation,
             (1,) + self.kernel_size + (1,),
             (1,) + self.stride + (1,),
-            ((0, 0),) + self.padding + ((0, 0),),
+            ((0, 0),) + padding + ((0, 0),),
         )
 
         x = jnp.squeeze(x, axis=0)

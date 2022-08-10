@@ -802,6 +802,11 @@ def test_maxpool1d():
 
     assert jnp.all(output == answer)
 
+    max_pool = eqx.nn.MaxPool1d(kernel_size=3, stride=3, padding=0, use_ceil=True)
+    answer = jnp.array([2, 5, 8, 11, 13])
+    output = max_pool(x)
+    assert jnp.all(output == answer)
+
 
 def test_avgpool1d():
 
@@ -846,6 +851,11 @@ def test_maxpool2d():
 
     assert jnp.all(output == answer)
 
+    max_pool = eqx.nn.MaxPool2d(kernel_size=4, stride=4, padding=(0, 1), use_ceil=True)
+    answer = jnp.array([[20, 23], [32, 35]])
+    output = max_pool(x)
+    assert jnp.all(output == answer)
+
 
 def test_avgpool2d():
 
@@ -888,6 +898,18 @@ def test_maxpool3d():
     output = max_pool(x)
     answer = jnp.array([[[21, 22, 23], [29, 30, 31]]])
 
+    assert jnp.all(output == answer)
+
+    max_pool = eqx.nn.MaxPool3d(
+        kernel_size=3, padding=(0, 1, 1), stride=2, use_ceil=True
+    )
+    answer = jnp.asarray(
+        [
+            [[37, 39, 39], [45, 47, 47], [45, 47, 47]],
+            [[53, 55, 55], [61, 63, 63], [61, 63, 63]],
+        ]
+    )
+    output = max_pool(x)
     assert jnp.all(output == answer)
 
 
