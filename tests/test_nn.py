@@ -851,9 +851,12 @@ def test_maxpool2d():
 
     assert jnp.all(output == answer)
 
-    max_pool = eqx.nn.MaxPool2d(kernel_size=4, stride=4, padding=(0, 1), use_ceil=True)
-    answer = jnp.array([[20, 23], [32, 35]])
+    max_pool = eqx.nn.MaxPool2d((3, 3), 2, (1, 1), use_ceil=True)
     output = max_pool(x)
+    answer = jnp.array(
+        [[[7, 9, 11, 11], [19, 21, 23, 23], [31, 33, 35, 35], [31, 33, 35, 35]]]
+    )
+
     assert jnp.all(output == answer)
 
 
