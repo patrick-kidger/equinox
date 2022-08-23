@@ -40,7 +40,7 @@ def dot_product_attention(
 ) -> Array["query_seq_length", "value_size"]:  # noqa: F821
 
     weights = dot_product_attention_weights(query, key, mask)
-    if dropout_fn:
+    if dropout_fn is not None:
         weights = dropout_fn(weights)
     attn = jnp.einsum("sS,Sd->sd", weights, value)
     return attn
@@ -259,7 +259,7 @@ class MultiheadAttention(Module):
         )
         # vmap over attention heads
         in_axes = (1, 1, 1, None if mask is None else 1, None)
-        attn = jax.vmap(dot_product_attention, in_axes)(
+        attn = jax.vmap(dot_product_attention, in_axes, out_axes=1)(
             query_heads, key_heads, value_heads, mask, dropout_fn
         )
         attn = attn.reshape(query_seq_length, -1)
