@@ -120,6 +120,9 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
     elif isinstance(x, (bool, float, complex, int)):
         return np.load(f).item()
     elif isinstance(x, experimental.StateIndex):
+        # Make a new StateIndex. If we happen to load some state then we don't
+        # want to affect the `like` as a side-effect.
+        y = experimental.StateIndex(inference=x.inference)
         saved_value = np.load(f).item()
         assert isinstance(saved_value, bool)
         if saved_value:
@@ -131,8 +134,8 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
                 tuple_length = np.load(f).item()
                 assert isinstance(tuple_length, int)
                 value = tuple(jnp.load(f) for _ in range(tuple_length))
-            experimental.set_state(x, value)
-        return x
+            experimental.set_state(y, value)
+        return y
     else:
         return x
 
