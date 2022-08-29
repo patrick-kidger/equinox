@@ -136,6 +136,9 @@ def test_sequential(getkey):
     with pytest.raises(TypeError):
         seq[[0, 1, 2]]
 
+    assert len(seq) == 3
+    assert eqx.nn.Sequential(list(seq)) == seq
+
 
 def test_mlp(getkey):
     mlp = eqx.nn.MLP(2, 3, 8, 2, key=getkey())
