@@ -55,9 +55,8 @@ def test_leaf_serialisation(getkey, tmp_path):
     tree_loaded_index, tree_loaded_func, tree_loaded_obj = tree_loaded[-3:]
 
     assert eqx.tree_equal(tree_serialisable, tree_loaded_serialisable)
-    assert tree_loaded_index is like_index
     assert jnp.array_equal(
-        eqx.experimental.get_state(like_index, jnp.array(4)), index_value
+        eqx.experimental.get_state(tree_loaded_index, jnp.array(4)), index_value
     )
     assert tree_loaded_func is like_func
     assert tree_loaded_obj is like_obj
@@ -134,41 +133,17 @@ def test_custom_leaf_serialisation(getkey, tmp_path):
     assert tree_loaded_obj is not tree_ser_obj
 
 
-def test_partial_deserialisation(getkey, tmp_path):
-
-    tree_saved = (jnp.array([1, 2, 3]), np.array([4, 5, 6]))
-    eqx.tree_serialise_leaves(tmp_path, tree_saved)
-
-    sub_tree = (jnp.asarray([4, 5, 6]),)
-    tree_loaded = eqx.tree_deserialise_leaves(tmp_path, sub_tree)
-
-    assert (tree_saved[0] == tree_loaded[0]).all()
-
-    tree = (jnp.asarray([4, 5, 6]), np.array([1, 2, 3]))
-    tree_loaded = eqx.tree_deserialise_leaves(tmp_path, tree)
-
-    no_np_tree = eqx.tree_at(lambda t: t[1], tree_loaded, tree[1])
-
-    assert (no_np_tree[0] == tree_saved[0]).all()
-    assert (no_np_tree[1] == tree[1]).all()
-
-
-def test_ordered_tree_map(getkey):
-    obj_1 = object()
-    obj_2 = object()
-    fun_1 = lambda x: x
-    fun_2 = lambda x: -x
-    x = ((1, fun_1), (obj_1, 4, 5), (obj_1))
-    y = (([3], fun_2), ({"foo": "bar"}, 7, [5, 6]), (obj_2))
-    out = eqx.serialisation._ordered_tree_map(lambda *xs: tuple(xs), x, y)
-    answer = (
-        ((1, [3]), (fun_1, fun_2)),
-        ((obj_1, {"foo": "bar"}), (4, 7), (5, [5, 6])),
-        (obj_1, obj_2),
-    )
-    assert eqx.tree_equal(out, answer)
-
-
-def test_serialise_empty_state(getkey, tmp_path):
+def test_serialise_empty_state(tmp_path):
     index = eqx.experimental.StateIndex()
     eqx.tree_serialise_leaves(tmp_path, index)
+
+
+def test_tuple_stateindex(tmp_path):
+    index = eqx.experimental.StateIndex()
+    x = jnp.array([0, 1])
+    y = jnp.array([2, 3])
+    z = (x, y)
+    eqx.experimental.set_state(index, z)
+    eqx.tree_serialise_leaves(tmp_path, index)
+    index2 = eqx.tree_deserialise_leaves(tmp_path, index)
+    assert eqx.tree_equal(eqx.experimental.get_state(index2, z), z)
