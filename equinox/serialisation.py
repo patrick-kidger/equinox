@@ -1,5 +1,5 @@
 import pathlib
-from typing import Any, BinaryIO, Callable, Union
+from typing import Any, BinaryIO, Callable, Optional, Union
 
 import jax.numpy as jnp
 import jax.tree_util as jtu
@@ -10,8 +10,23 @@ from .custom_types import PyTree
 from .pretty_print import tree_pformat
 
 
+def _ordered_tree_map(
+    f: Callable[..., Any],
+    tree: Any,
+    *rest: Any,
+    is_leaf: Optional[Callable[[Any], bool]] = None,
+) -> Any:
+    """Like jax.tree_util.tree_map, but guaranteed to iterate over the tree
+    in fixed order. (Namely depth-first left-to-right.)
+    """
+    # Discussion: https://github.com/patrick-kidger/equinox/issues/136
+    leaves, treedef = jtu.tree_flatten(tree, is_leaf)
+    all_leaves = [leaves] + [treedef.flatten_up_to(r) for r in rest]
+    return treedef.unflatten(f(*xs) for xs in zip(*all_leaves))
+
+
 def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
-    """Default filter specification for serializing a leaf.
+    """Default filter specification for serialising a leaf.
 
     **Arguments**
 
@@ -24,7 +39,7 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
 
     !!! info
 
-        This function can be extended to customise the serialization behaviour for leaves.
+        This function can be extended to customise the serialisation behaviour for leaves.
 
     !!! example
 
@@ -83,7 +98,7 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
 
 
 def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
-    """Default filter specification for deserializing saved data.
+    """Default filter specification for deserialising saved data.
 
     **Arguments**
 
@@ -96,7 +111,7 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
 
     !!! info
 
-        This function can be extended to customise the serialization behaviour for leaves.
+        This function can be extended to customise the deserialisation behaviour for leaves.
 
     !!! example
 
@@ -221,9 +236,9 @@ def tree_serialise_leaves(
             def __serialise(y):
                 spec(f, y)
 
-            jtu.tree_map(__serialise, x, is_leaf=is_leaf)
+            _ordered_tree_map(__serialise, x, is_leaf=is_leaf)
 
-        jtu.tree_map(_serialise, filter_spec, pytree)
+        _ordered_tree_map(_serialise, filter_spec, pytree)
 
 
 def tree_deserialise_leaves(
@@ -237,9 +252,9 @@ def tree_deserialise_leaves(
     **Arguments:**
 
     - `path`: The file location to load values from.
-    - `like`: A PyTree of the same structure, and with leaves of the same type, as the
-        PyTree being loaded. Those leaves which are loaded will replace the
-        corresponding leaves of `like`.
+    - `like`: A PyTree of same structure as the saved PyTree.
+        The matching leaves are required to be of the same type.
+        Those leaves which are loaded will replace the corresponding leaves of `like`.
     - `filter_spec`: Specifies how to load each kind of leaf. By default all JAX
         arrays, NumPy arrays, Python bool/int/float/complexes are loaded, and
         [`equinox.experimental.StateIndex`][] instances have their value looked up
@@ -261,11 +276,13 @@ def tree_deserialise_leaves(
         import equinox as eqx
         import jax.random as jr
 
-        model = eqx.nn.MLP(2, 2, 2, 2, key=jr.PRNGKey(0))
-        eqx.tree_serialise_leaves("some_filename.eqx", model)
-        model2 = eqx.tree_deserialise_leaves("some_filename.eqx", model)
-        ```
+        model_original = eqx.nn.MLP(2, 2, 2, 2, key=jr.PRNGKey(0))
+        eqx.tree_serialise_leaves("some_filename.eqx", model_original)
+        model_loaded = eqx.tree_deserialise_leaves("some_filename.eqx", model_original)
 
+        # To partially load weights
+        model_partial = eqx.tree_at(lambda mlp: mlp.layers[-1], model_loaded, model_original)
+        ```
     !!! info
 
         `filter_spec` should typically be a function `(File, Any) -> Any`, which takes
@@ -283,8 +300,8 @@ def tree_deserialise_leaves(
             def __deserialise(y):
                 return spec(f, y)
 
-            return jtu.tree_map(__deserialise, x, is_leaf=is_leaf)
+            return _ordered_tree_map(__deserialise, x, is_leaf=is_leaf)
 
-        out = jtu.tree_map(_deserialise, filter_spec, like)
+        out = _ordered_tree_map(_deserialise, filter_spec, like)
     jtu.tree_map(_assert_same, out, like, is_leaf=is_leaf)
     return out

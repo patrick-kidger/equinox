@@ -34,6 +34,7 @@ def test_leaf_serialisation(getkey, tmp_path):
     like_numpy_array2 = np.array([6.0, 7.0])
     like_scalars = (False, 6, 6.0, 6 + 6j)
     like_index = eqx.experimental.StateIndex()
+
     like_func = lambda x: x
     like_obj = object()
     like = (
