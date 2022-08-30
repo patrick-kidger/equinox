@@ -252,9 +252,9 @@ def tree_deserialise_leaves(
     **Arguments:**
 
     - `path`: The file location to load values from.
-    - `like`: A PyTree of same structure as the saved PyTree.
-        The matching leaves are required to be of the same type.
-        Those leaves which are loaded will replace the corresponding leaves of `like`.
+    - `like`: A PyTree of same structure, and with leaves of the same type, as the
+        PyTree being loaded. Those leaves which are loaded will replace the
+        corresponding leaves of `like`.
     - `filter_spec`: Specifies how to load each kind of leaf. By default all JAX
         arrays, NumPy arrays, Python bool/int/float/complexes are loaded, and
         [`equinox.experimental.StateIndex`][] instances have their value looked up
@@ -280,7 +280,7 @@ def tree_deserialise_leaves(
         eqx.tree_serialise_leaves("some_filename.eqx", model_original)
         model_loaded = eqx.tree_deserialise_leaves("some_filename.eqx", model_original)
 
-        # To partially load weights
+        # To partially load weights: in this case load everything except the final layer.
         model_partial = eqx.tree_at(lambda mlp: mlp.layers[-1], model_loaded, model_original)
         ```
     !!! info
