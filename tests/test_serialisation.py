@@ -54,9 +54,8 @@ def test_leaf_serialisation(getkey, tmp_path):
     tree_loaded_index, tree_loaded_func, tree_loaded_obj = tree_loaded[-3:]
 
     assert eqx.tree_equal(tree_serialisable, tree_loaded_serialisable)
-    assert tree_loaded_index is like_index
     assert jnp.array_equal(
-        eqx.experimental.get_state(like_index, jnp.array(4)), index_value
+        eqx.experimental.get_state(tree_loaded_index, jnp.array(4)), index_value
     )
     assert tree_loaded_func is like_func
     assert tree_loaded_obj is like_obj
@@ -146,5 +145,4 @@ def test_tuple_stateindex(tmp_path):
     eqx.experimental.set_state(index, z)
     eqx.tree_serialise_leaves(tmp_path, index)
     index2 = eqx.tree_deserialise_leaves(tmp_path, index)
-    assert index is index2
     assert eqx.tree_equal(eqx.experimental.get_state(index2, z), z)
