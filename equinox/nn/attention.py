@@ -1,4 +1,5 @@
 import math
+from functools import partial
 from typing import Callable, Optional
 
 import jax
@@ -33,15 +34,18 @@ def dot_product_attention_weights(
 
 def dot_product_attention(
     query: Array["query_seq_length", "qk_size"],  # noqa: F821
-    key: Array["kv_seq_length", "qk_size"],  # noqa: F821
+    key_: Array["kv_seq_length", "qk_size"],  # noqa: F821
     value: Array["kv_seq_length", "value_size"],  # noqa: F821
     mask: Optional[Array["query_seq_length", "kv_seq_length"]] = None,  # noqa: F821
-    dropout_fn: Optional[Callable[[Array], Array]] = None,
+    dropout: Optional[Callable[[Array], Array]] = None,
+    *,
+    key: Optional["jax.random.PRNGKey"] = None,
+    inference: Optional[bool] = None,
 ) -> Array["query_seq_length", "value_size"]:  # noqa: F821
 
-    weights = dot_product_attention_weights(query, key, mask)
-    if dropout_fn is not None:
-        weights = dropout_fn(weights)
+    weights = dot_product_attention_weights(query, key_, mask)
+    if dropout is not None:
+        weights = dropout(weights, key=key, inference=inference)
     attn = jnp.einsum("sS,Sd->sd", weights, value)
     return attn
 
@@ -254,13 +258,12 @@ class MultiheadAttention(Module):
         key_heads = self._project(self.key_proj, key_)
         value_heads = self._project(self.value_proj, value)
 
-        dropout_fn = lambda weights: self.dropout(
-            weights, key=key, inference=inference, deterministic=deterministic
+        attn_fn = partial(
+            dot_product_attention, dropout=self.dropout, inference=inference
         )
-        # vmap over attention heads
-        in_axes = (1, 1, 1, None if mask is None else 1, None)
-        attn = jax.vmap(dot_product_attention, in_axes, out_axes=1)(
-            query_heads, key_heads, value_heads, mask, dropout_fn
+        keys = None if key is None else jax.random.split(key, query_heads.shape[1])
+        attn = jax.vmap(attn_fn, in_axes=1, out_axes=1)(
+            query_heads, key_heads, value_heads, mask, key=keys
         )
         attn = attn.reshape(query_seq_length, -1)
 
