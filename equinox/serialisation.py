@@ -7,6 +7,7 @@ import numpy as np
 
 from . import experimental
 from .custom_types import PyTree
+from .pretty_print import tree_pformat
 
 
 def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
@@ -53,7 +54,30 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
             np.save(f, False)
         else:
             np.save(f, True)
-            jnp.save(f, value)
+            # This is a bit of a hack. Serialising arbitrary PyTrees is of course
+            # possible, but it's a lot more work. In general it would additionally
+            # require the StateIndex to already have a value when passed in (so that
+            # we can grab its PyTree structure from it), which is kind of a faff.
+            if isinstance(value, np.ndarray):
+                np.save(f, True)
+                jnp.save(f, value)
+            elif isinstance(value, tuple):
+                if any(not isinstance(v, np.ndarray) for v in value):
+                    value_str = tree_pformat(value)
+                    raise NotImplementedError(
+                        "Can only serialise usages of StateIndex storing np.ndarray "
+                        f"or tuples of jnp.ndarray, got {value_str}"
+                    )
+                np.save(f, False)
+                np.save(f, len(value))
+                for v in value:
+                    jnp.save(f, v)
+            else:
+                value_str = tree_pformat(value)
+                raise NotImplementedError(
+                    "Can only serialise usages of StateIndex storing np.ndarray "
+                    f"or tuples of jnp.ndarray, got {value_str}"
+                )
     else:
         pass
 
@@ -96,11 +120,22 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
     elif isinstance(x, (bool, float, complex, int)):
         return np.load(f).item()
     elif isinstance(x, experimental.StateIndex):
-        saved_value = np.load(f)
+        # Make a new StateIndex. If we happen to load some state then we don't
+        # want to affect the `like` as a side-effect.
+        y = experimental.StateIndex(inference=x.inference)
+        saved_value = np.load(f).item()
+        assert isinstance(saved_value, bool)
         if saved_value:
-            value = jnp.load(f)
-            experimental.set_state(x, value)
-        return x
+            is_array = np.load(f).item()
+            assert isinstance(is_array, bool)
+            if is_array:
+                value = jnp.load(f)
+            else:
+                tuple_length = np.load(f).item()
+                assert isinstance(tuple_length, int)
+                value = tuple(jnp.load(f) for _ in range(tuple_length))
+            experimental.set_state(y, value)
+        return y
     else:
         return x
 

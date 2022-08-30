@@ -164,11 +164,11 @@ class SpectralNorm(Module):
         v_like = self.weight[-1]
         u, v = get_state(self.uv_index, (u_like, v_like))
         if not self.inference:
+            weight = lax.stop_gradient(self.weight)
+            eps = lax.stop_gradient(self.eps)
             for _ in range(self.num_power_iterations):
-                u, v = _power_iteration(self.weight, u, v, self.eps)
+                u, v = _power_iteration(weight, u, v, eps)
             set_state(self.uv_index, (u, v))
-        u = lax.stop_gradient(u)
-        v = lax.stop_gradient(v)
         σ = jnp.einsum("i,ij,j->", u, self.weight, v)
         return jnp.reshape(self.weight / σ, self.weight_shape)
 

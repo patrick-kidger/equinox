@@ -255,16 +255,21 @@ def tree_equal(*pytrees: PyTree) -> bool:
     return out
 
 
-def _has_inference(leaf):
-    return hasattr(leaf, "inference")
+def _subinferences(pytree):
+    is_leaf = lambda x: hasattr(x, "inference") and x is not pytree
+    out = [x for x in jtu.tree_leaves(pytree, is_leaf=is_leaf) if is_leaf(x)]
+    for x in out:
+        out.extend(_subinferences(x))
+    return out
 
 
 def _inferences(pytree):
-    return tuple(
-        x.inference
-        for x in jtu.tree_leaves(pytree, is_leaf=_has_inference)
-        if _has_inference(x)
-    )
+    is_leaf = lambda x: hasattr(x, "inference")
+    out = [x for x in jtu.tree_leaves(pytree, is_leaf=is_leaf) if is_leaf(x)]
+    # Nodes with an inference flag might have sub-nodes with an inference flag.
+    for x in out:
+        out.extend(_subinferences(x))
+    return [x.inference for x in out]
 
 
 def tree_inference(pytree: PyTree, value: bool) -> PyTree:
