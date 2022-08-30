@@ -15,9 +15,10 @@ class Pool(Module):
     init: Union[int, float, Array]
     operation: Callable[[Array, Array], Array]
     num_spatial_dims: int = static_field()
-    kernel_size: Union[int, Sequence[int]] = static_field()
-    stride: Union[int, Sequence[int]] = static_field()
-    padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = static_field()
+    kernel_size: Sequence[int] = static_field()
+    stride: Sequence[int] = static_field()
+    padding: Sequence[Tuple[int, int]] = static_field()
+    use_ceil: bool = static_field()
 
     def __init__(
         self,
@@ -27,6 +28,7 @@ class Pool(Module):
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = 1,
         padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
+        use_ceil: bool = False,
         **kwargs,
     ):
         """**Arguments:**
@@ -38,6 +40,9 @@ class Pool(Module):
         - `stride`: The stride of the convolution.
         - `padding`: The amount of padding to apply before and after each
             spatial dimension.
+        - `use_ceil`: If `True`, then `ceil` is used to compute the final output
+            shape instead of `floor`. For `ceil`, if required, extra padding is added.
+            Defaults to `False`.
 
         !!! info
 
@@ -51,6 +56,7 @@ class Pool(Module):
         self.operation = operation
         self.init = init
         self.num_spatial_dims = num_spatial_dims
+        self.use_ceil = use_ceil
 
         if isinstance(kernel_size, int):
             self.kernel_size = (kernel_size,) * num_spatial_dims
@@ -85,6 +91,27 @@ class Pool(Module):
                 f"{num_spatial_dims} containing ints or tuples of length 2."
             )
 
+    def _update_padding_for_ceil(self, input_shape):
+        new_padding = []
+        for input_size, (left_padding, right_padding), kernel_size, stride in zip(
+            input_shape[1:], self.padding, self.kernel_size, self.stride
+        ):
+            if (input_size + left_padding + right_padding - kernel_size) % stride == 0:
+                new_padding.append((left_padding, right_padding))
+            else:
+                new_padding.append((left_padding, right_padding + stride))
+        return tuple(new_padding)
+
+    def _check_is_padding_valid(self, padding):
+        for (left_padding, right_padding), kernel_size in zip(
+            padding, self.kernel_size
+        ):
+            if max(left_padding, right_padding) > kernel_size:
+                raise RuntimeError(
+                    "Paddings should be less than the size of the kernel. "
+                    f"Padding {(left_padding, right_padding)} received for kernel size {kernel_size}."
+                )
+
     def __call__(
         self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
     ) -> Array:
@@ -104,6 +131,13 @@ class Pool(Module):
             f"but input has shape {x.shape}"
         )
 
+        if self.use_ceil:
+            padding = self._update_padding_for_ceil(x.shape)
+        else:
+            padding = self.padding
+
+        self._check_is_padding_valid(padding)
+
         x = jnp.moveaxis(x, 0, -1)
         x = jnp.expand_dims(x, axis=0)
         x = lax.reduce_window(
@@ -112,7 +146,7 @@ class Pool(Module):
             self.operation,
             (1,) + self.kernel_size + (1,),
             (1,) + self.stride + (1,),
-            ((0, 0),) + self.padding + ((0, 0),),
+            ((0, 0),) + padding + ((0, 0),),
         )
 
         x = jnp.squeeze(x, axis=0)
@@ -128,6 +162,7 @@ class AvgPool1d(Pool):
         kernel_size,
         stride,
         padding=0,
+        use_ceil=False,
         **kwargs,
     ):
         """**Arguments:**
@@ -136,6 +171,9 @@ class AvgPool1d(Pool):
         - `stride`: The stride of the convolution.
         - `padding`: The amount of padding to apply before and after each
             spatial dimension.
+        - `use_ceil`: If `True`, then `ceil` is used to compute the final output
+            shape instead of `floor`. For `ceil`, if required, extra padding is added.
+            Defaults to `False`.
         """
 
         super().__init__(
@@ -145,6 +183,7 @@ class AvgPool1d(Pool):
             kernel_size=kernel_size,
             stride=stride,
             padding=padding,
+            use_ceil=use_ceil,
             **kwargs,
         )
 
@@ -173,6 +212,7 @@ class MaxPool1d(Pool):
         kernel_size,
         stride,
         padding=0,
+        use_ceil=False,
         **kwargs,
     ):
         """**Arguments:**
@@ -181,6 +221,9 @@ class MaxPool1d(Pool):
         - `stride`: The stride of the convolution.
         - `padding`: The amount of padding to apply before and after each
             spatial dimension.
+        - `use_ceil`: If `True`, then `ceil` is used to compute the final output
+            shape instead of `floor`. For `ceil`, if required, extra padding is added.
+            Defaults to `False`.
         """
 
         super().__init__(
@@ -190,6 +233,7 @@ class MaxPool1d(Pool):
             kernel_size=kernel_size,
             stride=stride,
             padding=padding,
+            use_ceil=use_ceil,
             **kwargs,
         )
 
@@ -219,6 +263,7 @@ class AvgPool2d(Pool):
         kernel_size,
         stride,
         padding=0,
+        use_ceil=False,
         **kwargs,
     ):
         """**Arguments:**
@@ -227,6 +272,9 @@ class AvgPool2d(Pool):
         - `stride`: The stride of the convolution.
         - `padding`: The amount of padding to apply before and after each
             spatial dimension.
+        - `use_ceil`: If `True`, then `ceil` is used to compute the final output
+            shape instead of `floor`. For `ceil`, if required, extra padding is added.
+            Defaults to `False`.
         """
 
         super().__init__(
@@ -236,6 +284,7 @@ class AvgPool2d(Pool):
             kernel_size=kernel_size,
             stride=stride,
             padding=padding,
+            use_ceil=use_ceil,
             **kwargs,
         )
 
@@ -264,6 +313,7 @@ class MaxPool2d(Pool):
         kernel_size,
         stride,
         padding=0,
+        use_ceil=False,
         **kwargs,
     ):
         """**Arguments:**
@@ -272,6 +322,9 @@ class MaxPool2d(Pool):
         - `stride`: The stride of the convolution.
         - `padding`: The amount of padding to apply before and after each
             spatial dimension.
+        - `use_ceil`: If `True`, then `ceil` is used to compute the final output
+            shape instead of `floor`. For `ceil`, if required, extra padding is added.
+            Defaults to `False`.
         """
 
         super().__init__(
@@ -281,6 +334,7 @@ class MaxPool2d(Pool):
             kernel_size=kernel_size,
             stride=stride,
             padding=padding,
+            use_ceil=use_ceil,
             **kwargs,
         )
 
@@ -310,6 +364,7 @@ class AvgPool3d(Pool):
         kernel_size,
         stride,
         padding=0,
+        use_ceil=False,
         **kwargs,
     ):
         """**Arguments:**
@@ -318,6 +373,9 @@ class AvgPool3d(Pool):
         - `stride`: The stride of the convolution.
         - `padding`: The amount of padding to apply before and after each
             spatial dimension.
+        - `use_ceil`: If `True`, then `ceil` is used to compute the final output
+            shape instead of `floor`. For `ceil`, if required, extra padding is added.
+            Defaults to `False`.
         """
 
         super().__init__(
@@ -327,6 +385,7 @@ class AvgPool3d(Pool):
             kernel_size=kernel_size,
             stride=stride,
             padding=padding,
+            use_ceil=use_ceil,
             **kwargs,
         )
 
@@ -356,6 +415,7 @@ class MaxPool3d(Pool):
         kernel_size,
         stride,
         padding=0,
+        use_ceil=False,
         **kwargs,
     ):
         """**Arguments:**
@@ -364,6 +424,9 @@ class MaxPool3d(Pool):
         - `stride`: The stride of the convolution.
         - `padding`: The amount of padding to apply before and after each
             spatial dimension.
+        - `use_ceil`: If `True`, then `ceil` is used to compute the final output
+            shape instead of `floor`. For `ceil`, if required, extra padding is added.
+            Defaults to `False`.
         """
 
         super().__init__(
@@ -373,6 +436,7 @@ class MaxPool3d(Pool):
             kernel_size=kernel_size,
             stride=stride,
             padding=padding,
+            use_ceil=use_ceil,
             **kwargs,
         )
 

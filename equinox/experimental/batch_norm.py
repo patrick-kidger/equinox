@@ -152,7 +152,9 @@ class BatchNorm(Module):
         if inference is None:
             inference = self.inference
         if inference:
-            running_mean, running_var = get_state(self.state_index, like=batch_state)
+            running_mean, running_var = get_state(
+                self.state_index, like=lax.stop_gradient(batch_state)
+            )
         else:
             first_time = get_state(self.first_time_index, like=jnp.array(False))
             running_state = lax.cond(
@@ -170,7 +172,7 @@ class BatchNorm(Module):
                 1 - self.momentum
             ) * batch_mean + self.momentum * running_mean
             running_var = (1 - self.momentum) * batch_var + self.momentum * running_var
-            set_state(self.state_index, (running_mean, running_var))
+            set_state(self.state_index, lax.stop_gradient((running_mean, running_var)))
 
         def _norm(y, m, v, w, b):
             out = (y - m) / jnp.sqrt(v + self.eps)

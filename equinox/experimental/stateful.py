@@ -7,7 +7,6 @@ import jax.experimental.host_callback as hcb
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
 import jax.interpreters.xla as xla
-import jax.lax as lax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 
@@ -205,6 +204,22 @@ class StateIndex(Module):
     __hash__ = None
 
 
+def _delete_smuggled_state(x: StateIndex) -> StateIndex:
+    # `x._state` may have a gradient on it, which would mean we hit the JVP rule for
+    # `host_callback.call`, which doesn't exist. Simplest thing to do is just to
+    # delete it, provided we don't need it.
+    #
+    # We don't use `tree_at` because `tree_at(where, pytree, ...)` checks that
+    # `where(pytree)` doesn't depend on the values of the leaves of `pytree`. This
+    # involves a flatten. Meanwhile `StateIndex` sneakily modifies its structure
+    # under flatten, and this trips a false positive.
+
+    leaves, treedef = jax.tree_flatten(x)
+    x = jax.tree_unflatten(treedef, leaves)
+    object.__setattr__(x, "_state", None)
+    return x
+
+
 class _Leaf:  # Not a PyTree
     def __init__(self, value):
         self.value = value
@@ -227,7 +242,7 @@ def _monkey_patch():
 
         #
         # Overwrite impl and abstract_eval:
-        # Make `get_state` not actually pass `index._state` or `like` into the
+        # Make `get_state` not actually pass `like` into the
         # callback. This means we don't need to wait for `like` to be computed at
         # runtime.
         #
@@ -238,13 +253,9 @@ def _monkey_patch():
             # Not using isinstance for speed. (Questionable choice?)
             if call_type is _GetStateArg:
                 arg = jtu.tree_unflatten(arg_treedef, arg_flat)
-                token_index = jtu.tree_map(lambda _: jax.core.token, arg.index)
+                assert arg.index._state is None
                 token_like = jtu.tree_map(lambda _: jax.core.token, arg.like)
-                arg = tree_at(
-                    lambda a: jtu.tree_leaves((a.index, a.like)),
-                    arg,
-                    jtu.tree_leaves((token_index, token_like)),
-                )
+                arg = tree_at(lambda a: a.like, arg, token_like)
                 arg_flat = jtu.tree_leaves(arg)
             return _old_outside_call_impl(*arg_flat, arg_treedef=arg_treedef, **params)
 
@@ -255,13 +266,9 @@ def _monkey_patch():
                 arg_flat = avals_in[:-2]
                 extra_tokens = avals_in[-2:]
                 arg = jtu.tree_unflatten(arg_treedef, arg_flat)
-                token_index = jtu.tree_map(lambda _: jax.core.abstract_token, arg.index)
+                assert arg.index._state is None
                 token_like = jtu.tree_map(lambda _: jax.core.abstract_token, arg.like)
-                arg = tree_at(
-                    lambda a: jtu.tree_leaves((a.index, a.like)),
-                    arg,
-                    jtu.tree_leaves((token_index, token_like)),
-                )
+                arg = tree_at(lambda a: a.like, arg, token_like)
                 arg_flat = jtu.tree_leaves(arg)
                 avals_in = arg_flat + extra_tokens
             return _old_outside_call_translation_rule(
@@ -313,7 +320,7 @@ def _monkey_patch():
                     batch_axes_flat,
                     arg_treedef=arg_treedef,
                     result_treedef=result_treedef,
-                    **params
+                    **params,
                 )
 
         hcb.outside_call_p.def_impl(_outside_call_impl)
@@ -349,7 +356,7 @@ def _batchify_batching_rule(
             *flat,
             treedef=treedef,
             like_batch_axes=like_batch_axes + like_batch_axis,
-            current_batch_axes=current_batch_axes
+            current_batch_axes=current_batch_axes,
         ),
         like_batch_axis,
     )
@@ -493,11 +500,12 @@ def get_state(index: StateIndex, like: PyTree[Array]) -> PyTree[Array]:
             *flat,
             treedef=treedef,
             like_batch_axes=[],
-            current_batch_axes=current_batch_axes
+            current_batch_axes=current_batch_axes,
         )
         return jtu.tree_unflatten(_treedef, out)
     else:
         _monkey_patch()
+        index = _delete_smuggled_state(index)
         return _get_state(index, like, [])
 
 
@@ -526,7 +534,8 @@ def _set_state_hcb(arg: _SetStateArg) -> None:
         state_shape = jax.eval_shape(lambda: state)
         if current_state_shape != state_shape:
             raise RuntimeError(
-                "New state and old state have different shape, dtype, or PyTree structure"
+                "New state and old state have different shape, dtype, or PyTree "
+                f"structure. New: {current_state_shape}. Old: {state_shape}."
             )
         if current_batch_axes != batch_axes:
             raise RuntimeError("New state and old state have different batch axes")
@@ -548,12 +557,15 @@ def set_state(index: StateIndex, state: PyTree[Array]) -> None:
 
     **Raises:**
 
-    A `TypeError` at trace time if `state` is not a PyTree of JAX arrays.
-
     A `RuntimeError` at run time if this `index` has previously been used to save a
     `state` with a different shape, dtype, PyTree structure, or batch axes.
 
     A `RuntimeError` at trace time if `index.inference` is truthy.
+
+    A `TypeError` at trace time if `state` is not a PyTree of JAX arrays.
+
+    A `NotImplementedError` at trace time if trying to compute a gradient through
+      `state`.
 
     !!! info
 
@@ -562,7 +574,7 @@ def set_state(index: StateIndex, state: PyTree[Array]) -> None:
 
     !!! warning
 
-        Note that gradient information in `state` will not preserved.
+        Note that `state` cannot be differentiated.
 
     !!! warning
 
@@ -582,7 +594,7 @@ def set_state(index: StateIndex, state: PyTree[Array]) -> None:
     if any(not is_array(x) for x in jtu.tree_leaves(state)):
         raise TypeError("`state` must be a PyTree containing only JAX arrays")
     _monkey_patch()
-    state = jtu.tree_map(lax.stop_gradient, state)
+    index = _delete_smuggled_state(index)
     _set_state(index, state, [])
 
 

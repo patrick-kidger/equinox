@@ -1,5 +1,5 @@
 import pathlib
-from typing import Any, BinaryIO, Callable, Union
+from typing import Any, BinaryIO, Callable, Optional, Union
 
 import jax.numpy as jnp
 import jax.tree_util as jtu
@@ -7,10 +7,26 @@ import numpy as np
 
 from . import experimental
 from .custom_types import PyTree
+from .pretty_print import tree_pformat
+
+
+def _ordered_tree_map(
+    f: Callable[..., Any],
+    tree: Any,
+    *rest: Any,
+    is_leaf: Optional[Callable[[Any], bool]] = None,
+) -> Any:
+    """Like jax.tree_util.tree_map, but guaranteed to iterate over the tree
+    in fixed order. (Namely depth-first left-to-right.)
+    """
+    # Discussion: https://github.com/patrick-kidger/equinox/issues/136
+    leaves, treedef = jtu.tree_flatten(tree, is_leaf)
+    all_leaves = [leaves] + [treedef.flatten_up_to(r) for r in rest]
+    return treedef.unflatten(f(*xs) for xs in zip(*all_leaves))
 
 
 def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
-    """Default filter specification for serializing a leaf.
+    """Default filter specification for serialising a leaf.
 
     **Arguments**
 
@@ -23,7 +39,7 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
 
     !!! info
 
-        This function can be extended to customise the serialization behaviour for leaves.
+        This function can be extended to customise the serialisation behaviour for leaves.
 
     !!! example
 
@@ -53,13 +69,36 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
             np.save(f, False)
         else:
             np.save(f, True)
-            jnp.save(f, value)
+            # This is a bit of a hack. Serialising arbitrary PyTrees is of course
+            # possible, but it's a lot more work. In general it would additionally
+            # require the StateIndex to already have a value when passed in (so that
+            # we can grab its PyTree structure from it), which is kind of a faff.
+            if isinstance(value, np.ndarray):
+                np.save(f, True)
+                jnp.save(f, value)
+            elif isinstance(value, tuple):
+                if any(not isinstance(v, np.ndarray) for v in value):
+                    value_str = tree_pformat(value)
+                    raise NotImplementedError(
+                        "Can only serialise usages of StateIndex storing np.ndarray "
+                        f"or tuples of jnp.ndarray, got {value_str}"
+                    )
+                np.save(f, False)
+                np.save(f, len(value))
+                for v in value:
+                    jnp.save(f, v)
+            else:
+                value_str = tree_pformat(value)
+                raise NotImplementedError(
+                    "Can only serialise usages of StateIndex storing np.ndarray "
+                    f"or tuples of jnp.ndarray, got {value_str}"
+                )
     else:
         pass
 
 
 def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
-    """Default filter specification for deserializing saved data.
+    """Default filter specification for deserialising saved data.
 
     **Arguments**
 
@@ -72,7 +111,7 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
 
     !!! info
 
-        This function can be extended to customise the serialization behaviour for leaves.
+        This function can be extended to customise the deserialisation behaviour for leaves.
 
     !!! example
 
@@ -96,11 +135,22 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
     elif isinstance(x, (bool, float, complex, int)):
         return np.load(f).item()
     elif isinstance(x, experimental.StateIndex):
-        saved_value = np.load(f)
+        # Make a new StateIndex. If we happen to load some state then we don't
+        # want to affect the `like` as a side-effect.
+        y = experimental.StateIndex(inference=x.inference)
+        saved_value = np.load(f).item()
+        assert isinstance(saved_value, bool)
         if saved_value:
-            value = jnp.load(f)
-            experimental.set_state(x, value)
-        return x
+            is_array = np.load(f).item()
+            assert isinstance(is_array, bool)
+            if is_array:
+                value = jnp.load(f)
+            else:
+                tuple_length = np.load(f).item()
+                assert isinstance(tuple_length, int)
+                value = tuple(jnp.load(f) for _ in range(tuple_length))
+            experimental.set_state(y, value)
+        return y
     else:
         return x
 
@@ -186,9 +236,9 @@ def tree_serialise_leaves(
             def __serialise(y):
                 spec(f, y)
 
-            jtu.tree_map(__serialise, x, is_leaf=is_leaf)
+            _ordered_tree_map(__serialise, x, is_leaf=is_leaf)
 
-        jtu.tree_map(_serialise, filter_spec, pytree)
+        _ordered_tree_map(_serialise, filter_spec, pytree)
 
 
 def tree_deserialise_leaves(
@@ -202,7 +252,7 @@ def tree_deserialise_leaves(
     **Arguments:**
 
     - `path`: The file location to load values from.
-    - `like`: A PyTree of the same structure, and with leaves of the same type, as the
+    - `like`: A PyTree of same structure, and with leaves of the same type, as the
         PyTree being loaded. Those leaves which are loaded will replace the
         corresponding leaves of `like`.
     - `filter_spec`: Specifies how to load each kind of leaf. By default all JAX
@@ -226,11 +276,13 @@ def tree_deserialise_leaves(
         import equinox as eqx
         import jax.random as jr
 
-        model = eqx.nn.MLP(2, 2, 2, 2, key=jr.PRNGKey(0))
-        eqx.tree_serialise_leaves("some_filename.eqx", model)
-        model2 = eqx.tree_deserialise_leaves("some_filename.eqx", model)
-        ```
+        model_original = eqx.nn.MLP(2, 2, 2, 2, key=jr.PRNGKey(0))
+        eqx.tree_serialise_leaves("some_filename.eqx", model_original)
+        model_loaded = eqx.tree_deserialise_leaves("some_filename.eqx", model_original)
 
+        # To partially load weights: in this case load everything except the final layer.
+        model_partial = eqx.tree_at(lambda mlp: mlp.layers[-1], model_loaded, model_original)
+        ```
     !!! info
 
         `filter_spec` should typically be a function `(File, Any) -> Any`, which takes
@@ -248,8 +300,8 @@ def tree_deserialise_leaves(
             def __deserialise(y):
                 return spec(f, y)
 
-            return jtu.tree_map(__deserialise, x, is_leaf=is_leaf)
+            return _ordered_tree_map(__deserialise, x, is_leaf=is_leaf)
 
-        out = jtu.tree_map(_deserialise, filter_spec, like)
+        out = _ordered_tree_map(_deserialise, filter_spec, like)
     jtu.tree_map(_assert_same, out, like, is_leaf=is_leaf)
     return out
