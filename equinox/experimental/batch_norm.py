@@ -152,7 +152,9 @@ class BatchNorm(Module):
         if inference is None:
             inference = self.inference
         if inference:
-            running_mean, running_var = get_state(self.state_index, like=batch_state)
+            running_mean, running_var = get_state(
+                self.state_index, like=lax.stop_gradient(batch_state)
+            )
         else:
             first_time = get_state(self.first_time_index, like=jnp.array(False))
             running_state = lax.cond(
