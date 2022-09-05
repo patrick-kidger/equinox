@@ -263,7 +263,7 @@ class MultiheadAttention(Module):
         )
         keys = None if key is None else jax.random.split(key, query_heads.shape[1])
         attn = jax.vmap(attn_fn, in_axes=1, out_axes=1)(
-            query_heads, key_heads, value_heads, mask, key=keys
+            query_heads, key_heads, value_heads, mask=mask, key=keys
         )
         attn = attn.reshape(query_seq_length, -1)
 
