@@ -7,6 +7,7 @@ import jax.experimental.host_callback as hcb
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
 import jax.interpreters.xla as xla
+import jax.lax as lax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 
@@ -487,7 +488,7 @@ def get_state(index: StateIndex, like: PyTree[Array]) -> PyTree[Array]:
         except KeyError as e:
             raise RuntimeError("Cannot get state before it has been set") from e
         if current_version == index._version.value:
-            state = index._state
+            state = lax.stop_gradient(index._state)
         else:
             state = jtu.tree_map(jnp.asarray, current_state)
         _treedef = jtu.tree_structure(state)
