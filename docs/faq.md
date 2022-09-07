@@ -31,7 +31,11 @@ class Module(eqx.Module):
         self.linear1 = shared_linear
         self.linear2 = shared_linear
 ```
-in which the same object is saved multiple times in the model. After making some gradient updates you'll find that `self.linear1` and `self.linear2` are now different.
+in which the same object is saved multiple times in the model.
+
+Don't do this!
+
+After making some gradient updates you'll find that `self.linear1` and `self.linear2` are now different.
 
 Recall that in Equinox, models are PyTrees. Meanwhile, JAX treats all PyTrees as *trees*: that is, the same object does not appear more in the tree than once. (If it did, then it would be a *directed acyclic graph* instead.) If JAX ever encounters the same object multiple times then it will unwittingly make independent copies of the object whenever it transforms the overall PyTree.
 
