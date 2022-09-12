@@ -1,5 +1,5 @@
 import typing
-from typing import Any, Callable, List, Optional, Sequence, Union
+from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 
 import jax
 import jax.nn as jnn
@@ -107,7 +107,10 @@ class Sequential(Module):
         Activation functions can be added by wrapping them in [`equinox.nn.Lambda`][].
     """
 
-    layers: Sequence[Module]
+    layers: Tuple[Module, ...]
+
+    def __init__(self, layers: Sequence[Module]):
+        self.layers = tuple(layers)
 
     def __call__(self, x: Any, *, key: Optional["jax.random.PRNGKey"] = None) -> Any:
         """**Arguments:**
