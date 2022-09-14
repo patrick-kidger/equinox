@@ -75,7 +75,10 @@ class Conv(Module):
         - `kernel_size`: The size of the convolutional kernel.
         - `stride`: The stride of the convolution.
         - `padding`: The amount of padding to apply before and after each spatial
-            dimension. The same amount of padding is applied both before and after.
+            dimension. If `padding` is an `int`, the same amount of padding is applied for each dimension,
+            both before and after. If it is a `tuple` of size `num_spatial_dim`, the same amount of padding is applied
+            both before and after, but different for each dimension. If it is a `tuple` of size `2 * num_spatial_dim`,
+            the amount of padding is applied as `(before dim 1, after dim 1, before dim 2, after dim 2, ...)`.
         - `dilation`: The dilation of the convolution.
         - `groups`: The number of input channel groups. At `groups=1`,
             all input channels contribute to all output channels. Values
@@ -139,6 +142,8 @@ class Conv(Module):
             self.padding = tuple((padding, padding) for _ in range(num_spatial_dims))
         elif isinstance(padding, Sequence) and len(padding) == num_spatial_dims:
             self.padding = tuple((p, p) for p in padding)
+        elif isinstance(padding, Sequence) and len(padding) == 2 * num_spatial_dims:
+            self.padding = tuple(zip(padding[::2], padding[1::2]))
         else:
             raise ValueError(
                 "`padding` must either be an int or tuple of length "
@@ -404,6 +409,8 @@ class ConvTranspose(Module):
             self.padding = tuple((padding, padding) for _ in range(num_spatial_dims))
         elif isinstance(padding, Sequence) and len(padding) == num_spatial_dims:
             self.padding = tuple((p, p) for p in padding)
+        elif isinstance(padding, Sequence) and len(padding) == 2 * num_spatial_dims:
+            self.padding = tuple(zip(padding[::2], padding[1::2]))
         else:
             raise ValueError(
                 "`padding` must either be an int or tuple of length "
