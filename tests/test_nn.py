@@ -330,6 +330,13 @@ def test_conv3d(getkey):
     assert jnp.allclose(conv(data), answer)
 
 
+def test_conv_padding(getkey):
+    x = jrandom.normal(getkey(), (3, 32, 32))
+    conv = eqx.nn.Conv2d(3, 8, 1, 2, padding=((0, 1), (0, 3)), key=getkey())
+    output = conv(x)
+    assert output.shape == (8, 17, 18)
+
+
 def test_convtranspose1d(getkey):
     # Positional arguments
     conv = eqx.nn.ConvTranspose1d(1, 3, 3, key=getkey())
@@ -522,6 +529,13 @@ def test_convtranspose3d(getkey):
         ]
     ).reshape(1, 3, 3, 3)
     assert jnp.all(conv(data) == answer)
+
+
+def test_convtranspose_padding(getkey):
+    x = jrandom.normal(getkey(), (8, 17, 18))
+    conv = eqx.nn.ConvTranspose2d(8, 3, 1, 2, padding=((0, 1), (0, 3)), key=getkey())
+    output = conv(x)
+    assert output.shape == (3, 32, 32)
 
 
 def test_dot_product_attention_weights(getkey):

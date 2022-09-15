@@ -345,7 +345,9 @@ class ConvTranspose(Module):
             the sequence should be of length equal to `num_spatial_dims`, and specify
             the value of each property down each spatial dimension in turn.. If they
             are an integer then the same kernel size / stride / padding / dilation will
-            be used along every spatial dimension.
+            be used along every spatial dimension. `padding` can also be a sequence of 2 elements tuples
+            each representing the padding to apply before and after the spatial dimension,
+            with the sequence of length equal to `num_spatial_dims`.
 
         !!! tip
 
@@ -407,13 +409,14 @@ class ConvTranspose(Module):
         if isinstance(padding, int):
             self.padding = tuple((padding, padding) for _ in range(num_spatial_dims))
         elif isinstance(padding, Sequence) and len(padding) == num_spatial_dims:
-            self.padding = tuple((p, p) for p in padding)
-        elif isinstance(padding, Sequence) and len(padding) == 2 * num_spatial_dims:
-            self.padding = tuple(zip(padding[::2], padding[1::2]))
+            if all(isinstance(element, Sequence) for element in padding):
+                self.padding = padding
+            else:
+                self.padding = tuple((p, p) for p in padding)
         else:
             raise ValueError(
                 "`padding` must either be an int or tuple of length "
-                f"{num_spatial_dims}."
+                f"{num_spatial_dims} containing ints or tuples of length 2."
             )
         self.output_padding = output_padding
         self.dilation = dilation
