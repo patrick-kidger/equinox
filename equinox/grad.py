@@ -6,8 +6,9 @@ from typing import Any, Callable, Dict
 
 import jax
 import jax.tree_util as jtu
+from jaxtyping import PyTree
 
-from .custom_types import BoolAxisSpec, PyTree, sentinel
+from .custom_types import BoolAxisSpec, sentinel
 from .doc_utils import doc_strip_annotations
 from .filters import combine, is_array, is_inexact_array, partition
 from .module import Module, module_update_wrapper

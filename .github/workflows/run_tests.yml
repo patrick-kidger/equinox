@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest wheel optax jaxlib
+          python -m pip install -r ./tests/requirements.txt
 
       - name: Checks with pre-commit
         uses: pre-commit/action@v2.0.3

@@ -2,8 +2,8 @@ from typing import Optional
 
 import jax
 import jax.random as jrandom
+from jaxtyping import Array, Float
 
-from ..custom_types import Array
 from ..module import Module, static_field
 
 
@@ -18,7 +18,7 @@ class Embedding(Module):
         self,
         num_embeddings: int,
         embedding_size: int,
-        weight: Optional[Array["num_embeddings", "embedding_size"]] = None,
+        weight: Optional[Float[Array, "num_embeddings embedding_size"]] = None,
         *,
         key: "jax.random.PRNGKey",
         **kwargs,

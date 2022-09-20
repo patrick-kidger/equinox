@@ -4,9 +4,9 @@ from typing import Any, BinaryIO, Callable, Optional, Union
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
+from jaxtyping import PyTree
 
 from . import experimental
-from .custom_types import PyTree
 from .pretty_print import tree_pformat
 
 

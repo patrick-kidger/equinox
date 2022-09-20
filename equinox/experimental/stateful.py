@@ -1,6 +1,6 @@
 import weakref
 from dataclasses import field
-from typing import Tuple
+from typing import List
 
 import jax
 import jax.experimental.host_callback as hcb
@@ -10,8 +10,8 @@ import jax.interpreters.xla as xla
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.tree_util as jtu
+from jaxtyping import Array, PyTree
 
-from ..custom_types import Array, PyTree
 from ..filters import is_array
 from ..module import Module, static_field
 from ..tree import tree_at
@@ -215,8 +215,8 @@ def _delete_smuggled_state(x: StateIndex) -> StateIndex:
     # involves a flatten. Meanwhile `StateIndex` sneakily modifies its structure
     # under flatten, and this trips a false positive.
 
-    leaves, treedef = jax.tree_flatten(x)
-    x = jax.tree_unflatten(treedef, leaves)
+    leaves, treedef = jtu.tree_flatten(x)
+    x = jtu.tree_unflatten(treedef, leaves)
     object.__setattr__(x, "_state", None)
     return x
 
@@ -383,7 +383,7 @@ mlir.register_lowering(
 class _GetStateArg(Module):
     index: StateIndex
     like: PyTree[Array]
-    batch_axes: Tuple[int] = static_field()
+    batch_axes: List[int] = static_field()
 
 
 def _get_state_hcb(arg: _GetStateArg) -> PyTree:
@@ -398,9 +398,7 @@ def _get_state_hcb(arg: _GetStateArg) -> PyTree:
     return current_state
 
 
-def _get_state(
-    index: StateIndex, like: PyTree[Array], batch_axes: Tuple[int]
-) -> PyTree:
+def _get_state(index: StateIndex, like: PyTree[Array], batch_axes: List[int]) -> PyTree:
     arg = _GetStateArg(index, like, batch_axes)
     like_shape = jax.eval_shape(lambda: like)
     # Will raise an error if `like_shape` does not match the result.
@@ -513,7 +511,7 @@ def get_state(index: StateIndex, like: PyTree[Array]) -> PyTree[Array]:
 class _SetStateArg(Module):
     index: StateIndex
     state: PyTree[Array]
-    batch_axes: Tuple[int] = static_field()
+    batch_axes: List[int] = static_field()
 
 
 def _set_state_hcb(arg: _SetStateArg) -> None:
@@ -599,6 +597,6 @@ def set_state(index: StateIndex, state: PyTree[Array]) -> None:
     _set_state(index, state, [])
 
 
-def _set_state(index: StateIndex, state: PyTree[Array], batch_axes: Tuple[int]) -> None:
+def _set_state(index: StateIndex, state: PyTree[Array], batch_axes: List[int]) -> None:
     arg = _SetStateArg(index, state, batch_axes)
     hcb.call(_set_state_hcb, arg)

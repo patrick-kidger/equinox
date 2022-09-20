@@ -4,8 +4,8 @@ from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
 import jax
 import jax.nn as jnn
 import jax.random as jrandom
+from jaxtyping import Array
 
-from ..custom_types import Array
 from ..module import Module, static_field
 from .linear import Linear
 

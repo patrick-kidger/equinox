@@ -3,8 +3,8 @@ from typing import Optional, Sequence, Union
 
 import jax
 import jax.numpy as jnp
+from jaxtyping import Array
 
-from ..custom_types import Array
 from ..module import Module, static_field
 from .array_utils import left_broadcast_to
 

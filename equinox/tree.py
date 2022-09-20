@@ -4,8 +4,9 @@ import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
+from jaxtyping import Array, Bool, PyTree
 
-from .custom_types import PyTree, sentinel
+from .custom_types import sentinel
 from .doc_utils import doc_repr
 
 
@@ -210,7 +211,7 @@ def tree_at(
     return out
 
 
-def tree_equal(*pytrees: PyTree) -> bool:
+def tree_equal(*pytrees: PyTree) -> Union[bool, np.bool_, Bool[Array, ""]]:
     """Returns `True` if all input PyTrees are equal. Every PyTree must have the same
     structure. Any JAX or NumPy arrays (as leaves) must have the same shape, dtype, and
     values to be considered equal. JAX arrays and NumPy arrays are not considered equal

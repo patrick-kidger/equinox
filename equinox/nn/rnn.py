@@ -5,8 +5,8 @@ import jax
 import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
+from jaxtyping import Array
 
-from ..custom_types import Array
 from ..module import Module, static_field
 
 

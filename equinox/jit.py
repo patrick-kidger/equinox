@@ -6,6 +6,7 @@ from typing import Any, Callable, Sequence
 
 import jax
 import jax.tree_util as jtu
+from jaxtyping import PyTree
 
 from .compile_utils import (
     compile_cache,
@@ -14,7 +15,7 @@ from .compile_utils import (
     hashable_partition,
     Static,
 )
-from .custom_types import BoolAxisSpec, PyTree, sentinel, TreeDef
+from .custom_types import BoolAxisSpec, sentinel, TreeDef
 from .doc_utils import doc_strip_annotations
 from .filters import combine, is_array, partition
 from .module import Module, module_update_wrapper

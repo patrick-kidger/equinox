@@ -574,10 +574,10 @@ def test_multihead_attention(getkey):
         attn,
         [jnp.arange(16).reshape(4, 4) for _ in range(4)],
     )
-    x = jnp.array([[1, 2, 3, 4]])
+    x = jnp.array([[1.0, 2.0, 3.0, 4.0]])
     assert jnp.allclose(attn(x, x, x), jnp.array([[680.0, 1960.0, 3240.0, 4520.0]]))
 
-    x = jnp.arange(1, 13).reshape(3, 4)
+    x = jnp.arange(1, 13, dtype=jnp.float32).reshape(3, 4)
     mask = jnp.broadcast_to(jnp.array([True, False, False]), (2, 3, 3))
     assert jnp.allclose(
         attn(x, x, x, mask),

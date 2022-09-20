@@ -76,8 +76,8 @@ def test_function():
     i = jax.custom_vjp(f)
     j = jax.custom_jvp(f)
 
-    assert eqx.tree_pformat(f, "<function f>")
-    assert eqx.tree_pformat(g, "<function f>")
-    assert eqx.tree_pformat(h, "<function f>")
-    assert eqx.tree_pformat(i, "<function f>")
-    assert eqx.tree_pformat(j, "<function f>")
+    assert eqx.tree_pformat(f) == "<function f>"
+    assert eqx.tree_pformat(g) == "<wrapped function f>"
+    assert eqx.tree_pformat(h) == "<wrapped function f>"
+    assert eqx.tree_pformat(i) == "<function f>"
+    assert eqx.tree_pformat(j) == "<function f>"

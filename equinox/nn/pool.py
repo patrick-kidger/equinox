@@ -4,8 +4,8 @@ import jax.lax as lax
 import jax.numpy as jnp
 import jax.random
 import numpy as np
+from jaxtyping import Array
 
-from ..custom_types import Array
 from ..module import Module, static_field
 
 

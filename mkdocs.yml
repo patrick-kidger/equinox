@@ -75,6 +75,8 @@ plugins:
         handlers:
             python:
                 setup_commands:
+                    - import jaxtyping
+                    - jaxtyping.set_array_name_format("array")
                     - import pytkdocs_tweaks
                     - pytkdocs_tweaks.main()
 
