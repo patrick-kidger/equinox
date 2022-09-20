@@ -70,7 +70,7 @@ class BatchNorm(Module):
     def __init__(
         self,
         input_size: int,
-        axis_name: str,
+        axis_name: Union[Hashable, Sequence[Hashable]],
         eps: float = 1e-5,
         channelwise_affine: bool = True,
         momentum: float = 0.99,

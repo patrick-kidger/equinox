@@ -2,7 +2,6 @@ import abc
 import functools as ft
 import inspect
 from dataclasses import dataclass, field, fields
-from typing import Type
 
 import jax.tree_util as jtu
 
@@ -62,42 +61,6 @@ def _not_magic(k: str) -> bool:
     return not (k.startswith("__") and k.endswith("__"))
 
 
-@ft.lru_cache(maxsize=128)
-def _make_initable(cls: Type["Module"], wraps: bool) -> Type["Module"]:
-    if wraps:
-        field_names = {
-            "__module__",
-            "__name__",
-            "__qualname__",
-            "__doc__",
-            "__annotations__",
-            "__wrapped__",
-        }
-    else:
-        field_names = {field.name for field in fields(cls)}
-
-    class _InitableModule(cls):
-        pass
-
-    # Done like this to avoid dataclasses complaining about overriding setattr on a
-    # frozen class.
-    def __setattr__(self, name, value):
-        if name in field_names:
-            object.__setattr__(self, name, value)
-        else:
-            raise AttributeError(f"Cannot set attribute {name}")
-
-    _InitableModule.__setattr__ = __setattr__
-
-    return _InitableModule
-
-
-def _has_dataclass_init(cls: Type["Module"]) -> bool:
-    if "__init__" in cls.__dict__:
-        return False
-    return cls._has_dataclass_init
-
-
 # Inherits from abc.ABCMeta as a convenience for a common use-case.
 # It's not a feature we use ourselves.
 class _ModuleMeta(abc.ABCMeta):
@@ -142,6 +105,42 @@ class _ModuleMeta(abc.ABCMeta):
                 f"The following fields were not initialised during __init__: {missing_names}"
             )
         return self
+
+
+@ft.lru_cache(maxsize=128)
+def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
+    if wraps:
+        field_names = {
+            "__module__",
+            "__name__",
+            "__qualname__",
+            "__doc__",
+            "__annotations__",
+            "__wrapped__",
+        }
+    else:
+        field_names = {field.name for field in fields(cls)}
+
+    class _InitableModule(cls):
+        pass
+
+    # Done like this to avoid dataclasses complaining about overriding setattr on a
+    # frozen class.
+    def __setattr__(self, name, value):
+        if name in field_names:
+            object.__setattr__(self, name, value)
+        else:
+            raise AttributeError(f"Cannot set attribute {name}")
+
+    _InitableModule.__setattr__ = __setattr__
+
+    return _InitableModule
+
+
+def _has_dataclass_init(cls: _ModuleMeta) -> bool:
+    if "__init__" in cls.__dict__:
+        return False
+    return cls._has_dataclass_init
 
 
 class Module(metaclass=_ModuleMeta):

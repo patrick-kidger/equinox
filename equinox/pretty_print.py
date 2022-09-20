@@ -1,16 +1,17 @@
 import dataclasses
 import functools as ft
 import types
-from typing import Any, Callable, Dict, List, NamedTuple, Tuple
+from typing import Any, Callable, Dict, List, Tuple, Union
 
 import jax
 import jax._src.pretty_printer as pp
 import jax.numpy as jnp
 import numpy as np
-from jaxtyping import Array, PyTree
+from jaxtyping import PyTree
 
 
 Dataclass = Any
+NamedTuple = Any  # workaround typeguard bug
 PrettyPrintAble = PyTree
 
 
@@ -109,7 +110,7 @@ def _pformat_dataclass(obj: Dataclass, **kwargs) -> pp.Doc:
     )
 
 
-def _pformat_array(obj: Array, **kwargs) -> pp.Doc:
+def _pformat_array(obj: Union[jnp.ndarray, np.ndarray], **kwargs) -> pp.Doc:
     short = kwargs["short_arrays"]
     if short:
         dtype_str = (

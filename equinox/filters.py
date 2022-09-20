@@ -52,7 +52,7 @@ def is_inexact_array_like(element: Any) -> bool:
 
 
 def _make_filter_tree(is_leaf):
-    def _filter_tree(mask: BoolAxisSpec, arg: Any) -> ResolvedBoolAxisSpec:
+    def _filter_tree(mask: BoolAxisSpec, arg: Any) -> PyTree[ResolvedBoolAxisSpec]:
         if isinstance(mask, bool):
             return jtu.tree_map(lambda _: mask, arg, is_leaf=is_leaf)
         elif callable(mask):
