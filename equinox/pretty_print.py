@@ -7,8 +7,7 @@ import jax
 import jax._src.pretty_printer as pp
 import jax.numpy as jnp
 import numpy as np
-
-from .custom_types import Array, PyTree
+from jaxtyping import Array, PyTree
 
 
 Dataclass = Any

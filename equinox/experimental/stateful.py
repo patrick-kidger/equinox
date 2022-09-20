@@ -10,8 +10,8 @@ import jax.interpreters.xla as xla
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.tree_util as jtu
+from jaxtyping import Array, PyTree
 
-from ..custom_types import Array, PyTree
 from ..filters import is_array
 from ..module import Module, static_field
 from ..tree import tree_at

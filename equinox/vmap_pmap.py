@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict, Union
 import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
+from jaxtyping import PyTree
 
 from .compile_utils import (
     compile_cache,
@@ -13,7 +14,7 @@ from .compile_utils import (
     hashable_partition,
     Static,
 )
-from .custom_types import BoolAxisSpec, PyTree, ResolvedBoolAxisSpec, sentinel
+from .custom_types import BoolAxisSpec, ResolvedBoolAxisSpec, sentinel
 from .doc_utils import doc_strip_annotations
 from .filters import combine, filter, is_array, is_array_like, partition
 from .module import Module, module_update_wrapper

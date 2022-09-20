@@ -1,8 +1,7 @@
 from typing import Tuple
 
 import jax.numpy as jnp
-
-from ..custom_types import Array
+from jaxtyping import Array
 
 
 def left_broadcast_to(arr: Array, shape: Tuple[int]):

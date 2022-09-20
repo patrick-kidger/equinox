@@ -3,8 +3,8 @@ from typing import Hashable, Optional, Sequence, Union
 import jax
 import jax.lax as lax
 import jax.numpy as jnp
+from jaxtyping import Array, Float
 
-from ..custom_types import Array
 from ..module import Module, static_field
 from .stateful import get_state, set_state, StateIndex
 
@@ -56,8 +56,8 @@ class BatchNorm(Module):
         `BatchNorm` is considered experimental. Let us know how you find it!
     """  # noqa: E501
 
-    weight: Optional[Array["input_size"]]
-    bias: Optional[Array["input_size"]]
+    weight: Optional[Float[Array, "input_size"]]
+    bias: Optional[Float[Array, "input_size"]]
     first_time_index: StateIndex
     state_index: StateIndex
     axis_name: Union[Hashable, Sequence[Hashable]]

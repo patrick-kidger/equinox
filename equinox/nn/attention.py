@@ -5,18 +5,18 @@ from typing import Callable, Optional
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
+from jaxtyping import Array, Bool, Float
 
-from ..custom_types import Array
 from ..module import Module, static_field
 from .dropout import Dropout
 from .linear import Linear
 
 
 def dot_product_attention_weights(
-    query: Array["query_seq_length", "qk_size"],  # noqa: F821
-    key: Array["kv_seq_length", "qk_size"],  # noqa: F821
-    mask: Optional[Array["query_seq_length", "kv_seq_length"]] = None,  # noqa: F821
-) -> Array["query_seq_length", "kv_seq_length"]:  # noqa: F821
+    query: Float[Array, "q_seq qk_size"],
+    key: Float[Array, "kv_seq qk_size"],
+    mask: Optional[Bool[Array, "q_seq kv_seq"]] = None,
+) -> Float[Array, "q_seq kv_seq"]:
 
     logits = jnp.einsum("sd,Sd->sS", query, key)
     logits = logits / math.sqrt(query.shape[-1])
@@ -33,15 +33,15 @@ def dot_product_attention_weights(
 
 
 def dot_product_attention(
-    query: Array["query_seq_length", "qk_size"],  # noqa: F821
-    key_: Array["kv_seq_length", "qk_size"],  # noqa: F821
-    value: Array["kv_seq_length", "value_size"],  # noqa: F821
-    mask: Optional[Array["query_seq_length", "kv_seq_length"]] = None,  # noqa: F821
+    query: Float[Array, "q_seq qk_size"],
+    key_: Float[Array, "kv_seq qk_size"],
+    value: Float[Array, "kv_seq v_size"],
+    mask: Optional[Bool[Array, "q_seq kv_seq"]] = None,
     dropout: Optional[Callable[[Array], Array]] = None,
     *,
     key: Optional["jax.random.PRNGKey"] = None,
     inference: Optional[bool] = None,
-) -> Array["query_seq_length", "value_size"]:  # noqa: F821
+) -> Float[Array, "q_seq v_size"]:
 
     weights = dot_product_attention_weights(query, key_, mask)
     if dropout is not None:
@@ -215,17 +215,15 @@ class MultiheadAttention(Module):
 
     def __call__(
         self,
-        query: Array["query_seq_length", "query_size"],  # noqa: F821
-        key_: Array["kv_seq_length", "key_size"],  # noqa: F821
-        value: Array["kv_seq_length", "value_size"],  # noqa: F821
-        mask: Optional[
-            Array["num_heads", "query_seq_length", "kv_seq_length"]  # noqa: F821
-        ] = None,
+        query: Float[Array, "q_seq q_size"],
+        key_: Float[Array, "kv_seq k_size"],
+        value: Float[Array, "kv_seq v_size"],
+        mask: Optional[Bool[Array, "num_heads q_seq kv_seq"]] = None,
         *,
         key: Optional["jax.random.PRNGKey"] = None,
         inference: Optional[bool] = None,
         deterministic: Optional[bool] = None,
-    ) -> Array["query_seq_length", "output_size"]:  # noqa: F821
+    ) -> Float[Array, "q_seq o_size"]:
         """**Arguments:**
 
         - `query`: Query embedding. Should be a JAX array of shape

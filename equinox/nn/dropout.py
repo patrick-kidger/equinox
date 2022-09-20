@@ -4,8 +4,8 @@ from typing import Optional
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
+from jaxtyping import Array
 
-from ..custom_types import Array
 from ..module import Module
 
 

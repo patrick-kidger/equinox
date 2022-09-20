@@ -4,8 +4,9 @@ import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
+from jaxtyping import PyTree
 
-from .custom_types import PyTree, sentinel
+from .custom_types import sentinel
 from .doc_utils import doc_repr
 
 

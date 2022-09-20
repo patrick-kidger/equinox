@@ -3,8 +3,8 @@ from typing import Optional, TypeVar
 
 import jax
 import jax.random as jrandom
+from jaxtyping import Array
 
-from ..custom_types import Array
 from ..module import Module, static_field
 
 

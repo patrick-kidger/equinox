@@ -3,8 +3,9 @@ from typing import Any, Callable, Optional
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
+from jaxtyping import PyTree
 
-from .custom_types import BoolAxisSpec, PyTree, ResolvedBoolAxisSpec
+from .custom_types import BoolAxisSpec, ResolvedBoolAxisSpec
 
 
 #

@@ -1,6 +1,5 @@
 import jax.tree_util as jtu
-
-from .custom_types import PyTree
+from jaxtyping import PyTree
 
 
 def _apply_update(u, p):
