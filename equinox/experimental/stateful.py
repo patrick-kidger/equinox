@@ -215,8 +215,8 @@ def _delete_smuggled_state(x: StateIndex) -> StateIndex:
     # involves a flatten. Meanwhile `StateIndex` sneakily modifies its structure
     # under flatten, and this trips a false positive.
 
-    leaves, treedef = jax.tree_flatten(x)
-    x = jax.tree_unflatten(treedef, leaves)
+    leaves, treedef = jtu.tree_flatten(x)
+    x = jtu.tree_unflatten(treedef, leaves)
     object.__setattr__(x, "_state", None)
     return x
 
