@@ -310,7 +310,7 @@ class ConvTranspose(Module):
         out_channels: int,
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int]] = 0,
+        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
         output_padding: Union[int, Sequence[int]] = 0,
         dilation: Union[int, Sequence[int]] = 1,
         groups: int = 1,
