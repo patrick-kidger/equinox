@@ -58,7 +58,7 @@ class Conv(Module):
         out_channels: int,
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int]] = 0,
+        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
         dilation: Union[int, Sequence[int]] = 1,
         groups: int = 1,
         use_bias: bool = True,
@@ -74,8 +74,7 @@ class Conv(Module):
         - `out_channels`: The number of output channels.
         - `kernel_size`: The size of the convolutional kernel.
         - `stride`: The stride of the convolution.
-        - `padding`: The amount of padding to apply before and after each spatial
-            dimension. The same amount of padding is applied both before and after.
+        - `padding`: The amount of padding to apply before and after each spatial dimension.
         - `dilation`: The dilation of the convolution.
         - `groups`: The number of input channel groups. At `groups=1`,
             all input channels contribute to all output channels. Values
@@ -93,9 +92,14 @@ class Conv(Module):
             All of `kernel_size`, `stride`, `padding`, `dilation` can be either an
             integer or a sequence of integers. If they are a sequence then the sequence
             should be of length equal to `num_spatial_dims`, and specify the value of
-            each property down each spatial dimension in turn. If they are an integer
-            then the same kernel size / stride / padding / dilation will be used along
-            every spatial dimension.
+            each property down each spatial dimension in turn.
+
+            If they are an integer then the same kernel size / stride / padding /
+            dilation will be used along every spatial dimension.
+
+            `padding` can alternatively also be a sequence of 2-element tuples,
+            each representing the padding to apply before and after each spatial
+            dimension.
 
         """
         super().__init__(**kwargs)
@@ -138,11 +142,14 @@ class Conv(Module):
         if isinstance(padding, int):
             self.padding = tuple((padding, padding) for _ in range(num_spatial_dims))
         elif isinstance(padding, Sequence) and len(padding) == num_spatial_dims:
-            self.padding = tuple((p, p) for p in padding)
+            if all(isinstance(element, Sequence) for element in padding):
+                self.padding = tuple(padding)
+            else:
+                self.padding = tuple((p, p) for p in padding)
         else:
             raise ValueError(
                 "`padding` must either be an int or tuple of length "
-                f"{num_spatial_dims}."
+                f"{num_spatial_dims} containing ints or tuples of length 2."
             )
         self.dilation = dilation
         self.groups = groups
@@ -303,7 +310,7 @@ class ConvTranspose(Module):
         out_channels: int,
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int]] = 0,
+        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
         output_padding: Union[int, Sequence[int]] = 0,
         dilation: Union[int, Sequence[int]] = 1,
         groups: int = 1,
@@ -339,9 +346,14 @@ class ConvTranspose(Module):
             All of `kernel_size`, `stride`, `padding`, `output_padding`, `dilation` can
             be either an integer or a sequence of integers. If they are a sequence then
             the sequence should be of length equal to `num_spatial_dims`, and specify
-            the value of each property down each spatial dimension in turn.. If they
-            are an integer then the same kernel size / stride / padding / dilation will
-            be used along every spatial dimension.
+            the value of each property down each spatial dimension in turn.
+
+            If they are an integer then the same kernel size / stride / padding /
+            dilation will be used along every spatial dimension.
+
+            `padding` can alternatively also be a sequence of 2-element tuples,
+            each representing the padding to apply before and after each spatial
+            dimension.
 
         !!! tip
 
@@ -403,11 +415,14 @@ class ConvTranspose(Module):
         if isinstance(padding, int):
             self.padding = tuple((padding, padding) for _ in range(num_spatial_dims))
         elif isinstance(padding, Sequence) and len(padding) == num_spatial_dims:
-            self.padding = tuple((p, p) for p in padding)
+            if all(isinstance(element, Sequence) for element in padding):
+                self.padding = tuple(padding)
+            else:
+                self.padding = tuple((p, p) for p in padding)
         else:
             raise ValueError(
                 "`padding` must either be an int or tuple of length "
-                f"{num_spatial_dims}."
+                f"{num_spatial_dims} containing ints or tuples of length 2."
             )
         self.output_padding = output_padding
         self.dilation = dilation
