@@ -14,8 +14,8 @@ from .custom_types import BoolAxisSpec, ResolvedBoolAxisSpec
 
 
 def is_array(element: Any) -> bool:
-    """Returns `True` if `element` is a JAX array (but not a NumPy array)."""
-    return isinstance(element, jnp.ndarray)
+    """Returns `True` if `element` is a JAX array or NumPy array."""
+    return isinstance(element, (np.ndarray, jnp.ndarray))
 
 
 # Chosen to match
@@ -30,8 +30,13 @@ def is_array_like(element: Any) -> bool:
 
 
 def is_inexact_array(element: Any) -> bool:
-    """Returns `True` if `element` is an inexact (i.e. floating point) JAX array."""
-    return is_array(element) and jnp.issubdtype(element.dtype, jnp.inexact)
+    """Returns `True` if `element` is an inexact (i.e. floating point) JAX/NumPy array."""
+    if isinstance(element, np.ndarray):
+        return np.issubdtype(element.dtype, np.inexact)
+    elif isinstance(element, jnp.ndarray):
+        return jnp.issubdtype(element.dtype, jnp.inexact)
+    else:
+        return False
 
 
 def is_inexact_array_like(element: Any) -> bool:
@@ -40,10 +45,12 @@ def is_inexact_array_like(element: Any) -> bool:
     """
     if hasattr(element, "__jax_array__"):
         element = element.__jax_array__()
-    return (
-        isinstance(element, (jnp.ndarray, np.ndarray))
-        and jnp.issubdtype(element.dtype, jnp.inexact)
-    ) or isinstance(element, (float, complex))
+    if isinstance(element, np.ndarray):
+        return np.issubdtype(element.dtype, np.inexact)
+    elif isinstance(element, jnp.ndarray):
+        return jnp.issubdtype(element.dtype, jnp.inexact)
+    else:
+        return isinstance(element, (float, complex))
 
 
 #

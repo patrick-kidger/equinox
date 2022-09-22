@@ -68,7 +68,7 @@ def test_filter_grad2(api_version, getkey):
     assert jnp.all(gdict["hi"].bias == 1)
     assert g5 is None
     assert g1 is None
-    assert gnp is None
+    assert jnp.all(gnp == 1)
 
 
 @pytest.mark.parametrize("api_version", (0, 1))
