@@ -21,7 +21,7 @@ def test_is_array(getkey):
         np.array(1),
         eqx.nn.Linear(1, 1, key=getkey()),
     ]
-    results = [False, False, False, False, False, True, True, False, False, False]
+    results = [False, False, False, False, False, True, True, True, True, False]
     for o, r in zip(objs, results):
         assert eqx.is_array(o) == r
 
@@ -57,7 +57,7 @@ def test_is_inexact_array(getkey):
         np.array(1),
         eqx.nn.Linear(1, 1, key=getkey()),
     ]
-    results = [False, False, False, False, False, False, True, False, False, False]
+    results = [False, False, False, False, False, False, True, True, False, False]
     for o, r in zip(objs, results):
         assert eqx.is_inexact_array(o) == r
 
