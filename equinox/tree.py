@@ -8,6 +8,7 @@ from jaxtyping import Array, Bool, PyTree
 
 from .custom_types import sentinel
 from .doc_utils import doc_repr
+from .filters import is_array
 
 
 _Node = doc_repr(Any, "Node")
@@ -226,15 +227,14 @@ def tree_equal(*pytrees: PyTree) -> Union[bool, np.bool_, Bool[Array, ""]]:
     A boolean.
     """
     flat, treedef = jtu.tree_flatten(pytrees[0])
-    array_types = (jnp.ndarray, np.ndarray)
     out = True
     for pytree in pytrees[1:]:
         flat_, treedef_ = jtu.tree_flatten(pytree)
         if treedef_ != treedef:
             return False
         for elem, elem_ in zip(flat, flat_):
-            if isinstance(elem, array_types):
-                if isinstance(elem_, array_types):
+            if is_array(elem):
+                if is_array(elem_):
                     if (elem.shape != elem_.shape) or (elem.dtype != elem_.dtype):
                         return False
                     allsame = (elem == elem_).all()
@@ -244,7 +244,7 @@ def tree_equal(*pytrees: PyTree) -> Union[bool, np.bool_, Bool[Array, ""]]:
                 else:
                     return False
             else:
-                if isinstance(elem_, array_types):
+                if is_array(elem_):
                     return False
                 else:
                     if elem != elem_:

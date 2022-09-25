@@ -1,10 +1,8 @@
 import functools as ft
-from typing import Any
 
 import jax.tree_util as jtu
 
 from .filters import combine, partition
-from .module import Module, static_field
 
 
 def hashable_partition(pytree, filter_spec):
@@ -17,10 +15,6 @@ def hashable_partition(pytree, filter_spec):
 def hashable_combine(dynamic, static_leaves, static_treedef):
     static = jtu.tree_unflatten(static_treedef, static_leaves)
     return combine(dynamic, static)
-
-
-class Static(Module):
-    value: Any = static_field()
 
 
 def _strip_wrapped_partial(fun):

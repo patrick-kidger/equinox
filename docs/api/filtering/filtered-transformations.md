@@ -16,12 +16,6 @@ Practically speaking these are usually the only kind of filtering you ever have 
 
 ---
 
-::: equinox.filter_custom_vjp
-    selection:
-        members: false
-
----
-
 ::: equinox.filter_vmap
 
 ---
@@ -31,3 +25,15 @@ Practically speaking these are usually the only kind of filtering you ever have 
 ---
 
 ::: equinox.filter_eval_shape
+
+---
+
+::: equinox.filter_jvp
+
+---
+
+::: equinox.filter_custom_jvp
+
+---
+
+::: equinox.filter_custom_vjp

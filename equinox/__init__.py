@@ -1,4 +1,4 @@
-from . import experimental, nn
+from . import experimental, internal, nn
 from .eval_shape import filter_eval_shape
 from .filters import (
     combine,
@@ -9,7 +9,13 @@ from .filters import (
     is_inexact_array_like,
     partition,
 )
-from .grad import filter_custom_vjp, filter_grad, filter_value_and_grad
+from .grad import (
+    filter_custom_jvp,
+    filter_custom_vjp,
+    filter_grad,
+    filter_jvp,
+    filter_value_and_grad,
+)
 from .jit import filter_jit
 from .module import Module, static_field
 from .pretty_print import tree_pformat

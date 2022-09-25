@@ -3,8 +3,8 @@ from typing import Callable
 
 import jax
 
-from .compile_utils import Static
 from .filters import combine, is_array_like, partition
+from .internal import Static
 
 
 def _filter(x):

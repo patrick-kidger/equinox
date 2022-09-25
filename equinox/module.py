@@ -86,7 +86,6 @@ class _ModuleMeta(abc.ABCMeta):
 
     def __call__(cls, *args, **kwargs):
         self = cls.__new__(cls, *args, **kwargs)
-
         # Defreeze it during __init__
         initable_cls = _make_initable(cls, wraps=False)
         object.__setattr__(self, "__class__", initable_cls)

@@ -5,12 +5,20 @@ import warnings
 from typing import Any, Callable, Dict
 
 import jax
+import jax.interpreters.ad as ad
 import jax.tree_util as jtu
 from jaxtyping import PyTree
 
 from .custom_types import BoolAxisSpec, sentinel
 from .doc_utils import doc_strip_annotations
-from .filters import combine, is_array, is_inexact_array, partition
+from .filters import (
+    combine,
+    is_array,
+    is_inexact_array,
+    is_inexact_array_like,
+    partition,
+)
+from .internal import Static
 from .module import Module, module_update_wrapper
 
 
@@ -140,8 +148,120 @@ def filter_grad(
     return module_update_wrapper(_GradWrapper(fun_value_and_grad, has_aux), fun)
 
 
+def _is_none(x):
+    return x is None
+
+
+def _is_jvp_tracer(x):
+    return isinstance(x, ad.JVPTracer)
+
+
+def filter_jvp(fn, primals, tangents):
+    """Wraps together [`equinox.partition`][] and `jax.jvp`.
+
+    **Arguments:**
+
+    - `fn`: Function to be differentiated. Its arguments can be Python objects, and
+        its return type can be any Python object.
+    - `primals`: The primal values at which `fn` should be evaluated. Should be a
+        sequence of arguments, and its length should be equal to the number of
+        positional parameter of `fn`.
+    - `tangents`: The tangent vector for which the Jacobian-vector product should be
+        calculated. Should be a PyTree with the same structure as `primals`. The leaves
+        of `tangents` must be either floating-point JAX arrays, or Python floats, or
+        `None`s. The tangent must be `None` for any primal which is not itself a
+        floating-point JAX array or Python float.
+
+    **Returns:**
+
+    A pair `(primals_out, tangents_out)` is returned,
+    where `primals_out = fn(*primals)` and `tangents_out` is the Jacobian-vector
+    product of `fn` evaluated at `primals` with `tangents`.
+
+    The `tangents_out` has the same structure as `primals_out`, but has `None` for
+    any leaves that aren't differentiable.
+
+    !!! Tip
+
+        Unlike `jax.jvp`, this function does not support a `has_aux` argument. It isn't
+        needed, as unlike `jax.jvp` the output of this function can be of arbitrary type.
+    """
+    if jtu.tree_structure(primals, is_leaf=_is_none) != jtu.tree_structure(
+        tangents, is_leaf=_is_none
+    ):
+        raise ValueError("primals and tangents must have the same pytree structure")
+    filter_spec = jtu.tree_map(_is_none, tangents, is_leaf=_is_none)
+    static_primals, dynamic_primals = partition(primals, filter_spec)
+    flat_dynamic_primals, treedef = jtu.tree_flatten(dynamic_primals)
+    flat_tangents = jtu.tree_leaves(tangents)  # all non-None tangents are dynamic
+
+    def _fn(*_flat_dynamic):
+        _dynamic = jtu.tree_unflatten(treedef, _flat_dynamic)
+        _in = combine(_dynamic, static_primals)
+        _out = fn(*_in)
+        _dynamic_out, _static_out = partition(_out, _is_jvp_tracer)
+        return _dynamic_out, Static(_static_out)
+
+    primal_out, tangent_out = jax.jvp(_fn, flat_dynamic_primals, flat_tangents)
+    dynamic_primal_out, static_primal_out = primal_out
+    primal_out = combine(dynamic_primal_out, static_primal_out.value)
+    tangent_out, _ = tangent_out
+
+    return primal_out, tangent_out
+
+
+class filter_custom_jvp:
+    """Wraps together [`equinox.partition`][] and `jax.custom_jvp`.
+
+    Works in the same way as `jax.custom_jvp`, except that you do not need to specify
+    `nondiff_argnums`. Instead, arguments are automatically split into differentiable
+    and nondifferentiable based on whether or not they are a floating-point JAX array.
+
+    The tangents of the nondifferentiable arguments will be passed as `None`.
+
+    The return types must still all be JAX types.
+
+    Example:
+    ```python
+    @equinox.filter_custom_jvp
+    def call(fn, x):
+        return fn(x)
+
+    @call.defjvp
+    def call_jvp(primals, tangents):
+        fn, x = primals
+        _, tx = tangents
+        primal_out = call(fn, x)
+        tangent_out = tx**2
+        return primal_out, tangent_out
+    ```
+    """
+
+    def __init__(self, fn):
+        def fn_wrapper(static, dynamic):
+            return fn(*combine(dynamic, static))
+
+        self.fn = jax.custom_jvp(fn_wrapper, nondiff_argnums=(0,))
+
+    def defjvp(self, fn_jvp):
+        def fn_jvp_wrapper(static, dynamic, tangents):
+            (dynamic,) = dynamic
+            (tangents,) = tangents
+            primals = combine(dynamic, static)
+            return fn_jvp(primals, tangents)
+
+        self.fn.defjvp(fn_jvp_wrapper)
+
+    def defjvps(self, *a, **kw):
+        raise NotImplementedError("filter_custom_jvp().defjvps is not implemented")
+
+    def __call__(self, *args):
+        dynamic, static = partition(args, is_inexact_array_like)
+        return self.fn(static, dynamic)
+
+
 class filter_custom_vjp:
-    """Provides an easier API for `jax.custom_vjp`, by using filtering.
+    """Wraps together [`equinox.partition`][] and `jax.custom_vjp`.
 
     Usage is:
     ```python
@@ -271,7 +391,14 @@ class filter_custom_vjp:
 
 
 if getattr(typing, "GENERATING_DOCUMENTATION", False):
+    _filter_custom_jvp_doc = filter_custom_jvp.__doc__
     _filter_custom_vjp_doc = filter_custom_vjp.__doc__
+
+    def defjvp(fn_jvp):
+        pass
+
+    def filter_custom_jvp(fn):
+        return types.SimpleNamespace(defjvp=defjvp)
 
     def defvjp(fn_fwd, fn_bwd):
         pass
@@ -279,4 +406,5 @@ if getattr(typing, "GENERATING_DOCUMENTATION", False):
     def filter_custom_vjp(fn):
         return types.SimpleNamespace(defvjp=defvjp)
 
+    filter_custom_jvp.__doc__ = _filter_custom_jvp_doc
     filter_custom_vjp.__doc__ = _filter_custom_vjp_doc

@@ -1,3 +1,8 @@
+#
+# Held outside of `internal` to avoid a cyclic dependency
+# custom_types -> internal -> filter -> custom_types
+#
+
 import typing
 from typing import Any, Callable
 

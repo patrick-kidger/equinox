@@ -5,8 +5,8 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array
 
+from ..internal import left_broadcast_to
 from ..module import Module, static_field
-from .array_utils import left_broadcast_to
 
 
 class LayerNorm(Module):

@@ -12,11 +12,11 @@ from .compile_utils import (
     get_fun_names,
     hashable_combine,
     hashable_partition,
-    Static,
 )
 from .custom_types import BoolAxisSpec, ResolvedBoolAxisSpec, sentinel
 from .doc_utils import doc_strip_annotations
 from .filters import combine, filter, is_array, is_array_like, partition
+from .internal import Static
 from .module import Module, module_update_wrapper
 
 
