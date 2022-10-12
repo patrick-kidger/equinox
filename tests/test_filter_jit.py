@@ -383,19 +383,6 @@ def test_function_name_warning(log_compiles_config, caplog):
     # Check that the warning message contains the function name
     assert "Finished XLA compilation of the_test_function_name in" in warning_text
 
-    # Check that it works for filter_grad also
-    @eqx.filter_jit
-    @eqx.filter_grad
-    def the_test_function_name_grad(x):
-        return x + 1
-
-    # Trigger compile to log a warning message
-    the_test_function_name_grad(jnp.array(1.0))
-
-    warning_text = caplog.text
-
-    assert "Finished XLA compilation of the_test_function_name_grad in" in warning_text
-
     @eqx.filter_jit
     @eqx.filter_value_and_grad
     def the_test_function_name_value_and_grad(x):
