@@ -82,18 +82,18 @@ def _zero_if_array_else_none(x: Any) -> ResolvedMapAxisSpec:
     return 0 if is_array(x) else None
 
 
-def _check_map_out_axis(name, max_out_size, x):
+def _check_map_out_axis(max_out_size, x):
     if isinstance(x, bool) or x is None:
         pass
     elif isinstance(x, int):
         if x < -max_out_size or x >= max_out_size:
             raise ValueError(
-                f"integers in filter_{name}map(..., out=...) must correspond to a "
+                f"integers in filter_pmap(..., out=...) must correspond to a "
                 "dimension of the output array"
             )
     else:
         raise ValueError(
-            f"filter_{name}map(..., out=...) must contain only integers and Nones"
+            f"filter_pmap(..., out=...) must contain only integers and Nones"
         )
 
 
@@ -103,6 +103,7 @@ def _eval_and_return_arraylike(static, dynamic):
     return filter(out, is_array_like)
 
 
+@ft.lru_cache(maxsize=None)
 def _eval_shape(leaves, treedef, axis_name, axis_size):
     static, struct, in_axes = jtu.tree_unflatten(treedef, leaves)
     fn = ft.partial(_eval_and_return_arraylike, static)
@@ -118,9 +119,6 @@ def _eval_shape(leaves, treedef, axis_name, axis_size):
     return jtu.tree_reduce(lambda x, y: max(x, y.ndim), struct_out, 0)
 
 
-_eval_shape_cache = ft.lru_cache(maxsize=None)(_eval_shape)
-
-
 # Calculates the maximum `ndim` over all array outputs of `fun`.
 #
 # Note the asymmetry between `is_array` filtering on the input and `is_array_like`
@@ -132,7 +130,7 @@ _eval_shape_cache = ft.lru_cache(maxsize=None)(_eval_shape)
 # that we broadcast unnecessarily mean we might just get a return value of `1` rather
 # than `0` in some edge cases, which is fine since that will raise an error where it's
 # actually used in `out_axes`.)
-def _get_max_out_size(fun, args, kwargs, in_axes, mapkwargs, cache) -> int:
+def _get_max_out_size(fun, args, kwargs, in_axes, mapkwargs) -> int:
     dynamic, static = partition((fun, args, kwargs), is_array)
     try:
         axis_name = mapkwargs["axis_name"]
@@ -143,13 +141,13 @@ def _get_max_out_size(fun, args, kwargs, in_axes, mapkwargs, cache) -> int:
     except KeyError:
         axis_size = sentinel
     struct = jtu.tree_map(lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype), dynamic)
-    if cache:
-        _eval_shape_fn = _eval_shape_cache
-    else:
-        _eval_shape_fn = _eval_shape
     leaves, treedef = jtu.tree_flatten((static, struct, in_axes))
     leaves = tuple(leaves)
-    return _eval_shape_fn(leaves, treedef, axis_name, axis_size)
+    return _eval_shape(leaves, treedef, axis_name, axis_size)
+
+
+def _swapaxes(array, axis):
+    return jnp.swapaxes(array, 0, axis)
 
 
 class _VmapWrapper(Module):
@@ -165,17 +163,11 @@ class _VmapWrapper(Module):
     def __call__(__self, *args, **kwargs):
         def _fun_wrapper(_fun, _args, _kwargs):
             _out = _fun(*_args, **_kwargs)
-
             _out_axes = _resolve_axes(_out, __self._out)
             _out_axes = _map_axes(_out_axes)
-            jtu.tree_map(ft.partial(_check_map_out_axis, "v", max_out_size), _out_axes)
-            _vmapd = []
-            for i in range(-max_out_size, max_out_size):
-                _i_axes = jtu.tree_map(lambda a: a == i, _out_axes)
-                _vmapd.append(filter(_out, _i_axes))
-            _none_axes = jtu.tree_map(_is_none, _out_axes, is_leaf=_is_none)
-            _nonvmapd = filter(_out, _none_axes)
-            return _vmapd, Static(_nonvmapd)
+            _int_axes = jtu.tree_map(lambda _: True, _out_axes)
+            _vmapd, _nonvmapd = partition(_out, _int_axes)
+            return _vmapd, Static((_out_axes, _nonvmapd))
 
         bound = __self._signature.bind(*args, **kwargs)
         del args, kwargs
@@ -193,19 +185,15 @@ class _VmapWrapper(Module):
         del _args, _kwargs
         in_axes = _map_axes(in_axes)
 
-        max_out_size = _get_max_out_size(
-            __self._fun,
-            bound.args,
-            bound.kwargs,
-            in_axes,
-            __self._vmapkwargs,
-            cache=False,
-        )
-        out_axes = (list(range(-max_out_size, max_out_size)), None)
-        vmapd, nonvmapd = jax.vmap(
-            _fun_wrapper, in_axes=in_axes, out_axes=out_axes, **__self._vmapkwargs
+        vmapd, static = jax.vmap(
+            _fun_wrapper, in_axes=in_axes, out_axes=(0, None), **__self._vmapkwargs
         )(__self._fun, bound.args, bound.kwargs)
-        return combine(*vmapd, nonvmapd.value)
+        out_axes, nonvmapd = static.value
+        
+        assert jtu.tree_structure(vmapd) == jtu.tree_structure(out_axes)
+        vmapd = jtu.tree_map(_swapaxes, vmapd, out_axes)
+        
+        return combine(vmapd, nonvmapd)
 
     def __get__(self, instance, owner):
         if instance is None:
@@ -407,7 +395,7 @@ def _filter_pmap_cache(fun_names, map_in_axes, max_out_size, **pmapkwargs):
 
         _out_axes = _resolve_axes(_out, _out_axes)
         _map_out_axes = _map_axes(_out_axes)
-        jtu.tree_map(ft.partial(_check_map_out_axis, "p", max_out_size), _map_out_axes)
+        jtu.tree_map(ft.partial(_check_map_out_axis, max_out_size), _map_out_axes)
         _jit_out_axes = _jit_axes(_out_axes)
 
         _dynamic, _static_leaves, _static_treedef = hashable_partition(
