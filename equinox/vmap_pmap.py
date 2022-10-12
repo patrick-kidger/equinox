@@ -88,12 +88,12 @@ def _check_map_out_axis(max_out_size, x):
     elif isinstance(x, int):
         if x < -max_out_size or x >= max_out_size:
             raise ValueError(
-                f"integers in filter_pmap(..., out=...) must correspond to a "
+                "integers in filter_pmap(..., out=...) must correspond to a "
                 "dimension of the output array"
             )
     else:
         raise ValueError(
-            f"filter_pmap(..., out=...) must contain only integers and Nones"
+            "filter_pmap(..., out=...) must contain only integers and Nones"
         )
 
 
