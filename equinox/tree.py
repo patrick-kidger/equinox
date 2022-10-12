@@ -235,10 +235,7 @@ def tree_equal(*pytrees: PyTree) -> Union[bool, np.bool_, Bool[Array, ""]]:
         for elem, elem_ in zip(flat, flat_):
             if isinstance(elem, array_types):
                 if isinstance(elem_, array_types):
-                    if (
-                        (elem.shape != elem_.shape)
-                        or (elem.dtype != elem_.dtype)
-                    ):
+                    if (elem.shape != elem_.shape) or (elem.dtype != elem_.dtype):
                         return False
                     allsame = (elem == elem_).all()
                     if allsame is False:
