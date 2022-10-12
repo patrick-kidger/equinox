@@ -1,6 +1,5 @@
 import typing
-from types import FunctionType
-from typing import Any
+from typing import Any, Callable
 
 
 # Inherits from type so that _WithRepr instances are types and can be used as
@@ -26,7 +25,7 @@ def doc_repr(obj: Any, string: str):
         return obj
 
 
-def doc_strip_annotations(fn: FunctionType) -> FunctionType:
+def doc_strip_annotations(fn: Callable) -> Callable:
     if getattr(typing, "GENERATING_DOCUMENTATION", False):
         fn.__annotations__ = None
     return fn
