@@ -216,11 +216,11 @@ def test_pmap_vmap():
 
     out = eqx.filter_pmap(eqx.filter_vmap(f))(jnp.array([[1, 2]]))
     assert shaped_allclose(out, jnp.array([[2, 3]]))
-    assert num_traces == 4  # eval_shape in vmap + vmap + eval_shape in pmap + pmap
+    assert num_traces == 2  # eval_shape in pmap + pmap
 
     out = eqx.filter_pmap(eqx.filter_vmap(f))(jnp.array([[2, 3]]))
     assert shaped_allclose(out, jnp.array([[3, 4]]))
-    assert num_traces == 4  # all cached
+    assert num_traces == 2  # both cached
 
 
 def test_args_kwargs():
