@@ -236,7 +236,7 @@ def tree_equal(*pytrees: PyTree) -> Union[bool, np.bool_, Bool[Array, ""]]:
             if isinstance(elem, array_types):
                 if isinstance(elem_, array_types):
                     if (
-                        or (elem.shape != elem_.shape)
+                        (elem.shape != elem_.shape)
                         or (elem.dtype != elem_.dtype)
                     ):
                         return False
