@@ -165,8 +165,8 @@ class _VmapWrapper(Module):
             _out = _fun(*_args, **_kwargs)
             _out_axes = _resolve_axes(_out, __self._out)
             _out_axes = _map_axes(_out_axes)
-            _int_axes = jtu.tree_map(lambda _: True, _out_axes)
-            _vmapd, _nonvmapd = partition(_out, _int_axes)
+            _none_axes = jtu.tree_map(_is_none, _out_axes, is_leaf=_is_none)
+            _nonvmapd, _vmapd = partition(_out, _none_axes)
             return _vmapd, Static((_out_axes, _nonvmapd))
 
         bound = __self._signature.bind(*args, **kwargs)
@@ -470,7 +470,6 @@ class _PmapWrapper(Module):
             bound.kwargs,
             map_in_axes_no_dummy,
             self._pmapkwargs,
-            cache=True,
         )
 
         cached = _filter_pmap_cache(

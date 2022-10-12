@@ -354,11 +354,11 @@ def test_jit_vmap():
 
     out = eqx.filter_jit(eqx.filter_vmap(f))(jnp.array([1, 2]))
     assert shaped_allclose(out, jnp.array([2, 3]))
-    assert num_traces == 2
+    assert num_traces == 1
 
     out = eqx.filter_jit(eqx.filter_vmap(f))(jnp.array([2, 3]))
     assert shaped_allclose(out, jnp.array([3, 4]))
-    assert num_traces == 2
+    assert num_traces == 1
 
 
 @pytest.fixture
