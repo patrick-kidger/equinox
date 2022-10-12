@@ -189,10 +189,10 @@ class _VmapWrapper(Module):
             _fun_wrapper, in_axes=in_axes, out_axes=(0, None), **__self._vmapkwargs
         )(__self._fun, bound.args, bound.kwargs)
         out_axes, nonvmapd = static.value
-        
+
         assert jtu.tree_structure(vmapd) == jtu.tree_structure(out_axes)
         vmapd = jtu.tree_map(_swapaxes, vmapd, out_axes)
-        
+
         return combine(vmapd, nonvmapd)
 
     def __get__(self, instance, owner):
