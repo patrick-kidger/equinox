@@ -386,10 +386,8 @@ def filter_vmap(
 
 @compile_cache
 def _filter_pmap_cache(fun_names, map_in_axes, max_out_size, **pmapkwargs):
-    def fun_wrapped(_dynamic, _static_leaves, _static_treedef, _out_axes):
-        _fun, _args, _kwargs, _maybe_dummy = hashable_combine(
-            _dynamic, _static_leaves, _static_treedef
-        )
+    def fun_wrapped(_dynamic, _static, _out_axes):
+        _fun, _args, _kwargs, _maybe_dummy = hashable_combine(_dynamic, _static)
         del _maybe_dummy
         _out = _fun(*_args, **_kwargs)
 
@@ -398,9 +396,7 @@ def _filter_pmap_cache(fun_names, map_in_axes, max_out_size, **pmapkwargs):
         jtu.tree_map(ft.partial(_check_map_out_axis, max_out_size), _map_out_axes)
         _jit_out_axes = _jit_axes(_out_axes)
 
-        _dynamic, _static_leaves, _static_treedef = hashable_partition(
-            _out, _jit_out_axes
-        )
+        _dynamic, _static = hashable_partition(_out, _jit_out_axes)
 
         _pmapd = []
         for i in range(-max_out_size, max_out_size):
@@ -412,8 +408,7 @@ def _filter_pmap_cache(fun_names, map_in_axes, max_out_size, **pmapkwargs):
         return (
             _pmapd,
             _nonpmapd,
-            Static(_static_leaves),
-            Static(_static_treedef),
+            Static(_static),
         )
 
     fun_name, fun_qualname = fun_names
@@ -426,7 +421,7 @@ def _filter_pmap_cache(fun_names, map_in_axes, max_out_size, **pmapkwargs):
         fun_wrapped,
         in_axes=(map_in_axes, None, None, None),
         out_axes=map_out_axes,
-        static_broadcasted_argnums=(1, 2, 3),
+        static_broadcasted_argnums=(1, 2),
         **pmapkwargs,
     )
 
@@ -479,23 +474,16 @@ class _PmapWrapper(Module):
             **self._pmapkwargs,
         )
 
-        dynamic, static_leaves, static_treedef = hashable_partition(
+        dynamic, static = hashable_partition(
             (self._fun, bound.args, bound.kwargs, maybe_dummy), jit_in_axes
         )
         if is_lower:
-            return cached.lower(dynamic, static_leaves, static_treedef, self._out)
+            return cached.lower(dynamic, static, self._out)
         else:
-            (
-                pmapd,
-                dynamic_nonpmapd,
-                static_nonpmapd_leaves,
-                static_nonpmapd_treedef,
-            ) = cached(dynamic, static_leaves, static_treedef, self._out)
-            nonpmapd = hashable_combine(
-                dynamic_nonpmapd,
-                static_nonpmapd_leaves.value,
-                static_nonpmapd_treedef.value,
+            (pmapd, dynamic_nonpmapd, static_nonpmapd) = cached(
+                dynamic, static, self._out
             )
+            nonpmapd = hashable_combine(dynamic_nonpmapd, static_nonpmapd.value)
             return combine(*pmapd, nonpmapd)
 
     def __call__(__self, *args, **kwargs):

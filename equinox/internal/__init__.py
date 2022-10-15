@@ -4,6 +4,7 @@ from .bounded_while_loop import bounded_while_loop, HadInplaceUpdate
 from .errors import branched_error_if, error_if
 from .misc import ContainerMeta, left_broadcast_to, Static
 from .nextafter import nextafter, prevbefore
+from .noinline import noinline
 from .omega import ω
 from .primitive import (
     create_vprim,

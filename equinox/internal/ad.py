@@ -43,6 +43,11 @@ ad.primitive_jvps[_nondifferentiable_p] = _nondifferentiable_jvp
 
 
 def nondifferentiable(x: PyTree) -> PyTree:
+    """
+    Consumes a PyTree with arbitrary leaves and returns an identical PyTree.
+    If any of the JAX arrays in this PyTree are ever differentiated (in
+    forward or reverse mode) then an error will be thrown.
+    """
     dynamic, static = partition(x, is_array)
     flat, treedef = jtu.tree_flatten(dynamic)
     flat = map(_nondifferentiable_p.bind, flat)
@@ -94,6 +99,11 @@ ad.primitive_transposes[
 
 
 def nondifferentiable_backward(x: PyTree) -> PyTree:
+    """
+    Consumes a PyTree with arbitrary leaves and returns an identical PyTree.
+    If any of the JAX arrays in this PyTree are ever differentiated in
+    reverse mode then an error will be thrown.
+    """
     dynamic, static = partition(x, is_array)
     flat, treedef = jtu.tree_flatten(dynamic)
     flat = map(_nondifferentiable_backward_p.bind, flat)

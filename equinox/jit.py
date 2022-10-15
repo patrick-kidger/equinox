@@ -2,7 +2,7 @@ import functools as ft
 import inspect
 import warnings
 from types import FunctionType
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Sequence, Tuple
 
 import jax
 import jax.tree_util as jtu
@@ -25,17 +25,9 @@ from .module import Module, module_update_wrapper
 def _filter_jit_cache(fun_names, **jitkwargs):
     def fun_wrapped(dynamic, static):
         dynamic_fun, dynamic_spec = dynamic
-        (
-            static_fun_treedef,
-            static_fun_leaves,
-            static_spec_treedef,
-            static_spec_leaves,
-            filter_out,
-        ) = static
-        fun = hashable_combine(dynamic_fun, static_fun_leaves, static_fun_treedef)
-        args, kwargs = hashable_combine(
-            dynamic_spec, static_spec_leaves, static_spec_treedef
-        )
+        (static_fun, static_spec, filter_out) = static
+        fun = hashable_combine(dynamic_fun, static_fun)
+        args, kwargs = hashable_combine(dynamic_spec, static_spec)
         out = fun(*args, **kwargs)
         dynamic_out, static_out = partition(out, filter_out)
         return dynamic_out, Static(static_out)
@@ -51,8 +43,7 @@ class _JitWrapper(Module):
     _new_style: bool
     _signature: inspect.Signature
     _dynamic_fun: PyTree[Any]
-    _static_fun_treedef: TreeDef
-    _static_fun_leaves: Sequence[Any]
+    _static_fun: Tuple[TreeDef, Sequence[Any]]
     _filter_default: BoolAxisSpec
     _filter_spec: PyTree[BoolAxisSpec]
     _filter_out: PyTree[Any]
@@ -75,15 +66,11 @@ class _JitWrapper(Module):
             filter_spec = (filter_args, filter_kwargs)
         else:
             filter_spec = self._filter_spec
-        dynamic_spec, static_spec_leaves, static_spec_treedef = hashable_partition(
-            (args, kwargs), filter_spec
-        )
+        dynamic_spec, static_spec = hashable_partition((args, kwargs), filter_spec)
         dynamic = (self._dynamic_fun, dynamic_spec)
         static = (
-            self._static_fun_treedef,
-            self._static_fun_leaves,
-            static_spec_treedef,
-            static_spec_leaves,
+            self._static_fun,
+            static_spec,
             self._filter_out,
         )
         if is_lower:
@@ -270,17 +257,14 @@ def filter_jit(
         new_style = True
     # ~Backward compatibility
 
-    dynamic_fun, static_fun_leaves, static_fun_treedef = hashable_partition(
-        fun, filter_fn
-    )
+    dynamic_fun, static_fun = hashable_partition(fun, filter_fn)
     cached = _filter_jit_cache(get_fun_names(fun), **jitkwargs)
 
     jit_wrapper = _JitWrapper(
         _new_style=new_style,
         _signature=signature,
         _dynamic_fun=dynamic_fun,
-        _static_fun_treedef=static_fun_treedef,
-        _static_fun_leaves=static_fun_leaves,
+        _static_fun=static_fun,
         _filter_default=filter_default,
         _filter_spec=filter_spec,
         _filter_out=filter_out,

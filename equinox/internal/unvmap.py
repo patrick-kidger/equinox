@@ -11,6 +11,7 @@ _unvmap_all_p = jax.core.Primitive("unvmap_all")
 
 
 def unvmap_all(x):
+    """As `jnp.all`, but ignores batch dimensions."""
     return _unvmap_all_p.bind(x)
 
 
@@ -46,6 +47,7 @@ _unvmap_any_p = jax.core.Primitive("unvmap_any")
 
 
 def unvmap_any(x):
+    """As `jnp.any`, but ignores batch dimensions."""
     return _unvmap_any_p.bind(x)
 
 
@@ -81,6 +83,7 @@ _unvmap_max_p = jax.core.Primitive("unvmap_max")
 
 
 def unvmap_max(x):
+    """As `jnp.max`, but ignores batch dimensions."""
     return _unvmap_max_p.bind(x)
 
 

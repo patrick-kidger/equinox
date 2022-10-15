@@ -131,3 +131,43 @@ def test_filter_primitives():
     assert jvpd
     assert batchd
     assert transposed
+
+
+def test_vprim():
+    impl = lambda x: (2 * x + 1,)
+    abstract = lambda x: (x,)
+    jvp = lambda p, t: ((2 * p[0] + 1,), (2 * t[0],))
+    multwo_addone_p = eqxi.create_vprim(
+        "multwo_addone", impl, abstract, jvp, transpose=None
+    )
+    bind = lambda x: multwo_addone_p.bind(x)[0]
+
+    o1 = bind(1)
+    o2 = jax.jit(bind)(1)
+    o3 = jax.eval_shape(bind, 1)
+    o4 = jax.jvp(bind, (1.0,), (1.0,))
+
+    o5 = jax.vmap(bind)(jnp.array([1, 2]))
+    o6 = jax.jit(jax.vmap(bind))(jnp.array([1, 2]))
+    o7 = jax.vmap(jax.jit(bind))(jnp.array([1, 2]))
+    o8 = jax.eval_shape(jax.vmap(bind), jnp.array([1, 2]))
+    o9 = jax.jvp(jax.vmap(bind), (jnp.array([1.0, 2.0]),), (jnp.array([3.0, 4.0]),))
+
+    o10 = jax.vmap(jax.vmap(bind))(jnp.array([[1, 2], [3, 4]]))
+
+    assert shaped_allclose(o1, 3)
+    assert shaped_allclose(o2, jnp.array(3))
+    assert type(o3) is jax.ShapeDtypeStruct
+    assert o3.shape == ()
+    assert o3.dtype == jnp.int32
+    assert shaped_allclose(o4, (3.0, 2.0))
+
+    assert shaped_allclose(o5, jnp.array([3, 5]))
+    assert shaped_allclose(o6, jnp.array([3, 5]))
+    assert shaped_allclose(o7, jnp.array([3, 5]))
+    assert type(o8) is jax.ShapeDtypeStruct
+    assert o8.shape == (2,)
+    assert o8.dtype == jnp.int32
+    assert shaped_allclose(o9, (jnp.array([3.0, 5.0]), jnp.array([6.0, 8.0])))
+
+    assert shaped_allclose(o10, jnp.array([[3, 5], [7, 9]]))

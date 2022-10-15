@@ -10,7 +10,6 @@ import numpy as np
 from jaxtyping import Array, PyTree
 
 from ..filters import combine, is_array, partition
-from ..vmap_pmap import filter_vmap
 
 
 #
@@ -26,23 +25,28 @@ _ArrayLike = Union[Array, np.ndarray, int, float, complex, bool]
 _sentinel = object()
 
 
-def _flat_smuggle(out, smuggle, *, treedef=_sentinel):
-    flat_out, treedef_out = jtu.tree_flatten(out)
-    if treedef is not _sentinel:
-        assert treedef_out == treedef
-    if len(smuggle) == 0:
-        smuggle.append(treedef_out)
-    else:
-        assert len(smuggle) == 1
-        assert smuggle[0] == treedef_out
-    return flat_out
+class _Smuggle:
+    def get(self):
+        return self.treedef_out
+
+    def __call__(self, out, *, treedef=_sentinel):
+        flat_out, treedef_out = jtu.tree_flatten(out)
+        if treedef is not _sentinel:
+            assert treedef_out == treedef
+        try:
+            old_treedef_out = self.treedef_out
+        except AttributeError:
+            self.treedef_out = treedef_out
+        else:
+            assert treedef_out == old_treedef_out
+        return flat_out
 
 
 def filter_primitive_def(rule):
     def _wrapper(*flat, treedef, static, smuggle):
         args = combine(jtu.tree_unflatten(treedef, flat), static)
         out = rule(*args)
-        return _flat_smuggle(out, smuggle)
+        return smuggle(out)
 
     return _wrapper
 
@@ -50,13 +54,10 @@ def filter_primitive_def(rule):
 def filter_primitive_jvp(rule):
     def _wrapper(primals, tangents, *, treedef, static, smuggle):
         primals = combine(jtu.tree_unflatten(treedef, primals), static)
-        nones = jtu.tree_map(lambda _: None, static)
-        tangents = combine(jtu.tree_unflatten(treedef, tangents), nones)
+        tangents = jtu.tree_unflatten(treedef, tangents)
         primals_out, tangents_out = rule(primals, tangents)
         flat_tangents_out, treedef_tangents_out = jtu.tree_flatten(tangents_out)
-        flat_primals_out = _flat_smuggle(
-            primals_out, smuggle, treedef=treedef_tangents_out
-        )
+        flat_primals_out = smuggle(primals_out, treedef=treedef_tangents_out)
         return flat_primals_out, flat_tangents_out
 
     return _wrapper
@@ -104,8 +105,7 @@ def _get_ct(v, ct):
 
 def filter_primitive_transpose(rule):
     def _wrapper(cts_out, *flat, treedef, static, smuggle):
-        assert len(smuggle) == 1
-        treedef_out = smuggle[0]
+        treedef_out = smuggle.get()
         cts_out = jtu.tree_unflatten(treedef_out, cts_out)
         wrapped_flat = [_wrap_undefined(x) for x in flat]
         wrapped_dynamic = jtu.tree_unflatten(treedef, wrapped_flat)
@@ -130,7 +130,7 @@ def filter_primitive_batching(rule):
         batch_axes = combine(jtu.tree_unflatten(treedef, batch_axes), nones)
         out, batch_axes = rule(inputs, batch_axes)
         flat_batch_axes, treedef_batch_axes = jtu.tree_flatten(batch_axes)
-        flat_out = _flat_smuggle(out, smuggle, treedef=treedef_batch_axes)
+        flat_out = smuggle(out, treedef=treedef_batch_axes)
         return flat_out, flat_batch_axes
 
     return _wrapper
@@ -140,10 +140,9 @@ def filter_primitive_bind(prim: jax.core.Primitive, *args) -> PyTree[_ArrayLike]
     assert prim.multiple_results
     dynamic, static = partition(args, is_array)
     flat, treedef = jtu.tree_flatten(dynamic)
-    smuggle = []
+    smuggle = _Smuggle()
     flat_out = prim.bind(*flat, treedef=treedef, static=static, smuggle=smuggle)
-    assert len(smuggle) == 1
-    treedef_out = smuggle[0]
+    treedef_out = smuggle.get()
     return jtu.tree_unflatten(treedef_out, flat_out)
 
 
@@ -155,6 +154,11 @@ def filter_primitive_bind(prim: jax.core.Primitive, *args) -> PyTree[_ArrayLike]
 # its rules are implemented using JAX operations).
 #
 
+_vprim_impl_registry = {}
+_vprim_abstract_eval_registry = {}
+_vprim_jvp_registry = {}
+_vprim_transpose_registry = {}
+
 
 def create_vprim(name: str, impl, abstract_eval, jvp, transpose):
     prim = jax.core.Primitive(name)
@@ -162,7 +166,7 @@ def create_vprim(name: str, impl, abstract_eval, jvp, transpose):
 
     def batch_rule(inputs, batch_axes, **params):
         # delegates batching to `_vprim_p`
-        out = _vprim_p.bind(*inputs, prim=prim, batch_axes=batch_axes, params=params)
+        out = _vprim_p.bind(*inputs, prim=prim, __batch_axes=batch_axes, params=params)
         batch_axes_out = jtu.tree_map(lambda _: 0, out)
         return out, batch_axes_out
 
@@ -172,27 +176,91 @@ def create_vprim(name: str, impl, abstract_eval, jvp, transpose):
     ad.primitive_transposes[prim] = transpose
     batching.primitive_batchers[prim] = batch_rule
     mlir.register_lowering(prim, mlir.lower_fun(impl, multiple_results=True))
+    _vprim_impl_registry[prim] = impl
+    _vprim_abstract_eval_registry[prim] = abstract_eval
+    _vprim_jvp_registry[prim] = jvp
+    _vprim_transpose_registry[prim] = transpose
     return prim
 
 
-def _vprim_impl(*inputs, prim, batch_axes, params):
-    impl = ft.partial(prim.impl, **params)
-    return filter_vmap(impl, args=batch_axes)(*inputs)
+def _vprim_impl(*inputs, prim, __batch_axes, params):
+    impl = ft.partial(_vprim_impl_registry[prim], **params)
+    impl = jax.vmap(impl, in_axes=__batch_axes)
+    return impl(*inputs)
 
 
-def _vprim_abstract_eval(*inputs, prim, batch_axes, params):
-    abstract_eval = ft.partial(prim.abstract_eval, **params)
-    return filter_vmap(abstract_eval, args=batch_axes)(*inputs)
+def _to_struct(x):
+    return jax.ShapeDtypeStruct(x.shape, x.dtype)
 
 
-def _vprim_jvp(primals, tangents, *, prim, batch_axes, params):
-    jvp = ft.partial(ad.primitive_jvps[prim], **params)
-    return filter_vmap(jvp, args=batch_axes)(primals, tangents)
+def _to_shapedarray(x):
+    return jax.core.ShapedArray(x.shape, x.dtype)
 
 
-def _vprim_transpose(cts, *inputs, prim, batch_axes, params):
-    transpose = ft.partial(ad.primitive_transposes[prim], **params)
-    return filter_vmap(transpose, args=batch_axes)(cts, *inputs)
+def _vprim_abstract_eval(*inputs, prim, __batch_axes, params):
+    abstract_eval = ft.partial(_vprim_abstract_eval_registry[prim], **params)
+    abstract_eval = jax.vmap(abstract_eval, in_axes=__batch_axes)
+    inputs = [_to_struct(x) for x in inputs]
+    out = jax.eval_shape(abstract_eval, *inputs)
+    return [_to_shapedarray(x) for x in out]
+
+
+def _resolve_zeros_t(tangent, batch_axis):
+    if type(tangent) is ad.Zero and isinstance(batch_axis, int):
+        aval = tangent.aval
+        if type(aval) is not jax.core.ShapedArray:
+            raise NotImplementedError(
+                "vprim only currently supports shaped arrays for symbolic zeros"
+            )
+        shape = aval.shape[:batch_axis] + aval.shape[batch_axis + 1 :]
+        return ad.Zero(jax.core.ShapedArray(shape, aval.dtype))
+    else:
+        return tangent
+
+
+def _resolve_zeros_b(tangent, batch_axis):
+    if type(tangent) is ad.Zero:
+        return None
+    else:
+        return batch_axis
+
+
+def _vprim_jvp(primals, tangents, *, prim, __batch_axes, params):
+    assert len(primals) == len(__batch_axes)
+    assert len(tangents) == len(__batch_axes)
+    tangents = [_resolve_zeros_t(t, b) for t, b in zip(tangents, __batch_axes)]
+    batch_axes_t = [_resolve_zeros_b(t, b) for t, b in zip(tangents, __batch_axes)]
+    jvp = ft.partial(_vprim_jvp_registry[prim], **params)
+    jvp = jax.vmap(jvp, in_axes=(__batch_axes, batch_axes_t))
+    return jvp(primals, tangents)
+
+
+def _resolve_undefined_i(input, batch_axis):
+    if type(input) is ad.UndefinedPrimal and isinstance(batch_axis, int):
+        aval = input.aval
+        if type(aval) is not jax.core.ShapedArray:
+            raise NotImplementedError(
+                "vprim only currently supports shaped arrays for undefined primals"
+            )
+        shape = aval.shape[:batch_axis] + aval.shape[batch_axis + 1 :]
+        return ad.UndefinedPrimal(jax.core.ShapedArray(shape, aval.dtype))
+    else:
+        return input
+
+
+def _resolve_undefined_b(input, batch_axis):
+    if type(input) is ad.UndefinedPrimal:
+        return None
+    else:
+        return batch_axis
+
+
+def _vprim_transpose(cts, *inputs, prim, __batch_axes, params):
+    inputs = [_resolve_undefined_i(i, b) for i, b in zip(inputs, __batch_axes)]
+    batch_axes = [_resolve_undefined_b(i, b) for i, b in zip(inputs, __batch_axes)]
+    transpose = ft.partial(_vprim_transpose_registry[prim], **params)
+    transpose = jax.vmap(transpose, in_axes=(0, *batch_axes))
+    return transpose(cts, *inputs)
 
 
 # _vprim_p is itself a vprim!

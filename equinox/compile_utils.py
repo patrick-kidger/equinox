@@ -9,10 +9,11 @@ def hashable_partition(pytree, filter_spec):
     dynamic, static = partition(pytree, filter_spec)
     static_leaves, static_treedef = jtu.tree_flatten(static)
     static_leaves = tuple(static_leaves)
-    return dynamic, static_leaves, static_treedef
+    return dynamic, (static_leaves, static_treedef)
 
 
-def hashable_combine(dynamic, static_leaves, static_treedef):
+def hashable_combine(dynamic, static):
+    static_leaves, static_treedef = static
     static = jtu.tree_unflatten(static_treedef, static_leaves)
     return combine(dynamic, static)
 
