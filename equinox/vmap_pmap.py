@@ -16,8 +16,7 @@ from .compile_utils import (
 from .custom_types import BoolAxisSpec, ResolvedBoolAxisSpec, sentinel
 from .doc_utils import doc_strip_annotations
 from .filters import combine, filter, is_array, is_array_like, partition
-from .internal import Static
-from .module import Module, module_update_wrapper
+from .module import Module, module_update_wrapper, Static
 
 
 ResolvedMapAxisSpec = Union[None, int]
@@ -415,7 +414,7 @@ def _filter_pmap_cache(fun_names, map_in_axes, max_out_size, **pmapkwargs):
     fun_wrapped.__name__ = fun_name
     fun_wrapped.__qualname__ = fun_qualname
 
-    map_out_axes = (list(range(-max_out_size, max_out_size)), None, None, None)
+    map_out_axes = (list(range(-max_out_size, max_out_size)), None, None)
 
     return jax.pmap(
         fun_wrapped,

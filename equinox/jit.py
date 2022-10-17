@@ -17,8 +17,7 @@ from .compile_utils import (
 from .custom_types import BoolAxisSpec, sentinel, TreeDef
 from .doc_utils import doc_strip_annotations
 from .filters import combine, is_array, partition
-from .internal import Static
-from .module import Module, module_update_wrapper
+from .module import Module, module_update_wrapper, Static
 
 
 @compile_cache

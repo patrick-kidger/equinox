@@ -1,19 +1,12 @@
-"""Benchmarks the effect of `equinox.experimental.noinline`.
-On my CPU-only machine:
-```
-> python noinline.py inline
-Compile+run time 29.040641525003593
-Run time 0.0007120280060917139
-> python noinline.py noinline
-Compile+run time 9.005861932993867
-Run time 0.12737214396474883
-```
+"""Benchmarks the effect of `equinox.internal.noinline` and
+`equinox.internal.bounded_while_loop`.
 """
 import functools as ft
 import sys
 import timeit
 
 import diffrax as dfx
+import jax
 import jax.numpy as jnp
 import jax.random as jr
 
@@ -22,11 +15,23 @@ import equinox as eqx
 
 # inline vs no-inline are done through separate executions of the script, to
 # be sure that there's no jaxpr caching making the second compilation faster.
-_, inline = sys.argv
+_, inline, checkpoint, grad = sys.argv
 if inline == "inline":
     noinline = False
 elif inline == "noinline":
     noinline = True
+else:
+    raise ValueError
+if checkpoint == "none":
+    adjoint = dfx.DirectAdjoint()
+elif checkpoint == "recursive":
+    adjoint = dfx.RecursiveCheckpointAdjoint()
+else:
+    raise ValueError
+if grad == "grad":
+    grad_decorator = jax.grad
+elif grad == "nograd":
+    grad_decorator = lambda x: x
 else:
     raise ValueError
 
@@ -47,6 +52,7 @@ class VectorField(eqx.Module):
 
     def __call__(self, t, y, args):
         # Inefficient computation graph to make a toy example more expensive.
+        y = eqx.internal.announce_jaxpr(y, "vf")
         y = [y_i for y_i in y]
         for w in self.weights:
             y = [sum(w_ij * y_j for w_ij, y_j in zip(w_i, y)) for w_i in w]
@@ -61,14 +67,25 @@ solver = dfx.Dopri8(scan_stages=False)
 stepsize_controller = dfx.PIDController(rtol=1e-3, atol=1e-6)
 t0 = 0
 t1 = 1
-dt0 = None
+dt0 = 0.01
 
 
-@eqx.filter_jit
+@jax.jit
+@grad_decorator
 def solve(y0):
-    return dfx.diffeqsolve(
-        term, solver, t0, t1, dt0, y0, stepsize_controller=stepsize_controller
+    y0 = eqx.internal.announce_jaxpr(y0, name="y0")
+    sol = dfx.diffeqsolve(
+        term,
+        solver,
+        t0,
+        t1,
+        dt0,
+        y0,
+        stepsize_controller=stepsize_controller,
+        adjoint=adjoint,
+        max_steps=16**2,
     )
+    return jnp.sum(sol.ys)
 
 
 solve_ = ft.partial(solve, jnp.array([1.0]))

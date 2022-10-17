@@ -1,9 +1,7 @@
-from typing import Any, Tuple
+from typing import Tuple
 
 import jax.numpy as jnp
 from jaxtyping import Array
-
-from ..module import Module, static_field
 
 
 def left_broadcast_to(arr: Array, shape: Tuple[int, ...]) -> Array:
@@ -35,7 +33,3 @@ class ContainerMeta(type):
 
     def __len__(cls):
         return len(cls.reverse_lookup)
-
-
-class Static(Module):
-    value: Any = static_field()

@@ -18,8 +18,7 @@ from .filters import (
     is_inexact_array_like,
     partition,
 )
-from .internal import Static
-from .module import Module, module_update_wrapper
+from .module import Module, module_update_wrapper, Static
 
 
 class _ValueAndGradWrapper(Module):
@@ -322,7 +321,10 @@ class filter_custom_vjp:
                 nonarray_vjp_arg, diff_array_vjp_arg, nondiff_array_vjp_arg
             )
             args, kwargs = combine(nonarray_args_kwargs, array_args_kwargs)
-            return self.fn(vjp_arg, *args, **kwargs)
+            out = self.fn(vjp_arg, *args, **kwargs)
+            array_out, nonarray_out = partition(out, is_array)
+            diff_array_out, nondiff_array_out = partition(array_out, is_inexact_array)
+            return diff_array_out, nondiff_array_out, Static(nonarray_out)
 
         def fn_fwd_wrapped(
             nonarray_vjp_arg,
@@ -336,6 +338,9 @@ class filter_custom_vjp:
             )
             args, kwargs = combine(nonarray_args_kwargs, array_args_kwargs)
             out, residuals = fn_fwd(vjp_arg, *args, **kwargs)
+            array_out, nonarray_out = partition(out, is_array)
+            diff_array_out, nondiff_array_out = partition(array_out, is_inexact_array)
+            out = diff_array_out, nondiff_array_out, Static(nonarray_out)
             return out, (
                 residuals,
                 diff_array_vjp_arg,
@@ -354,7 +359,8 @@ class filter_custom_vjp:
                 nonarray_vjp_arg, diff_array_vjp_arg, nondiff_array_vjp_arg
             )
             args, kwargs = combine(nonarray_args_kwargs, array_args_kwargs)
-            out = fn_bwd(residuals, grad_out, vjp_arg, *args, **kwargs)
+            grad_diff_array_out, _, _ = grad_out
+            out = fn_bwd(residuals, grad_diff_array_out, vjp_arg, *args, **kwargs)
             if jtu.tree_structure(out) != jtu.tree_structure(diff_array_vjp_arg):
                 raise RuntimeError(
                     "custom_vjp gradients must have the same structure as "
@@ -381,13 +387,15 @@ class filter_custom_vjp:
             array_vjp_arg, is_inexact_array
         )
         array_args_kwargs, nonarray_args_kwargs = partition((args, kwargs), is_array)
-        return self.fn_wrapped(
+        out = self.fn_wrapped(
             nonarray_vjp_arg,
             nonarray_args_kwargs,
             diff_array_vjp_arg,
             nondiff_array_vjp_arg,
             array_args_kwargs,
         )
+        diff_array_out, nondiff_array_out, nonarray_out = out
+        return combine(diff_array_out, nondiff_array_out, nonarray_out.value)
 
 
 if getattr(typing, "GENERATING_DOCUMENTATION", False):

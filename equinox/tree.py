@@ -140,6 +140,7 @@ def tree_at(
         nonlocal in_pytree
         if x is node_or_nodes:  # noqa: F821
             in_pytree = True
+        return x  # needed for jax.tree_util.Partial, which has a dodgy constructor
 
     jtu.tree_map(_in_pytree, pytree, is_leaf=lambda x: x is node_or_nodes)  # noqa: F821
     if in_pytree:

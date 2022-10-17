@@ -4,7 +4,7 @@ from typing import Callable
 import jax
 
 from .filters import combine, is_array_like, partition
-from .internal import Static
+from .module import Static
 
 
 def _filter(x):

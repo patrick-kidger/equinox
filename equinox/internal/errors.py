@@ -57,7 +57,9 @@ def branched_error_if(
     struct = jax.eval_shape(lambda: dynamic_x)
     dynamic_x = lax.cond(
         pred,
-        lambda: jax.pure_callback(raises, struct, dynamic_x, index, vectorized=True),
+        lambda: jax.pure_callback(
+            raises, struct, lax.stop_gradient(dynamic_x), index, vectorized=True
+        ),
         lambda: dynamic_x,
     )
     return combine(dynamic_x, static_x)

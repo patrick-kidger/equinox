@@ -1,8 +1,10 @@
 from ..doc_utils import doc_repr, doc_strip_annotations
+from ..module import Static
 from .ad import nondifferentiable, nondifferentiable_backward
-from .bounded_while_loop import bounded_while_loop, HadInplaceUpdate
+from .bounded_while_loop import bounded_while_loop
+from .debug_jaxpr import announce_jaxpr
 from .errors import branched_error_if, error_if
-from .misc import ContainerMeta, left_broadcast_to, Static
+from .misc import ContainerMeta, left_broadcast_to
 from .nextafter import nextafter, prevbefore
 from .noinline import noinline
 from .omega import ω
