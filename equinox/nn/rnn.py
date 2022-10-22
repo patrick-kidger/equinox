@@ -21,11 +21,11 @@ class GRUCell(Module):
         class Model(Module):
             cell: GRUCell
 
-            def __init__(self, ...):
-                self.cell = GRUCell(...)
+            def __init__(self, **kwargs):
+                self.cell = GRUCell(**kwargs)
 
             def __call__(self, xs):
-                scan_fn = lambda state, input: (cell(input, state), None)
+                scan_fn = lambda state, input: (self.cell(input, state), None)
                 init_state = jnp.zeros(self.cell.hidden_size)
                 final_state, _ = jax.lax.scan(scan_fn, init_state, xs)
                 return final_state
@@ -100,11 +100,11 @@ class GRUCell(Module):
         The updated hidden state, which is a JAX array of shape `(hidden_size,)`.
         """
         if self.use_bias:
-            bias = 0
-            bias_n = 0
-        else:
             bias = self.bias
             bias_n = self.bias_n
+        else:
+            bias = 0
+            bias_n = 0
         igates = jnp.split(self.weight_ih @ input + bias, 3)
         hgates = jnp.split(self.weight_hh @ hidden, 3)
         reset = jnn.sigmoid(igates[0] + hgates[0])
