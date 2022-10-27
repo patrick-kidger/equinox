@@ -13,7 +13,7 @@ import equinox.internal as eqxi
 from .helpers import shaped_allclose
 
 
-def test_filter_primitives():
+def test_call():
     newprim_p = jax.core.Primitive("newprim")
     newprim_p.multiple_results = True
 
@@ -171,3 +171,7 @@ def test_vprim():
     assert shaped_allclose(o9, (jnp.array([3.0, 5.0]), jnp.array([6.0, 8.0])))
 
     assert shaped_allclose(o10, jnp.array([[3, 5], [7, 9]]))
+
+
+# TODO: add a test for batch axes with None
+# TODO: add a test for jvps with Zero

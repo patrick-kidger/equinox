@@ -1,15 +1,16 @@
 import functools as ft
-from typing import Union
 
 import jax
 import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
+import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
-from jaxtyping import Array, PyTree
+from jaxtyping import PyTree
 
-from ..filters import combine, is_array, partition
+from ..filters import combine, is_array, is_array_like, partition
+from ..tree import tree_equal
 
 
 #
@@ -17,50 +18,90 @@ from ..filters import combine, is_array, partition
 # -----------------
 # As with all filtering in Equinox, this is basically just about putting a
 # nicer interface on existing JAX operations; in this case creating custom
-# primitives. The inputs to the primitive can be arbitrary. The output must
-# be a PyTree of JAX arrays.
+# primitives. The inputs and outputs to the primitive can be arbitrary.
 #
 
-_ArrayLike = Union[Array, np.ndarray, int, float, complex, bool]
-_sentinel = object()
+
+_like_sentinel = object()
+_dummy_none = object()
 
 
-class _Smuggle:
+def _is_array_or_shapedarray(x):
+    return is_array(x) or isinstance(x, jax.core.ShapedArray)
+
+
+def _zero_from_primal(p):
+    shape = jnp.shape(p)
+    dtype = jax.core.primal_dtype_to_tangent_dtype(jnp.result_type(p))
+    return ad.Zero(jax.core.ShapedArray(shape, dtype))
+
+
+def _is_none(x):
+    return x is None
+
+
+def _replace_none(x):
+    return _dummy_none if x is None else x
+
+
+def _get_second(x, y):
+    return y
+
+
+def _make_spec(x, y):
+    if y is None:
+        return _is_array_or_shapedarray(x)
+    else:
+        assert x is not None
+        return True
+
+
+class _Flatten:
+    __slots__ = ("treedef_out", "static_out")
+
+    def called(self):
+        return hasattr(self, "treedef_out")
+
     def get(self):
-        return self.treedef_out
+        return self.treedef_out, self.static_out
 
-    def __call__(self, out, *, treedef=_sentinel):
-        flat_out, treedef_out = jtu.tree_flatten(out)
-        if treedef is not _sentinel:
-            assert treedef_out == treedef
-        try:
-            old_treedef_out = self.treedef_out
-        except AttributeError:
-            self.treedef_out = treedef_out
+    def __call__(self, out, like=_like_sentinel):
+        if like is _like_sentinel:
+            dynamic_out, static_out = partition(out, _is_array_or_shapedarray)
+            flat_out, treedef_out = jtu.tree_flatten(dynamic_out)
+            try:
+                treedef_out_old = self.treedef_out
+                static_out_old = self.static_out
+            except AttributeError:
+                self.treedef_out = treedef_out
+                self.static_out = static_out
+            else:
+                assert treedef_out_old == treedef_out
+                assert tree_equal(static_out_old, static_out)
+            return flat_out
         else:
-            assert treedef_out == old_treedef_out
-        return flat_out
-
-
-def filter_primitive_def(rule):
-    def _wrapper(*flat, treedef, static, smuggle):
-        args = combine(jtu.tree_unflatten(treedef, flat), static)
-        out = rule(*args)
-        return smuggle(out)
-
-    return _wrapper
-
-
-def filter_primitive_jvp(rule):
-    def _wrapper(primals, tangents, *, treedef, static, smuggle):
-        primals = combine(jtu.tree_unflatten(treedef, primals), static)
-        tangents = jtu.tree_unflatten(treedef, tangents)
-        primals_out, tangents_out = rule(primals, tangents)
-        flat_tangents_out, treedef_tangents_out = jtu.tree_flatten(tangents_out)
-        flat_primals_out = smuggle(primals_out, treedef=treedef_tangents_out)
-        return flat_primals_out, flat_tangents_out
-
-    return _wrapper
+            assert jtu.tree_structure(out, is_leaf=_is_none) == jtu.tree_structure(
+                like, is_leaf=_is_none
+            )
+            spec = jtu.tree_map(_make_spec, out, like, is_leaf=_is_none)
+            dynamic_out, static_out = partition(out, spec, is_leaf=_is_none)
+            flat_out, treedef_out = jtu.tree_flatten(dynamic_out)
+            try:
+                treedef_out_old = self.treedef_out
+                static_out_old = self.static_out
+            except AttributeError:
+                self.treedef_out = treedef_out
+                self.static_out = static_out
+            else:
+                assert treedef_out_old == treedef_out
+                assert tree_equal(static_out_old, static_out)
+            like = jtu.tree_map(_replace_none, like, is_leaf=_is_none)
+            like = jtu.tree_map(_get_second, dynamic_out, like)
+            flat_like, treedef_like = jtu.tree_flatten(like)
+            flat_like = [None if x is _dummy_none else x for x in flat_like]
+            assert treedef_like == treedef_out
+            assert len(flat_out) == len(flat_like)
+            return flat_out, flat_like
 
 
 # Not a PyTree
@@ -83,67 +124,130 @@ def _unwrap_undefined(x):
         return x
 
 
-def _is_none(x):
-    return x is None
+def filter_primitive_def(rule):
+    """For wrapping def_impl and def_abstract_eval.
+
+    These can now take arbitrary inputs and outputs.
+    """
+
+    def _wrapper(*flat, treedef, static, flatten):
+        args = combine(jtu.tree_unflatten(treedef, flat), static)
+        out = rule(*args)
+        return flatten(out)
+
+    return _wrapper
 
 
-_dummy_none = object()
+def filter_primitive_jvp(rule):
+    """
+    The input tangents (to the wrapped rule) will be a PyTree with the same
+    structure as the input primals. `None` indicates symbolic zero tangents,
+    in particular for non-JAX-array-likes.
 
+    The output tangents are expected to match the output primals, necessarily
+    with `None` for all non-JAX-array-likes.
+    """
 
-def _replace_none(x):
-    return _dummy_none if x is None else x
+    def _wrapper(primals, tangents, *, treedef, static, flatten):
+        primals = combine(jtu.tree_unflatten(treedef, primals), static)
+        tangents = [None if type(t) is ad.Zero else t for t in tangents]
+        tangents = jtu.tree_unflatten(treedef, tangents)
+        primals_out, tangents_out = rule(primals, tangents)
+        flat_primals_out, flat_tangents_out = flatten(primals_out, tangents_out)
+        flat_tangents_out = [
+            _zero_from_primal(p) if t is None else t
+            for p, t in zip(flat_primals_out, flat_tangents_out)
+        ]
+        return flat_primals_out, flat_tangents_out
 
-
-def _get_ct(v, ct):
-    if isinstance(v, _WrappedPrimal):
-        assert ct is not _dummy_none
-        assert v.value.aval == ct.aval
-    else:
-        assert ct is _dummy_none
-    return ct
+    return _wrapper
 
 
 def filter_primitive_transpose(rule):
-    def _wrapper(cts_out, *flat, treedef, static, smuggle):
-        treedef_out = smuggle.get()
+    """
+    The `inputs` to the transpose rule are a PyTree like the primal
+    inputs, with `UndefinedPrimal`s where appropriate.
+
+    The `cts_out` passed to the transpose rule are a PyTree like the
+    primal output, with `None` for symbolic zero cotangents, in particular
+    for non-JAX-array-likes.
+
+    The output from the rule should be a PyTree like the primal input.
+    All leaves which were non-JAX-array-like, or which should have zero
+    cotangent, should have cotangent `None`.
+    """
+
+    def _wrapper(cts_out, *flat, treedef, static, flatten):
+        treedef_out, _ = flatten.get()
+        cts_out = [None if type(ct) is ad.Zero else ct for ct in cts_out]
         cts_out = jtu.tree_unflatten(treedef_out, cts_out)
         wrapped_flat = [_wrap_undefined(x) for x in flat]
         wrapped_dynamic = jtu.tree_unflatten(treedef, wrapped_flat)
         wrapped_inputs = combine(wrapped_dynamic, static)
         inputs = jtu.tree_map(_unwrap_undefined, wrapped_inputs)
         cts = rule(inputs, cts_out)
-        assert jtu.tree_structure(
-            wrapped_inputs, is_leaf=_is_none
-        ) == jtu.tree_structure(cts, is_leaf=_is_none)
-        cts = jtu.tree_map(_replace_none, cts, is_leaf=_is_none)
-        cts = jtu.tree_map(_get_ct, wrapped_dynamic, cts)
-        cts = jtu.tree_leaves(cts)
-        return [None if ct is _dummy_none else ct for ct in cts]
+        flat_inputs, flat_cts = _Flatten()(wrapped_inputs, cts)
+        flat_cts = [
+            _zero_from_primal(p) if ct is None else ct
+            for p, ct in zip(flat_inputs, flat_cts)
+        ]
+        return flat_cts
 
     return _wrapper
 
 
 def filter_primitive_batching(rule):
-    def _wrapper(flat, batch_axes, *, treedef, static, smuggle):
+    """
+    The input batch axes (to the wrapped rule) will be a PyTree with the same
+    structure as the input primals, with `None` for all non-JAX-arrays.
+
+    The output batch axes are expected to match the output primals, with `None`
+    for all non-JAX-arrays.
+    """
+
+    def _wrapper(flat, batch_axes, *, treedef, static, flatten):
         inputs = combine(jtu.tree_unflatten(treedef, flat), static)
-        nones = jtu.tree_map(lambda _: None, static)
-        batch_axes = combine(jtu.tree_unflatten(treedef, batch_axes), nones)
+        batch_axes = [None if b is batching.not_mapped else b for b in batch_axes]
+        batch_axes = jtu.tree_unflatten(treedef, batch_axes)
         out, batch_axes = rule(inputs, batch_axes)
-        flat_batch_axes, treedef_batch_axes = jtu.tree_flatten(batch_axes)
-        flat_out = smuggle(out, treedef=treedef_batch_axes)
+        flat_out, flat_batch_axes = flatten(out, batch_axes)
+        flat_batch_axes = [
+            batching.not_mapped if b is None else b for b in flat_batch_axes
+        ]
         return flat_out, flat_batch_axes
 
     return _wrapper
 
 
-def filter_primitive_bind(prim: jax.core.Primitive, *args) -> PyTree[_ArrayLike]:
+def filter_primitive_bind(prim: jax.core.Primitive, *args) -> PyTree:
+    """Calls a primitive that has had its rules defined using the filter
+    functions above.
+    """
     assert prim.multiple_results
     dynamic, static = partition(args, is_array)
     flat, treedef = jtu.tree_flatten(dynamic)
-    smuggle = _Smuggle()
-    flat_out = prim.bind(*flat, treedef=treedef, static=static, smuggle=smuggle)
-    treedef_out = smuggle.get()
-    return jtu.tree_unflatten(treedef_out, flat_out)
+    flatten = _Flatten()
+    flat_out = prim.bind(*flat, treedef=treedef, static=static, flatten=flatten)
+    treedef_out, static_out = flatten.get()
+    return combine(jtu.tree_unflatten(treedef_out, flat_out), static_out)
+
+
+# Useful helper for JVP rules of higher-order primitives.
+def materialise_zeros(primal, tangent):
+    if tangent is None and is_array_like(primal):
+        shape = jnp.shape(primal)
+        dtype = jax.core.primal_dtype_to_tangent_dtype(jnp.result_type(primal))
+        if dtype == jax.dtypes.float0:
+            return np.broadcast_to(np.zeros((), dtype=dtype), shape)
+        else:
+            weak_type = hasattr(primal, "weak_type") and primal.weak_type
+            if weak_type:
+                assert shape == ()
+                return jnp.array(0, dtype=dtype)
+            else:
+                return jnp.zeros(shape, dtype=dtype)
+    else:
+        return tangent
 
 
 #

@@ -1,3 +1,4 @@
+from ..compile_utils import hashable_combine, hashable_partition
 from ..doc_utils import doc_repr, doc_strip_annotations
 from ..module import Static
 from .ad import nondifferentiable, nondifferentiable_backward
@@ -14,6 +15,7 @@ from .primitive import (
     filter_primitive_def,
     filter_primitive_jvp,
     filter_primitive_transpose,
+    materialise_zeros,
 )
 from .str2jax import str2jax
 from .unvmap import unvmap_all, unvmap_any, unvmap_max

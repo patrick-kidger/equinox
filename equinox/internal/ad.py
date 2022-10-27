@@ -10,6 +10,7 @@ import jax.tree_util as jtu
 from jaxtyping import PyTree
 
 from ..filters import combine, is_array, partition
+from .errors import error_if
 
 
 _identity = lambda x, *, name: x
@@ -79,11 +80,18 @@ def _nondifferentiable_backward_transpose(cts_in, _, *, name):
     if isinstance(cts_in, ad.Zero):
         return ad.Zero  # the class, not an instance
     else:
+        # Unfortunately there are legitimate cases where we get all-zero non-symbolic
+        # cotangents, so we have to use a runtime error here instead of just erroring
+        # at trace time.
+        # This happens when doing something like:
+        #
+        # x = nondifferentiable_backward(x)
+        # x, y = lax.cond(pred, lambda: (x, y), lambda: (x+1, y+1))
+        # return y
         if name is None:
             name = "This operation"
-        raise RuntimeError(
-            f"Unexpected cotangent. {name} cannot be reverse-mode autodifferentiated."
-        )
+        msg = f"Unexpected cotangent. {name} cannot be reverse-mode autodifferentiated."
+        return [error_if(cts_in, (cts_in != 0).any(), msg)]
 
 
 _nondifferentiable_backward_p.def_impl(_identity)

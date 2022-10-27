@@ -127,24 +127,3 @@ def test_unvmap():
 
     assert jnp.array_equal(vmap_unvmap_max(_21), jnp.array(2))
     assert jnp.array_equal(vmap_unvmap_max(_11), jnp.array(1))
-
-
-def test_nondifferentiable():
-    def nd(x):
-        return eqxi.nondifferentiable((x, object()))
-
-    nd(jnp.array(2.0))  # no error
-    with pytest.raises(RuntimeError):
-        jax.jvp(nd, (jnp.array(2.0),), (jnp.array(1.0),))
-    with pytest.raises(RuntimeError):
-        jax.grad(nd)(jnp.array(2.0))
-
-
-def test_nondifferentiable_backward():
-    def ndb(x):
-        return eqxi.nondifferentiable_backward((x, object()))[0]
-
-    ndb(jnp.array(2.0))  # no error
-    jax.jvp(ndb, (jnp.array(2.0),), (jnp.array(1.0),))  # no error
-    with pytest.raises(RuntimeError):
-        jax.grad(ndb)(jnp.array(2.0))
