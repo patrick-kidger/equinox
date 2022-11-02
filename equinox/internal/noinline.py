@@ -360,7 +360,7 @@ def noinline(fn: Callable, abstract_fn: Optional[Callable] = None) -> Callable:
     `fn` can be any function `PyTree[Any] -> PyTree[Any]`.
 
     `abstract_fn` will be called using [`equinox.filter_eval_shape`][] in order
-    to dtermine the shapes/dtypes/pytrees of the output. It defaults to
+    to determine the shapes/dtypes/pytrees of the output. It defaults to
     `abstract_fn = fn`.
 
     !!! Example
@@ -397,8 +397,8 @@ def noinline(fn: Callable, abstract_fn: Optional[Callable] = None) -> Callable:
         will lead to recompilations of `f`. (E.g. what if there was an
         `if y == 1` command in there?)
 
-    All noinlined-functions with the same `abstract_fn` may be
-    swapped out without recompiling the main call graph.
+    All noinlined-functions with the same `abstract_fn` may be passes as inputs
+    to the main call graph, and swapped without needing to recompile.
 
     !!! Example
 
