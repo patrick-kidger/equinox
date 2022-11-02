@@ -2,6 +2,7 @@ import abc
 import functools as ft
 import inspect
 from dataclasses import dataclass, field, fields
+from typing import Any
 
 import jax.tree_util as jtu
 
@@ -86,7 +87,6 @@ class _ModuleMeta(abc.ABCMeta):
 
     def __call__(cls, *args, **kwargs):
         self = cls.__new__(cls, *args, **kwargs)
-
         # Defreeze it during __init__
         initable_cls = _make_initable(cls, wraps=False)
         object.__setattr__(self, "__class__", initable_cls)
@@ -284,3 +284,7 @@ def module_update_wrapper(wrapper: Module, wrapped) -> Module:
     finally:
         object.__setattr__(wrapper, "__class__", cls)
     return wrapper
+
+
+class Static(Module):
+    value: Any = static_field()
