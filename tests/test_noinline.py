@@ -134,14 +134,14 @@ def test_abstract():
     f = eqx.internal.noinline(f, abstract)
     g = eqx.internal.noinline(g, abstract)
 
+    @jax.jit
     def call(fn, x, y):
         nonlocal call_num_traces
         call_num_traces += 1
         return fn(x, y)
 
-    call = eqx.filter_jit(call)
-    call(f, jnp.array(1), jnp.array(1))
-    call(g, jnp.array(1), jnp.array(1))
+    assert shaped_allclose(call(f, 2, 3), jnp.array(5))
+    assert shaped_allclose(call(g, 2, 3), jnp.array(6))
     assert f_num_traces == 1
     assert g_num_traces == 1
     assert call_num_traces == 1

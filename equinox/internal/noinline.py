@@ -16,7 +16,7 @@ from ..compile_utils import hashable_combine, hashable_partition
 from ..eval_shape import filter_eval_shape
 from ..filters import combine, is_array, partition
 from ..grad import filter_jvp
-from ..module import Module, module_update_wrapper
+from ..module import Module, module_update_wrapper, static_field
 from ..vmap_pmap import filter_vmap
 from .primitive import (
     filter_primitive_batching,
@@ -340,7 +340,7 @@ _index_to_fn = []
 
 class _NoInlineWrapper(Module):
     dynamic_index: Int[Array, ""]
-    abstract_fn: Callable
+    abstract_fn: Callable = static_field()
     dynamic_fn: Callable
 
     def __call__(self, *args, **kwargs):
@@ -425,11 +425,11 @@ def noinline(fn: Callable, abstract_fn: Optional[Callable] = None) -> Callable:
         f = noinline(f, abstract)
         g = noinline(g, abstract)
 
+        @jax.jit
         def call(fn, x, y):
             print("Compiling call!")
             return fn(x, y)
 
-        call = eqx.filter_jit(call)
         call(f, 1, 1)  # Compiling call! Compiling f!
         call(g, 1, 1)  # Compiling g!
         ```
