@@ -357,11 +357,22 @@ def noinline(fn: Callable, abstract_fn: Optional[Callable] = None) -> Callable:
     """Marks a function as not being inlined into a larger computation.
     This can help to reduce compile time at the expense of increased runtime.
 
-    `fn` can be any function `PyTree[Any] -> PyTree[Any]`.
+    `fn` can be any callable `PyTree[Any] -> PyTree[Any]`. In addition `fn`
+    itself may be any (callable) PyTree; any JAX arrays in `fn`'s PyTree are
+    also treated as inputs to the noinline'd computation.
 
-    `abstract_fn` will be called using [`equinox.filter_eval_shape`][] in order
-    to determine the shapes/dtypes/pytrees of the output. It defaults to
-    `abstract_fn = fn`.
+    `abstract_fn` determines the shapes/dtypes/pytrees of the output. (And must
+     return results consistent with `fn`.) If `fn` is called as
+    `fn(*args, **kwargs)`, then `abstract_fn` is called as
+    ```python
+    eqx.filter_eval_shape(
+        abstract_fn, eqx.filter(fn, eqx.is_array), *args, **kwargs)
+    )
+    ```
+    If not passed then `abstract_fn` is automatically constructed from `fn`.
+    Specifying it is useful as noinline'd functions sharing the same
+    `abstract_fn` may be substituted for each other without recompiling the
+    enclosing computation graph; see the second example below.
 
     !!! Example
 
@@ -397,13 +408,10 @@ def noinline(fn: Callable, abstract_fn: Optional[Callable] = None) -> Callable:
         will lead to recompilations of `f`. (E.g. what if there was an
         `if y == 1` command in there?)
 
-    All noinlined-functions with the same `abstract_fn` may be passes as inputs
-    to the main call graph, and swapped without needing to recompile.
-
     !!! Example
 
         ```python
-        def abstract(x, y):
+        def abstract(_, x, y):
             return jnp.broadcast_arrays(x, y)[0]
 
         def f(x, y):
@@ -425,6 +433,11 @@ def noinline(fn: Callable, abstract_fn: Optional[Callable] = None) -> Callable:
         call(f, 1, 1)  # Compiling call! Compiling f!
         call(g, 1, 1)  # Compiling g!
         ```
+
+        In this example, we see how noinline'd functions with the same
+        `abstract_fn` may be passed as inputs to the main call graph,
+        and swapped without needing to recompile the main call graph.
+
     """
     dynamic_fn, static_fn = hashable_partition(fn, is_array)
     if abstract_fn is None:
