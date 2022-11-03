@@ -150,9 +150,9 @@ def test_abstract():
 def test_complicated(getkey):
     num_lowerings = 0
 
-    def increment(stack: str):
+    def increment(_, stack):
         nonlocal num_lowerings
-        if stack.startswith("mlir"):
+        if stack[0] == "mlir":
             num_lowerings += 1
 
     def call(f, x):
@@ -161,7 +161,7 @@ def test_complicated(getkey):
     @eqx.internal.noinline
     def call_noinline(f, x):
         print("hi")
-        x = eqx.internal.announce_jaxpr(x, announce=increment)
+        x = eqx.internal.hook_transform(x, hook=increment)
         return call(f, x)
 
     mlp = eqx.nn.MLP(1, 1, 16, 2, key=getkey())
