@@ -26,11 +26,37 @@ _like_sentinel = object()
 _dummy_none = object()
 
 
-def _is_array_or_shapedarray(x):
-    return is_array(x) or isinstance(x, jax.core.ShapedArray)
+# Not a PyTree
+class _WrappedPrimal:
+    def __init__(self, value):
+        self.value = value
+
+
+def _wrap_undefined(x):
+    if isinstance(x, ad.UndefinedPrimal):
+        return _WrappedPrimal(x)
+    else:
+        return x
+
+
+def _unwrap_undefined(x, aval=False):
+    if isinstance(x, _WrappedPrimal):
+        if aval:
+            return x.value.aval
+        else:
+            return x.value
+    else:
+        return x
+
+
+def _is_array_like_internal(x):
+    assert type(x) is not ad.UndefinedPrimal
+    # Not `type(x) in (...)` as that doesn't handle stuff like ConcreteArrays.
+    return is_array(x) or isinstance(x, (jax.core.ShapedArray, _WrappedPrimal))
 
 
 def _zero_from_primal(p):
+    assert type(p) is not ad.UndefinedPrimal
     shape = jnp.shape(p)
     dtype = jax.core.primal_dtype_to_tangent_dtype(jnp.result_type(p))
     return ad.Zero(jax.core.ShapedArray(shape, dtype))
@@ -50,13 +76,13 @@ def _get_second(x, y):
 
 def _make_spec(x, y):
     if y is None:
-        return _is_array_or_shapedarray(x)
+        return _is_array_like_internal(x)
     else:
         assert x is not None
         return True
 
 
-class _Flatten:
+class Flatten:
     __slots__ = ("treedef_out", "static_out")
 
     def called(self):
@@ -67,7 +93,7 @@ class _Flatten:
 
     def __call__(self, out, like=_like_sentinel):
         if like is _like_sentinel:
-            dynamic_out, static_out = partition(out, _is_array_or_shapedarray)
+            dynamic_out, static_out = partition(out, _is_array_like_internal)
             flat_out, treedef_out = jtu.tree_flatten(dynamic_out)
             try:
                 treedef_out_old = self.treedef_out
@@ -102,26 +128,6 @@ class _Flatten:
             assert treedef_like == treedef_out
             assert len(flat_out) == len(flat_like)
             return flat_out, flat_like
-
-
-# Not a PyTree
-class _WrappedPrimal:
-    def __init__(self, value):
-        self.value = value
-
-
-def _wrap_undefined(x):
-    if isinstance(x, ad.UndefinedPrimal):
-        return _WrappedPrimal(x)
-    else:
-        return x
-
-
-def _unwrap_undefined(x):
-    if isinstance(x, _WrappedPrimal):
-        return x.value
-    else:
-        return x
 
 
 def filter_primitive_def(rule):
@@ -186,11 +192,13 @@ def filter_primitive_transpose(rule):
         wrapped_inputs = combine(wrapped_dynamic, static)
         inputs = jtu.tree_map(_unwrap_undefined, wrapped_inputs)
         cts = rule(inputs, cts_out)
-        flat_inputs, flat_cts = _Flatten()(wrapped_inputs, cts)
+        flat_inputs, flat_cts = Flatten()(wrapped_inputs, cts)
+        flat_inputs = [_unwrap_undefined(p, aval=True) for p in flat_inputs]
         flat_cts = [
             _zero_from_primal(p) if ct is None else ct
             for p, ct in zip(flat_inputs, flat_cts)
         ]
+        assert len(flat) == len(flat_cts)
         return flat_cts
 
     return _wrapper
@@ -226,7 +234,7 @@ def filter_primitive_bind(prim: jax.core.Primitive, *args) -> PyTree:
     assert prim.multiple_results
     dynamic, static = partition(args, is_array)
     flat, treedef = jtu.tree_flatten(dynamic)
-    flatten = _Flatten()
+    flatten = Flatten()
     flat_out = prim.bind(*flat, treedef=treedef, static=static, flatten=flatten)
     treedef_out, static_out = flatten.get()
     return combine(jtu.tree_unflatten(treedef_out, flat_out), static_out)

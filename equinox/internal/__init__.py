@@ -2,7 +2,7 @@ from ..compile_utils import hashable_combine, hashable_partition
 from ..doc_utils import doc_repr, doc_strip_annotations
 from ..module import Static
 from .ad import nondifferentiable, nondifferentiable_backward
-from .debug import announce, hook_transform
+from .debug import announce_transform, debug_backward_nan
 from .errors import branched_error_if, error_if
 from .misc import ContainerMeta, left_broadcast_to
 from .nextafter import nextafter, prevbefore
