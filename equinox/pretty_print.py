@@ -141,7 +141,7 @@ def _pformat(obj: PrettyPrintAble, **kwargs) -> pp.Doc:
     truncate_leaf = kwargs["truncate_leaf"]
     if truncate_leaf(obj):
         return pp.text(f"{type(obj).__name__}(...)")
-    elif dataclasses.is_dataclass(obj):
+    elif dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         return _pformat_dataclass(obj, **kwargs)
     elif isinstance(obj, list):
         return _pformat_list(obj, **kwargs)
