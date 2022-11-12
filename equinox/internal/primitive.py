@@ -4,6 +4,7 @@ import jax
 import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
+import jax.lax as lax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
@@ -250,8 +251,7 @@ def materialise_zeros(primal, tangent):
         else:
             weak_type = hasattr(primal, "weak_type") and primal.weak_type
             if weak_type:
-                assert shape == ()
-                return jnp.array(0, dtype=dtype)
+                return lax.broadcast(jnp.array(0, dtype=dtype), shape)
             else:
                 return jnp.zeros(shape, dtype=dtype)
     else:
