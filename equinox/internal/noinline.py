@@ -236,10 +236,18 @@ def _noinline_transpose(inputs, cts_out):
 def _noinline_batch(inputs, batch_axes):
     dynamic_index, abstract_fn, transforms, args = inputs
     dynamic_index_bdim, abstract_fn_bdim, transforms_bdim, args_bdim = batch_axes
-    assert (
-        len(jtu.tree_leaves((dynamic_index_bdim, abstract_fn_bdim, transforms_bdim)))
-        == 0
-    )  # all none
+    assert len(jtu.tree_leaves((abstract_fn_bdim, transforms_bdim))) == 0  # all none
+    if dynamic_index_bdim is not batching.not_mapped:
+        # The batch rule for `lax.cond` with vmap'd predicate simply
+        # broadcasts all constants in the branches. In particular it may broadcast
+        # this. We simply need to ignore this and return to having a single dynamic
+        # index.
+        # This is actually a silent error if you do something exceptionally silly, and
+        # try to manually combine two different `noinline`d functions. There's no real
+        # way to catch this that wouldn't slow things down at runtime though, I don't
+        # think.
+        assert jnp.ndim(dynamic_index) == 1
+        dynamic_index = dynamic_index[0]
     del dynamic_index_bdim, abstract_fn_bdim, transforms_bdim
     args = jtu.tree_map(_move_to_front, args, args_bdim, is_leaf=_is_not_mapped)
     args_bdim = jtu.tree_map(_int_to_zero, args_bdim, is_leaf=_is_not_mapped)
