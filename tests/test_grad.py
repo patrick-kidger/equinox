@@ -307,6 +307,54 @@ def test_filter_jvp():
                     after_jit(eqx.filter_jvp)(g, primals_in, tangents_in)
 
 
+def test_filter_vjp(getkey):
+    mlp = eqx.nn.MLP(2, 3, 2, 2, key=getkey())
+    x = jnp.array(1)
+    y = 1.0
+    sentinel = object()
+    sentinel2 = object()
+
+    def f(_mlp, _x, _y, _sentinel):
+        return _mlp(jnp.array([1.0, 2.0])) + _x + _y, 2.0, sentinel2
+
+    def g(_mlp, _x, _y, _sentinel):
+        return f(_mlp, _x, _y, _sentinel), _sentinel
+
+    def _check(x, y):
+        assert x.shape == y.shape
+        assert x.dtype == y.dtype
+
+    out1, vjpfun1 = eqx.filter_vjp(f, mlp, x, y, sentinel)
+    out2, vjpfun2, aux = eqx.filter_vjp(g, mlp, x, y, sentinel, has_aux=True)
+    assert aux is sentinel
+    for out, vjpfun in ((out1, vjpfun1), (out2, vjpfun2)):
+        out_array, out_float, out_sentinel = out
+        assert out_array.shape == (3,)
+        assert out_array.dtype == jnp.float32
+        assert shaped_allclose(out_float, 2.0)
+        assert out_sentinel is sentinel2
+        ct_mlp, ct_x, ct_y, ct_sentinel = vjpfun(
+            (jnp.array([1.0, 2.0, 3.0]), None, None)
+        )
+        mlp_dyn = eqx.filter(mlp, eqx.is_array)
+        assert jtu.tree_structure(mlp_dyn) == jtu.tree_structure(ct_mlp)
+        jtu.tree_map(_check, mlp_dyn, ct_mlp)
+        assert ct_y is None
+        assert ct_sentinel is None
+
+
+def test_closure_convert_basic():
+    @jax.grad
+    def f(x, y):
+        z = x + y
+        g = lambda a: z + a  # closes over z
+        g2 = eqx.filter_closure_convert(g, 1)
+        assert [id(b) for b in g2.consts] == [id(z)]
+        return z
+
+    f(1.0, 1.0)
+
+
 def test_filter_custom_jvp():
     @eqx.filter_custom_jvp
     def call(fn, x):

@@ -7,7 +7,7 @@ from typing import Any, Callable, Dict
 import jax
 import jax.interpreters.ad as ad
 import jax.tree_util as jtu
-from jaxtyping import PyTree
+from jaxtyping import Array, PyTree
 
 from .custom_types import BoolAxisSpec, sentinel
 from .doc_utils import doc_strip_annotations
@@ -18,6 +18,7 @@ from .filters import (
     is_inexact_array_like,
     partition,
 )
+from .make_jaxpr import filter_make_jaxpr
 from .module import Module, module_update_wrapper, Static
 
 
@@ -98,7 +99,7 @@ def filter_grad(
     arg: PyTree[BoolAxisSpec] = is_inexact_array,
     **gradkwargs,
 ):
-    """Wraps together [`equinox.partition`][] and `jax.grad`.
+    """As `jax.grad`, but accepts arbitrary PyTrees as inputs. (Not just JAXable types.)
 
     !!! info
 
@@ -156,7 +157,7 @@ def _is_jvp_tracer(x):
 
 
 def filter_jvp(fn, primals, tangents):
-    """Wraps together [`equinox.partition`][] and `jax.jvp`.
+    """Like `jax.jvp`, but accepts arbitrary PyTrees. (Not just JAXable types.)
 
     **Arguments:**
 
@@ -209,8 +210,125 @@ def filter_jvp(fn, primals, tangents):
     return primal_out, tangent_out
 
 
+def filter_vjp(fun, *primals, has_aux=False):
+    """Filtered version of `jax.vjp`.
+
+    **Arguments:**
+
+    - `fun`: The function to be differentiated. Will be called as `fun(*primals)`. Can
+        return an arbitrary PyTree.
+    - `primals`: The arguments at which `fun` will be evaluated and differentiated.
+        Can be arbitrary PyTrees.
+    - `has_aux`: Indicates whether `fun` returns a pair, with the first element the
+        output to be differentiated, and the latter auxiliary data. Defaults to `False`.
+
+    **Returns:**
+
+    If `has_aux is False` then returns a `(primals_out, vjpfun)` pair, where
+    `primals_out = fun(*primals)` and `vjpfun` is a function from a cotangent vector
+    with the same shape as `primals_out` to a tuple of cotangent vectors with the same
+    shape as `primals`, representing the vector-Jacobian product of `fun` evaluated at
+    `primals`.
+
+    If `has_aux is True` then returns a tuple `(primals_out, vjpfun, aux)`, where `aux`
+    is the auxiliary data returned from `fun`.
+
+    The cotangent passed to `vjpfun` should have arrays corresponding to all
+    floating-point arrays in `primals_out`, and `None` for all other PyTree leaves. The
+    cotangents returned from `vjpfun` will likewise have arrays for all `primals` that
+    are floating-point arrays, and `None` for all other PyTree leaves.
+    """
+    diff, nondiff = partition(primals, is_inexact_array)
+
+    def diff_fun(*_diff):
+        _primals = combine(_diff, nondiff)
+        _out = fun(*_primals)
+        if has_aux:
+            _out, _aux = _out
+        else:
+            _aux = None
+        _diff_out, _nondiff_out = partition(_out, is_inexact_array)
+        return _diff_out, (_nondiff_out, _aux)
+
+    diff_out, vjp_fn, (nondiff_out, aux) = jax.vjp(diff_fun, *diff, has_aux=True)
+    out = combine(diff_out, nondiff_out)
+    if has_aux:
+        return out, vjp_fn, aux
+    else:
+        return out, vjp_fn
+
+
+class _ClosureConvert(Module):
+    jaxpr: jax.core.Jaxpr
+    consts: PyTree[Array]  # Captured in the PyTree structure of _ClosureConvert
+    out_dynamic_struct: PyTree[jax.ShapeDtypeStruct]
+    out_static: PyTree[Any]
+
+    def __call__(self, *args, **kwargs):
+        dynamic = filter((args, kwargs), is_array)
+        dynamic_flat = jtu.tree_leaves(dynamic)
+        out_dynamic_flat = jax.core.eval_jaxpr(self.jaxpr, self.consts, *dynamic_flat)
+        out_dynamic_struct_flat, out_dynamic_treedef = jtu.tree_flatten(
+            self.out_dynamic_struct
+        )
+        assert len(out_dynamic_flat) == len(out_dynamic_struct_flat)
+        for o1, o2 in zip(out_dynamic_flat, out_dynamic_struct_flat):
+            assert o1.shape == o2.shape
+            assert o1.dtype == o2.dtype
+        out = jtu.tree_unflatten(out_dynamic_treedef, out_dynamic_flat)
+        out = combine(out, self.out_static)
+        return out
+
+
+def filter_closure_convert(fn, *args, **kwargs):
+    """As `jax.closure_convert`, but works on functions accepting and returning
+    arbtirary PyTree objects. In addition, all JAX arrays are hoisted into constants
+    (not just floating point arrays).
+
+    This is useful for explicitly capturing any closed-over JAX tracers
+    before crossing an API boundary, such as `jax.grad`, `jax.custom_vjp`, or the
+    rule of a custom primitive.
+
+    **Arguments:**
+
+    - `fn`: The function to call. Will be called as `fun(*args, **kwargs)`.
+    - `args`, `kwargs`: Example arguments at which to call the function. The function is
+        not actually evaluated on these arguments; all JAX arrays are subsituted for
+        tracers. Note that Python builtins (`bool`, `int`, `float`, `complex`) are
+        not substituted for tracers and are passed through as-is.
+
+    **Returns:**
+
+    A new function, which can be called in the same way, using `*args` and `**kwargs`.
+    Will contain all closed-over tracers of `fn` as part of its PyTree structure.
+
+    !!! Example
+
+        ```python
+        @jax.grad
+        def f(x, y):
+            z = x + y
+            g = lambda a: z + a  # closes over z
+            g2 = filter_closure_convert(g, 1)
+            assert [id(b) for b in g2.consts] == [id(z)]
+            return z
+
+        f(1., 1.)
+        ```
+    """
+    if fn.__closure__ is None:
+        # In this case, it's not possible to have any closed-over tracers.
+        return fn
+    closed_jaxpr, out_dynamic_struct, out_static = filter_make_jaxpr(fn)(
+        *args, **kwargs
+    )
+    jaxpr = closed_jaxpr.jaxpr
+    consts = closed_jaxpr.consts
+    return _ClosureConvert(jaxpr, consts, out_dynamic_struct, out_static)
+
+
 class filter_custom_jvp:
-    """Wraps together [`equinox.partition`][] and `jax.custom_jvp`.
+    """Filtered version of `jax.custom_jvp`.
 
     Works in the same way as `jax.custom_jvp`, except that you do not need to specify
     `nondiff_argnums`. Instead, arguments are automatically split into differentiable
@@ -260,7 +378,7 @@ class filter_custom_jvp:
 
 
 class filter_custom_vjp:
-    """Wraps together [`equinox.partition`][] and `jax.custom_vjp`.
+    """As `jax.custom_vjp`, but with a nicer interface.
 
     Usage is:
     ```python
