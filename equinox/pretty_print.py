@@ -142,6 +142,11 @@ class _Partial:
     keywords: Dict[str, Any]
 
 
+_Partial.__name__ = jtu.Partial.__name__
+_Partial.__qualname__ = jtu.Partial.__qualname__
+_Partial.__module__ = jtu.Partial.__module__
+
+
 # TODO: offer user-customisable override mechanism if they wish.
 # Ideally this would be something tied to being a PyTree.
 def _pformat(obj: PrettyPrintAble, **kwargs) -> pp.Doc:

@@ -93,7 +93,11 @@ def branched_error_if(
     several messages depending on the value of `index`.
     """
 
-    pred = unvmap_any(pred)
+    with jax.ensure_compile_time_eval():
+        pred = unvmap_any(pred)
+        if not isinstance(pred, jax.core.Tracer) and pred.item() is False:
+            return x
+
     index = unvmap_max(index)
     dynamic_x, static_x = partition(x, is_array_like)
     flat, treedef = jtu.tree_flatten(dynamic_x)

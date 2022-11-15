@@ -8,4 +8,8 @@
 
 ---
 
+::: equinox.filter_pure_callback
+
+---
+
 ::: equinox.static_field

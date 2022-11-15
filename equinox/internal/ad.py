@@ -13,22 +13,20 @@ from ..filters import combine, is_array, partition
 from .errors import error_if
 
 
-_identity = lambda x, *, name: x
+_identity = lambda x, *, msg: x
 
 
 _nondifferentiable_p = jax.core.Primitive("nondifferentiable")
 
 
-def _nondifferentiable_batch(x, batch_axes, *, name):
+def _nondifferentiable_batch(x, batch_axes, *, msg):
     (x,) = x
     (batch_axes,) = batch_axes
-    return nondifferentiable(x, name=name), batch_axes
+    return nondifferentiable(x, msg=msg), batch_axes
 
 
-def _nondifferentiable_jvp(primals, tangents, *, name):
-    if name is None:
-        name = "This operation"
-    raise RuntimeError(f"Unexpected tangent. {name} cannot be autodifferentiated.")
+def _nondifferentiable_jvp(primals, tangents, *, msg):
+    raise RuntimeError(msg)
 
 
 _nondifferentiable_p.def_impl(_identity)
@@ -46,7 +44,9 @@ mlir.register_lowering(
 ad.primitive_jvps[_nondifferentiable_p] = _nondifferentiable_jvp
 
 
-def nondifferentiable(x: PyTree, *, name: Optional[str] = None) -> PyTree:
+def nondifferentiable(
+    x: PyTree, *, name: Optional[str] = None, msg: Optional[str] = None
+) -> PyTree:
     """
     Consumes a PyTree with arbitrary leaves and returns an identical PyTree.
     If any of the JAX arrays in this PyTree are ever differentiated (in
@@ -54,7 +54,11 @@ def nondifferentiable(x: PyTree, *, name: Optional[str] = None) -> PyTree:
     """
     dynamic, static = partition(x, is_array)
     flat, treedef = jtu.tree_flatten(dynamic)
-    bind = ft.partial(_nondifferentiable_p.bind, name=name)
+    if msg is None:
+        if name is None:
+            name = "This operation"
+        msg = f"Unexpected tangent. {name} cannot be autodifferentiated."
+    bind = ft.partial(_nondifferentiable_p.bind, msg=msg)
     flat = map(bind, flat)
     return combine(jtu.tree_unflatten(treedef, flat), static)
 
@@ -62,21 +66,21 @@ def nondifferentiable(x: PyTree, *, name: Optional[str] = None) -> PyTree:
 _nondifferentiable_backward_p = jax.core.Primitive("nondifferentiable_backward")
 
 
-def _nondifferentiable_backward_batch(x, batch_axes, *, name):
+def _nondifferentiable_backward_batch(x, batch_axes, *, msg):
     (x,) = x
     (batch_axes,) = batch_axes
-    return nondifferentiable_backward(x, name=name), batch_axes
+    return nondifferentiable_backward(x, msg=msg), batch_axes
 
 
-def _nondifferentiable_backward_jvp(primals, tangents, *, name):
+def _nondifferentiable_backward_jvp(primals, tangents, *, msg):
     (primals,) = primals
     (tangents,) = tangents
-    return nondifferentiable_backward(primals, name=name), nondifferentiable_backward(
-        tangents, name=name
+    return nondifferentiable_backward(primals, msg=msg), nondifferentiable_backward(
+        tangents, msg=msg
     )
 
 
-def _nondifferentiable_backward_transpose(cts_in, _, *, name):
+def _nondifferentiable_backward_transpose(cts_in, _, *, msg):
     if isinstance(cts_in, ad.Zero):
         return ad.Zero  # the class, not an instance
     else:
@@ -88,9 +92,6 @@ def _nondifferentiable_backward_transpose(cts_in, _, *, name):
         # x = nondifferentiable_backward(x)
         # x, y = lax.cond(pred, lambda: (x, y), lambda: (x+1, y+1))
         # return y
-        if name is None:
-            name = "This operation"
-        msg = f"Unexpected cotangent. {name} cannot be reverse-mode autodifferentiated."
         return [error_if(cts_in, (cts_in != 0).any(), msg)]
 
 
@@ -114,7 +115,9 @@ ad.primitive_transposes[
 ] = _nondifferentiable_backward_transpose
 
 
-def nondifferentiable_backward(x: PyTree, name: Optional[str] = None) -> PyTree:
+def nondifferentiable_backward(
+    x: PyTree, name: Optional[str] = None, msg: Optional[str] = None
+) -> PyTree:
     """
     Consumes a PyTree with arbitrary leaves and returns an identical PyTree.
     If any of the JAX arrays in this PyTree are ever differentiated in
@@ -122,6 +125,10 @@ def nondifferentiable_backward(x: PyTree, name: Optional[str] = None) -> PyTree:
     """
     dynamic, static = partition(x, is_array)
     flat, treedef = jtu.tree_flatten(dynamic)
-    bind = ft.partial(_nondifferentiable_backward_p.bind, name=name)
+    if msg is None:
+        if name is None:
+            name = "This operation"
+        msg = f"Unexpected cotangent. {name} cannot be reverse-mode autodifferentiated."
+    bind = ft.partial(_nondifferentiable_backward_p.bind, msg=msg)
     flat = map(bind, flat)
     return combine(jtu.tree_unflatten(treedef, flat), static)
