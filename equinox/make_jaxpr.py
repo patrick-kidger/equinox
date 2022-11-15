@@ -43,14 +43,16 @@ def filter_make_jaxpr(fun):
 
     A wrapped version of `fun`, that when applied to example arguments
     `*args, **kwargs`, will return a 3-tuple of:
+    
     - A `ClosedJaxpr` representing the evaluation of that function on those arguments.
     - A `PyTree[jax.ShapeDtypeStruct]` representing the output shape and dtype of the
         result.
     - A `PyTree[Any]` representing any non-array outputs from `fun`.
 
-    The example arguments may be either JAX/NumPy arrays, or anything with `.shape` and
-    `.dtype` fields (typically `jax.ShapeDtypeStruct`s). Python builtins (`int`,
-    `float`, `bool`, `complex`) are treated as static inputs; wrap them in JAX/NumPy
+    The example arguments to be traced may be anything with `.shape` and `.dtype`
+    fields (typically JAX arrays, NumPy arrays, of `jax.ShapeDtypeStruct`s). All
+    other argments are treated statically. In particular, Python builtins (`bool`,
+    `int`, `float`, `complex`) are treated as static inputs; wrap them in JAX/NumPy
     arrays if you would like them to be traced.
     """
     return _MakeJaxpr(fun)
