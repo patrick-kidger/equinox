@@ -282,7 +282,7 @@ class _ClosureConvert(Module):
 
 def filter_closure_convert(fn, *args, **kwargs):
     """As `jax.closure_convert`, but works on functions accepting and returning
-    arbtirary PyTree objects. In addition, all JAX arrays are hoisted into constants
+    arbitrary PyTree objects. In addition, all JAX arrays are hoisted into constants
     (not just floating point arrays).
 
     This is useful for explicitly capturing any closed-over JAX tracers
