@@ -1,4 +1,5 @@
 import pathlib
+from contextlib import contextmanager
 from typing import Any, BinaryIO, Callable, Optional, Union
 
 import jax.numpy as jnp
@@ -163,6 +164,20 @@ def _with_suffix(path):
         return path
 
 
+@contextmanager
+def _maybe_open(path_or_file: Union[str, pathlib.Path, BinaryIO], mode: str):
+    """A function that unifies handling of file objects and path-like objects
+    by opening the latter."""
+    if isinstance(path_or_file, (str, pathlib.Path)):
+        file = open(_with_suffix(path_or_file), mode)
+        try:
+            yield file
+        finally:
+            file.close()
+    else:  # file-like object
+        yield path_or_file
+
+
 def _assert_same(new, old):
     if type(new) is not type(old):
         raise RuntimeError(
@@ -184,7 +199,7 @@ def _is_index(x):
 
 
 def tree_serialise_leaves(
-    path: Union[str, pathlib.Path],
+    path_or_file: Union[str, pathlib.Path, BinaryIO],
     pytree: PyTree,
     filter_spec=default_serialise_filter_spec,
     is_leaf: Callable[[Any], bool] = _is_index,
@@ -193,7 +208,7 @@ def tree_serialise_leaves(
 
     **Arguments:**
 
-    - `path`: The file location to save values to.
+    - `path_or_file`: The file location to save values to or a binary file-like object.
     - `pytree`: The PyTree whose leaves will be saved.
     - `filter_spec`: Specifies how to save each kind of leaf. By default all JAX
         arrays, NumPy arrays, Python bool/int/float/complexes are saved,
@@ -230,7 +245,7 @@ def tree_serialise_leaves(
         corresponding sub-PyTree of `pytree`.
     """
 
-    with open(_with_suffix(path), "wb") as f:
+    with _maybe_open(path_or_file, "wb") as f:
 
         def _serialise(spec, x):
             def __serialise(y):
@@ -242,7 +257,7 @@ def tree_serialise_leaves(
 
 
 def tree_deserialise_leaves(
-    path: Union[str, pathlib.Path],
+    path_or_file: Union[str, pathlib.Path, BinaryIO],
     like: PyTree,
     filter_spec=default_deserialise_filter_spec,
     is_leaf: Callable[[Any], bool] = _is_index,
@@ -251,7 +266,7 @@ def tree_deserialise_leaves(
 
     **Arguments:**
 
-    - `path`: The file location to load values from.
+    - `path_or_file`: The file location to load values from or a binary file-like object.
     - `like`: A PyTree of same structure, and with leaves of the same type, as the
         PyTree being loaded. Those leaves which are loaded will replace the
         corresponding leaves of `like`.
@@ -293,8 +308,7 @@ def tree_deserialise_leaves(
         should be a prefix of `pytree`, and each function will be mapped over the
         corresponding sub-PyTree of `pytree`.
     """
-
-    with open(_with_suffix(path), "rb") as f:
+    with _maybe_open(path_or_file, "rb") as f:
 
         def _deserialise(spec, x):
             def __deserialise(y):
