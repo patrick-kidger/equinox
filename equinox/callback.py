@@ -16,14 +16,14 @@ def filter_pure_callback(
 
     **Arguments:**
 
-        - `callback`: The Python function to call.
-        - `args`, `kwargs`: The function will be called as `callback(*args, **kwargs)`.
-            These may be arbitrary Python objects.
-        - `result_shape_dtypes`: A PyTree specifying the output of `callback`. It should
-            have a `jax.ShapeDtypeStruct` in place of any JAX arrays.
-        - `vectorized`: If `True` then `callback` is batched(when transformed by `vmap`)
-            by calling it directly on the batched arrays. If `False` then `callback` is
-            called on each batch element individually.
+    - `callback`: The Python function to call.
+    - `args`, `kwargs`: The function will be called as `callback(*args, **kwargs)`.
+        These may be arbitrary Python objects.
+    - `result_shape_dtypes`: A PyTree specifying the output of `callback`. It should
+        have a `jax.ShapeDtypeStruct` in place of any JAX arrays.
+    - `vectorized`: If `True` then `callback` is batched(when transformed by `vmap`)
+        by calling it directly on the batched arrays. If `False` then `callback` is
+        called on each batch element individually.
 
     **Returns:**
 
