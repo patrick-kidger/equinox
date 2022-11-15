@@ -1,10 +1,12 @@
+import os
+
 import jax.numpy as jnp
 import numpy as np
 
 import equinox as eqx
 
 
-def test_leaf_serialisation(getkey, tmp_path):
+def _example_trees():
     jax_array1 = jnp.array(1)
     jax_array2 = jnp.array([1.0, 2.0])
     numpy_array1 = np.array(1)
@@ -26,8 +28,6 @@ def test_leaf_serialisation(getkey, tmp_path):
         obj,
     )
 
-    eqx.tree_serialise_leaves(tmp_path, tree)
-
     like_jax_array1 = jnp.array(5)
     like_jax_array2 = jnp.array([6.0, 7.0])
     like_numpy_array1 = np.array(5)
@@ -47,7 +47,36 @@ def test_leaf_serialisation(getkey, tmp_path):
         like_obj,
     )
 
+    return tree, like, index_value, like_func, like_obj
+
+
+def test_leaf_serialisation_path(getkey, tmp_path):
+    tree, like, index_value, like_func, like_obj = _example_trees()
+
+    eqx.tree_serialise_leaves(tmp_path, tree)
+
     tree_loaded = eqx.tree_deserialise_leaves(tmp_path, like)
+
+    tree_serialisable = tree[:-3]
+    tree_loaded_serialisable = tree_loaded[:-3]
+    tree_loaded_index, tree_loaded_func, tree_loaded_obj = tree_loaded[-3:]
+
+    assert eqx.tree_equal(tree_serialisable, tree_loaded_serialisable)
+    assert jnp.array_equal(
+        eqx.experimental.get_state(tree_loaded_index, jnp.array(4)), index_value
+    )
+    assert tree_loaded_func is like_func
+    assert tree_loaded_obj is like_obj
+
+
+def test_leaf_serialisation_file(getkey, tmp_path):
+    tree, like, index_value, like_func, like_obj = _example_trees()
+
+    with open(os.path.join(tmp_path, "test.eqx"), "wb") as tmp_file:
+        eqx.tree_serialise_leaves(tmp_file, tree)
+
+    with open(os.path.join(tmp_path, "test.eqx"), "rb") as tmp_file:
+        tree_loaded = eqx.tree_deserialise_leaves(tmp_file, like)
 
     tree_serialisable = tree[:-3]
     tree_loaded_serialisable = tree_loaded[:-3]
