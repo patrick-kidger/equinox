@@ -44,9 +44,9 @@ def test_vmap(getkey):
     o2 = mlp_jit_vmap(x)
     o3 = mlp_vmap_noinline(x)
     o4 = mlp_jit_vmap_noinline(x)
-    assert shaped_allclose(o1, o2)
-    assert shaped_allclose(o1, o3)
-    assert shaped_allclose(o1, o4)
+    assert shaped_allclose(o1, o2, atol=1e-5)
+    assert shaped_allclose(o1, o3, atol=1e-5)
+    assert shaped_allclose(o1, o4, atol=1e-5)
 
 
 def test_jvp(getkey):

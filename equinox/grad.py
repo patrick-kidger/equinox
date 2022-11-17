@@ -13,13 +13,14 @@ from .custom_types import BoolAxisSpec, sentinel
 from .doc_utils import doc_strip_annotations
 from .filters import (
     combine,
+    filter,
     is_array,
     is_inexact_array,
     is_inexact_array_like,
     partition,
 )
 from .make_jaxpr import filter_make_jaxpr
-from .module import Module, module_update_wrapper, Static
+from .module import Module, module_update_wrapper, Static, static_field
 
 
 class _ValueAndGradWrapper(Module):
@@ -259,10 +260,10 @@ def filter_vjp(fun, *primals, has_aux=False):
 
 
 class _ClosureConvert(Module):
-    jaxpr: jax.core.Jaxpr
+    jaxpr: jax.core.Jaxpr = static_field()
     consts: PyTree[Array]  # Captured in the PyTree structure of _ClosureConvert
-    out_dynamic_struct: PyTree[jax.ShapeDtypeStruct]
-    out_static: PyTree[Any]
+    out_dynamic_struct: PyTree[jax.ShapeDtypeStruct] = static_field()
+    out_static: PyTree[Any] = static_field()
 
     def __call__(self, *args, **kwargs):
         dynamic = filter((args, kwargs), is_array)

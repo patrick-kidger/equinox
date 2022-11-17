@@ -43,7 +43,7 @@ def filter_make_jaxpr(fun):
 
     A wrapped version of `fun`, that when applied to example arguments
     `*args, **kwargs`, will return a 3-tuple of:
-    
+
     - A `ClosedJaxpr` representing the evaluation of that function on those arguments.
     - A `PyTree[jax.ShapeDtypeStruct]` representing the output shape and dtype of the
         result.
