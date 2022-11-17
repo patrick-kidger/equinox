@@ -14,7 +14,6 @@ from jaxtyping import Array, PyTree
 
 from ..filters import is_array
 from ..module import Module, static_field
-from ..tree import tree_at
 
 
 # So the use of a weak dictionary is a bit of wishful thinking here, really.
@@ -235,46 +234,9 @@ def _monkey_patch():
     if not _have_monkey_patched:
         _have_monkey_patched = True
 
-        _old_outside_call_impl = hcb.outside_call_p.impl
-        _old_outside_call_translation_rule = xla._translations[hcb.outside_call_p]
         _old_outside_call_batching_rule = batching.primitive_batchers[
             hcb.outside_call_p
         ]
-
-        #
-        # Overwrite impl and abstract_eval:
-        # Make `get_state` not actually pass `like` into the
-        # callback. This means we don't need to wait for `like` to be computed at
-        # runtime.
-        #
-
-        def _outside_call_impl(*arg_flat, arg_treedef, **params):
-            leaves = [None] * arg_treedef.num_leaves
-            call_type = type(jtu.tree_unflatten(arg_treedef, leaves))
-            # Not using isinstance for speed. (Questionable choice?)
-            if call_type is _GetStateArg:
-                arg = jtu.tree_unflatten(arg_treedef, arg_flat)
-                assert arg.index._state is None
-                token_like = jtu.tree_map(lambda _: jax.core.token, arg.like)
-                arg = tree_at(lambda a: a.like, arg, token_like)
-                arg_flat = jtu.tree_leaves(arg)
-            return _old_outside_call_impl(*arg_flat, arg_treedef=arg_treedef, **params)
-
-        def _outside_call_translation_rule(ctx, avals_in, *args, arg_treedef, **kwargs):
-            leaves = [None] * arg_treedef.num_leaves
-            call_type = type(jtu.tree_unflatten(arg_treedef, leaves))
-            if call_type is _GetStateArg:
-                arg_flat = avals_in[:-2]
-                extra_tokens = avals_in[-2:]
-                arg = jtu.tree_unflatten(arg_treedef, arg_flat)
-                assert arg.index._state is None
-                token_like = jtu.tree_map(lambda _: jax.core.abstract_token, arg.like)
-                arg = tree_at(lambda a: a.like, arg, token_like)
-                arg_flat = jtu.tree_leaves(arg)
-                avals_in = arg_flat + extra_tokens
-            return _old_outside_call_translation_rule(
-                ctx, avals_in, *args, arg_treedef=arg_treedef, **kwargs
-            )
 
         #
         # Overwrite batching:
@@ -324,9 +286,7 @@ def _monkey_patch():
                     **params,
                 )
 
-        hcb.outside_call_p.def_impl(_outside_call_impl)
         batching.primitive_batchers[hcb.outside_call_p] = _outside_call_batching_rule
-        xla.register_translation(hcb.outside_call_p, _outside_call_translation_rule)
 
 
 def _batchify_impl(*flat, treedef, like_batch_axes, current_batch_axes):

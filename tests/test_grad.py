@@ -355,6 +355,32 @@ def test_closure_convert_basic():
     f(1.0, 1.0)
 
 
+def test_closure_convert_custom_jvp():
+    # Deliberately not using filter_custom_jvp to check the static fields on the
+    # closure converted function.
+    @jax.custom_jvp
+    def call(f, x):
+        return f(x)
+
+    @call.defjvp
+    def call_jvp(primals, tangents):
+        f, x = primals
+        tf, tx = tangents
+        out = call(f, x)
+        tsum = sum(jnp.sum(x) for x in jtu.tree_leaves((tf, tx)))
+        tout = jtu.tree_map(lambda x: jnp.full(x.shape, tsum, x.dtype), out)
+        return out, tout
+
+    @jax.grad
+    def run(x):
+        x1, x2 = x
+        f = lambda y: x1 * y + x2
+        f = eqx.filter_closure_convert(f, 3.0)
+        return call(f, 3.0)
+
+    assert shaped_allclose(run((2.0, 4.0)), (jnp.array(1.0), jnp.array(1.0)))
+
+
 def test_filter_custom_jvp():
     @eqx.filter_custom_jvp
     def call(fn, x):
