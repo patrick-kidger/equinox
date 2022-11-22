@@ -259,6 +259,13 @@ def filter_vjp(fun, *primals, has_aux=False):
         return out, vjp_fn
 
 
+class _TrivialClosureConvert(Module):
+    fn: Callable = static_field()
+
+    def __call__(self, *args, **kwargs):
+        return self.fn(*args, **kwargs)
+
+
 class _ClosureConvert(Module):
     jaxpr: jax.core.Jaxpr = static_field()
     consts: PyTree[Array]  # Captured in the PyTree structure of _ClosureConvert
@@ -319,7 +326,8 @@ def filter_closure_convert(fn, *args, **kwargs):
     """
     if fn.__closure__ is None:
         # In this case, it's not possible to have any closed-over tracers.
-        return fn
+        # Convert to a PyTree nonetheless
+        return _TrivialClosureConvert(fn)
     closed_jaxpr, out_dynamic_struct, out_static = filter_make_jaxpr(fn)(
         *args, **kwargs
     )

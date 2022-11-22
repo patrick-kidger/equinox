@@ -183,10 +183,6 @@ class _ωUpdateRef:
         self.item = item
         self.is_leaf = is_leaf
 
-    def get(self, **kwargs):
-        value, item = self.ω
-        return value.at[item].get(**kwargs)
-
 
 def _set_binary_at(base, name: str, op: callable) -> callable:
     def fn(self, other):

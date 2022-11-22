@@ -2,6 +2,7 @@ import math
 import operator
 from typing import Callable, Optional, TypeVar, Union
 
+import jax
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.tree_util as jtu
@@ -10,6 +11,7 @@ from jaxtyping import Array, Bool
 from ..filters import is_array, is_inexact_array
 from ..grad import filter_closure_convert, filter_custom_vjp, filter_vjp
 from ..tree import tree_at
+from .misc import at_set
 
 
 _T = TypeVar("T")
@@ -33,9 +35,8 @@ def checkpointed_while_loop(
         assert isinstance(max_steps, int)
         if checkpoints == "binomial":
             checkpoints = math.ceil(math.log2(max_steps))
-        else:
+        if not isinstance(checkpoints, int):
             raise ValueError(f"Unrecognised checkpoints={checkpoints}")
-        assert isinstance(checkpoints, int)
         body_fun = filter_closure_convert(body_fun, init_val)
         vjp_arg = (init_val, body_fun)
         return _checkpointed_while_loop(vjp_arg, cond_fun, max_steps, checkpoints)
@@ -63,44 +64,45 @@ _sentinel = object()
 
 # TODO: introduce checkpointing!
 def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, max_steps, checkpoints):
-    assert jtu.tree_map(is_array, vjp_arg)
+    assert all(is_array(leaf) for leaf in jtu.tree_leaves(vjp_arg))
     init_val, body_fun = vjp_arg
 
-    vjp_fns = _sentinel
+    def _cond_fun(carry):
+        step, val, _ = carry
+        return cond_fun(val) & (step < max_steps)
 
-    def f(carry, _):
-        step, val = carry
+    def _body_fun(carry):
+        step, val, residuals = carry
         # Use `filter_vjp` to neatly handle floating-point arrays.
         # We pass in `body_fun` as an argument as it contains its closed-over values in
         # its PyTree structure, and we do want to compute cotangents wrt these.
         val2, vjp_fn = filter_vjp(_call, val, body_fun)
         residual = _get_residual(vjp_fn)
-        nonlocal vjp_fns
-        vjp_fns = tree_at(_get_residual, vjp_fn, object())
-        return (step + 1, val2), residual
+        residuals = at_set(residuals, step, residual)
+        return step + 1, val2, residuals
 
-    def early_exit(carry):
-        _, val = carry
-        return jnp.invert(cond_fun(val))
-
-    init_carry = 0, init_val
-    (num_steps, final_val), residuals = lax.scan(
-        f, init_carry, xs=None, length=max_steps, early_exit=early_exit
+    vjp_fns = jax.eval_shape(
+        lambda v, b: filter_vjp(_call, v, b)[1], init_val, body_fun
     )
-    assert vjp_fns is not _sentinel
+    vjp_fns = jtu.tree_map(
+        lambda x: jnp.zeros((max_steps,) + x.shape, x.dtype), vjp_fns
+    )
+    residuals = _get_residual(vjp_fns)
+    init_carry = 0, init_val, residuals
+    num_steps, final_val, residuals = lax.while_loop(_cond_fun, _body_fun, init_carry)
     vjp_fns = tree_at(_get_residual, vjp_fns, residuals)
     return final_val, (num_steps, vjp_fns)
 
 
 def _checkpointed_while_loop_bwd(
-    residuals, grad_final_val, vjp_arg, cond_fun, max_steps, checkpoints
+    remainders, grad_final_val, vjp_arg, cond_fun, max_steps, checkpoints
 ):
     _, body_fun = vjp_arg
     grad_body_fun = jtu.tree_map(
         lambda x: jnp.zeros_like(x) if is_inexact_array(x) else None, body_fun
     )
     del cond_fun, body_fun
-    num_steps, vjp_fns = residuals
+    num_steps, vjp_fns = remainders
     init_carry = num_steps, grad_final_val, grad_body_fun
 
     def _cond_fun(carry):
