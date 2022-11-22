@@ -339,25 +339,28 @@ class filter_custom_jvp:
 
     The return types must still all be JAX types.
 
+    Supports keyword arguments, which are always treated as nondifferentiable.
+
     Example:
     ```python
     @equinox.filter_custom_jvp
-    def call(fn, x):
-        return fn(x)
+    def call(x, y, *, fn):
+        return fn(x, y)
 
     @call.defjvp
-    def call_jvp(primals, tangents):
-        fn, x = primals
-        _, tx = tangents
-        primal_out = call(fn, x)
-        tangent_out = tx**2
+    def call_jvp(primals, tangents, *, fn):
+        x, y = primals
+        tx, ty = tangents
+        primal_out = call(x, y, fn=fn)
+        tangent_out = tx**2 + ty
         return primal_out, tangent_out
     ```
     """
 
     def __init__(self, fn):
         def fn_wrapper(static, dynamic):
-            return fn(*combine(dynamic, static))
+            args, kwargs = combine(dynamic, static)
+            return fn(*args, **kwargs)
 
         self.fn = jax.custom_jvp(fn_wrapper, nondiff_argnums=(0,))
 
@@ -365,16 +368,19 @@ class filter_custom_jvp:
         def fn_jvp_wrapper(static, dynamic, tangents):
             (dynamic,) = dynamic
             (tangents,) = tangents
-            primals = combine(dynamic, static)
-            return fn_jvp(primals, tangents)
+            args, kwargs = combine(dynamic, static)
+            t_args, t_kwargs = tangents
+            if any(x is not None for x in jtu.tree_leaves(t_kwargs)):
+                raise ValueError("Received keyword tangent")
+            return fn_jvp(args, t_args, **kwargs)
 
         self.fn.defjvp(fn_jvp_wrapper)
 
     def defjvps(self, *a, **kw):
         raise NotImplementedError("filter_custom_jvp().defjvps is not implemented")
 
-    def __call__(self, *args):
-        dynamic, static = partition(args, is_inexact_array_like)
+    def __call__(self, *args, **kwargs):
+        dynamic, static = partition((args, kwargs), is_inexact_array_like)
         return self.fn(static, dynamic)
 
 

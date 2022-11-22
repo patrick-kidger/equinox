@@ -381,7 +381,7 @@ def test_closure_convert_custom_jvp():
     assert shaped_allclose(run((2.0, 4.0)), (jnp.array(1.0), jnp.array(1.0)))
 
 
-def test_filter_custom_jvp():
+def test_filter_custom_jvp_no_kwargs():
     @eqx.filter_custom_jvp
     def call(fn, x):
         return fn(x)
@@ -415,3 +415,38 @@ def test_filter_custom_jvp():
     assert was_called
     assert shaped_allclose(primal_out, 5.0)
     assert shaped_allclose(tangent_out, 9.0)
+
+
+def test_filter_custom_jvp_kwargs():
+    @eqx.filter_custom_jvp
+    def call(x, y, *, fn):
+        return fn(x, y)
+
+    was_called = False
+
+    @call.defjvp
+    def call_jvp(primals, tangents, *, fn):
+        nonlocal was_called
+        was_called = True
+        x, y = primals
+        tx, ty = tangents
+        primal_out = call(x, y, fn=fn)
+        tangent_out = tx**2 + ty
+        return primal_out, tangent_out
+
+    f = lambda a, b: a**2 + b
+    assert shaped_allclose(call(1, 2, fn=f), 3)
+    assert shaped_allclose(call(1.0, 2.0, fn=f), 3.0)
+    assert shaped_allclose(call(jnp.array(1), 2, fn=f), jnp.array(3))
+    assert shaped_allclose(call(jnp.array(1.0), 2, fn=f), jnp.array(3.0))
+
+    def jvpcall(x, y, tx, ty):
+        def _jvpcall(_x, _y):
+            return call(_x, _y, fn=f)
+
+        return jax.jvp(_jvpcall, (x, y), (tx, ty))
+
+    primal_out, tangent_out = jvpcall(2.0, 1.5, 3.0, 4.0)
+    assert was_called
+    assert shaped_allclose(primal_out, 5.5)
+    assert shaped_allclose(tangent_out, 13.0)
