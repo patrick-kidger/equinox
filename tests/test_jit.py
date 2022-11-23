@@ -422,3 +422,112 @@ def test_wrap_jax_partial(getkey):
     g = jtu.Partial(f, jrandom.normal(getkey(), ()))
     fn = jtu.Partial(f, True)
     eqx.filter_jit(g, fn=fn)
+
+
+def test_jit_with_buffer_donation(getkey):
+    # We can't just use `lambda x: x` or any function just rearrange without modification because JAX
+    # simplifies this away to an empty XLA computation.
+    def f(x):
+        return x + 1
+
+    def _test(jit_fun, x):
+        old_p = x.unsafe_buffer_pointer()
+        new_x = jit_fun(x)
+        assert new_x.unsafe_buffer_pointer() == old_p
+        assert x.is_deleted()
+        return new_x
+
+    f_jit = eqx.filter_jit(f, donate_args=(True,))
+
+    assert _eq(_test(f_jit, jnp.array(0)), jnp.array(1.0))
+
+    f_jit = eqx.filter_jit(f, donate_kwargs=dict(x=True))
+    assert _eq(_test(f_jit, jnp.array(0)), jnp.array(1.0))
+
+    f_jit = eqx.filter_jit(f, donate_default=True)
+    assert _eq(_test(f_jit, jnp.array(0)), jnp.array(1.0))
+
+    num_traces = 0
+
+    class M(eqx.Module):
+        buffer: jnp.ndarray
+        mlp: eqx.nn.MLP
+
+        def __init__(self, width: int, depth: int):
+            self.mlp = eqx.nn.MLP(width, width, width, depth, key=getkey())
+            self.buffer = jnp.zeros((100000,))
+
+        @eqx.filter_jit(donate_args=(True,))
+        def __call__(self, x):
+            nonlocal num_traces
+            num_traces += 1
+
+            return self.mlp(x), eqx.tree_at(
+                lambda s: s.buffer, self, self.buffer.at[0].add(1)
+            )
+
+    m = M(10, 3)
+    old_m_p = jax.tree_map(
+        lambda x: x.unsafe_buffer_pointer()
+        if hasattr(x, "unsafe_buffer_pointer")
+        else None,
+        m,
+    )
+
+    _, new_m = m(jnp.ones((10,)))
+    _, new_m = new_m(jnp.ones((10,)))
+    _, new_m = new_m(jnp.ones((10,)))
+    assert num_traces == 1
+
+    assert _eq(new_m.buffer[0], jnp.array(3.0))
+    assert m.buffer.is_deleted()
+    assert new_m.buffer.unsafe_buffer_pointer() == old_m_p.buffer
+
+    old_m_deleted_flag = jax.tree_map(
+        lambda x: x.is_deleted() if hasattr(x, "is_deleted") else None, m
+    )
+    for flag in jtu.tree_leaves(old_m_deleted_flag):
+        assert flag is True or flag is None
+
+    @eqx.filter_jit(
+        args=(True, False), donate_args=(True, True)
+    )  # donate_args will only be applied to traced argument
+    def g(x, y):
+        return x + 1, y + 1
+
+    x, y = jnp.array(0), 0
+    old_x_p = x.unsafe_buffer_pointer()
+    new_x, new_y = g(x, y)
+    assert _eq(new_x, jnp.array(1))
+    assert _eq(new_y, 1)
+    assert x.is_deleted()
+    assert old_x_p == new_x.unsafe_buffer_pointer()
+
+    num_traces = 0
+
+    class F(eqx.Module):
+        buffer: jnp.ndarray
+        mlp: eqx.nn.MLP
+
+        def __init__(self, width: int, depth: int):
+            self.mlp = eqx.nn.MLP(width, width, width, depth, key=getkey())
+            self.buffer = jnp.zeros((100000,))
+
+        def __call__(self, x):
+            nonlocal num_traces
+            num_traces += 1
+            return self.mlp(x), eqx.tree_at(
+                lambda s: s.buffer, self, self.buffer.at[0].add(1)
+            )
+
+    f = F(10, 3)
+    jit_f = eqx.filter_jit(f, donate_fn=True)
+    _, new_f = jit_f(jnp.ones((10,)))
+    assert num_traces == 1
+    assert f.buffer.is_deleted()
+
+    jit_f = eqx.filter_jit(new_f, donate_fn=True)
+    _, new_f_2 = jit_f(jnp.ones((10,)))
+
+    assert num_traces == 1
+    assert new_f.buffer.is_deleted()
