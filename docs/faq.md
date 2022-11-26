@@ -63,3 +63,29 @@ linear = eqx.nn.Linear(input_size, output_size, key=key)
 
 y = jax.vmap(linear)(x)
 ```
+
+## TypeError: not a valid JAX type.
+
+You might be getting an error like
+```
+TypeError: Argument '<function ...>' of type <class 'function'> is not a valid JAX type.
+```
+Example:
+```python3
+import jax
+import equinox as eqx
+
+def loss_fn(model, x, y):
+    return (model(x) - y) ** 2
+
+model = eqx.nn.Lambda(lambda x: x)
+
+try:
+    jax.jit(loss_fn)(model, 0, 0) # error
+except TypeError as e:
+    print(e)
+
+eqx.filter_jit(loss_fn)(model, 0, 0) # ok
+```
+
+Instead of [`jax.jit`](https://jax.readthedocs.io/en/latest/_autosummary/jax.jit.html), use [`equinox.filter_jit`](https://docs.kidger.site/equinox/api/filtering/filtered-transformations/#equinox.filter_jit). Likewise for [other transformations](https://docs.kidger.site/equinox/api/filtering/filtered-transformations/).

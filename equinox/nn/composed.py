@@ -160,6 +160,8 @@ class Lambda(Module):
     Precisely, this just adds an extra `key` argument (that is ignored). Given some
     function `fn`, then `Lambda` is essentially a convenience for `lambda x, key: f(x)`.
 
+    If you get a TypeError saying the function is not a valid JAX type, see the FAQ.
+
     !!! Example
 
         ```python
