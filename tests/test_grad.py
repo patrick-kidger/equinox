@@ -220,11 +220,31 @@ def test_grad_jit():
 
 
 def test_filter_jvp():
-    after_filter_jit = eqx.filter_jit(
-        args=(False, eqx.is_array_like, eqx.is_array_like)
+    _map_is_array_like = lambda pytree: jax.tree_map(
+        lambda x: jnp.array(x) if eqx.is_array_like(x) else x, pytree
     )
+
+    def after_filter_jit(fun):
+        fun_jit = eqx.filter_jit(fun, donate="none")
+
+        def _fun(x, y, z, *args):
+            y = _map_is_array_like(y)
+            z = _map_is_array_like(z)
+            return fun_jit(x, y, z, *args)
+
+        return _fun
+
+    def before_filter_jit(fun):
+        fun_jit = eqx.filter_jit(fun, donate="none")
+
+        def _fun(*args):
+            args = _map_is_array_like(args)
+            return fun_jit(*args)
+
+        return _fun
+
     identity = lambda f: f
-    for before_jit in (eqx.filter_jit(default=eqx.is_array_like), identity):
+    for before_jit in (before_filter_jit, identity):
         for after_jit in (after_filter_jit, identity):
 
             @before_jit

@@ -1,4 +1,5 @@
 import functools as ft
+import warnings
 from typing import Union
 
 import jax
@@ -12,12 +13,16 @@ import equinox as eqx
 from .helpers import shaped_allclose
 
 
+# We can't just use `lambda x: x` or any function just rearrange without modification
+# because JAX simplifies this away to an empty XLA computation.
+
+
 def _eq(a, b):
     return (type(a) is type(b)) and (a == b)
 
 
-@pytest.mark.parametrize("api_version", (0, 1))
-def test_filter_jit1(api_version, getkey):
+@pytest.mark.parametrize("donate", ("arrays", "none"))
+def test_filter_jit(donate, getkey):
     a = jrandom.normal(getkey(), (2, 3))
     b = jrandom.normal(getkey(), (3,))
     c = jrandom.normal(getkey(), (1, 4))
@@ -30,133 +35,44 @@ def test_filter_jit1(api_version, getkey):
         eqx.nn.MLP(2, 2, 2, 2, key=getkey()),
     ]
     array_tree = [{"a": a, "b": b}, (c,)]
-    _mlp = jtu.tree_map(lambda u: u if eqx.is_array_like(u) else None, general_tree[-1])
+    mlp_add = jtu.tree_map(lambda u: u + 1 if eqx.is_array(u) else u, general_tree[-1])
 
-    if api_version == 0:
+    array_tree_ = jax.tree_map(
+        lambda x: jnp.copy(x) if eqx.is_array(x) else x, array_tree
+    )
+    general_tree_ = jax.tree_map(
+        lambda x: jnp.copy(x) if eqx.is_array(x) else x, general_tree
+    )
 
-        @ft.partial(eqx.filter_jit, filter_spec=lambda _: True)
-        def f(x):
-            return x
-
-    else:
-
-        @eqx.filter_jit(default=True)
-        def f(x):
-            return x
-
-    assert jnp.all(a == f(a))
-    f1 = f(array_tree)
-    assert jnp.all(f1[0]["a"] == a)
-    assert jnp.all(f1[0]["b"] == b)
-    assert jnp.all(f1[1][0] == c)
-
-    with pytest.raises(TypeError):
-        f(general_tree)
-
-    def g(x):
-        return jtu.tree_map(lambda u: u if eqx.is_array_like(u) else None, x)
-
-    if api_version == 0:
-        g = eqx.filter_jit(g, filter_spec=eqx.is_inexact_array)
-    else:
-        g = eqx.filter_jit(default=eqx.is_inexact_array)(g)
-
-    assert jnp.all(a == g(a))
-    g1 = g(array_tree)
-    assert jnp.all(g1[0]["a"] == a)
-    assert jnp.all(g1[0]["b"] == b)
-    assert jnp.all(g1[1][0] == c)
-    g2 = g(general_tree)
-    assert _eq(g2[0], 1)
-    assert _eq(g2[1], True)
-    assert _eq(g2[2], None)
-    assert jnp.all(g2[3]["a"] == a)
-    assert _eq(g2[3]["tuple"][0], 2.0)
-    assert jnp.all(g2[3]["tuple"][1] == b)
-    assert jnp.all(g2[4] == c)
-    assert _eq(g2[5], _mlp)
-
-    def h(x):
-        return jtu.tree_map(lambda u: u if eqx.is_array_like(u) else None, x)
-
-    if api_version == 0:
-        h = eqx.filter_jit(h, filter_spec=eqx.is_array_like)
-    else:
-        h = eqx.filter_jit(h, default=eqx.is_array_like)
-
-    assert jnp.all(a == h(a))
-    h1 = h(array_tree)
-    assert jnp.all(h1[0]["a"] == a)
-    assert jnp.all(h1[0]["b"] == b)
-    assert jnp.all(h1[1][0] == c)
-    h2 = h(general_tree)
-    assert _eq(h2[0], jnp.array(1))
-    assert _eq(h2[1], jnp.array(True))
-    assert _eq(h2[2], None)
-    assert jnp.all(h2[3]["a"] == a)
-    assert _eq(h2[3]["tuple"][0], jnp.array(2.0))
-    assert jnp.all(h2[3]["tuple"][1] == b)
-    assert jnp.all(h2[4] == c)
-    assert _eq(h2[5], _mlp)
-
-
-@pytest.mark.parametrize("api_version", (0, 1))
-def test_filter_jit2(api_version, getkey):
-    a = jrandom.normal(getkey(), (2, 3))
-    b = jrandom.normal(getkey(), (3,))
-    c = jrandom.normal(getkey(), (1, 4))
-    general_tree = [
-        1,
-        True,
-        object(),
-        {"a": a, "tuple": (2.0, b)},
-        c,
-        eqx.nn.MLP(2, 2, 2, 2, key=getkey()),
-    ]
-    _mlp = jtu.tree_map(lambda u: u if eqx.is_array_like(u) else None, general_tree[-1])
-
-    spec = [
-        True,
-        True,
-        False,
-        {"a": True, "tuple": (False, True)},
-        True,
-        eqx.is_inexact_array,
-    ]
-
+    @eqx.filter_jit(donate=donate)
     def f(x):
-        return jtu.tree_map(lambda u: u if eqx.is_array_like(u) else None, x)
+        x = jax.tree_map(lambda x: x + 1 if eqx.is_array(x) else x, x)
+        return x
 
-    if api_version == 0:
-        wrappers = [ft.partial(eqx.filter_jit, filter_spec=((spec,), {}))]
-    else:
-        wrappers = [eqx.filter_jit(args=(spec,)), eqx.filter_jit(kwargs=dict(x=spec))]
-
-    for wrapper in wrappers:
-        _f = wrapper(f)
-        f1 = _f(general_tree)
-        assert _eq(f1[0], jnp.array(1))
-        assert _eq(f1[1], jnp.array(True))
-        assert _eq(f1[2], None)
-        assert jnp.all(f1[3]["a"] == a)
-        assert _eq(f1[3]["tuple"][0], 2.0)
-        assert jnp.all(f1[3]["tuple"][1] == b)
-        assert jnp.all(f1[4] == c)
-        assert _eq(f1[5], _mlp)
+    assert jnp.all(a + 1 == f(jnp.copy(a)))
+    f1 = f(array_tree_)
+    assert jnp.all(f1[0]["a"] == a + 1)
+    assert jnp.all(f1[0]["b"] == b + 1)
+    assert jnp.all(f1[1][0] == c + 1)
+    f2 = f(general_tree_)
+    assert _eq(f2[0], 1)
+    assert _eq(f2[1], True)
+    assert _eq(f2[2], general_tree[2])
+    assert jnp.all(f2[3]["a"] == a + 1)
+    assert _eq(f2[3]["tuple"][0], 2.0)
+    assert jnp.all(f2[3]["tuple"][1] == b + 1)
+    assert jnp.all(f2[4] == c + 1)
+    assert _eq(f2[5], mlp_add)
 
 
-@pytest.mark.parametrize("api_version", (0, 1))
-def test_num_traces(api_version):
+def test_num_traces():
     num_traces = 0
 
     def f(x):
         nonlocal num_traces
         num_traces += 1
 
-    if api_version == 0:
-        f = eqx.filter_jit(f, filter_spec=lambda _: True)
-    else:
-        f = eqx.filter_jit(default=True)(f)
+    f = eqx.filter_jit(f)
 
     f(jnp.zeros(2))
     f(jnp.zeros(2))
@@ -177,10 +93,7 @@ def test_num_traces(api_version):
         nonlocal num_traces
         num_traces += 1
 
-    if api_version == 0:
-        g = eqx.filter_jit(g, filter_spec=([eqx.is_array_like, False], {}))
-    else:
-        g = eqx.filter_jit(args=[eqx.is_array_like, False])(g)
+    g = eqx.filter_jit(g)
 
     g(jnp.zeros(2), True)
     g(jnp.zeros(2), False)
@@ -192,14 +105,7 @@ def test_num_traces(api_version):
         nonlocal num_traces
         num_traces += 1
 
-    if api_version == 0:
-        h = eqx.filter_jit(
-            h, filter_spec=([False, {"a": True, "b": False}, False, False], {})
-        )
-    else:
-        h = eqx.filter_jit(
-            h, args=[False, {"a": True, "b": False}], kwargs=dict(z=False, w=False)
-        )
+    h = eqx.filter_jit(h)
 
     h(True, {"a": 1, "b": 1}, True, True)
     h(False, {"a": 1, "b": 1}, True, True)
@@ -207,8 +113,10 @@ def test_num_traces(api_version):
     h(True, {"a": 1, "b": 1}, True, 2)
     h(True, {"a": 1, "b": 1}, 5, True)
     assert num_traces == 5
-    h(True, {"a": 2, "b": 1}, True, True)
+    h(True, {"a": 1, "b": 1}, True, True)
     assert num_traces == 5
+    h(True, {"a": 2, "b": 1}, True, True)
+    assert num_traces == 6
 
 
 @pytest.mark.parametrize("call", [False, True])
@@ -238,9 +146,8 @@ def test_methods(call, outer):
             if not outer:
                 method = eqx.filter_jit(method)
 
-    y = jnp.array(1.0)
-
     def run(_m):
+        y = jnp.array(1.0)
         if call:
             if outer:
                 return eqx.filter_jit(_m)(y)
@@ -270,30 +177,20 @@ def test_methods(call, outer):
 def test_args_kwargs():
     num_traces = 0
 
-    @eqx.filter_jit(kwargs=dict(x=True))
+    @eqx.filter_jit
     def f(*args, **kwargs):
         nonlocal num_traces
         num_traces += 1
         return kwargs["x"]
 
-    assert f(x=2) == 2
-    assert f(x=3) == 3
+    assert f(x=jnp.array(2)) == 2
+    assert f(x=jnp.array(3)) == 3
     assert num_traces == 1
 
-    assert f(x=3, y=4) == 3  # check we can use other kwargs
+    assert f(x=jnp.array(3), y=jnp.array(4)) == 3
     assert num_traces == 2
 
-    @eqx.filter_jit(default=eqx.is_array_like)
-    def g(*args, **kwargs):
-        nonlocal num_traces
-        num_traces += 1
-        return kwargs["x"]
-
-    assert g(x=1, y=1) == 1
-    assert g(x=1, y=2) == 1
-    assert num_traces == 3
-
-    @eqx.filter_jit(args=(eqx.is_array,))
+    @eqx.filter_jit
     def h(*args, **kwargs):
         nonlocal num_traces
         num_traces += 1
@@ -305,25 +202,25 @@ def test_args_kwargs():
 def test_jit_jit():
     num_traces = 0
 
-    @eqx.filter_jit(default=True)
-    @eqx.filter_jit(default=True)
+    @eqx.filter_jit
+    @eqx.filter_jit
     def f(x):
         nonlocal num_traces
         num_traces += 1
         return x + 1
 
-    assert f(1) == 2
-    assert f(2) == 3
+    assert f(jnp.array(1)) == 2
+    assert f(jnp.array(2)) == 3
     assert num_traces == 1
 
-    @eqx.filter_jit(default=True)
+    @eqx.filter_jit
     def g(x):
         nonlocal num_traces
         num_traces += 1
         return x + 1
 
-    assert eqx.filter_jit(g, default=True)(1) == 2
-    assert eqx.filter_jit(g, default=True)(2) == 3
+    assert eqx.filter_jit(g)(jnp.array(1)) == 2
+    assert eqx.filter_jit(g)(jnp.array(2)) == 3
     assert num_traces == 2
 
 
@@ -420,13 +317,10 @@ def test_wrap_jax_partial(getkey):
         return x + y
 
     g = jtu.Partial(f, jrandom.normal(getkey(), ()))
-    fn = jtu.Partial(f, True)
-    eqx.filter_jit(g, fn=fn)
+    eqx.filter_jit(g)
 
 
-def test_jit_with_buffer_donation(getkey):
-    # We can't just use `lambda x: x` or any function just rearrange without modification because JAX
-    # simplifies this away to an empty XLA computation.
+def test_buffer_donation(getkey):
     def f(x):
         return x + 1
 
@@ -437,14 +331,8 @@ def test_jit_with_buffer_donation(getkey):
         assert x.is_deleted()
         return new_x
 
-    f_jit = eqx.filter_jit(f, donate_args=(True,))
+    f_jit = eqx.filter_jit(f)
 
-    assert _eq(_test(f_jit, jnp.array(0)), jnp.array(1.0))
-
-    f_jit = eqx.filter_jit(f, donate_kwargs=dict(x=True))
-    assert _eq(_test(f_jit, jnp.array(0)), jnp.array(1.0))
-
-    f_jit = eqx.filter_jit(f, donate_default=True)
     assert _eq(_test(f_jit, jnp.array(0)), jnp.array(1.0))
 
     num_traces = 0
@@ -457,7 +345,7 @@ def test_jit_with_buffer_donation(getkey):
             self.mlp = eqx.nn.MLP(width, width, width, depth, key=getkey())
             self.buffer = jnp.zeros((100000,))
 
-        @eqx.filter_jit(donate_args=(True,))
+        @eqx.filter_jit
         def __call__(self, x):
             nonlocal num_traces
             num_traces += 1
@@ -489,20 +377,6 @@ def test_jit_with_buffer_donation(getkey):
     for flag in jtu.tree_leaves(old_m_deleted_flag):
         assert flag is True or flag is None
 
-    @eqx.filter_jit(
-        args=(True, False), donate_args=(True, True)
-    )  # donate_args will only be applied to traced argument
-    def g(x, y):
-        return x + 1, y + 1
-
-    x, y = jnp.array(0), 0
-    old_x_p = x.unsafe_buffer_pointer()
-    new_x, new_y = g(x, y)
-    assert _eq(new_x, jnp.array(1))
-    assert _eq(new_y, 1)
-    assert x.is_deleted()
-    assert old_x_p == new_x.unsafe_buffer_pointer()
-
     num_traces = 0
 
     class F(eqx.Module):
@@ -521,13 +395,36 @@ def test_jit_with_buffer_donation(getkey):
             )
 
     f = F(10, 3)
-    jit_f = eqx.filter_jit(f, donate_fn=True)
+    jit_f = eqx.filter_jit(f)
     _, new_f = jit_f(jnp.ones((10,)))
     assert num_traces == 1
     assert f.buffer.is_deleted()
 
-    jit_f = eqx.filter_jit(new_f, donate_fn=True)
+    jit_f = eqx.filter_jit(new_f)
     _, new_f_2 = jit_f(jnp.ones((10,)))
 
     assert num_traces == 1
     assert new_f.buffer.is_deleted()
+
+
+def test_donation_warning():
+    """Test the warning when compiling a function decorated with `filter_jit`"""
+
+    @eqx.filter_jit
+    def f(x, y):
+        return x + jnp.sum(y)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        f(jnp.array(1.0), jnp.ones((10,)))
+
+    @eqx.filter_jit(donate="warn")
+    def g(x, y):
+        return x + jnp.sum(y)
+
+    with pytest.warns(
+        UserWarning, match=r"Some donated buffers were not usable*"
+    ) as record:
+        g(jnp.array(1.0), jnp.ones((10,)))
+
+    assert len(record) == 1

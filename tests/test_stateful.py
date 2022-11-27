@@ -171,19 +171,19 @@ def test_multi_vmap(with_jit, with_pytree):
     a = jnp.array([[1, 2]])
     b = jnp.array([[3, 4]])
     if with_pytree:
-        set_ = (a, a)
-        get_ = (b, b)
+        set_ = lambda: (jnp.copy(a), jnp.copy(a))
+        get_ = lambda: (jnp.copy(b), jnp.copy(b))
     else:
-        set_ = a
-        get_ = b
-    set_state(set_)
-    assert jnp.array_equal(get_state(get_), set_)
+        set_ = lambda: jnp.copy(a)
+        get_ = lambda: jnp.copy(b)
+    set_state(set_())
+    assert jnp.array_equal(get_state(get_()), set_())
 
     with pytest.raises(RuntimeError):
-        eqx.experimental.get_state(index, get_)
+        eqx.experimental.get_state(index, get_())
 
     with pytest.raises(RuntimeError):
-        get_state_bad(get_)
+        get_state_bad(get_())
 
 
 def test_inference_not_set_state():
@@ -410,9 +410,9 @@ def test_inference_multi_vmap(with_jit, with_pytree):
         return eqx.experimental.get_state(index_inference, y)
 
     if with_jit:
-        set_state = eqx.filter_jit(set_state)
-        get_state = eqx.filter_jit(get_state)
-        get_state_bad = eqx.filter_jit(get_state_bad)
+        set_state = eqx.filter_jit(set_state, donate="none")
+        get_state = eqx.filter_jit(get_state, donate="none")
+        get_state_bad = eqx.filter_jit(get_state_bad, donate="none")
 
     a = jnp.array([[1, 2]])
     b = jnp.array([[3, 4]])
