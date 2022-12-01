@@ -24,7 +24,12 @@ if getattr(typing, "GENERATING_DOCUMENTATION", False):
 
 
 class MLP(Module):
-    """Standard Multi-Layer Perceptron; also known as a feed-forward network."""
+    """Standard Multi-Layer Perceptron; also known as a feed-forward network.
+
+    !!! faq
+
+        If you get a TypeError saying an object is not a valid JAX type, see the
+            [FAQ](https://docs.kidger.site/equinox/faq/)."""
 
     layers: List[Linear]
     activation: Callable
@@ -159,6 +164,11 @@ class Lambda(Module):
 
     Precisely, this just adds an extra `key` argument (that is ignored). Given some
     function `fn`, then `Lambda` is essentially a convenience for `lambda x, key: f(x)`.
+
+    !!! faq
+
+        If you get a TypeError saying the function is not a valid JAX type, see the
+            [FAQ](https://docs.kidger.site/equinox/faq/).
 
     !!! Example
 
