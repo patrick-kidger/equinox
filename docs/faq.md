@@ -63,3 +63,35 @@ linear = eqx.nn.Linear(input_size, output_size, key=key)
 
 y = jax.vmap(linear)(x)
 ```
+
+## TypeError: not a valid JAX type.
+
+You might be getting an error like
+```
+TypeError: Argument '<function ...>' of type <class 'function'> is not a valid JAX type.
+```
+Example:
+```python3
+import jax
+import equinox as eqx
+
+def loss_fn(model, x, y):
+    return ((model(x) - y) ** 2).mean()
+
+model = eqx.nn.Lambda(lambda x: x)
+model = eqx.nn.MLP(2, 2, 2, 2, key=jax.random.PRNGKey(0))
+
+x = jax.numpy.arange(2)
+y = x * x
+
+try:
+    jax.jit(loss_fn)(model, x, y) # error
+except TypeError as e:
+    print(e)
+
+eqx.filter_jit(loss_fn)(model, x, y) # ok
+```
+
+This error happens because a model, when treated as a PyTree, may have leaves that are not JAX types (such as functions). It only makes sense to trace arrays. Filtering is used to handle this.
+
+Instead of [`jax.jit`](https://jax.readthedocs.io/en/latest/_autosummary/jax.jit.html), use [`equinox.filter_jit`](https://docs.kidger.site/equinox/api/filtering/filtered-transformations/#equinox.filter_jit). Likewise for [other transformations](https://docs.kidger.site/equinox/api/filtering/filtered-transformations/).
