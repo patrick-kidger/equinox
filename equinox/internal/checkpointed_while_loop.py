@@ -11,7 +11,6 @@ from jaxtyping import Array, Bool
 from ..filters import is_array, is_inexact_array
 from ..grad import filter_closure_convert, filter_custom_vjp, filter_vjp
 from ..tree import tree_at
-from .misc import at_set
 
 
 _T = TypeVar("T")
@@ -78,7 +77,7 @@ def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, max_steps, checkpoints):
         # its PyTree structure, and we do want to compute cotangents wrt these.
         val2, vjp_fn = filter_vjp(_call, val, body_fun)
         residual = _get_residual(vjp_fn)
-        residuals = at_set(residuals, step, residual)
+        residuals = jtu.tree_map(lambda rs, r: rs.at[step].set(r), residuals, residual)
         return step + 1, val2, residuals
 
     vjp_fns = jax.eval_shape(
