@@ -17,10 +17,6 @@ from .helpers import shaped_allclose
 # because JAX simplifies this away to an empty XLA computation.
 
 
-def _eq(a, b):
-    return (type(a) is type(b)) and (a == b)
-
-
 @pytest.mark.parametrize("donate", ("arrays", "none"))
 def test_filter_jit(donate, getkey):
     a = jrandom.normal(getkey(), (2, 3))
@@ -37,16 +33,14 @@ def test_filter_jit(donate, getkey):
     array_tree = [{"a": a, "b": b}, (c,)]
     mlp_add = jtu.tree_map(lambda u: u + 1 if eqx.is_array(u) else u, general_tree[-1])
 
-    array_tree_ = jax.tree_map(
-        lambda x: jnp.copy(x) if eqx.is_array(x) else x, array_tree
-    )
-    general_tree_ = jax.tree_map(
+    array_tree_ = jtu.tree_map(jnp.copy, array_tree)
+    general_tree_ = jtu.tree_map(
         lambda x: jnp.copy(x) if eqx.is_array(x) else x, general_tree
     )
 
     @eqx.filter_jit(donate=donate)
     def f(x):
-        x = jax.tree_map(lambda x: x + 1 if eqx.is_array(x) else x, x)
+        x = jtu.tree_map(lambda x: x + 1 if eqx.is_array(x) else x, x)
         return x
 
     assert jnp.all(a + 1 == f(jnp.copy(a)))
@@ -55,14 +49,14 @@ def test_filter_jit(donate, getkey):
     assert jnp.all(f1[0]["b"] == b + 1)
     assert jnp.all(f1[1][0] == c + 1)
     f2 = f(general_tree_)
-    assert _eq(f2[0], 1)
-    assert _eq(f2[1], True)
-    assert _eq(f2[2], general_tree[2])
+    assert shaped_allclose(f2[0], 1)
+    assert shaped_allclose(f2[1], True)
+    assert shaped_allclose(f2[2], general_tree[2])
     assert jnp.all(f2[3]["a"] == a + 1)
-    assert _eq(f2[3]["tuple"][0], 2.0)
+    assert shaped_allclose(f2[3]["tuple"][0], 2.0)
     assert jnp.all(f2[3]["tuple"][1] == b + 1)
     assert jnp.all(f2[4] == c + 1)
-    assert _eq(f2[5], mlp_add)
+    assert shaped_allclose(f2[5], mlp_add)
 
 
 def test_num_traces():
@@ -321,19 +315,16 @@ def test_wrap_jax_partial(getkey):
 
 
 def test_buffer_donation(getkey):
+    @eqx.filter_jit
     def f(x):
         return x + 1
 
-    def _test(jit_fun, x):
-        old_p = x.unsafe_buffer_pointer()
-        new_x = jit_fun(x)
-        assert new_x.unsafe_buffer_pointer() == old_p
-        assert x.is_deleted()
-        return new_x
-
-    f_jit = eqx.filter_jit(f)
-
-    assert _eq(_test(f_jit, jnp.array(0)), jnp.array(1.0))
+    x = jnp.array(0.0)
+    old_p = x.unsafe_buffer_pointer()
+    new_x = f(x)
+    assert shaped_allclose(new_x, jnp.array(1.0))
+    assert new_x.unsafe_buffer_pointer() == old_p
+    assert x.is_deleted()
 
     num_traces = 0
 
@@ -355,7 +346,7 @@ def test_buffer_donation(getkey):
             )
 
     m = M(10, 3)
-    old_m_p = jax.tree_map(
+    old_m_p = jtu.tree_map(
         lambda x: x.unsafe_buffer_pointer()
         if hasattr(x, "unsafe_buffer_pointer")
         else None,
@@ -367,11 +358,11 @@ def test_buffer_donation(getkey):
     _, new_m = new_m(jnp.ones((10,)))
     assert num_traces == 1
 
-    assert _eq(new_m.buffer[0], jnp.array(3.0))
+    assert shaped_allclose(new_m.buffer[0], jnp.array(3.0))
     assert m.buffer.is_deleted()
     assert new_m.buffer.unsafe_buffer_pointer() == old_m_p.buffer
 
-    old_m_deleted_flag = jax.tree_map(
+    old_m_deleted_flag = jtu.tree_map(
         lambda x: x.is_deleted() if hasattr(x, "is_deleted") else None, m
     )
     for flag in jtu.tree_leaves(old_m_deleted_flag):

@@ -92,7 +92,7 @@ def filter_jit(
 
     !!! info
 
-        By default, all JAX arrays are traced, all other types are held static, all
+        By default, all JAX arrays are traced, all other types are held static, and all
         buffers of JAX array are donated.
 
     **Arguments:**
@@ -124,6 +124,19 @@ def filter_jit(
         x = jnp.array(2)
         new_x = f(x, 1) #  donated
         x.is_deleted() # True
+
+        x = jnp.array(2)
+        new_x = f(jnp.copy(x), 1) #avoid donating by copying arrays
+        x.is_deleted() #False
+
+        #trace ints/floats/bools/complexes, by using jnp.asarray
+        def f_traced(x, y):
+            x, y = jax.tree_util.tree_map(jnp.asarray, (x, y))
+            return f(x, y)
+
+        f_traced(1, True)  # both args traced
+        f_traced(1+1j, 2.0)  # both args traced
+
         ```
     """
 
