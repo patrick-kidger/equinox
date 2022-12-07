@@ -14,7 +14,7 @@ def test_nondiff():
     assert shaped_allclose(eqxi.nondifferentiable(x), x)
     assert shaped_allclose(jax.jit(eqxi.nondifferentiable)(x), jnp.array(x))
     assert shaped_allclose(eqxi.nondifferentiable(y), y)
-    assert shaped_allclose(eqx.filter_jit(eqxi.nondifferentiable)(y), y)
+    assert shaped_allclose(eqx.filter_jit(eqxi.nondifferentiable, donate="none")(y), y)
 
     with pytest.raises(RuntimeError):
         jax.jvp(eqxi.nondifferentiable, (x,), (x,))
@@ -28,7 +28,9 @@ def test_nondiff_back():
     assert shaped_allclose(eqxi.nondifferentiable_backward(x), x)
     assert shaped_allclose(jax.jit(eqxi.nondifferentiable_backward)(x), jnp.array(x))
     assert shaped_allclose(eqxi.nondifferentiable_backward(y), y)
-    assert shaped_allclose(eqx.filter_jit(eqxi.nondifferentiable_backward)(y), y)
+    assert shaped_allclose(
+        eqx.filter_jit(eqxi.nondifferentiable_backward, donate="none")(y), y
+    )
 
     x1, x2 = jax.jvp(eqxi.nondifferentiable_backward, (x,), (x,))
     x3, x4 = jax.jvp(jax.jit(eqxi.nondifferentiable_backward), (x,), (x,))
