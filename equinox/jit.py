@@ -88,12 +88,13 @@ class _JitWrapper(Module):
 def filter_jit(
     fun: Callable = sentinel, *, donate: str = "arrays", **jitkwargs
 ) -> Callable:
-    """Wraps together [`equinox.partition`][] and `jax.jit`.
+    """A simplified version of `jax.jit`.
 
     !!! info
 
         By default, all JAX arrays are traced, all other types are held static, and all
-        buffers of JAX array are donated.
+        buffers of JAX array are donated. ('Donation' meaning that the memory is reused
+        for the outputs of the JIT'd function.)
 
     **Arguments:**
 
@@ -113,30 +114,39 @@ def filter_jit(
     !!! example
 
         ```python
+        # Basic behaviour
         @eqx.filter_jit
         def f(x, y):  # both args traced if arrays, static if non-arrays
-            return x + y
+            return x + y, x - y
 
         f(jnp.array(1), jnp.array(2))  # both args traced
         f(jnp.array(1), 2)  # first arg traced, second arg static
         f(1, 2)  # both args static
 
-        x = jnp.array(2)
-        new_x = f(x, 1) #  donated
-        x.is_deleted() # True
+        # Donation behaviour
+        x = jnp.array(1)
+        y = jnp.array(1)
+        f(x, y)
+        x.is_deleted()  # True
+        y.is_deleted()  # True
 
-        x = jnp.array(2)
-        new_x = f(jnp.copy(x), 1) #avoid donating by copying arrays
-        x.is_deleted() #False
+        def f_donate_y_only(x, y):
+            x = jnp.copy(x)  # avoid donation by copying an array
+            return f(x, y)
 
-        #trace ints/floats/bools/complexes, by using jnp.asarray
-        def f_traced(x, y):
+        x = jnp.array(1)
+        y = jnp.array(2)
+        f_donate_y_only(x, y)
+        x.is_deleted()  # False
+        y.is_deleted()  # True
+
+        # Trace int/float/bool/complex as well
+        def f_trace_arraylike(x, y):
             x, y = jax.tree_util.tree_map(jnp.asarray, (x, y))
             return f(x, y)
 
-        f_traced(1, True)  # both args traced
-        f_traced(1+1j, 2.0)  # both args traced
-
+        f_trace_arraylike(1, True)  # both args traced
+        f_trace_arraylike(1+1j, 2.0)  # both args traced
         ```
     """
 
