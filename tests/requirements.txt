@@ -1,3 +1,5 @@
 jaxlib
 pytest
 typeguard
+tensorflow
+tf2onnx

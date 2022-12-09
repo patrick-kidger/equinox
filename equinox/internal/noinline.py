@@ -1,5 +1,5 @@
 import functools as ft
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 import jax
 import jax._src.pretty_printer as pp
@@ -198,9 +198,9 @@ def _noinline_jvp(primals, tangents):
     )  # all none
     del t_dynamic_index, t_abstract_fn, t_transforms
     tangents = jtu.tree_map(materialise_zeros, args, t_args, is_leaf=_is_none)
-    primal_outs = filter_primitive_bind(_noinline_p, *primals)
+    primal_outs = filter_primitive_bind(noinline_p, *primals)
     tangent_outs = filter_primitive_bind(
-        _noinline_p,
+        noinline_p,
         dynamic_index,
         abstract_fn,
         transforms + [_jvp_transform],
@@ -222,7 +222,7 @@ def _noinline_transpose(inputs, cts_out):
     undefined, defined = partition(args, _is_undefined, is_leaf=_is_undefined)
     undefined = jtu.tree_map(lambda x: x.aval, undefined, is_leaf=_is_undefined)
     cts_args = filter_primitive_bind(
-        _noinline_p,
+        noinline_p,
         dynamic_index,
         abstract_fn,
         transforms + [_MetaTransposeTransform(undefined)],
@@ -252,7 +252,7 @@ def _noinline_batch(inputs, batch_axes):
     args = jtu.tree_map(_move_to_front, args, args_bdim, is_leaf=_is_not_mapped)
     args_bdim = jtu.tree_map(_int_to_zero, args_bdim, is_leaf=_is_not_mapped)
     out = filter_primitive_bind(
-        _noinline_p,
+        noinline_p,
         dynamic_index,
         abstract_fn,
         transforms + [_MetaBatchTransform(args_bdim)],
@@ -331,15 +331,15 @@ def _noinline_mlir(ctx, *flat, treedef, static, flatten):
     return result
 
 
-_noinline_p = jax.core.Primitive("noinline")
-_noinline_p.multiple_results = True
-_noinline_p.def_impl(_noinline_impl)
-_noinline_p.def_abstract_eval(_noinline_abstract)
-ad.primitive_jvps[_noinline_p] = _noinline_jvp
-ad.primitive_transposes[_noinline_p] = _noinline_transpose
-batching.primitive_batchers[_noinline_p] = _noinline_batch
-jax.core.pp_eqn_rules[_noinline_p] = _noinline_pretty_print
-mlir.register_lowering(_noinline_p, _noinline_mlir)
+noinline_p = jax.core.Primitive("noinline")
+noinline_p.multiple_results = True
+noinline_p.def_impl(_noinline_impl)
+noinline_p.def_abstract_eval(_noinline_abstract)
+ad.primitive_jvps[noinline_p] = _noinline_jvp
+ad.primitive_transposes[noinline_p] = _noinline_transpose
+batching.primitive_batchers[noinline_p] = _noinline_batch
+jax.core.pp_eqn_rules[noinline_p] = _noinline_pretty_print
+mlir.register_lowering(noinline_p, _noinline_mlir)
 
 
 _fn_to_index = {}
@@ -349,11 +349,11 @@ _index_to_fn = []
 class _NoInlineWrapper(Module):
     dynamic_index: Int[Array, ""]
     abstract_fn: Callable = static_field()
-    dynamic_fn: Callable
+    dynamic_fn: Any
 
     def __call__(self, *args, **kwargs):
         return filter_primitive_bind(
-            _noinline_p,
+            noinline_p,
             self.dynamic_index,
             self.abstract_fn,
             [_impl_transform],

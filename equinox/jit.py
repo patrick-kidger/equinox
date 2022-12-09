@@ -1,8 +1,7 @@
 import functools as ft
 import inspect
 import warnings
-from types import FunctionType
-from typing import Any, Callable, Sequence, Tuple
+from typing import Any, Callable
 
 import jax
 import jax.tree_util as jtu
@@ -14,7 +13,7 @@ from .compile_utils import (
     hashable_combine,
     hashable_partition,
 )
-from .custom_types import sentinel, TreeDef
+from .custom_types import sentinel
 from .doc_utils import doc_strip_annotations
 from .filters import combine, is_array, partition
 from .module import Module, module_update_wrapper, Static
@@ -45,9 +44,9 @@ def _filter_jit_cache(fun_names, donate_default, **jitkwargs):
 
 class _JitWrapper(Module):
     _signature: inspect.Signature
-    _dynamic_fun: PyTree[Any]
-    _static_fun: Tuple[TreeDef, Sequence[Any]]
-    _cached: FunctionType
+    _dynamic_fun: PyTree
+    _static_fun: Any
+    _cached: Any
     _filter_warning: bool
 
     def _fun_wrapper(self, is_lower, args, kwargs):

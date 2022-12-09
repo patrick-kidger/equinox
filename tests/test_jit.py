@@ -269,10 +269,11 @@ def test_function_name_warning(log_compiles_config, caplog):
     # Trigger compile to log a warning message
     the_test_function_name(jnp.array(1.0))
 
-    warning_text = caplog.text
-
     # Check that the warning message contains the function name
-    assert "Finished XLA compilation of the_test_function_name in" in warning_text
+    old = "Finished XLA compilation of the_test_function_name in" in caplog.text
+    new = "Finished XLA compilation of jit(the_test_function_name) in" in caplog.text
+    assert old or new
+    caplog.clear()
 
     @eqx.filter_jit
     @eqx.filter_value_and_grad
@@ -282,12 +283,16 @@ def test_function_name_warning(log_compiles_config, caplog):
     # Trigger compile to log a warning message
     the_test_function_name_value_and_grad(jnp.array(1.0))
 
-    warning_text = caplog.text
-
-    assert (
+    old = (
         "Finished XLA compilation of the_test_function_name_value_and_grad in"
-        in warning_text
+        in caplog.text
     )
+    new = (
+        "Finished XLA compilation of jit(the_test_function_name_value_and_grad) in"
+        in caplog.text
+    )
+    assert old or new
+    caplog.clear()
 
     def wrapped_fun(y):
         pass
@@ -301,9 +306,9 @@ def test_function_name_warning(log_compiles_config, caplog):
 
     fun(jnp.array(1.0))
 
-    warning_text = caplog.text
-
-    assert "Finished XLA compilation of wrapped_fun in" in warning_text
+    old = "Finished XLA compilation of wrapped_fun in" in caplog.text
+    new = "Finished XLA compilation of jit(wrapped_fun) in" in caplog.text
+    caplog.clear()
 
 
 def test_wrap_jax_partial(getkey):
