@@ -14,6 +14,7 @@ from .finalise_jaxpr import (
     finalise_fn,
     finalise_jaxpr,
     finalise_jaxpr_as_fn,
+    finalise_make_jaxpr,
 )
 from .misc import ContainerMeta, left_broadcast_to
 from .nextafter import nextafter, prevbefore

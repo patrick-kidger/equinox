@@ -1,4 +1,5 @@
 import jax
+import jax.lax as lax
 import jax.numpy as jnp
 
 import equinox.internal as eqxi
@@ -51,13 +52,13 @@ def test_jaxpr2jaxpr_custom_idempotent():
         return x
 
     jaxpr = jax.make_jaxpr(fn)(True)
-    jaxpr2 = eqxi.finalise_jaxpr(jaxpr, wrapper_prims=[eqxi.unvmap_any_p])
-    jaxpr3 = eqxi.finalise_jaxpr(jaxpr2, wrapper_prims=[eqxi.unvmap_any_p])
+    jaxpr2 = eqxi.finalise_jaxpr(jaxpr)
+    jaxpr3 = eqxi.finalise_jaxpr(jaxpr2)
     _assert_jaxpr_equal(jaxpr2, jaxpr3)
 
     jaxpr = jax.make_jaxpr(jax.vmap(fn))(jnp.array([True, False]))
-    jaxpr2 = eqxi.finalise_jaxpr(jaxpr, wrapper_prims=[eqxi.unvmap_any_p])
-    jaxpr3 = eqxi.finalise_jaxpr(jaxpr2, wrapper_prims=[eqxi.unvmap_any_p])
+    jaxpr2 = eqxi.finalise_jaxpr(jaxpr)
+    jaxpr3 = eqxi.finalise_jaxpr(jaxpr2)
     _assert_jaxpr_equal(jaxpr2, jaxpr3)
 
 
@@ -84,7 +85,7 @@ def test_fn2fn_custom_idempotent():
         x = jnp.invert(x)
         return x
 
-    finalised_fn = eqxi.finalise_fn(fn, wrapper_prims=[eqxi.unvmap_any_p])
+    finalised_fn = eqxi.finalise_fn(fn)
     assert shaped_allclose(fn(False), finalised_fn(False))
     assert shaped_allclose(fn(True), finalised_fn(True))
 
@@ -95,7 +96,7 @@ def test_fn2fn_custom_idempotent():
         assert eqn.primitive != eqxi.unvmap_any_p
 
     vmap_fn = jax.vmap(fn)
-    finalised_vmap_fn = eqxi.finalise_fn(vmap_fn, wrapper_prims=[eqxi.unvmap_any_p])
+    finalised_vmap_fn = eqxi.finalise_fn(vmap_fn)
     for arg in (
         jnp.array([False, False]),
         jnp.array([False, True]),
@@ -111,3 +112,65 @@ def test_fn2fn_custom_idempotent():
     for eqn in finalised_vmap_jaxpr.eqns:
         assert eqn.primitive != eqxi.unvmap_any_p
     _assert_jaxpr_equal(finalised_vmap_jaxpr, finalised_finalised_vmap_jaxpr)
+
+
+def _assert_no_unvmap(jaxpr: jax.core.Jaxpr):
+    for eqn in jaxpr.eqns:
+        assert eqn.primitive not in (eqxi.unvmap_any_p, eqxi.unvmap_all_p)
+    for subjaxpr in jax.core.subjaxprs(jaxpr):
+        _assert_no_unvmap(subjaxpr)
+
+
+def test_cond():
+    def f(pred, x):
+        return lax.cond(pred, eqxi.unvmap_all, eqxi.unvmap_any, x)
+
+    single_jaxpr = eqxi.finalise_make_jaxpr(f)(True, True)
+    batch_jaxpr = eqxi.finalise_make_jaxpr(f)(False, jnp.array([True, False]))
+
+    for jaxpr in (single_jaxpr, batch_jaxpr):
+        _assert_no_unvmap(jaxpr.jaxpr)
+
+
+def test_custom_jvp():
+    @jax.custom_jvp
+    def f(pred, x):
+        pred = eqxi.unvmap_any(pred)
+        return lax.cond(pred, lambda y: y, lambda y: y + 1, x)
+
+    @f.defjvp
+    def f_jvp(x, tx):
+        # Note that we don't need to remove any wrapper primitives in a JVP rule, since
+        # finalisation happens after autodiff.
+        assert False
+
+    jaxpr = eqxi.finalise_make_jaxpr(f)(True, 1.0)
+    _assert_no_unvmap(jaxpr)
+
+
+def test_custom_vjp():
+    @jax.custom_vjp
+    def f(pred, x):
+        pred = eqxi.unvmap_any(pred)
+        return lax.cond(pred, lambda y: y, lambda y: y + 1, x)
+
+    def f_fwd(pred, x):
+        assert False
+
+    def f_bwd(aux, pred, x):
+        assert False
+
+    f.defvjp(f_fwd, f_bwd)
+
+    jaxpr = eqxi.finalise_make_jaxpr(f)(True, 1.0)
+    _assert_no_unvmap(jaxpr)
+
+
+def test_checkpoint():
+    @jax.checkpoint
+    def f(pred, x):
+        pred = eqxi.unvmap_any(pred)
+        return lax.cond(pred, lambda y: y, lambda y: y + 1, x)
+
+    jaxpr = eqxi.finalise_make_jaxpr(f)(True, 1.0)
+    _assert_no_unvmap(jaxpr)
