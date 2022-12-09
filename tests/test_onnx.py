@@ -11,6 +11,6 @@ def test_onnx_export():
         y = eqxi.unvmap_any(y)
         return jnp.where(y, x, 1)
 
-    onnx_fn = eqxi.to_onnx(fn, wrapper_prims=[eqxi.unvmap_any_p])
+    onnx_fn = eqxi.to_onnx(fn)
     args = jnp.array([1, 2]), jnp.array([True, False])
     onnx_fn(*args)
