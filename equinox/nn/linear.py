@@ -1,5 +1,5 @@
 import math
-from typing import Optional, TypeVar
+from typing import Any, Optional, TypeVar
 
 import jax
 import jax.random as jrandom
@@ -86,7 +86,7 @@ class Identity(Module):
     another Module.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any):
         """Consumes arbitrary `*args` and `**kwargs` but ignores them."""
         # Ignores args and kwargs
         super().__init__()

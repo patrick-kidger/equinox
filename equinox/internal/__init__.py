@@ -1,13 +1,26 @@
 from ..compile_utils import hashable_combine, hashable_partition
 from ..doc_utils import doc_repr, doc_strip_annotations
 from ..module import Static
-from .ad import nondifferentiable, nondifferentiable_backward
-from .debug import announce_transform, debug_backward_nan
-from .errors import branched_error_if, error_if
+from .ad import (
+    nondifferentiable,
+    nondifferentiable_backward,
+    nondifferentiable_backward_p,
+    nondifferentiable_p,
+)
+from .debug import announce_jaxpr_p, announce_transform, debug_backward_nan
+from .errors import branched_error_if, branched_error_p, error_if
+from .finalise_jaxpr import (
+    finalise_eval_jaxpr,
+    finalise_fn,
+    finalise_jaxpr,
+    finalise_jaxpr_as_fn,
+)
 from .misc import ContainerMeta, left_broadcast_to
 from .nextafter import nextafter, prevbefore
-from .noinline import noinline
+from .noinline import noinline, noinline_p
+from .nontraceable import nontraceable, nontraceable_p
 from .omega import ω
+from .onnx import to_onnx
 from .primitive import (
     create_vprim,
     filter_primitive_batching,
@@ -18,4 +31,11 @@ from .primitive import (
     materialise_zeros,
 )
 from .str2jax import str2jax
-from .unvmap import unvmap_all, unvmap_any, unvmap_max
+from .unvmap import (
+    unvmap_all,
+    unvmap_all_p,
+    unvmap_any,
+    unvmap_any_p,
+    unvmap_max,
+    unvmap_max_p,
+)

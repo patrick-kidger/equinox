@@ -15,7 +15,7 @@ def announce_transform(x, name=None, intermediates=False, announce=print):
     """Identity function on an arbitrary PyTree. Announces each time it is parsed as part of a jaxpr."""
     array, nonarray = partition(x, is_array)
     flat, treedef = jtu.tree_flatten(array)
-    flat = _announce_jaxpr_p.bind(
+    flat = announce_jaxpr_p.bind(
         *flat, stack=(), name=name, intermediates=intermediates, announce=announce
     )
     array = jtu.tree_unflatten(treedef, flat)
@@ -51,10 +51,10 @@ def _jvp(p, t, *, stack, name, intermediates, announce):
         announce(":".join(_stack))
     p_stack = ("jvp_p",) + stack
     t_stack = ("jvp_t",) + stack
-    p_out = _announce_jaxpr_p.bind(
+    p_out = announce_jaxpr_p.bind(
         *p, stack=p_stack, name=name, intermediates=intermediates, announce=announce
     )
-    t_out = _announce_jaxpr_p.bind(
+    t_out = announce_jaxpr_p.bind(
         *t, stack=t_stack, name=name, intermediates=intermediates, announce=announce
     )
     return p_out, t_out
@@ -68,7 +68,7 @@ def _transpose(ct, p, *, stack, name, intermediates, announce):
             _stack = (name, "transpose") + stack
         announce(":".join(_stack))
     stack = ("transpose",) + stack
-    return _announce_jaxpr_p.bind(
+    return announce_jaxpr_p.bind(
         *ct, stack=stack, name=name, intermediates=intermediates, announce=announce
     )
 
@@ -81,7 +81,7 @@ def _batching(p, b, *, stack, name, intermediates, announce):
             _stack = (name, "vmap") + stack
         announce(":".join(_stack))
     stack = ("vmap",) + stack
-    out = _announce_jaxpr_p.bind(
+    out = announce_jaxpr_p.bind(
         *p, stack=stack, name=name, intermediates=intermediates, announce=announce
     )
     return out, b
@@ -97,14 +97,14 @@ def _mlir(*x, stack, name, intermediates, announce):
     return x
 
 
-_announce_jaxpr_p = jax.core.Primitive("announce_jaxpr")
-_announce_jaxpr_p.multiple_results = True
-_announce_jaxpr_p.def_impl(_impl)
-_announce_jaxpr_p.def_abstract_eval(_abstract)
-ad.primitive_jvps[_announce_jaxpr_p] = _jvp
-ad.primitive_transposes[_announce_jaxpr_p] = _transpose
-batching.primitive_batchers[_announce_jaxpr_p] = _batching
-mlir.register_lowering(_announce_jaxpr_p, mlir.lower_fun(_mlir, multiple_results=True))
+announce_jaxpr_p = jax.core.Primitive("announce_jaxpr")
+announce_jaxpr_p.multiple_results = True
+announce_jaxpr_p.def_impl(_impl)
+announce_jaxpr_p.def_abstract_eval(_abstract)
+ad.primitive_jvps[announce_jaxpr_p] = _jvp
+ad.primitive_transposes[announce_jaxpr_p] = _transpose
+batching.primitive_batchers[announce_jaxpr_p] = _batching
+mlir.register_lowering(announce_jaxpr_p, mlir.lower_fun(_mlir, multiple_results=True))
 
 
 def debug_backward_nan(x, name=None, terminate=True):

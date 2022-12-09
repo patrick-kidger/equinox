@@ -110,8 +110,8 @@ def test_vmap(with_jit, with_pytree):
         return eqx.experimental.get_state(i, x)
 
     if with_jit:
-        vmap_set_state = eqx.filter_jit(vmap_set_state)
-        vmap_get_state = eqx.filter_jit(vmap_get_state)
+        vmap_set_state = eqx.filter_jit(vmap_set_state, donate="none")
+        vmap_get_state = eqx.filter_jit(vmap_get_state, donate="none")
 
     a = jnp.array([1, 2])
     b = jnp.array([3, 4])

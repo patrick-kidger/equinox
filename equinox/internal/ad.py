@@ -16,7 +16,7 @@ from .errors import error_if
 _identity = lambda x, *, msg: x
 
 
-_nondifferentiable_p = jax.core.Primitive("nondifferentiable")
+nondifferentiable_p = jax.core.Primitive("nondifferentiable")
 
 
 def _nondifferentiable_batch(x, batch_axes, *, msg):
@@ -29,19 +29,19 @@ def _nondifferentiable_jvp(primals, tangents, *, msg):
     raise RuntimeError(msg)
 
 
-_nondifferentiable_p.def_impl(_identity)
-_nondifferentiable_p.def_abstract_eval(_identity)
-batching.primitive_batchers[_nondifferentiable_p] = _nondifferentiable_batch
+nondifferentiable_p.def_impl(_identity)
+nondifferentiable_p.def_abstract_eval(_identity)
+batching.primitive_batchers[nondifferentiable_p] = _nondifferentiable_batch
 if hasattr(xla, "lower_fun"):
     xla.register_translation(
-        _nondifferentiable_p,
+        nondifferentiable_p,
         xla.lower_fun(_identity, multiple_results=False, new_style=True),
     )
 mlir.register_lowering(
-    _nondifferentiable_p,
+    nondifferentiable_p,
     mlir.lower_fun(_identity, multiple_results=False),
 )
-ad.primitive_jvps[_nondifferentiable_p] = _nondifferentiable_jvp
+ad.primitive_jvps[nondifferentiable_p] = _nondifferentiable_jvp
 
 
 def nondifferentiable(
@@ -58,12 +58,12 @@ def nondifferentiable(
         if name is None:
             name = "This operation"
         msg = f"Unexpected tangent. {name} cannot be autodifferentiated."
-    bind = ft.partial(_nondifferentiable_p.bind, msg=msg)
+    bind = ft.partial(nondifferentiable_p.bind, msg=msg)
     flat = map(bind, flat)
     return combine(jtu.tree_unflatten(treedef, flat), static)
 
 
-_nondifferentiable_backward_p = jax.core.Primitive("nondifferentiable_backward")
+nondifferentiable_backward_p = jax.core.Primitive("nondifferentiable_backward")
 
 
 def _nondifferentiable_backward_batch(x, batch_axes, *, msg):
@@ -95,23 +95,23 @@ def _nondifferentiable_backward_transpose(cts_in, _, *, msg):
         return [error_if(cts_in, (cts_in != 0).any(), msg)]
 
 
-_nondifferentiable_backward_p.def_impl(_identity)
-_nondifferentiable_backward_p.def_abstract_eval(_identity)
+nondifferentiable_backward_p.def_impl(_identity)
+nondifferentiable_backward_p.def_abstract_eval(_identity)
 batching.primitive_batchers[
-    _nondifferentiable_backward_p
+    nondifferentiable_backward_p
 ] = _nondifferentiable_backward_batch
 if hasattr(xla, "lower_fun"):
     xla.register_translation(
-        _nondifferentiable_backward_p,
+        nondifferentiable_backward_p,
         xla.lower_fun(_identity, multiple_results=False, new_style=True),
     )
 mlir.register_lowering(
-    _nondifferentiable_backward_p,
+    nondifferentiable_backward_p,
     mlir.lower_fun(_identity, multiple_results=False),
 )
-ad.primitive_jvps[_nondifferentiable_backward_p] = _nondifferentiable_backward_jvp
+ad.primitive_jvps[nondifferentiable_backward_p] = _nondifferentiable_backward_jvp
 ad.primitive_transposes[
-    _nondifferentiable_backward_p
+    nondifferentiable_backward_p
 ] = _nondifferentiable_backward_transpose
 
 
@@ -129,6 +129,6 @@ def nondifferentiable_backward(
         if name is None:
             name = "This operation"
         msg = f"Unexpected cotangent. {name} cannot be reverse-mode autodifferentiated."
-    bind = ft.partial(_nondifferentiable_backward_p.bind, msg=msg)
+    bind = ft.partial(nondifferentiable_backward_p.bind, msg=msg)
     flat = map(bind, flat)
     return combine(jtu.tree_unflatten(treedef, flat), static)
