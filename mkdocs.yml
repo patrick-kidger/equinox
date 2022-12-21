@@ -111,6 +111,7 @@ nav:
             - 'api/nn/normalisation.md'
             - 'api/nn/embedding.md'
             - 'api/nn/composed.md'
+            - 'api/nn/activations.md'
         - Filtering:
             - 'api/filtering/filter-operations.md'
             - 'api/filtering/filter-functions.md'

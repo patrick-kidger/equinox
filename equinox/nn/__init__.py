@@ -1,3 +1,4 @@
+from .activations import PReLU
 from .attention import MultiheadAttention
 from .composed import Lambda, MLP, Sequential
 from .conv import (
