@@ -8,7 +8,7 @@ from ..module import Module
 
 class PReLU(Module):
     """PReLU activation function.
-    
+
     This is the elementwise function `x -> max(x, 0) + α * min(x, 0)`.
     This can be thought of as a leaky ReLU, with a learnt leak `α`.
     """
