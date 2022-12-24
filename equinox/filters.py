@@ -83,6 +83,22 @@ def filter(
     Filters out the leaves of a PyTree not satisfying a condition. Those not satisfying
     the condition are replaced with `replace`.
 
+    !!! Example
+
+        ```python
+        pytree = [(jnp.array(0), 1), object()]
+        result = eqx.filter(pytree, eqx.is_array)
+        # [(jnp.array(0), None), None]
+        ```
+
+    !!! Example
+
+        ```python
+        pytree = [(jnp.array(0), 1), object()]
+        result = eqx.filter(pytree, [(False, False), True])
+        # [(None, None), object()]
+        ```
+
     **Arguments:**
 
     - `pytree` is any PyTree.
@@ -97,19 +113,11 @@ def filter(
     - `replace` is what to replace any falsey leaves with. Defaults to `None`.
     - `is_leaf`: Optional function called at each node of the PyTree. It should return
         a boolean. `True` indicates that the whole subtree should be treated as leaf;
-        `False` indicates that the subtree should be traversed as a PyTree. This is
-        mostly useful for evaluating a callable `filter_spec` on a node instead of a
-        leaf.
+        `False` indicates that the subtree should be traversed as a PyTree.
 
     **Returns:**
 
     A PyTree of the same structure as `pytree`.
-
-    !!! info
-
-        A common special case is `equinox.filter(pytree, equinox.is_array)`. Then
-        `equinox.is_array` is evaluted on all of `pytree`'s leaves, and each leaf then
-        kept or replaced.
     """
 
     inverse = bool(inverse)  # just in case, to make the != trick below work reliably
@@ -125,8 +133,8 @@ def partition(
     replace: Any = None,
     is_leaf: Optional[Callable[[Any], bool]] = None,
 ) -> PyTree:
-    """Equivalent to `filter(...), filter(..., inverse=True)`, but slightly more
-    efficient.
+    """Splits a PyTree into two pieces. Equivalent to
+    `filter(...), filter(..., inverse=True)`, but slightly more efficient.
 
     !!! info
 

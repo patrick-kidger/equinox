@@ -21,8 +21,8 @@ from .grad import (
 )
 from .jit import filter_jit
 from .make_jaxpr import filter_make_jaxpr
-from .module import Module, static_field
-from .pretty_print import tree_pformat
+from .module import Module, module_update_wrapper, static_field
+from .pretty_print import tree_pformat, tree_pprint
 from .serialisation import (
     default_deserialise_filter_spec,
     default_serialise_filter_spec,

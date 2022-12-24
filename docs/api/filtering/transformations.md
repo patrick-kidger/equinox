@@ -1,10 +1,8 @@
-# Filtered transformations
+# Transformations
 
-These typically combine [`equinox.partition`][], [`equinox.combine`][], and a JAX transformation, all together.
+These offer an alternate API on to JAX transformations. For example, JAX uses `jax.jit(..., static_argnums=...)` to indicate which arguments should be treated dynamically/statically. Meanwhile `equinox.filter_jit` will automatically treat JAX arrays dynamically, and everything else statically. (It does this by doing something like `eqx.partition(args, eqx.is_array)` under-the-hood.)
 
 Generally speaking, this means producing an enhanced version of the JAX transformation, that operates on arbitrary PyTrees instead of specifically just JAX arrays.
-
-Practically speaking these are usually the only kind of filtering you ever have to use. (But it's good to understand what e.g. [`equinox.partition`][] and [`equinox.is_array`][] are doing under the hood, just so that these don't seem too magical.)
 
 ## Just-in-time compilation
 

@@ -272,6 +272,26 @@ class Module(metaclass=_ModuleMeta):
 
 # Modifies in-place, just like functools.update_wrapper
 def module_update_wrapper(wrapper: Module, wrapped) -> Module:
+    """Like `functools.update_wrapper` (or its better-known cousin, `functools.wraps`),
+    but can be used on [`equinox.Module`][]s. (Which are normally immutable.)
+
+    !!! Example:
+
+        ```python
+        class Wrapper(eqx.Module):
+            fn: Callable
+
+            def __call__(self, *args, **kwargs):
+                return self.fn(*args, **kwargs)
+
+        def make_wrapper(fn):
+            return eqx.module_update_wrapper(Wrapper(fn), fn)
+        ```
+
+    For example, [`equinox.filter_jit`][] returns a module representing the JIT'd
+    computation. `module_update_wrapper` is used on this module to indicate that this
+    JIT'd computation wraps the original one. (Just like how `functools.wraps` is used.)
+    """
     cls = wrapper.__class__
     initable_cls = _make_initable(cls, wraps=True)
     object.__setattr__(wrapper, "__class__", initable_cls)

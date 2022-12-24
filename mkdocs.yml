@@ -113,9 +113,8 @@ nav:
             - 'api/nn/composed.md'
             - 'api/nn/activations.md'
         - Filtering:
-            - 'api/filtering/filter-operations.md'
-            - 'api/filtering/filter-functions.md'
-            - 'api/filtering/filtered-transformations.md'
+            - 'api/filtering/partition-combine.md'
+            - 'api/filtering/transformations.md'
         - Utilities:
             - 'api/utilities/manipulation.md'
             - 'api/utilities/serialisation.md'

@@ -324,7 +324,7 @@ def filter_closure_convert(fn, *args, **kwargs):
         f(1., 1.)
         ```
     """
-    if fn.__closure__ is None:
+    if isinstance(fn, types.FunctionType) and fn.__closure__ is None:
         # In this case, it's not possible to have any closed-over tracers.
         # Convert to a PyTree nonetheless
         return _TrivialClosureConvert(fn)
@@ -349,20 +349,21 @@ class filter_custom_jvp:
 
     Supports keyword arguments, which are always treated as nondifferentiable.
 
-    Example:
-    ```python
-    @equinox.filter_custom_jvp
-    def call(x, y, *, fn):
-        return fn(x, y)
+    !!! Example
 
-    @call.defjvp
-    def call_jvp(primals, tangents, *, fn):
-        x, y = primals
-        tx, ty = tangents
-        primal_out = call(x, y, fn=fn)
-        tangent_out = tx**2 + ty
-        return primal_out, tangent_out
-    ```
+        ```python
+        @equinox.filter_custom_jvp
+        def call(x, y, *, fn):
+            return fn(x, y)
+
+        @call.defjvp
+        def call_jvp(primals, tangents, *, fn):
+            x, y = primals
+            tx, ty = tangents
+            primal_out = call(x, y, fn=fn)
+            tangent_out = tx**2 + ty
+            return primal_out, tangent_out
+        ```
     """
 
     def __init__(self, fn):

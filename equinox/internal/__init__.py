@@ -1,6 +1,7 @@
 from ..compile_utils import hashable_combine, hashable_partition
 from ..doc_utils import doc_repr, doc_strip_annotations
 from ..module import Static
+from ..pretty_print import tree_pp
 from .ad import (
     nondifferentiable,
     nondifferentiable_backward,
