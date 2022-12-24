@@ -158,7 +158,9 @@ def _is_none(x):
     return x is None
 
 
-def combine(*pytrees: PyTree) -> PyTree:
+def combine(
+    *pytrees: PyTree, is_leaf: Optional[Callable[[Any], bool]] = None
+) -> PyTree:
     """Combines multiple PyTrees into one PyTree, by replacing `None` leaves.
 
     !!! example
@@ -177,6 +179,7 @@ def combine(*pytrees: PyTree) -> PyTree:
     **Arguments:**
 
     - `*pytrees`: a sequence of PyTrees all with the same structure.
+    - `is_leaf`: As [`equinox.partition`][].
 
     **Returns:**
 
@@ -184,5 +187,9 @@ def combine(*pytrees: PyTree) -> PyTree:
     non-`None` leaf found in the corresponding leaves of `pytrees` as they are
     iterated over.
     """
+    if is_leaf is None:
+        _is_leaf = _is_none
+    else:
+        _is_leaf = lambda x: _is_none(x) or is_leaf(x)
 
-    return jtu.tree_map(_combine, *pytrees, is_leaf=_is_none)
+    return jtu.tree_map(_combine, *pytrees, is_leaf=_is_leaf)
