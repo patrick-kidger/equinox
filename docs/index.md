@@ -41,7 +41,7 @@ class Linear(eqx.Module):
         return self.weight @ x + self.bias
 ```
 
-and fully compatible with normal JAX operations:
+and may be used alongside normal JAX operations:
 
 ```python
 @jax.jit
@@ -57,11 +57,11 @@ y = jax.numpy.zeros((batch_size, out_size))
 grads = loss_fn(model, x, y)
 ```
 
-Finally, there's no magic behind the scenes. All `eqx.Module` does is register your class as a PyTree. From that point onwards, JAX already knows how to work with PyTrees.
+There's no magic behind the scenes. All `eqx.Module` does is register your class as a PyTree. From that point onwards, JAX already knows how to work with PyTrees.
 
 ## Next steps
 
-If this quick start has got you interested, then have a read of [All of Equinox](./all-of-equinox.md), which introduces you to basically everything in Equinox. (Doesn't take very long! Equinox is simple because everything is a PyTree.)
+If this quick start has got you interested, then have a read of [All of Equinox](./all-of-equinox.md), which introduces you to basically everything in Equinox.
 
 ## Citation
 

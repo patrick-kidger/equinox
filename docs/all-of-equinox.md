@@ -1,8 +1,6 @@
 # All of Equinox
 
-Equinox is a very small and easy to understand library. (Because it uses JAX abstractions like PyTrees, it doesn't need any real complexity.)
-
-So as the title suggests, this page tells you essentially everything you need to know to use Equinox.
+Equinox is a small and easy to understand library. So as the title suggests, this page tells you essentially everything you need to know to use Equinox.
 
 ## Parameterised functions as PyTrees
 
@@ -22,19 +20,20 @@ import jax
 
 class MyModule(eqx.Module):
     layers: list
-    bias: jax.numpy.ndarray
+    extra_bias: jax.numpy.ndarray
 
     def __init__(self, key):
         key1, key2, key3 = jax.random.split(key, 3)
         self.layers = [eqx.nn.Linear(2, 8, key=key1),
                        eqx.nn.Linear(8, 8, key=key2),
                        eqx.nn.Linear(8, 2, key=key3)]
-        self.bias = jax.numpy.ones(2)
+        # This is a trainable parameter.
+        self.extra_bias = jax.numpy.ones(2)
 
     def __call__(self, x):
         for layer in self.layers[:-1]:
             x = jax.nn.relu(layer(x))
-        return self.layers[-1](x) + self.bias
+        return self.layers[-1](x) + self.extra_bias
 
 @jax.jit
 @jax.grad
@@ -53,13 +52,13 @@ model = jax.tree_util.tree_map(lambda m, g: m - learning_rate * g, model, grads)
 
 ## Filtering
 
-In the previous example, all of the model attributes were `Module`s and JAX arrays.
+In the previous example, all of the model attributes were `Module`s and JAX arrays. To be precise: the overall model was a PyTree of JAX arrays.
 
-But Equinox supports using arbitrary Python objects too! If you choose to include those in your models, then Equinox offers the tools to handle them appropriately around `jax.jit` and `jax.grad`. (Which themselves only really work with JAX arrays.)
+Equinox supports using arbitrary Python objects too. (That is, the model is a PyTree of arbitrary Python objects, which may or may not include JAX arrays.) Equinox offers the tools to handle these appropriately around transforms like `jax.jit` and `jax.grad`. (Which themselves only work with JAX arrays.)
 
 !!! example
 
-    The activation function in [`equinox.nn.MLP`][] isn't a JAX array -- it's an arbitrary Python function.
+    The activation function in [`equinox.nn.MLP`][] isn't a JAX array -- it's a Python function.
 
 !!! example
 
@@ -69,7 +68,7 @@ If you want to do this, then Equinox offers *filtering*, as follows.
 
 **Create a model**
 
-Start off by creating a model just like normal, but with some arbitrary Python objects as part of its parameterisation. In this case, we have `jax.nn.relu`, which is a Python function.
+Start off by creating a model just like normal, now with some arbitrary Python objects as part of its parameterisation. In this case, we have `jax.nn.relu`, which is a Python function.
 
 ```python
 import equinox as eqx
@@ -95,7 +94,7 @@ x, y = jax.random.normal(x_key, (100, 2)), jax.random.normal(y_key, (100, 2))
 model = AnotherModule(model_key)
 ```
 
-**Option 1: manually filter out anything that isn't JIT/grad-able.**
+**Option 1: use `eqx.{partition,combine}`**
 
 ```python
 @ft.partial(jax.jit, static_argnums=1)
@@ -113,7 +112,7 @@ Here, `params` and `static` are both instances of `AnotherModule`: `params` keep
 
 The choice of `eqx.is_array` is a *filter function*: a boolean function specifying whether each leaf should go into `params` or into `static`. In this case very simply `eqx.is_array(x)` returns `True` for JAX and NumPy arrays.
 
-**Option 2: use filtered transformations, which automate the above process for you.**
+**Option 2: use filtered transformations**
 
 ```python
 @eqx.filter_jit
@@ -129,15 +128,13 @@ As a convenience, `eqx.filter_jit` and `eqx.filter_grad` wrap filtering and tran
 
 If your models only use JAX arrays, then `eqx.filter_{jit,grad,...}` will do exactly the same as `jax.{jit,grad,...}`. So if you just want to keep things simple, it is safe to just always use `eqx.filter_{jit,grad,...}`.
 
+Both approaches are equally valid. Some people prefer to explicitly see the `jax.{jit,grad,...}` operations without using a wrapper. Some people prefer a shorter syntax instead.
+
 ## Integrates smoothly with JAX
 
 Equinox introduces a powerful yet straightforward way to build neural networks, without introducing lots of new notions or tieing you into a framework.
 
 Equinox is all just regular JAX -- PyTrees and transformations. Together, these two pieces allow us to specify complex models in JAX-friendly ways.
-
-## Next steps
-
-And that's it! That's pretty much everything you need to know about Equinox. Everything you've seen so far should be enough to get started with using the library. Also see the [Train RNN](./examples/train_rnn.ipynb) example for a fully worked example.
 
 ## Summary
 
@@ -150,8 +147,12 @@ Equinox includes four main things:
 
 See also the API reference on the left.
 
+## Next steps
+
+And that's it! That's pretty much everything you need to know about Equinox. Everything you've seen so far should be enough to get started with using the library. Also see the [Train RNN](./examples/train_rnn.ipynb) example for a fully worked example.
+
 !!! faq "FAQ"
 
     One common question: a lot of other libraries introduce custom `library.jit` etc. operations, specifically to work with `library.Module`. What makes the filtered transformations of Equinox different?
 
-    The answer is that filter transformations are tools that apply to any PyTree. And models just happen to be PyTrees. The filtered transformations and `eqx.Module` are not coupled together; they are independent tools.
+    The answer is that filtered transformations and `eqx.Module` are not coupled together; they are independent tools. Filtered transformations work with any PyTree. And `eqx.Module`s just happens to be a PyTree!
