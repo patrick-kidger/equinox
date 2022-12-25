@@ -100,7 +100,8 @@ def filter_grad(
     arg: PyTree[BoolAxisSpec] = is_inexact_array,
     **gradkwargs,
 ):
-    """As `jax.grad`, but accepts arbitrary PyTrees as inputs. (Not just JAXable types.)
+    """Backpropates through `fun". As `jax.grad`, but accepts arbitrary PyTrees as
+    inputs. (Not just JAXable types.)
 
     !!! info
 
@@ -110,7 +111,7 @@ def filter_grad(
 
     **Arguments:**
 
-    - `fun` is a pure function to JIT compile.
+    - `fun` is a pure function to differentiate.
     - `arg` is a PyTree whose structure should be a prefix of the structure of
         the **first** argument to `fun`. It behaves as the `filter_spec` argument to
         [`equinox.filter`][]. Truthy values will be differentiated; falsey values will

@@ -1,6 +1,7 @@
 import abc
 import functools as ft
 import inspect
+import weakref
 from dataclasses import dataclass, field, fields
 from typing import Any
 
@@ -62,6 +63,9 @@ def _not_magic(k: str) -> bool:
     return not (k.startswith("__") and k.endswith("__"))
 
 
+_has_dataclass_init = weakref.WeakKeyDictionary()
+
+
 # Inherits from abc.ABCMeta as a convenience for a common use-case.
 # It's not a feature we use ourselves.
 class _ModuleMeta(abc.ABCMeta):
@@ -76,7 +80,20 @@ class _ModuleMeta(abc.ABCMeta):
         # Don't override custom __init__'s, which leads to poor ergonomics:
         # e.g. if `B` has a custom init then `class A(B): pass` would otherwise set a
         # dataclass init that overrides the custom __init__.
-        _init = cls._has_dataclass_init = _has_dataclass_init(cls)
+        if "__init__" in cls.__dict__:
+            _init = False
+        else:
+            for kls in cls.__mro__:
+                try:
+                    _init = _has_dataclass_init[kls]
+                except KeyError:
+                    pass
+                else:
+                    break
+            else:
+                assert name == "Module"
+                _init = True  # eqx.Module itself
+        _has_dataclass_init[cls] = _init
         if _init:
             init_doc = cls.__init__.__doc__
         cls = dataclass(eq=False, repr=False, frozen=True, init=_init)(cls)
@@ -135,12 +152,6 @@ def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
     _InitableModule.__setattr__ = __setattr__
 
     return _InitableModule
-
-
-def _has_dataclass_init(cls: _ModuleMeta) -> bool:
-    if "__init__" in cls.__dict__:
-        return False
-    return cls._has_dataclass_init
 
 
 class Module(metaclass=_ModuleMeta):
@@ -224,8 +235,6 @@ class Module(metaclass=_ModuleMeta):
         because `self` is just a PyTree. Unlike most other neural network libaries, you
         can mix Equinox and native JAX without any difficulties at all.
     """
-
-    _has_dataclass_init = True
 
     def __hash__(self):
         return hash(tuple(jtu.tree_leaves(self)))
