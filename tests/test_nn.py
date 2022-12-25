@@ -1018,7 +1018,7 @@ def test_poolnetworkbackprop(getkey):
         conv_layer: List[Union[eqx.nn.Conv2d, eqx.nn.MaxPool2d]]
         linear_layers: List[eqx.nn.Linear]
 
-        def __init__(self, key):
+        def __init__(self, key: "jax.random.PRNGKey"):
             key1, key2, key3 = jax.random.split(key, 3)
             self.conv_layer = [eqx.nn.Conv2d(3, 2, 3, key=key1), eqx.nn.MaxPool2d(2, 2)]
             self.linear_layers = [

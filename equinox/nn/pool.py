@@ -159,10 +159,10 @@ class AvgPool1d(Pool):
 
     def __init__(
         self,
-        kernel_size,
-        stride,
-        padding=0,
-        use_ceil=False,
+        kernel_size: Union[int, Sequence[int]],
+        stride: Union[int, Sequence[int]] = 1,
+        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
+        use_ceil: bool = False,
         **kwargs,
     ):
         """**Arguments:**
@@ -209,10 +209,10 @@ class MaxPool1d(Pool):
 
     def __init__(
         self,
-        kernel_size,
-        stride,
-        padding=0,
-        use_ceil=False,
+        kernel_size: Union[int, Sequence[int]],
+        stride: Union[int, Sequence[int]] = 1,
+        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
+        use_ceil: bool = False,
         **kwargs,
     ):
         """**Arguments:**
@@ -260,10 +260,10 @@ class AvgPool2d(Pool):
 
     def __init__(
         self,
-        kernel_size,
-        stride,
-        padding=0,
-        use_ceil=False,
+        kernel_size: Union[int, Sequence[int]],
+        stride: Union[int, Sequence[int]] = 1,
+        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
+        use_ceil: bool = False,
         **kwargs,
     ):
         """**Arguments:**
@@ -310,10 +310,10 @@ class MaxPool2d(Pool):
 
     def __init__(
         self,
-        kernel_size,
-        stride,
-        padding=0,
-        use_ceil=False,
+        kernel_size: Union[int, Sequence[int]],
+        stride: Union[int, Sequence[int]] = 1,
+        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
+        use_ceil: bool = False,
         **kwargs,
     ):
         """**Arguments:**
@@ -361,10 +361,10 @@ class AvgPool3d(Pool):
 
     def __init__(
         self,
-        kernel_size,
-        stride,
-        padding=0,
-        use_ceil=False,
+        kernel_size: Union[int, Sequence[int]],
+        stride: Union[int, Sequence[int]] = 1,
+        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
+        use_ceil: bool = False,
         **kwargs,
     ):
         """**Arguments:**
@@ -412,10 +412,10 @@ class MaxPool3d(Pool):
 
     def __init__(
         self,
-        kernel_size,
-        stride,
-        padding=0,
-        use_ceil=False,
+        kernel_size: Union[int, Sequence[int]],
+        stride: Union[int, Sequence[int]] = 1,
+        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
+        use_ceil: bool = False,
         **kwargs,
     ):
         """**Arguments:**
@@ -456,15 +456,6 @@ class MaxPool3d(Pool):
         """
 
         return super().__call__(x)
-
-
-# Backward compatability: these were originally misnamed.
-AvgPool1D = AvgPool1d
-AvgPool2D = AvgPool2d
-AvgPool3D = AvgPool3d
-MaxPool1D = MaxPool1d
-MaxPool2D = MaxPool2d
-MaxPool3D = MaxPool3d
 
 
 def _adaptive_pool1d(x: Array, target_size: int, operation: Callable) -> Array:
