@@ -1,39 +1,49 @@
 """Implements backpropagation through a while loop by using checkpointing.
+
 (Variously known as "treeverse", "optimal checkpointing", "binomial checkpointing",
 "recursive checkpointing", "revolve", etc.)
 
 The algorithm used here is the online version (when the number of steps isn't known in
 advance), as proposed in:
 
-Stumm and Walther 2010
-New Algorithms for Optimal Online Checkpointing
-https://tu-dresden.de/mn/math/wir/ressourcen/dateien/forschung/publikationen/pdf2010/new_algorithms_for_optimal_online_checkpointing.pdf
+    Stumm and Walther 2010
+    New Algorithms for Optimal Online Checkpointing
+    https://tu-dresden.de/mn/math/wir/ressourcen/dateien/forschung/publikationen/pdf2010/new_algorithms_for_optimal_online_checkpointing.pdf
 
-also depending on the results of:
+and also depends on the results of:
 
-Wang and Moin 2008
-Minimal repetition dynamic checkpointing algorithm for unsteady adjoint calculation
-https://web.stanford.edu/group/ctr/ResBriefs08/4_checkpointing.pdf
+    Wang and Moin 2008
+    Minimal repetition dynamic checkpointing algorithm for unsteady adjoint calculation
+    https://web.stanford.edu/group/ctr/ResBriefs08/4_checkpointing.pdf
 
-For context, the other two classical references for treeverse are:
+This matches the performance of the offline version (classical treeverse, when the
+number of steps is known in advance) provided that the number of steps is less than or
+equal to `(num_checkpoints + 1) * (num_checkpoints + 2) / 2`; see the Stumm--Walther
+paper. After that is may make extra steps (as compared to the offline version), but does
+still have similar asymptotic complexity.
 
-Griewank 1992
-Achieiving logarithmic growth of temporal and spatial complexity in reverse automatic
-differentiation
-https://ftp.mcs.anl.gov/pub/tech_reports/reports/P228.pdf
+For context, the two classical references for (offline) treeverse are:
+
+    Griewank 1992
+    Achieiving logarithmic growth of temporal and spatial complexity in reverse
+    automatic differentiation
+    https://ftp.mcs.anl.gov/pub/tech_reports/reports/P228.pdf
 
 and
 
-Griewank and Walther 2000
-Algorithm 799: revolve: an implementation of checkpointing for the reverse or adjoint
-mode of computational differentiation
-https://dl.acm.org/doi/pdf/10.1145/347837.347846
+    Griewank and Walther 2000
+    Algorithm 799: revolve: an implementation of checkpointing for the reverse or
+    adjoint mode of computational differentiation
+    https://dl.acm.org/doi/pdf/10.1145/347837.347846
 """
-# I think this code is not maximally efficient. A few things that could be improved:
+# I think this code is not quite maximally efficient. A few things that could be
+# improved:
 # - The initial value is available on the backward pass twice: once as an argument,
 #   once as a saved checkpoint. We should be able to get away without this repetition.
 # - We only implement Algorithm I of Stumm--Wather. Additionally implementing
-#   Algorithm II would be worthwhile.
+#   Algorithm II would be worthwhile. (But finickity, as their description of it in the
+#   paper leaves something to be desired. And may also have an off-by-one-error, like
+#   their Figure 2.2 does?)
 
 import functools as ft
 import operator
@@ -62,9 +72,108 @@ def checkpointed_while_loop(
     cond_fun: Callable[[_T], _Bool],
     body_fun: Callable[[_T], _T],
     init_val: _T,
-    max_steps: Optional[int],
+    max_steps: Optional[int] = None,
+    *,
     checkpoints: int,
 ):
+    """Reverse-mode autodifferentiable while loop, using optimal online checkpointing.
+
+    The usual `jax.lax.while_loop` is not reverse-mode autodifferentiable, since it
+    would need to save a potentially unbounded amount of residuals between the forward
+    and backward pass. However, JAX/XLA requires that all memory buffers be of known
+    (bounded) size.
+
+    This works around this limitation by saving values to a prespecified number of
+    checkpoints, and then recomputing other intermediate value on-the-fly.
+
+    Checkpointing in this way is a classical autodifferentiation technique, usually used
+    to reduce memory consumption. (And it's still useful for this purpose for us too.)
+
+    **Arguments:**
+
+    - `cond_fun`: As `lax.while_loop`.
+    - `body_fun`: As `lax.while_loop`.
+    - `init_val`: As `lax.while_loop`.
+    - `checkpoints`: The number of steps at which to checkpoint. The memory consumed
+        will be that of `checkpoints`-many copies of `init_val`. (As the state is
+        updated throughout the loop.)
+
+    **Returns:**
+
+    The final value; as `lax.while_loop`.
+
+    !!! Info
+
+        This function is not forward-mode autodifferentiable.
+
+    !!! cite "References"
+
+        Selecting which steps at which to save checkpoints (and when this is done, which
+        old checkpoint to evict) is important for minimising the amount of recomputation
+        performed.
+
+        This is a difficult, but solved, problem! So if you are using this function in
+        academic work, then you should cite the following references.
+
+        The implementation here performs "online checkpointing", as the number of steps
+        is not known in advance. This was developed in:
+
+        ```bibtex
+        @article{stumm2010new,
+            author = {Stumm, Philipp and Walther, Andrea},
+            title = {New Algorithms for Optimal Online Checkpointing},
+            journal = {SIAM Journal on Scientific Computing},
+            volume = {32},
+            number = {2},
+            pages = {836--854},
+            year = {2010},
+            doi = {10.1137/080742439},
+        }
+
+        @article{wang2009minimal,
+            author = {Wang, Qiqi and Moin, Parviz and Iaccarino, Gianluca},
+            title = {Minimal Repetition Dynamic Checkpointing Algorithm for Unsteady
+                     Adjoint Calculation},
+            journal = {SIAM Journal on Scientific Computing},
+            volume = {31},
+            number = {4},
+            pages = {2549--2567},
+            year = {2009},
+            doi = {10.1137/080727890},
+        }
+        ```
+
+        For reference, the classical "offline checkpointing" (also known as "treeverse",
+        "recursive binary checkpointing", "revolved" etc.) was developed in:
+
+        ```bibtex
+        @article{griewank1992achieving,
+            author = {Griewank, Andreas},
+            title = {Achieving logarithmic growth of temporal and spatial complexity in
+                     reverse automatic differentiation},
+            journal = {Optimization Methods and Software},
+            volume = {1},
+            number = {1},
+            pages = {35--54},
+            year  = {1992},
+            publisher = {Taylor & Francis},
+            doi = {10.1080/10556789208805505},
+        }
+
+        @article{griewank2000revolve,
+            author = {Griewank, Andreas and Walther, Andrea},
+            title = {Algorithm 799: Revolve: An Implementation of Checkpointing for the
+                     Reverse or Adjoint Mode of Computational Differentiation},
+            year = {2000},
+            publisher = {Association for Computing Machinery},
+            volume = {26},
+            number = {1},
+            doi = {10.1145/347837.347846},
+            journal = {ACM Trans. Math. Softw.},
+            pages = {19--45},
+        }
+        ```
+    """
     if checkpoints < 1:
         raise ValueError("Must have at least one checkpoint")
     if max_steps == 0:
@@ -246,8 +355,7 @@ def _wang_moin_wrapper(step, save_state, residual_steps):
 
 
 def _should_save_residual(step, save_state, residual_steps, u2_minus_2):
-    """
-    This is the controller for whether we should save the current value at each step,
+    """This is the controller for whether we should save the current value at each step,
     and if so which memory location to save it in.
     """
     # TODO: also implement Algorithm 2 of Stumm and Walther, which gives improved
@@ -353,6 +461,8 @@ def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, max_steps, checkpoints):
     # reading and writing the most recent residual to and from the end. So sort the
     # residuals we've produced here to obtain the desired invariant, i.e. that the
     # residuals are in order.
+    # TODO: does this introduce a 2x memory overhead?  It may be that we can do better
+    # here.
     sort_indices = jnp.argsort(final_residual_steps)
     final_residual_steps, final_residuals = jtu.tree_map(
         ft.partial(_unique_index, sort_indices), (final_residual_steps, final_residuals)
@@ -517,7 +627,7 @@ def _make_u_turn(residual_steps, residuals, checkpoints):
         grad_val,
         grad_body_fun,
     ):
-        #        del step_val, step_next_checkpoint
+        del step_val, step_next_checkpoint
         step_grad_val, index = _assert_unbatched(step_grad_val, index)
 
         # Use `filter_vjp` to neatly handle floating-point arrays.

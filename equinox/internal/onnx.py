@@ -4,6 +4,25 @@ from .finalise_jaxpr import finalise_fn
 
 
 def to_onnx(fn):
+    """Export a JAX function to ONNX.
+
+    !!! Warning
+
+        This is experimental and may be removed or changed.
+
+    !!! Example
+
+        ```python
+        import equinox.internal as eqxi
+        import jax.numpy as jnp
+
+        def f(x, y):
+            return x + y
+
+        onnx_f = eqxi.to_onnx(f)
+        result = onnx_f(jnp.array(1), jnp.array(2))
+        ```
+    """
     import jax.experimental.jax2tf as jax2tf
     import tensorflow as tf
     import tf2onnx

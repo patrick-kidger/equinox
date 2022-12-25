@@ -31,6 +31,12 @@ mlir.register_lowering(
 
 
 def nontraceable(x, *, name="nontraceable operation"):
+    """Identity function, which raises an error if it is transformed in any way. (i.e.
+    in `jax.grad`, `jax.vmap` etc.)
+
+    This is useful at the end of the `impl` rule for higher-order final-style
+    primitives, for checking that no other tracers were captured via closure.
+    """
     dynamic, static = partition(x, is_array)
     bind = ft.partial(nontraceable_p.bind, name=name)
     dynamic = jtu.tree_map(bind, dynamic)

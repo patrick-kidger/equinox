@@ -6,9 +6,11 @@ This means that it is full of lots of fun toys for the JAX enthusiast! If you're
 
 A few of the highlights available here are:
 
-**errors.py:** Runtime errors. For verifying arguments or for checking that a computation succeeded.
+**checkpointed_while_loop.py** A while loop which may be backpropagated through, using an online checkpointing scheme.
 
-**noinline.py:** MLIR sub-graphs. Can reduce compile times by removing the inlining of a function called repeatedly. Also makes it possible to iteratively recompile: change and recompile just the sub/super-computation, without needing to recompile the whole computation graph.
+**errors.py:** Runtime errors. For verifying arguments or for checking that a computation succeeded. Only tested on CPU.
+
+**noinline.py:** MLIR sub-graphs. Can reduce compile times by removing the inlining of a function called repeatedly. Also makes it possible to iteratively recompile: change and recompile just the sub/super-computation, without needing to recompile the whole computation graph. Only tested on CPU.
 
 **omega.py**: Neat syntax for tree-mapping arithmetic. E.g. `(x**ω + y**ω).ω == jtu.tree_map(operator.add, x, y)`. See also [tree-math](https://github.com/google/tree-math), for a similar idea but without the neat syntax.
 
