@@ -32,7 +32,7 @@ def _is_none(x: Any) -> bool:
 
 def _resolve_axis(axis_spec: AxisSpec, elem: Any) -> PyTree[ResolvedAxisSpec]:
     if axis_spec is None or isinstance(axis_spec, (bool, int)):
-        return axis_spec
+        return jtu.tree_map(lambda _: axis_spec, elem)
     if callable(axis_spec):
         return jtu.tree_map(axis_spec, elem)
     else:
