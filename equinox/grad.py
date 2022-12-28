@@ -344,7 +344,9 @@ class filter_custom_jvp:
     `nondiff_argnums`. Instead, arguments are automatically split into differentiable
     and nondifferentiable based on whether or not they are a floating-point JAX array.
 
-    The tangents of the nondifferentiable arguments will be passed as `None`.
+    The tangents of the nondifferentiable arguments will be passed as `None`. In
+    addition, any floating-point JAX array with symbolic zero tangent will also have
+    that tangent passed as `None`.
 
     The return types must still all be JAX types.
 
@@ -372,7 +374,7 @@ class filter_custom_jvp:
             args, kwargs = combine(dynamic, static)
             return fn(*args, **kwargs)
 
-        self.fn = jax.custom_jvp(fn_wrapper, nondiff_argnums=(0,))
+        self.fn = jax.custom_jvp(fn_wrapper, nondiff_argnums=(0,), symbolic_zeros=True)
 
     def defjvp(self, fn_jvp):
         def fn_jvp_wrapper(static, dynamic, tangents):
@@ -381,7 +383,10 @@ class filter_custom_jvp:
             args, kwargs = combine(dynamic, static)
             t_args, t_kwargs = tangents
             if any(x is not None for x in jtu.tree_leaves(t_kwargs)):
-                raise ValueError("Received keyword tangent")
+                raise ValueError(
+                    "Cannot differentiate keyword arguments to "
+                    "`equinox.filter_custom_jvp`."
+                )
             return fn_jvp(args, t_args, **kwargs)
 
         self.fn.defjvp(fn_jvp_wrapper)
