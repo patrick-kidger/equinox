@@ -4,10 +4,7 @@ import jax
 import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
-import jax.lax as lax
-import jax.numpy as jnp
 import jax.tree_util as jtu
-import numpy as np
 from jaxtyping import PyTree
 
 from ..filters import combine, is_array, is_array_like, partition
@@ -58,9 +55,7 @@ def _is_array_like_internal(x):
 
 def _zero_from_primal(p):
     assert type(p) is not ad.UndefinedPrimal
-    shape = jnp.shape(p)
-    dtype = jax.core.primal_dtype_to_tangent_dtype(jnp.result_type(p))
-    return ad.Zero(jax.core.ShapedArray(shape, dtype))
+    return ad.Zero(jax.core.get_aval(p).at_least_vspace())
 
 
 def _is_none(x):
@@ -244,16 +239,8 @@ def filter_primitive_bind(prim: jax.core.Primitive, *args) -> PyTree:
 # Useful helper for JVP rules of higher-order primitives.
 def materialise_zeros(primal, tangent):
     if tangent is None and is_array_like(primal):
-        shape = jnp.shape(primal)
-        dtype = jax.core.primal_dtype_to_tangent_dtype(jnp.result_type(primal))
-        if dtype == jax.dtypes.float0:
-            return np.broadcast_to(np.zeros((), dtype=dtype), shape)
-        else:
-            weak_type = hasattr(primal, "weak_type") and primal.weak_type
-            if weak_type:
-                return lax.broadcast(jnp.array(0, dtype=dtype), shape)
-            else:
-                return jnp.zeros(shape, dtype=dtype)
+        tangent = _zero_from_primal(primal)
+        return ad.instantiate_zeros(tangent)
     else:
         return tangent
 
@@ -302,6 +289,10 @@ def _vprim_impl(*inputs, prim, __batch_axes, params):
 
 
 def _to_struct(x):
+    if type(x) is not jax.core.ShapedArray:
+        raise NotImplementedError(
+            "vprim only currently supports ShapedArrays for abstract evaluation"
+        )
     return jax.ShapeDtypeStruct(x.shape, x.dtype)
 
 
@@ -322,7 +313,7 @@ def _resolve_zeros_t(tangent, batch_axis):
         aval = tangent.aval
         if type(aval) is not jax.core.ShapedArray:
             raise NotImplementedError(
-                "vprim only currently supports shaped arrays for symbolic zeros"
+                "vprim only currently supports ShapedArrays for symbolic zeros"
             )
         shape = aval.shape[:batch_axis] + aval.shape[batch_axis + 1 :]
         return ad.Zero(jax.core.ShapedArray(shape, aval.dtype))

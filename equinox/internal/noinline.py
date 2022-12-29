@@ -39,6 +39,18 @@ def _to_shapedarray(x):
         return x
 
 
+def _only_shapedarrays(rule):
+    def _rule_wrapper(*args, **params):
+        for arg in args:
+            if not _is_shapedarray(arg):
+                raise NotImplementedError(
+                    "noinline only supports ShapedArrays in abstract evaluation"
+                )
+        return rule(*args, **params)
+
+    return _rule_wrapper
+
+
 @ft.lru_cache(maxsize=128)
 def _cache_filter_eval_shape(key):
     flat_dynamic, treedef_dynamic, static = key
@@ -176,6 +188,7 @@ def _noinline_impl(dynamic_index, abstract_fn, transforms, args):
     return static_fn(args)
 
 
+@_only_shapedarrays
 @filter_primitive_def
 def _noinline_abstract(dynamic_index, abstract_fn, transforms, args):
     del dynamic_index
