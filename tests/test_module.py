@@ -176,3 +176,17 @@ def test_init_subclass():
         pass
 
     assert ran == [True]
+
+
+def test_wrapper_attributes():
+    def f(x):
+        pass
+
+    fjit = eqx.filter_jit(f)
+    # Gets __name__ attribute from module_update_wrapper
+
+    @eqx.filter_jit  # Flattens and unflattens
+    def g(k):
+        k.__name__
+
+    g(fjit)

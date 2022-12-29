@@ -119,22 +119,26 @@ class _ModuleMeta(abc.ABCMeta):
         }
         if len(missing_names):
             raise ValueError(
-                f"The following fields were not initialised during __init__: {missing_names}"
+                f"The following fields were not initialised during __init__: "
+                f"{missing_names}"
             )
         return self
+
+
+_wrapper_field_names = {
+    "__module__",
+    "__name__",
+    "__qualname__",
+    "__doc__",
+    "__annotations__",
+    "__wrapped__",
+}
 
 
 @ft.lru_cache(maxsize=128)
 def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
     if wraps:
-        field_names = {
-            "__module__",
-            "__name__",
-            "__qualname__",
-            "__doc__",
-            "__annotations__",
-            "__wrapped__",
-        }
+        field_names = _wrapper_field_names
     else:
         field_names = {field.name for field in fields(cls)}
 
@@ -192,7 +196,8 @@ class Module(metaclass=_ModuleMeta):
 
     **Methods**
 
-    It is common to create some methods on the class -- for example to define the forward pass of a model.
+    It is common to create some methods on the class -- for example to define the
+    forward pass of a model.
 
     ```python
     class MyModule(equinox.Module):
@@ -262,6 +267,12 @@ class Module(metaclass=_ModuleMeta):
             else:
                 dynamic_field_names.append(name)
                 dynamic_field_values.append(value)
+        sentinel = object()
+        for name in _wrapper_field_names:
+            value = getattr(self, name, sentinel)
+            if value is not sentinel:
+                static_field_names.append(name)
+                static_field_values.append(value)
         return tuple(dynamic_field_values), (
             tuple(dynamic_field_names),
             tuple(static_field_names),

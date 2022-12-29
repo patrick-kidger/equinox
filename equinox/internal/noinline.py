@@ -462,4 +462,4 @@ def noinline(fn: Callable, abstract_fn: Optional[Callable] = None) -> Callable:
         _index_to_fn.append(static_fn)
     dynamic_index = jnp.array(dynamic_index)
     noinline_fn = _NoInlineWrapper(dynamic_index, abstract_fn, dynamic_fn)
-    return module_update_wrapper(noinline_fn, fn)
+    return module_update_wrapper(noinline_fn, abstract_fn)
