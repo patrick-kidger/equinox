@@ -1,7 +1,6 @@
 import jax
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
-import jax.interpreters.xla as xla
 import jax.numpy as jnp
 
 
@@ -31,11 +30,6 @@ def _unvmap_all_batch(x, batch_axes):
 unvmap_all_p.def_impl(_unvmap_all_impl)
 unvmap_all_p.def_abstract_eval(_unvmap_all_abstract_eval)
 batching.primitive_batchers[unvmap_all_p] = _unvmap_all_batch
-if hasattr(xla, "lower_fun"):
-    xla.register_translation(
-        unvmap_all_p,
-        xla.lower_fun(_unvmap_all_impl, multiple_results=False, new_style=True),
-    )
 mlir.register_lowering(
     unvmap_all_p,
     mlir.lower_fun(_unvmap_all_impl, multiple_results=False),
@@ -67,11 +61,6 @@ def _unvmap_any_batch(x, batch_axes):
 unvmap_any_p.def_impl(_unvmap_any_impl)
 unvmap_any_p.def_abstract_eval(_unvmap_any_abstract_eval)
 batching.primitive_batchers[unvmap_any_p] = _unvmap_any_batch
-if hasattr(xla, "lower_fun"):
-    xla.register_translation(
-        unvmap_any_p,
-        xla.lower_fun(_unvmap_any_impl, multiple_results=False, new_style=True),
-    )
 mlir.register_lowering(
     unvmap_any_p,
     mlir.lower_fun(_unvmap_any_impl, multiple_results=False),
@@ -103,11 +92,6 @@ def _unvmap_max_batch(x, batch_axes):
 unvmap_max_p.def_impl(_unvmap_max_impl)
 unvmap_max_p.def_abstract_eval(_unvmap_max_abstract_eval)
 batching.primitive_batchers[unvmap_max_p] = _unvmap_max_batch
-if hasattr(xla, "lower_fun"):
-    xla.register_translation(
-        unvmap_max_p,
-        xla.lower_fun(_unvmap_max_impl, multiple_results=False, new_style=True),
-    )
 mlir.register_lowering(
     unvmap_max_p,
     mlir.lower_fun(_unvmap_max_impl, multiple_results=False),

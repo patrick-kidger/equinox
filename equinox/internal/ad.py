@@ -5,9 +5,8 @@ import jax
 import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
-import jax.interpreters.xla as xla
 import jax.tree_util as jtu
-from jaxtyping import PyTree
+from jaxtyping import Array, PyTree
 
 from ..filters import combine, is_array, partition
 from .errors import error_if
@@ -16,32 +15,14 @@ from .errors import error_if
 _identity = lambda x, *, msg: x
 
 
-nondifferentiable_p = jax.core.Primitive("nondifferentiable")
+@ft.partial(jax.custom_jvp, nondiff_argnums=(0,))
+def _nondifferentiable(msg: str, x: PyTree[Array]):
+    return x
 
 
-def _nondifferentiable_batch(x, batch_axes, *, msg):
-    (x,) = x
-    (batch_axes,) = batch_axes
-    return nondifferentiable(x, msg=msg), batch_axes
-
-
-def _nondifferentiable_jvp(primals, tangents, *, msg):
+@_nondifferentiable.defjvp
+def _nondifferentiable_jvp(msg: str, primals, tangents):
     raise RuntimeError(msg)
-
-
-nondifferentiable_p.def_impl(_identity)
-nondifferentiable_p.def_abstract_eval(_identity)
-batching.primitive_batchers[nondifferentiable_p] = _nondifferentiable_batch
-if hasattr(xla, "lower_fun"):
-    xla.register_translation(
-        nondifferentiable_p,
-        xla.lower_fun(_identity, multiple_results=False, new_style=True),
-    )
-mlir.register_lowering(
-    nondifferentiable_p,
-    mlir.lower_fun(_identity, multiple_results=False),
-)
-ad.primitive_jvps[nondifferentiable_p] = _nondifferentiable_jvp
 
 
 def nondifferentiable(
@@ -53,14 +34,12 @@ def nondifferentiable(
     forward or reverse mode) then an error will be thrown.
     """
     dynamic, static = partition(x, is_array)
-    flat, treedef = jtu.tree_flatten(dynamic)
     if msg is None:
         if name is None:
             name = "This operation"
         msg = f"Unexpected tangent. {name} cannot be autodifferentiated."
-    bind = ft.partial(nondifferentiable_p.bind, msg=msg)
-    flat = map(bind, flat)
-    return combine(jtu.tree_unflatten(treedef, flat), static)
+    dynamic = _nondifferentiable(msg, dynamic)
+    return combine(dynamic, static)
 
 
 nondifferentiable_backward_p = jax.core.Primitive("nondifferentiable_backward")
@@ -97,22 +76,17 @@ def _nondifferentiable_backward_transpose(cts_in, _, *, msg):
 
 nondifferentiable_backward_p.def_impl(_identity)
 nondifferentiable_backward_p.def_abstract_eval(_identity)
-batching.primitive_batchers[
-    nondifferentiable_backward_p
-] = _nondifferentiable_backward_batch
-if hasattr(xla, "lower_fun"):
-    xla.register_translation(
-        nondifferentiable_backward_p,
-        xla.lower_fun(_identity, multiple_results=False, new_style=True),
-    )
-mlir.register_lowering(
-    nondifferentiable_backward_p,
-    mlir.lower_fun(_identity, multiple_results=False),
-)
 ad.primitive_jvps[nondifferentiable_backward_p] = _nondifferentiable_backward_jvp
 ad.primitive_transposes[
     nondifferentiable_backward_p
 ] = _nondifferentiable_backward_transpose
+batching.primitive_batchers[
+    nondifferentiable_backward_p
+] = _nondifferentiable_backward_batch
+mlir.register_lowering(
+    nondifferentiable_backward_p,
+    mlir.lower_fun(_identity, multiple_results=False),
+)
 
 
 def nondifferentiable_backward(

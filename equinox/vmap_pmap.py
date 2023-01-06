@@ -294,8 +294,8 @@ def filter_vmap(
 
     !!! example
 
-        `filter_vmap` can be used to easily create ensembles of models. For example, here's an
-        ensemble of eight MLPs:
+        `filter_vmap` can be used to easily create ensembles of models. For example,
+        here's an ensemble of eight MLPs:
 
         ```python
         import equinox as eqx

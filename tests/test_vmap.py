@@ -177,10 +177,8 @@ def test_named_reduction():
         y = x + 1
         return jax.lax.psum(y, axis_name="device")
 
-    n = 2
-    output = eqx.filter_vmap(f, axis_name="device")(jnp.zeros(n))
-
-    assert shaped_allclose(output, n * jnp.ones(n))
+    output = eqx.filter_vmap(f, axis_name="device")(jnp.zeros(2))
+    assert shaped_allclose(output, jnp.array([2.0, 2.0]))
 
 
 def test_map_non_jax():

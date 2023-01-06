@@ -4,7 +4,7 @@ import jax
 import jax.tree_util as jtu
 
 from .filters import combine, is_array, partition
-from .module import Module, Static
+from .module import Module, module_update_wrapper, Static
 
 
 def _is_struct(x):
@@ -55,4 +55,4 @@ def filter_make_jaxpr(fun):
     `int`, `float`, `complex`) are treated as static inputs; wrap them in JAX/NumPy
     arrays if you would like them to be traced.
     """
-    return _MakeJaxpr(fun)
+    return module_update_wrapper(_MakeJaxpr(fun), fun)

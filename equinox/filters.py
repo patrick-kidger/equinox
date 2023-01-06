@@ -1,4 +1,4 @@
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Tuple
 
 import jax.numpy as jnp
 import jax.tree_util as jtu
@@ -132,7 +132,7 @@ def partition(
     filter_spec: PyTree[BoolAxisSpec],
     replace: Any = None,
     is_leaf: Optional[Callable[[Any], bool]] = None,
-) -> PyTree:
+) -> Tuple[PyTree, PyTree]:
     """Splits a PyTree into two pieces. Equivalent to
     `filter(...), filter(..., inverse=True)`, but slightly more efficient.
 

@@ -327,7 +327,8 @@ def filter_closure_convert(fn, *args, **kwargs):
     """
     if isinstance(fn, types.FunctionType) and fn.__closure__ is None:
         # In this case, it's not possible to have any closed-over tracers.
-        # Convert to a PyTree nonetheless
+        # Skip jaxpr tracing for efficiency.
+        # For consistency, still make `fn` a static part of a PyTree.
         return _TrivialClosureConvert(fn)
     closed_jaxpr, out_dynamic_struct, out_static = filter_make_jaxpr(fn)(
         *args, **kwargs

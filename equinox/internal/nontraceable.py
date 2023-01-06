@@ -14,7 +14,7 @@ _identity = lambda x, *, name: x
 
 def _make_error(opname):
     def _error(*args, name):
-        raise RuntimeError("Detected {opname} of {name}")
+        raise RuntimeError(f"Detected {opname} of {name}")
 
     return _error
 
