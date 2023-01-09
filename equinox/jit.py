@@ -14,19 +14,17 @@ from .compile_utils import (
     hashable_partition,
 )
 from .custom_types import sentinel
-from .doc_utils import doc_strip_annotations
+from .deprecate import deprecated_0_10
 from .filters import combine, is_array, partition
 from .module import Module, module_update_wrapper, Static
 
 
 @compile_cache
-def _filter_jit_cache(fun_names, donate_default, **jitkwargs):
+def _filter_jit_cache(fun_names, jitkwargs):
     def fun_wrapped(dynamic, static):
         dynamic_fun, dynamic_spec = dynamic
         static_fun, static_spec = static
-
         fun = hashable_combine(dynamic_fun, static_fun)
-
         args, kwargs = hashable_combine(dynamic_spec, static_spec)
         out = fun(*args, **kwargs)
         dynamic_out, static_out = partition(out, is_array)
@@ -35,11 +33,7 @@ def _filter_jit_cache(fun_names, donate_default, **jitkwargs):
     fun_name, fun_qualname = fun_names
     fun_wrapped.__name__ = fun_name
     fun_wrapped.__qualname__ = fun_qualname
-
-    if donate_default:
-        return jax.jit(fun_wrapped, static_argnums=1, donate_argnums=0, **jitkwargs)
-    else:
-        return jax.jit(fun_wrapped, static_argnums=1, **jitkwargs)
+    return jax.jit(fun_wrapped, static_argnums=1, **jitkwargs)
 
 
 class _JitWrapper(Module):
@@ -83,7 +77,6 @@ class _JitWrapper(Module):
         return jtu.Partial(self, instance)
 
 
-@doc_strip_annotations
 def filter_jit(
     fun: Callable = sentinel, *, donate: str = "arrays", **jitkwargs
 ) -> Callable:
@@ -104,7 +97,6 @@ def filter_jit(
             unused buffers;
         - 'warn': as above, but don't suppress unused buffer warnings;
         - 'none': disables buffer donation.
-    - `**jitkwargs` are any other keyword arguments to `jax.jit`.
 
     **Returns:**
 
@@ -152,21 +144,30 @@ def filter_jit(
     if fun is sentinel:
         return ft.partial(filter_jit, donate=donate, **jitkwargs)
 
+    deprecated_0_10(jitkwargs, "default")
+    deprecated_0_10(jitkwargs, "fn")
+    deprecated_0_10(jitkwargs, "args")
+    deprecated_0_10(jitkwargs, "kwargs")
+    deprecated_0_10(jitkwargs, "out")
     if any(
         x in jitkwargs for x in ("static_argnums", "static_argnames", "donate_argnums")
     ):
         raise ValueError(
             "`jitkwargs` cannot contain 'static_argnums', 'static_argnames' or "
-            "'donate_argnums'."
+            "'donate_argnums'"
         )
     signature = inspect.signature(fun)
-    donate_default_dict = {"arrays": True, "warn": True, "none": False}
 
-    donate_default = donate_default_dict[donate]
+    if donate not in {"arrays", "warn", "none"}:
+        raise ValueError(
+            "`filter_jit(..., donate=...)` must be one of 'arrays', 'warn', or 'none'"
+        )
     filter_warning = True if donate == "arrays" else False
+    if donate != "none":
+        jitkwargs["donate_argnums"] = (0,)
 
     dynamic_fun, static_fun = hashable_partition(fun, is_array)
-    cached = _filter_jit_cache(get_fun_names(fun), donate_default, **jitkwargs)
+    cached = _filter_jit_cache(get_fun_names(fun), jitkwargs)
 
     jit_wrapper = _JitWrapper(
         _signature=signature,

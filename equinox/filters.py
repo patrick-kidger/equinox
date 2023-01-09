@@ -1,11 +1,12 @@
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple, Union
 
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
 from jaxtyping import PyTree
 
-from .custom_types import BoolAxisSpec, ResolvedBoolAxisSpec
+
+AxisSpec = Union[bool, Callable[[Any], bool]]
 
 
 #
@@ -59,7 +60,7 @@ def is_inexact_array_like(element: Any) -> bool:
 
 
 def _make_filter_tree(is_leaf):
-    def _filter_tree(mask: BoolAxisSpec, arg: Any) -> PyTree[ResolvedBoolAxisSpec]:
+    def _filter_tree(mask: AxisSpec, arg: Any) -> PyTree[bool]:
         if isinstance(mask, bool):
             return jtu.tree_map(lambda _: mask, arg, is_leaf=is_leaf)
         elif callable(mask):
@@ -74,7 +75,7 @@ def _make_filter_tree(is_leaf):
 
 def filter(
     pytree: PyTree,
-    filter_spec: PyTree[BoolAxisSpec],
+    filter_spec: PyTree[AxisSpec],
     inverse: bool = False,
     replace: Any = None,
     is_leaf: Optional[Callable[[Any], bool]] = None,
@@ -129,7 +130,7 @@ def filter(
 
 def partition(
     pytree: PyTree,
-    filter_spec: PyTree[BoolAxisSpec],
+    filter_spec: PyTree[AxisSpec],
     replace: Any = None,
     is_leaf: Optional[Callable[[Any], bool]] = None,
 ) -> Tuple[PyTree, PyTree]:

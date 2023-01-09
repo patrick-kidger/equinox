@@ -1,7 +1,8 @@
 from ..compile_utils import hashable_combine, hashable_partition
-from ..doc_utils import doc_repr, doc_strip_annotations
+from ..doc_utils import doc_repr
 from ..module import Static
 from ..pretty_print import tree_pp
+from ..vmap_pmap import if_mapped
 from .ad import (
     nondifferentiable,
     nondifferentiable_backward,

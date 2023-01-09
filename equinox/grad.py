@@ -1,7 +1,6 @@
 import functools as ft
 import types
 import typing
-import warnings
 from typing import Any, Callable, Dict
 
 import jax
@@ -9,8 +8,8 @@ import jax.interpreters.ad as ad
 import jax.tree_util as jtu
 from jaxtyping import Array, PyTree
 
-from .custom_types import BoolAxisSpec, sentinel
-from .doc_utils import doc_strip_annotations
+from .custom_types import sentinel
+from .deprecate import deprecated_0_10
 from .filters import (
     combine,
     filter,
@@ -25,18 +24,18 @@ from .module import Module, module_update_wrapper, Static, static_field
 
 class _ValueAndGradWrapper(Module):
     _fun: Callable
-    _arg: PyTree[BoolAxisSpec]
+    _has_aux: bool
     _gradkwargs: Dict[str, Any]
 
     # Try to avoid clashes with existing argument names.
     # TODO: use "/" once we're on Python 3.8.
     def __call__(__self, __x, *args, **kwargs):
-        @ft.partial(jax.value_and_grad, argnums=0, **__self._gradkwargs)
+        @ft.partial(jax.value_and_grad, has_aux=__self._has_aux, **__self._gradkwargs)
         def fun_value_and_grad(_diff_x, _nondiff_x, *_args, **_kwargs):
             _x = combine(_diff_x, _nondiff_x)
             return __self._fun(_x, *_args, **_kwargs)
 
-        diff_x, nondiff_x = partition(__x, __self._arg)
+        diff_x, nondiff_x = partition(__x, is_inexact_array)
         return fun_value_and_grad(diff_x, nondiff_x, *args, **kwargs)
 
     def __get__(self, instance, owner):
@@ -63,25 +62,37 @@ class _GradWrapper(Module):
         return jtu.Partial(self, instance)
 
 
-@doc_strip_annotations
 def filter_value_and_grad(
-    fun: Callable = sentinel,
-    *,
-    arg: PyTree[BoolAxisSpec] = is_inexact_array,
-    **gradkwargs,
+    fun: Callable = sentinel, *, has_aux: bool = False, **gradkwargs
 ) -> Callable:
-    """As [`equinox.filter_grad`][], except that it is `jax.value_and_grad` that is
-    wrapped.
+    """Creates a function that evaluates both `fun` and the gradient of `fun`.
+
+    The gradient will be computed with respect to all floating-point JAX/NumPy arrays
+    in the first argument. (Which should be a PyTree.)
+
+    Any nondifferentiable leaves in the first argument will have `None` as the gradient.
+
+    **Arguments:**
+
+    - `fun` is a pure function to differentiate.
+    - `has_aux`: if `True` then `fun` should return a pair; the first element is the
+        output to be differentiated and the second element is auxiliary data.
+
+    **Returns:**
+
+    A function with the same arguments as `fun`, that evaluates both `fun` and computes
+    the derivative of `fun` with respect to its first input. Any nondifferentiable
+    leaves will have `None` as the gradient.
+
+    If `has_aux` is `True` then a nested tuple `((value, aux), gradient)` is returned.
+    If `has_aux` is `False` then the pair `(value, gradient)` is returned.
     """
 
     if fun is sentinel:
-        return ft.partial(filter_value_and_grad, arg=arg, **gradkwargs)
+        return ft.partial(filter_value_and_grad, has_aux=has_aux, **gradkwargs)
 
-    filter_spec = gradkwargs.pop("filter_spec", None)
-    if filter_spec is not None:
-        warnings.warn("For brevity the `filter_spec` argument has been renamed `arg`")
-        arg = filter_spec
-
+    deprecated_0_10(gradkwargs, "arg")
+    deprecated_0_10(gradkwargs, "filter_spec")
     argnums = gradkwargs.pop("argnums", None)
     if argnums is not None:
         raise ValueError(
@@ -90,40 +101,31 @@ def filter_value_and_grad(
             "as the first argument."
         )
 
-    return module_update_wrapper(_ValueAndGradWrapper(fun, arg, gradkwargs), fun)
+    return module_update_wrapper(_ValueAndGradWrapper(fun, has_aux, gradkwargs), fun)
 
 
-@doc_strip_annotations
-def filter_grad(
-    fun: Callable = sentinel,
-    *,
-    arg: PyTree[BoolAxisSpec] = is_inexact_array,
-    **gradkwargs,
-):
-    """Backpropates through `fun". As `jax.grad`, but accepts arbitrary PyTrees as
-    inputs. (Not just JAXable types.)
+def filter_grad(fun: Callable = sentinel, *, has_aux: bool = False, **gradkwargs):
+    """Creates a function that computes the gradient of `fun`.
 
-    !!! info
+    The gradient will be computed with respect to all floating-point JAX/NumPy arrays
+    in the first argument. (Which should be a PyTree.)
 
-        By default, all inexact (floating-point) JAX arrays are differentiated. Any
-        nondifferentiable leaves will have `None` as the gradient.
-
+    Any nondifferentiable leaves in the first argument will have `None` as the gradient.
 
     **Arguments:**
 
     - `fun` is a pure function to differentiate.
-    - `arg` is a PyTree whose structure should be a prefix of the structure of
-        the **first** argument to `fun`. It behaves as the `filter_spec` argument to
-        [`equinox.filter`][]. Truthy values will be differentiated; falsey values will
-        not.
-    - `**gradkwargs` are any other keyword arguments to `jax.grad`.
+    - `has_aux`: if `True` then `fun` should return a pair; the first element is the
+        output to be differentiated and the second element is auxiliary data.
 
     **Returns:**
 
-    A function computing the derivative of `fun` with respect to its first input. Any
-    nondifferentiable leaves will have `None` as the gradient. See
-    [`equinox.apply_updates`][] for a convenience function that will only attempt to
-    apply non-`None` updates.
+    A function with the same arguments as `fun`, that computes the derivative of `fun`
+    with respect to its first input. Any nondifferentiable leaves will have `None` as
+    the gradient.
+
+    If `has_aux` is `True` then a pair `(gradient, aux)` is returned. If `has_aux` is
+    `False` then just the `gradient` is returned.
 
     !!! tip
 
@@ -139,14 +141,18 @@ def filter_grad(
             x, y = x__y
             return func(x, y)
         ```
+
+    !!! info
+
+        See also [`equinox.apply_updates`][] for a convenience function that applies
+        non-`None` gradient updates to a model.
+
     """
 
     if fun is sentinel:
-        return ft.partial(filter_grad, arg=arg, **gradkwargs)
+        return ft.partial(filter_grad, has_aux=has_aux, **gradkwargs)
 
-    has_aux = gradkwargs.get("has_aux", False)
-
-    fun_value_and_grad = filter_value_and_grad(fun, arg=arg, **gradkwargs)
+    fun_value_and_grad = filter_value_and_grad(fun, has_aux=has_aux, **gradkwargs)
     return module_update_wrapper(_GradWrapper(fun_value_and_grad, has_aux), fun)
 
 

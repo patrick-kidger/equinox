@@ -91,7 +91,7 @@ def test_call():
 
         def vcall(y):
             f, x = y
-            return eqx.filter_vmap(call, args=batch_axes)(f, x)
+            return eqx.filter_vmap(call, in_axes=batch_axes)(f, x)
 
         out = newprim(vcall, inputs)
         make_zero = lambda x: 0 if eqx.is_array(x) else None

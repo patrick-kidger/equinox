@@ -31,7 +31,7 @@ from .serialisation import (
 )
 from .tree import tree_at, tree_equal, tree_inference
 from .update import apply_updates
-from .vmap_pmap import filter_pmap, filter_vmap
+from .vmap_pmap import filter_pmap, filter_vmap, if_array
 
 
 __version__ = "0.9.2"

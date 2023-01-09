@@ -176,7 +176,7 @@ class _MetaBatchTransform(Module):
     batch_axes: PyTree[Union[batching.not_mapped, int]]
 
     def __call__(self, static_fn):
-        return filter_vmap(static_fn, args=(self.batch_axes,))
+        return filter_vmap(static_fn, in_axes=(self.batch_axes,))
 
 
 @filter_primitive_def

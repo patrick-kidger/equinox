@@ -12,27 +12,11 @@ import equinox as eqx
 from .helpers import shaped_allclose
 
 
-@pytest.mark.parametrize("api_version", (0, 1))
-def test_filter_grad1(api_version, getkey):
-    a = jrandom.normal(getkey(), (2, 3))
-
-    def f(x):
-        return jnp.sum(x)
-
-    if api_version == 0:
-        f = eqx.filter_grad(f, filter_spec=lambda _: True)
-    else:
-        f = eqx.filter_grad(arg=True)(f)
-
-    grad_f = f(a)
-    assert jnp.all(grad_f == 1)
-
-
-@pytest.mark.parametrize("api_version", (0, 1))
-def test_filter_grad2(api_version, getkey):
+def test_filter_grad(getkey):
     a = jrandom.normal(getkey(), (2, 3))
     b = jrandom.normal(getkey(), (2, 3))
 
+    @eqx.filter_grad
     def f(x):
         sum = 0.0
         for arg in jtu.tree_leaves(x):
@@ -40,20 +24,15 @@ def test_filter_grad2(api_version, getkey):
                 sum = sum + jnp.sum(arg)
         return sum
 
-    if api_version == 0:
-        f = eqx.filter_grad(f, filter_spec=eqx.is_inexact_array)
-    else:
-        f = eqx.filter_grad(arg=eqx.is_inexact_array)(f)
-
     ga, gb = f([a, b])
-    assert jnp.all(ga == 1)
-    assert jnp.all(gb == 1)
+    assert shaped_allclose(ga, jnp.ones((2, 3)))
+    assert shaped_allclose(gb, jnp.ones((2, 3)))
 
     gtrue, ghi, gobject, ga = f([True, "hi", object(), a])
     assert gtrue is None
     assert ghi is None
     assert gobject is None
-    assert jnp.all(ga == 1)
+    assert shaped_allclose(ga, jnp.ones((2, 3)))
 
     gtrue, gdict, (g5, g1), gnp = f(
         [
@@ -66,88 +45,40 @@ def test_filter_grad2(api_version, getkey):
     assert gtrue is None
     assert list(gdict.keys()) == ["hi"]
     assert isinstance(gdict["hi"], eqx.nn.Linear)
-    assert jnp.all(gdict["hi"].weight == 1)
-    assert jnp.all(gdict["hi"].bias == 1)
+    assert shaped_allclose(gdict["hi"].weight, jnp.ones((1, 1)))
+    assert shaped_allclose(gdict["hi"].bias, jnp.ones(1))
     assert g5 is None
     assert g1 is None
-    assert jnp.all(gnp == 1)
-
-
-@pytest.mark.parametrize("api_version", (0, 1))
-def test_filter_grad3(api_version, getkey):
-    a = jrandom.normal(getkey(), (2, 3))
-    b = jrandom.normal(getkey(), (1, 2))
-    c = jrandom.normal(getkey(), ())
-
-    def f(x):
-        return jnp.sum(x[0]) + jnp.sum(x[1])
-
-    if api_version == 0:
-        f = eqx.filter_grad(f, filter_spec=[True, False])
-    else:
-        f = eqx.filter_grad(arg=[True, False])(f)
-
-    ga, gb = f([a, b])
-    assert jnp.all(ga == 1)
-    assert gb is None
-
-    def h(x, y):
-        return jnp.sum(x["a"]) * jnp.sum(x["b"]) * y
-
-    if api_version == 0:
-        h = eqx.filter_grad(h, filter_spec={"a": True, "b": False})
-    else:
-        h = eqx.filter_grad(arg={"a": True, "b": False})(h)
-
-    grad = h({"a": a, "b": b}, c)
-    assert jnp.allclose(grad["a"], jnp.sum(b) * c)
-    assert grad["b"] is None
-
-    with pytest.raises(ValueError):
-        grad = h(c, {"a": a, "b": b})
+    assert shaped_allclose(gnp, jnp.ones(2))
 
 
 # TODO: more comprehensive tests on this.
-@pytest.mark.parametrize("api_version", (0, 1))
-def test_filter_value_and_grad(api_version, getkey):
+def test_filter_value_and_grad(getkey):
     a = jrandom.normal(getkey(), (2, 3))
 
+    @eqx.filter_value_and_grad
     def f(x):
         return jnp.sum(x)
 
-    if api_version == 0:
-        f = eqx.filter_value_and_grad(f, filter_spec=eqx.is_inexact_array)
-    else:
-        f = eqx.filter_value_and_grad(arg=eqx.is_inexact_array)(f)
-
     val, grad = f(a)
-    assert val == jnp.sum(a)
-    assert jnp.all(grad == 1)
+    assert shaped_allclose(val, jnp.sum(a))
+    assert shaped_allclose(grad, jnp.ones((2, 3)))
 
 
-@pytest.mark.parametrize("api_version", (0, 1))
-def test_aux(api_version, getkey):
+def test_aux(getkey):
     a = jrandom.normal(getkey(), (2, 3))
 
+    @eqx.filter_grad(has_aux=True)
     def f(x):
         return jnp.sum(x), "hi"
-
-    if api_version == 0:
-        f = eqx.filter_grad(f, has_aux=True, filter_spec=eqx.is_inexact_array)
-    else:
-        f = eqx.filter_grad(has_aux=True, arg=eqx.is_inexact_array)(f)
 
     grad, aux = f(a)
     assert aux == "hi"
     assert jnp.all(grad == 1)
 
+    @eqx.filter_value_and_grad(has_aux=True)
     def f(x):
         return jnp.sum(x), "hi"
-
-    if api_version == 0:
-        f = eqx.filter_value_and_grad(f, has_aux=True, filter_spec=eqx.is_inexact_array)
-    else:
-        f = eqx.filter_value_and_grad(has_aux=True, arg=eqx.is_inexact_array)(f)
 
     (value, aux), grad = f(a)
     assert value == jnp.sum(a)
