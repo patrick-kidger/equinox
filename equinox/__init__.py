@@ -34,4 +34,4 @@ from .update import apply_updates
 from .vmap_pmap import filter_pmap, filter_vmap, if_array
 
 
-__version__ = "0.9.2"
+__version__ = "0.10.0"
