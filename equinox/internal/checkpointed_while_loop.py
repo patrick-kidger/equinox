@@ -106,7 +106,7 @@ def checkpointed_while_loop(
 
         This function is not forward-mode autodifferentiable.
 
-    !!! cite "References"
+    ??? cite "References"
 
         Selecting which steps at which to save checkpoints (and when this is done, which
         old checkpoint to evict) is important for minimising the amount of recomputation
@@ -144,7 +144,7 @@ def checkpointed_while_loop(
         ```
 
         For reference, the classical "offline checkpointing" (also known as "treeverse",
-        "recursive binary checkpointing", "revolved" etc.) was developed in:
+        "recursive binary checkpointing", "revolve" etc.) was developed in:
 
         ```bibtex
         @article{griewank1992achieving,
