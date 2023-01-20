@@ -122,5 +122,6 @@ nav:
         - Experimental:
             - 'api/experimental/stateful.md'
     - Misc:
+        - 'tricks.md'
         - 'citation.md'
         - 'faq.md'
