@@ -120,7 +120,21 @@ class _VmapWrapper(Module):
             )
         del kwargs
 
-        def _fun_wrapper(_args):
+        # JAX only actually supports passing array-typed values as inputs.
+        # Interestingly it's usually still fine to pass non-array-typed values as
+        # broadcast inputs. *Unless* you mess up with an inconsistent axis size, in
+        # which case it tries to get the axis sizes of all inputs and then fails on the
+        # non-array inputs.
+        # e.g:
+        # ```
+        # jax.vmap(lambda x, y, z: 0,
+        #          in_axes=(0, 0, None))(jnp.arange(3), jnp.arange(5), object())
+        # ```
+        unmapped_axis = jtu.tree_map(_is_none, __self._in_axes, is_leaf=_is_none)
+        static_args, dynamic_args = partition(args, unmapped_axis)
+
+        def _fun_wrapper(_dynamic_args):
+            _args = combine(_dynamic_args, static_args)
             _out = __self._fun(*_args)
             _out_axes = _resolve_axes(_out, __self._out_axes)
             _none_axes = jtu.tree_map(_is_none, _out_axes, is_leaf=_is_none)
@@ -136,7 +150,7 @@ class _VmapWrapper(Module):
             axis_name=__self._axis_name,
             axis_size=__self._axis_size,
             **__self._vmapkwargs,
-        )(args)
+        )(dynamic_args)
         nonvmapd, out_axes = static.value
 
         assert jtu.tree_structure(vmapd) == jtu.tree_structure(out_axes)
