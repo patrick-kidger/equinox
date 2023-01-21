@@ -46,6 +46,7 @@ and
 #   their Figure 2.2 does?)
 
 import functools as ft
+import math
 import operator
 from typing import Callable, Optional, TypeVar, Union
 
@@ -74,7 +75,7 @@ def checkpointed_while_loop(
     init_val: _T,
     max_steps: Optional[int] = None,
     *,
-    checkpoints: int,
+    checkpoints: Optional[int] = None,
 ):
     """Reverse-mode autodifferentiable while loop, using optimal online checkpointing.
 
@@ -174,6 +175,36 @@ def checkpointed_while_loop(
         }
         ```
     """
+    if checkpoints is None:
+        if max_steps is None:
+            raise ValueError(
+                "Must specify either `max_steps` or `checpoints` in "
+                "`equinox.internal.checkpointed_while_loop`."
+            )
+        # Binomial logarithmic growth is what is needed in classical treeverse.
+        #
+        # Moreover this is optimal even in the online case, as provided
+        # `max_steps >= 21`
+        # then
+        # `checkpoints = ceil(log2(max_steps))`
+        # satisfies
+        # `max_steps <= (checkpoints + 1)(checkpoints + 2)/2`
+        # which is the condition for optimality.
+        #
+        # Meanwhile if
+        # `max_steps <= 20`
+        # then we handle it as a special case, to once again ensure we satisfy
+        # `max_steps <= (checkpoints + 1)(checkpoints + 2)/2`
+        #
+        # The optimality condition is equation (2.2) of
+        # "New Algorithms for Optimal Online Checkpointing", Stumm and Walther 2010.
+        # https://tu-dresden.de/mn/math/wir/ressourcen/dateien/forschung/publikationen/pdf2010/new_algorithms_for_optimal_online_checkpointing.pdf
+        if max_steps <= 20:
+            checkpoints = 1
+            while (checkpoints + 1) * (checkpoints + 2) < 2 * max_steps:
+                checkpoints += 1
+        else:
+            checkpoints = math.ceil(math.log2(max_steps))
     if checkpoints < 1:
         raise ValueError("Must have at least one checkpoint")
     if max_steps == 0:

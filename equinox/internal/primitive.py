@@ -311,7 +311,8 @@ def _vprim_abstract_eval(*inputs, prim, __batch_axes, params):
 def _resolve_zeros_t(tangent, batch_axis):
     if type(tangent) is ad.Zero and isinstance(batch_axis, int):
         aval = tangent.aval
-        if type(aval) is not jax.core.ShapedArray:
+        # Also accepts ConcreteArrays
+        if not isinstance(aval, jax.core.ShapedArray):
             raise NotImplementedError(
                 "vprim only currently supports ShapedArrays for symbolic zeros"
             )
@@ -341,9 +342,10 @@ def _vprim_jvp(primals, tangents, *, prim, __batch_axes, params):
 def _resolve_undefined_i(input, batch_axis):
     if type(input) is ad.UndefinedPrimal and isinstance(batch_axis, int):
         aval = input.aval
-        if type(aval) is not jax.core.ShapedArray:
+        # Also accepts ConcreteArrays
+        if not isinstance(aval, jax.core.ShapedArray):
             raise NotImplementedError(
-                "vprim only currently supports shaped arrays for undefined primals"
+                "vprim only currently supports ShapedArrays for undefined primals"
             )
         shape = aval.shape[:batch_axis] + aval.shape[batch_axis + 1 :]
         return ad.UndefinedPrimal(jax.core.ShapedArray(shape, aval.dtype))

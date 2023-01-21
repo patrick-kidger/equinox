@@ -286,8 +286,7 @@ def _pp_transform(x):
 
 
 def _noinline_pretty_print(eqn, context, settings):
-    _, (abstract_fn_leaves, abstract_fn_treedef), transforms, _ = eqn.params["static"]
-    abstract_fn = jtu.tree_unflatten(abstract_fn_treedef, abstract_fn_leaves)
+    _, abstract_fn, transforms, _ = eqn.params["static"]
     pretty_params = dict(abstract_fn=abstract_fn)
     if type(eqn.invars[0]) is jax.core.Literal:
         static_fn_leaves, static_fn_treedef = _index_to_fn[eqn.invars[0].val]

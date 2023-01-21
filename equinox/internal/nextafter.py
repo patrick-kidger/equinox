@@ -15,7 +15,11 @@ def nextafter(x: Array) -> Array:
     return jnp.where(x == 0, jnp.finfo(x.dtype).tiny, y)
 
 
-nextafter.defjvps(lambda x_dot, _, __: x_dot)
+@nextafter.defjvp
+def nextafter_jvp(primals, tangents):
+    (x,) = primals
+    (tx,) = tangents
+    return nextafter(x), tx
 
 
 @jax.custom_jvp
@@ -25,4 +29,8 @@ def prevbefore(x: Array) -> Array:
     return jnp.where(x == 0, -jnp.finfo(x.dtype).tiny, y)
 
 
-prevbefore.defjvps(lambda x_dot, _, __: x_dot)
+@prevbefore.defjvp
+def prevbefore_jvp(primals, tangents):
+    (x,) = primals
+    (tx,) = tangents
+    return prevbefore(x), tx

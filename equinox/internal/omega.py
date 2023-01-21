@@ -1,5 +1,5 @@
 import operator
-from typing import Optional
+from typing import Callable, Optional
 
 import jax.numpy as jnp
 import jax.tree_util as jtu
@@ -64,7 +64,7 @@ class ω(metaclass=_Metaω):
         return _ωUpdateHelper(self.ω, self.is_leaf)
 
 
-def _equal_code(fn1: Optional[callable], fn2: Optional[callable]):
+def _equal_code(fn1: Optional[Callable], fn2: Optional[Callable]):
     """Checks whether fn1 and fn2 both have the same code.
 
     It's essentially impossible to see if two functions are equivalent, so this won't,

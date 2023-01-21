@@ -1,4 +1,3 @@
-import abc
 import functools as ft
 import inspect
 import weakref
@@ -7,6 +6,7 @@ from typing import Any
 
 import jax.tree_util as jtu
 
+from .better_abc import ABCMeta
 from .pretty_print import tree_pformat
 from .tree import tree_equal
 
@@ -30,11 +30,11 @@ def static_field(**kwargs):
         ```
 
     In practice this should rarely be used; it is usually preferential to just filter
-    out each field with `eqx.filter` whenever you need to select only some fields.
+    out each field with `eqx.partition` whenever you need to select only some fields.
 
     **Arguments:**
 
-    - `**kwargs`: If any are passed then they are passed on to `datacalss.field`.
+    - `**kwargs`: If any are passed then they are passed on to `dataclass.field`.
         (Recall that Equinox uses dataclasses for its modules.)
     """
     try:
@@ -66,9 +66,9 @@ def _not_magic(k: str) -> bool:
 _has_dataclass_init = weakref.WeakKeyDictionary()
 
 
-# Inherits from abc.ABCMeta as a convenience for a common use-case.
+# Inherits from ABCMeta as a convenience for a common use-case.
 # It's not a feature we use ourselves.
-class _ModuleMeta(abc.ABCMeta):
+class _ModuleMeta(ABCMeta):
     def __new__(mcs, name, bases, dict_):
         dict_ = {
             k: _wrap_method(v) if _not_magic(k) and inspect.isfunction(v) else v

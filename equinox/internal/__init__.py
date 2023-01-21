@@ -1,3 +1,8 @@
+# These are the pieces which depend on JAX-internal functionality, and thus shouldn't
+# be part of the stable Equinox API.
+# These are the pieces which just don't have a home in the main Equinox API. At some
+# point we could consider spinning them up some other namespace.
+from ..better_abc import abstractattribute
 from ..compile_utils import hashable_combine, hashable_partition
 from ..doc_utils import doc_repr
 from ..module import Static
@@ -17,6 +22,8 @@ from .finalise_jaxpr import (
     finalise_jaxpr,
     finalise_jaxpr_as_fn,
     finalise_make_jaxpr,
+    primitive_finalisations,
+    register_impl_finalisation,
 )
 from .misc import ContainerMeta, left_broadcast_to
 from .nextafter import nextafter, prevbefore
