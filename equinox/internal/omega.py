@@ -47,6 +47,9 @@ class ω(metaclass=_Metaω):
         self.ω = value
         self.is_leaf = is_leaf
 
+    def __repr__(self):
+        return f"ω({self.ω})"
+
     def __getitem__(self, item):
         return ω(
             jtu.tree_map(lambda x: x[item], self.ω, is_leaf=self.is_leaf),

@@ -22,6 +22,7 @@ from ..tree import tree_equal
 
 _like_sentinel = object()
 _dummy_none = object()
+_missing_dynamic = object()
 
 
 # Not a PyTree
@@ -56,6 +57,13 @@ def _is_array_like_internal(x):
 def _zero_from_primal(p):
     assert type(p) is not ad.UndefinedPrimal
     return ad.Zero(jax.core.get_aval(p).at_least_vspace())
+
+
+def _combine(dynamic, static):
+    iter_dynamic = iter(dynamic)
+    out = [next(iter_dynamic) if x is _missing_dynamic else x for x in static]
+    assert next(iter_dynamic, None) is None
+    return out
 
 
 def _is_none(x):
@@ -132,8 +140,8 @@ def filter_primitive_def(rule):
     These can now take arbitrary inputs and outputs.
     """
 
-    def _wrapper(*flat, treedef, static, flatten):
-        args = combine(jtu.tree_unflatten(treedef, flat), static)
+    def _wrapper(*dynamic, treedef, static, flatten):
+        args = jtu.tree_unflatten(treedef, _combine(dynamic, static))
         out = rule(*args)
         return flatten(out)
 
@@ -151,9 +159,10 @@ def filter_primitive_jvp(rule):
     """
 
     def _wrapper(primals, tangents, *, treedef, static, flatten):
-        primals = combine(jtu.tree_unflatten(treedef, primals), static)
         tangents = [None if type(t) is ad.Zero else t for t in tangents]
-        tangents = jtu.tree_unflatten(treedef, tangents)
+        tangents_static = [x if x is _missing_dynamic else None for x in static]
+        primals = jtu.tree_unflatten(treedef, _combine(primals, static))
+        tangents = jtu.tree_unflatten(treedef, _combine(tangents, tangents_static))
         primals_out, tangents_out = rule(primals, tangents)
         flat_primals_out, flat_tangents_out = flatten(primals_out, tangents_out)
         flat_tangents_out = [
@@ -179,13 +188,13 @@ def filter_primitive_transpose(rule):
     cotangent, should have cotangent `None`.
     """
 
-    def _wrapper(cts_out, *flat, treedef, static, flatten):
+    def _wrapper(cts_out, *dynamic, treedef, static, flatten):
         treedef_out, _ = flatten.get()
         cts_out = [None if type(ct) is ad.Zero else ct for ct in cts_out]
         cts_out = jtu.tree_unflatten(treedef_out, cts_out)
-        wrapped_flat = [_wrap_undefined(x) for x in flat]
-        wrapped_dynamic = jtu.tree_unflatten(treedef, wrapped_flat)
-        wrapped_inputs = combine(wrapped_dynamic, static)
+        wrapped_dynamic = [_wrap_undefined(x) for x in dynamic]
+        wrapped_flat = _combine(wrapped_dynamic, static)
+        wrapped_inputs = jtu.tree_unflatten(treedef, wrapped_flat)
         inputs = jtu.tree_map(_unwrap_undefined, wrapped_inputs)
         cts = rule(inputs, cts_out)
         flat_inputs, flat_cts = Flatten()(wrapped_inputs, cts)
@@ -194,7 +203,7 @@ def filter_primitive_transpose(rule):
             _zero_from_primal(p) if ct is None else ct
             for p, ct in zip(flat_inputs, flat_cts)
         ]
-        assert len(flat) == len(flat_cts)
+        assert len(dynamic) == len(flat_cts)
         return flat_cts
 
     return _wrapper
@@ -209,9 +218,12 @@ def filter_primitive_batching(rule):
     for all non-JAX-arrays.
     """
 
-    def _wrapper(flat, batch_axes, *, treedef, static, flatten):
-        inputs = combine(jtu.tree_unflatten(treedef, flat), static)
+    def _wrapper(dynamic, batch_axes, *, treedef, static, flatten):
+        flat = _combine(dynamic, static)
+        inputs = jtu.tree_unflatten(treedef, flat)
         batch_axes = [None if b is batching.not_mapped else b for b in batch_axes]
+        batch_axes_static = [x if x is _missing_dynamic else None for x in static]
+        batch_axes = _combine(batch_axes, batch_axes_static)
         batch_axes = jtu.tree_unflatten(treedef, batch_axes)
         out, batch_axes = rule(inputs, batch_axes)
         flat_out, flat_batch_axes = flatten(out, batch_axes)
@@ -228,10 +240,16 @@ def filter_primitive_bind(prim: jax.core.Primitive, *args) -> PyTree:
     functions above.
     """
     assert prim.multiple_results
-    dynamic, static = partition(args, is_array)
-    flat, treedef = jtu.tree_flatten(dynamic)
+    # If `args` constains a Jaxpr or ClosedJaxpr in its leaves, then it ends up as a
+    # member of the `static` tuple. This is important to ensure that jaxpr-rewriting
+    # passes are able to find it.
+    # (E.g. if `eqx.filter_closure_convert(...)` is an argument and we apply
+    # `jax.core.jaxprs_in_params`.)
+    flat, treedef = jtu.tree_flatten(args)
+    dynamic = [x for x in flat if is_array(x)]
+    static = tuple(_missing_dynamic if is_array(x) else x for x in flat)
     flatten = Flatten()
-    flat_out = prim.bind(*flat, treedef=treedef, static=static, flatten=flatten)
+    flat_out = prim.bind(*dynamic, treedef=treedef, static=static, flatten=flatten)
     treedef_out, static_out = flatten.get()
     return combine(jtu.tree_unflatten(treedef_out, flat_out), static_out)
 

@@ -58,7 +58,7 @@ import jax.numpy as jnp
 import jax.tree_util as jtu
 from jaxtyping import Array, Bool
 
-from ..filters import is_inexact_array
+from ..filters import combine, is_array, is_inexact_array, partition
 from ..grad import filter_closure_convert, filter_custom_vjp, filter_vjp
 from .ad import nondifferentiable
 from .errors import error_if
@@ -618,38 +618,42 @@ def _calc_next_checkpoint(step_val, step_grad_val, index, checkpoints):
     return step_next_checkpoint
 
 
-def _fwd(
-    body_fun,
-    step_val,
-    step_grad_val,
-    step_next_checkpoint,
-    index,
-    val,
-    grad_val,
-    grad_body_fun,
-):
-    """Propagates the primal forward one step."""
-    (step_val,) = _assert_unbatched(step_val)
-    step_val2 = step_val + 1
-    val2 = body_fun(val)
-    (step_val2,) = _assert_unbatched(step_val2)
-    return (
-        step_val2,
+def _make_fwd(static_body_fun):
+    def _fwd(
+        dynamic_body_fun,
+        step_val,
         step_grad_val,
         step_next_checkpoint,
         index,
-        val2,
+        val,
         grad_val,
         grad_body_fun,
-    )
+    ):
+        """Propagates the primal forward one step."""
+        (step_val,) = _assert_unbatched(step_val)
+        step_val2 = step_val + 1
+        body_fun = combine(dynamic_body_fun, static_body_fun)
+        val2 = body_fun(val)
+        (step_val2,) = _assert_unbatched(step_val2)
+        return (
+            step_val2,
+            step_grad_val,
+            step_next_checkpoint,
+            index,
+            val2,
+            grad_val,
+            grad_body_fun,
+        )
+
+    return _fwd
 
 
-def _make_u_turn(residual_steps, residuals, checkpoints):
+def _make_u_turn(static_body_fun, residual_steps, residuals, checkpoints):
     """Propagates the cotangent backward one step."""
     (residual_steps,) = _assert_unbatched(residual_steps)
 
     def _u_turn(
-        body_fun,
+        dynamic_body_fun,
         step_val,
         step_grad_val,
         step_next_checkpoint,
@@ -665,6 +669,7 @@ def _make_u_turn(residual_steps, residuals, checkpoints):
         #
         # We pass in `body_fun` as an argument as it contains its closed-over values
         # in its PyTree structure, and we do want to compute cotangents wrt these.
+        body_fun = combine(dynamic_body_fun, static_body_fun)
         _, vjp_fn = filter_vjp(lambda b, v: b(v), body_fun, val)
 
         grad_body_fun_update, grad_val2 = vjp_fn(grad_val)
@@ -743,6 +748,7 @@ def _checkpointed_while_loop_bwd(
 
         perform_u_turn = step_val + 1 == unvmap_max(step_grad_val)
         (perform_u_turn,) = _assert_unbatched(perform_u_turn)
+        dynamic_body_fun, static_body_fun = partition(body_fun, is_array)
         (
             step_val2,
             step_grad_val2,
@@ -753,9 +759,9 @@ def _checkpointed_while_loop_bwd(
             grad_body_fun2,
         ) = lax.cond(
             perform_u_turn,
-            _make_u_turn(residual_steps, residuals, checkpoints),
-            _fwd,
-            body_fun,
+            _make_u_turn(static_body_fun, residual_steps, residuals, checkpoints),
+            _make_fwd(static_body_fun),
+            dynamic_body_fun,
             step_val,
             unvmap_max(step_grad_val),
             step_next_checkpoint,

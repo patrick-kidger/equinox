@@ -266,15 +266,11 @@ def filter_vjp(fun, *primals, has_aux=False):
         return out, vjp_fn
 
 
-class _TrivialClosureConvert(Module):
-    fn: Callable = static_field()
-
-    def __call__(self, *args, **kwargs):
-        return self.fn(*args, **kwargs)
-
-
 class _ClosureConvert(Module):
-    jaxpr: jax.core.Jaxpr = static_field()
+    # Important that `jaxpr` be a leaf (and not static), so that it is a tuple element
+    # when passing through `filter_primitive_bind` and thus visible to
+    # `jax.core.subjaxprs`
+    jaxpr: jax.core.Jaxpr
     consts: PyTree[Array]  # Captured in the PyTree structure of _ClosureConvert
     out_dynamic_struct: PyTree[jax.ShapeDtypeStruct] = static_field()
     out_static: PyTree[Any] = static_field()
@@ -334,8 +330,7 @@ def filter_closure_convert(fn, *args, **kwargs):
     if isinstance(fn, types.FunctionType) and fn.__closure__ is None:
         # In this case, it's not possible to have any closed-over tracers.
         # Skip jaxpr tracing for efficiency.
-        # For consistency, still make `fn` a static part of a PyTree.
-        return _TrivialClosureConvert(fn)
+        return fn
     closed_jaxpr, out_dynamic_struct, out_static = filter_make_jaxpr(fn)(
         *args, **kwargs
     )
