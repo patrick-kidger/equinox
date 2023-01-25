@@ -1,4 +1,5 @@
 import functools as ft
+import timeit
 
 import jax
 import jax.lax as lax
@@ -268,3 +269,89 @@ def test_vmap_cotangent(getkey):
     true_jac = true_run((init_val, mlp))
     jac = run((init_val, mlp))
     assert shaped_allclose(jac, true_jac, rtol=1e-4, atol=1e-4)
+
+
+def _linearised_checkpointed_while_loop(cond_fun, body_fun, init_val):
+    while_loop = ft.partial(
+        eqxi.checkpointed_while_loop, cond_fun, body_fun, checkpoints=50_000
+    )
+    return jax.linearize(while_loop, init_val)  # return jvp as well
+
+
+# This also tests the built-in JAX while loop.
+# For a while this was slow due to a missing XLA optimisation. This optimisation is
+# needed for checkpointed_while_loop to work effectively, so this serves as a simple
+# canary that the optimisation is present. (jaxlib>=0.4.2)
+@pytest.mark.parametrize("inplace_op", ["scatter", "dynamic_update_slice"])
+@pytest.mark.parametrize(
+    "while_loop",
+    [
+        lax.while_loop,
+        ft.partial(eqxi.checkpointed_while_loop, checkpoints=50_000),
+        _linearised_checkpointed_while_loop,
+    ],
+)
+def test_speed_while(inplace_op, while_loop):
+    @jax.jit
+    @jax.vmap
+    def f(init_step, init_xs):
+        def cond(carry):
+            step, xs = carry
+            return step < xs.size
+
+        def body(carry):
+            step, xs = carry
+            if inplace_op == "scatter":
+                xs = xs.at[step].set(1)
+            elif inplace_op == "dynamic_update_slice":
+                xs = lax.dynamic_update_index_in_dim(xs, 1.0, step, 0)
+            else:
+                assert False
+            return step + 1, xs
+
+        return while_loop(cond, body, (init_step, init_xs))
+
+    size = 100_000
+    args = jnp.array([0]), jnp.zeros((1, size))
+    f(*args)  # compile
+
+    speed = timeit.timeit(lambda: f(*args), number=1)
+    # Takes O(1e-3) with optimisation.
+    # Takes O(10) without optimisation.
+    # So we have two orders of magnitude safety margin each way, so the test shouldn't
+    # be flaky.
+    assert speed < 0.1
+
+
+def test_speed_grad_checkpointed_while(getkey):
+    mlp = eqx.nn.MLP(2, 1, 2, 2, key=getkey())
+
+    @jax.jit
+    @jax.vmap
+    @jax.grad
+    def f(init_val, init_step):
+        def cond(carry):
+            step, _ = carry
+            return step < 200_000
+
+        def body(carry):
+            step, val = carry
+            (theta,) = mlp(val)
+            real, imag = val
+            z = real + imag * 1j
+            z = z * jnp.exp(1j * theta)
+            real = jnp.real(z)
+            imag = jnp.imag(z)
+            return step + 1, jnp.stack([real, imag])
+
+        _, final_xs = eqxi.checkpointed_while_loop(
+            cond, body, (init_step, init_val), checkpoints=100_000
+        )
+        return jnp.sum(final_xs)
+
+    init_step = jnp.array([0, 10])
+    init_val = jr.normal(getkey(), (2, 2))
+
+    f(init_val, init_step)  # compile
+    speed = timeit.timeit(lambda: f(init_val, init_step), number=1)
+    assert speed < 0.1

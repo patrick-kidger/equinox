@@ -51,8 +51,6 @@ import operator
 from typing import Callable, Optional, TypeVar, Union
 
 import jax
-import jax.interpreters.batching as batching
-import jax.interpreters.mlir as mlir
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.tree_util as jtu
@@ -60,8 +58,8 @@ from jaxtyping import Array, Bool
 
 from ..filters import combine, is_array, is_inexact_array, partition
 from ..grad import filter_closure_convert, filter_custom_vjp, filter_vjp
-from .ad import nondifferentiable
 from .errors import error_if
+from .nontraceable import nonbatchable, nondifferentiable
 from .unvmap import unvmap_any, unvmap_max
 
 
@@ -178,7 +176,7 @@ def checkpointed_while_loop(
     if checkpoints is None:
         if max_steps is None:
             raise ValueError(
-                "Must specify either `max_steps` or `checpoints` in "
+                "Must specify either `max_steps` or `checkpoints` in "
                 "`equinox.internal.checkpointed_while_loop`."
             )
         # Binomial logarithmic growth is what is needed in classical treeverse.
@@ -239,32 +237,6 @@ def _checkpointed_while_loop(vjp_arg, cond_fun, max_steps, checkpoints):
     return final_val
 
 
-def _assert_unbatched(*x):
-    """Identity function. Raises a trace-time assert if it is batched.
-
-    Careful control over which quantities get batched is needed to make
-    `checkpointed_while_loop` work under `jax.vmap`.
-    """
-    return jtu.tree_map(_assert_unbatched_p.bind, x)
-
-
-def _error(x, b):
-    msg = (
-        "Internal trace-time error in `equinox.internal.checkpointed_while_loop`. "
-        "Please raise an issue at https://http://github.com/patrick-kidger/equinox"
-    )
-    assert False, msg
-
-
-_assert_unbatched_p = jax.core.Primitive("assert_unbatched")
-_assert_unbatched_p.def_impl(lambda x: x)
-_assert_unbatched_p.def_abstract_eval(lambda x: x)
-batching.primitive_batchers[_assert_unbatched_p] = _error
-mlir.register_lowering(
-    _assert_unbatched_p, mlir.lower_fun(lambda x: x, multiple_results=False)
-)
-
-
 def _scalar_index(i, x):
     """As `x[i]`, but slightly more efficient for a nonnegative scalar `i`.
 
@@ -297,7 +269,7 @@ def _stumm_walther_i(step, save_state):
     New Algorithms for Optimal Online Checkpointing
     https://tu-dresden.de/mn/math/wir/ressourcen/dateien/forschung/publikationen/pdf2010/new_algorithms_for_optimal_online_checkpointing.pdf
     """
-    step, save_state = _assert_unbatched(step, save_state)
+    step, save_state = nonbatchable((step, save_state))
     i, o, p, s = save_state
     index = i
     save_residual = s
@@ -316,7 +288,7 @@ def _stumm_walther_i(step, save_state):
         "Please raise an issue at https://http://github.com/patrick-kidger/equinox"
     )
     out = error_if(out, pred & (o == -1), msg)
-    (out,) = _assert_unbatched(out)
+    out = nonbatchable(out)
     return out
 
 
@@ -343,9 +315,7 @@ def _wang_moin(step, save_state, residual_steps):
     Minimal repetition dynamic checkpointing algorithm for unsteady adjoint calculation
     https://web.stanford.edu/group/ctr/ResBriefs08/4_checkpointing.pdf
     """
-    step, save_state, residual_steps = _assert_unbatched(
-        step, save_state, residual_steps
-    )
+    step, save_state, residual_steps = nonbatchable((step, save_state, residual_steps))
     levels, dispensable = save_state
     if len(residual_steps) == 1:
         # Don't save if we only have space to save the initial value, which is already
@@ -366,7 +336,7 @@ def _wang_moin(step, save_state, residual_steps):
         )
         levels2 = levels.at[index].set(level)
     out = save_residual, index, (levels2, dispensable2)
-    (out,) = _assert_unbatched(out)
+    out = nonbatchable(out)
     return out
 
 
@@ -424,7 +394,7 @@ def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, max_steps, checkpoints):
 
     def _body_fun(carry):
         pred, step, save_state, val, residual_steps, residuals = carry
-        save_state, residual_steps = _assert_unbatched(save_state, residual_steps)
+        save_state, residual_steps = nonbatchable((save_state, residual_steps))
 
         step2 = step + 1
         save_residual, index, save_state2 = _should_save_residual(
@@ -447,7 +417,7 @@ def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, max_steps, checkpoints):
         residual_steps2, residuals2 = jtu.tree_map(
             _maybe_update, (residual_steps, residuals), (unvmap_max(step), val)
         )
-        save_state2, residual_steps2 = _assert_unbatched(save_state2, residual_steps2)
+        save_state2, residual_steps2 = nonbatchable((save_state2, residual_steps2))
         return pred2, step2, save_state2, val2, residual_steps2, residuals2
 
     int_dtype = jnp.int64 if jax.config.jax_enable_x64 else jnp.int32
@@ -498,7 +468,7 @@ def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, max_steps, checkpoints):
     final_residual_steps, final_residuals = jtu.tree_map(
         ft.partial(_unique_index, sort_indices), (final_residual_steps, final_residuals)
     )
-    (final_residual_steps,) = _assert_unbatched(final_residual_steps)
+    final_residual_steps = nonbatchable(final_residual_steps)
     return final_val, (num_steps, final_residual_steps, final_residuals)
 
 
@@ -506,8 +476,8 @@ def _load_from_checkpoint(step_grad_val, index, residual_steps, residuals):
     """Loads a residual from the store of checkpoints."""
     # step_grad_val is the current location of grad_val.
     # index is the next currently empty slot for saving a residual.
-    step_grad_val, index, residual_steps = _assert_unbatched(
-        step_grad_val, index, residual_steps
+    step_grad_val, index, residual_steps = nonbatchable(
+        (step_grad_val, index, residual_steps)
     )
 
     # Subtract one to get the most recent residual, and then load it.
@@ -526,7 +496,7 @@ def _load_from_checkpoint(step_grad_val, index, residual_steps, residuals):
     # `_load_from_checkpoint` is itself used within a U-turn, then in practice this
     # triggers whenever we get >1 U-turns back-to-back.)
     index2 = jnp.where(step_val2 + 1 == step_grad_val, read_index, index)
-    step_val2, index2 = _assert_unbatched(step_val2, index2)
+    step_val2, index2 = nonbatchable((step_val2, index2))
     return step_val2, val2, index2
 
 
@@ -547,8 +517,8 @@ def _maybe_save_to_checkpoint(
         step_next_checkpoint,
         index,
         residual_steps,
-    ) = _assert_unbatched(
-        step_val, step_grad_val, step_next_checkpoint, index, residual_steps
+    ) = nonbatchable(
+        (step_val, step_grad_val, step_next_checkpoint, index, residual_steps)
     )
     save_checkpoint = step_val == step_next_checkpoint
 
@@ -565,8 +535,8 @@ def _maybe_save_to_checkpoint(
         _calc_next_checkpoint(step_val, step_grad_val, index2, checkpoints),
         step_next_checkpoint,
     )
-    index2, step_next_checkpoint2, residual_steps2 = _assert_unbatched(
-        index2, step_next_checkpoint2, residual_steps2
+    index2, step_next_checkpoint2, residual_steps2 = nonbatchable(
+        (index2, step_next_checkpoint2, residual_steps2)
     )
     return index2, step_next_checkpoint2, residual_steps2, residuals2
 
@@ -575,7 +545,7 @@ def _calc_next_checkpoint(step_val, step_grad_val, index, checkpoints):
     """Determines the step at which we next want to save a checkpoint."""
     # Note that when this function is called, `step_val` is always at the most recent
     # checkpoint.
-    step_val, step_grad_val, index = _assert_unbatched(step_val, step_grad_val, index)
+    step_val, step_grad_val, index = nonbatchable((step_val, step_grad_val, index))
 
     # Using treeverse...
     # ...Checkpoints are either placed binomially (most of the time)...
@@ -614,7 +584,7 @@ def _calc_next_checkpoint(step_val, step_grad_val, index, checkpoints):
     )
     # Invariant: `step_val < step_next_checkpoint`. (Due to the invariant
     # `step_val + 1 <= step_grad_val`.)
-    (step_next_checkpoint,) = _assert_unbatched(step_next_checkpoint)
+    step_next_checkpoint = nonbatchable(step_next_checkpoint)
     return step_next_checkpoint
 
 
@@ -630,11 +600,11 @@ def _make_fwd(static_body_fun):
         grad_body_fun,
     ):
         """Propagates the primal forward one step."""
-        (step_val,) = _assert_unbatched(step_val)
+        step_val = nonbatchable(step_val)
         step_val2 = step_val + 1
         body_fun = combine(dynamic_body_fun, static_body_fun)
         val2 = body_fun(val)
-        (step_val2,) = _assert_unbatched(step_val2)
+        step_val2 = nonbatchable(step_val2)
         return (
             step_val2,
             step_grad_val,
@@ -650,7 +620,7 @@ def _make_fwd(static_body_fun):
 
 def _make_u_turn(static_body_fun, residual_steps, residuals, checkpoints):
     """Propagates the cotangent backward one step."""
-    (residual_steps,) = _assert_unbatched(residual_steps)
+    residual_steps = nonbatchable(residual_steps)
 
     def _u_turn(
         dynamic_body_fun,
@@ -663,7 +633,7 @@ def _make_u_turn(static_body_fun, residual_steps, residuals, checkpoints):
         grad_body_fun,
     ):
         del step_val, step_next_checkpoint
-        step_grad_val, index = _assert_unbatched(step_grad_val, index)
+        step_grad_val, index = nonbatchable((step_grad_val, index))
 
         # Use `filter_vjp` to neatly handle floating-point arrays.
         #
@@ -681,8 +651,8 @@ def _make_u_turn(static_body_fun, residual_steps, residuals, checkpoints):
         step_next_checkpoint2 = _calc_next_checkpoint(
             step_val2, step_grad_val2, index2, checkpoints
         )
-        step_val2, step_grad_val2, step_next_checkpoint2, index2 = _assert_unbatched(
-            step_val2, step_grad_val2, step_next_checkpoint2, index2
+        step_val2, step_grad_val2, step_next_checkpoint2, index2 = nonbatchable(
+            (step_val2, step_grad_val2, step_next_checkpoint2, index2)
         )
         return (
             step_val2,
@@ -710,7 +680,7 @@ def _checkpointed_while_loop_bwd(
     )
     del cond_fun, max_steps
     num_steps, init_residual_steps, init_residuals = remainders
-    (init_residual_steps,) = _assert_unbatched(init_residual_steps)
+    init_residual_steps = nonbatchable(init_residual_steps)
 
     def _cond_fun(carry):
         _, step_grad_val, *_ = carry
@@ -730,8 +700,8 @@ def _checkpointed_while_loop_bwd(
             residual_steps,
             residuals,
         ) = carry
-        step_val, step_next_checkpoint, index, residual_steps = _assert_unbatched(
-            step_val, step_next_checkpoint, index, residual_steps
+        step_val, step_next_checkpoint, index, residual_steps = nonbatchable(
+            (step_val, step_next_checkpoint, index, residual_steps)
         )
 
         msg = (
@@ -747,7 +717,7 @@ def _checkpointed_while_loop_bwd(
         #
 
         perform_u_turn = step_val + 1 == unvmap_max(step_grad_val)
-        (perform_u_turn,) = _assert_unbatched(perform_u_turn)
+        perform_u_turn = nonbatchable(perform_u_turn)
         dynamic_body_fun, static_body_fun = partition(body_fun, is_array)
         (
             step_val2,
@@ -815,8 +785,8 @@ def _checkpointed_while_loop_bwd(
             (step_grad_val, grad_val, grad_body_fun),
             (step_grad_val2, grad_val2, grad_body_fun2),
         )
-        step_val2, step_next_checkpoint2, index2, residual_steps2 = _assert_unbatched(
-            step_val2, step_next_checkpoint2, index2, residual_steps2
+        step_val2, step_next_checkpoint2, index2, residual_steps2 = nonbatchable(
+            (step_val2, step_next_checkpoint2, index2, residual_steps2)
         )
         return (
             step_val2,

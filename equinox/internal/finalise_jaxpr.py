@@ -145,11 +145,10 @@ def finalise_make_jaxpr(fn, *, return_shape=False):
 
 
 # Register finalisation rules for Equinox's custom primitives.
-from .ad import nondifferentiable_backward_p
 from .debug import announce_jaxpr_p
 from .errors import branched_error_p
 from .noinline import noinline_p
-from .nontraceable import nontraceable_p
+from .nontraceable import nonbatchable_p, nondifferentiable_backward_p, nontraceable_p
 from .unvmap import unvmap_all_p, unvmap_any_p, unvmap_max_p
 
 
@@ -161,14 +160,34 @@ for prim in (
     announce_jaxpr_p,
     noinline_p,
     nontraceable_p,
+    nonbatchable_p,
 ):
     register_impl_finalisation(prim)
 
 
+# Assume no errors are raised after finalisation. Can't use the impl rule as that
+# has a pure_callback.
 def _branched_error_if_finalisation(pred, index, *x, msgs):
-    # Assume no errors are raised after finalisation. Can't use the impl rule as that
-    # has a pure_callback.
     return x
 
 
 primitive_finalisations[branched_error_p] = _branched_error_if_finalisation
+
+
+# To make this also useful as debugging tool, we also inline some calls.
+
+
+def _custom_jvp_finalisation(fun, jvp, *args):
+    del jvp
+    return fun.call_wrapped(*args)
+
+
+def _xla_call_p_finalisation(fun, *args, **params):
+    del params
+    return fun.call_wrapped(*args)
+
+
+primitive_finalisations[
+    jax.custom_derivatives.custom_jvp_call_p
+] = _custom_jvp_finalisation
+primitive_finalisations[jax.interpreters.xla.xla_call_p] = _xla_call_p_finalisation

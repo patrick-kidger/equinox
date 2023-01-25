@@ -78,25 +78,19 @@ class _JitWrapper(Module):
 
 
 def filter_jit(
-    fun: Callable = sentinel, *, donate: str = "arrays", **jitkwargs
+    fun: Callable = sentinel, *, donate: str = "none", **jitkwargs
 ) -> Callable:
-    """A simplified version of `jax.jit`.
-
-    !!! info
-
-        By default, all JAX arrays are traced, all other types are held static, and all
-        buffers of JAX array are donated. ('Donation' meaning that the memory is reused
-        for the outputs of the JIT'd function.)
+    """An easier-to-use version of `jax.jit`. All JAX and NumPy arrays are traced, and
+    all other types are held static.
 
     **Arguments:**
 
     - `fun` is a pure function to JIT compile.
-    - `donate` indicates whether the buffers of JAX arrays are donated or not, it
+    - `donate` indicates whether the buffers of JAX arrays are donated or not. It
         should either be:
-        - 'arrays': the default, donate all arrays and suppress all warnings about
-            unused buffers;
+        - 'all': donate all arrays and suppress all warnings about unused buffers;
         - 'warn': as above, but don't suppress unused buffer warnings;
-        - 'none': disables buffer donation.
+        - 'none': no buffer donation. (This the default.)
 
     **Returns:**
 
@@ -113,32 +107,23 @@ def filter_jit(
         f(jnp.array(1), jnp.array(2))  # both args traced
         f(jnp.array(1), 2)  # first arg traced, second arg static
         f(1, 2)  # both args static
-
-        # Donation behaviour
-        x = jnp.array(1)
-        y = jnp.array(1)
-        f(x, y)
-        x.is_deleted()  # True
-        y.is_deleted()  # True
-
-        def f_donate_y_only(x, y):
-            x = jnp.copy(x)  # avoid donation by copying an array
-            return f(x, y)
-
-        x = jnp.array(1)
-        y = jnp.array(2)
-        f_donate_y_only(x, y)
-        x.is_deleted()  # False
-        y.is_deleted()  # True
-
-        # Trace int/float/bool/complex as well
-        def f_trace_arraylike(x, y):
-            x, y = jax.tree_util.tree_map(jnp.asarray, (x, y))
-            return f(x, y)
-
-        f_trace_arraylike(1, True)  # both args traced
-        f_trace_arraylike(1+1j, 2.0)  # both args traced
         ```
+
+    !!! info
+
+        Donating arguments allows their underlying memory to be used in the
+        computation. This can produce speed and memory improvements, but means that you
+        cannot use any donated arguments again, as their underlying memory has been
+        overwritten. (JAX will throw an error if you try to.)
+
+    !!! info
+
+        If you want to trace Python `bool`/`int`/`float`/`complex` as well then you
+        can do this by wrapping them into a JAX array: `jnp.asarray(x)`.
+
+        If you want to donate only some arguments then this can be done by setting
+        `filter_jit(donate="all")` and then  `jnp.copy`ing any arguments you do not want
+        to donate before passing them in.
     """
 
     if fun is sentinel:
@@ -158,11 +143,11 @@ def filter_jit(
         )
     signature = inspect.signature(fun)
 
-    if donate not in {"arrays", "warn", "none"}:
+    if donate not in {"all", "warn", "none"}:
         raise ValueError(
             "`filter_jit(..., donate=...)` must be one of 'arrays', 'warn', or 'none'"
         )
-    filter_warning = True if donate == "arrays" else False
+    filter_warning = True if donate == "all" else False
     if donate != "none":
         jitkwargs["donate_argnums"] = (0,)
 

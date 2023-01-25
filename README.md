@@ -18,7 +18,7 @@ _(In other words, why should you care? Because Equinox is really simple to learn
 pip install equinox
 ```
 
-Requires Python 3.7+ and JAX 0.3.25+.
+Requires Python 3.8+ and JAX 0.4.1+.
 
 ## Documentation
 
