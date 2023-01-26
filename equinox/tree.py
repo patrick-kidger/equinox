@@ -92,7 +92,7 @@ def tree_at(
         grad_loss = equinox.filter_grad(loss, arg=trainable)
         grads = grad_loss(model)
         ```
-    """
+    """  # noqa: E501
 
     # We need to specify a particular node in a PyTree.
     # This is surprisingly difficult to do! As far as I can see, pretty much the only

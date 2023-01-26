@@ -17,7 +17,7 @@ from .helpers import shaped_allclose
 # because JAX simplifies this away to an empty XLA computation.
 
 
-@pytest.mark.parametrize("donate", ("arrays", "none"))
+@pytest.mark.parametrize("donate", ("all", "none"))
 def test_filter_jit(donate, getkey):
     a = jrandom.normal(getkey(), (2, 3))
     b = jrandom.normal(getkey(), (3,))
@@ -260,7 +260,9 @@ def log_compiles_config():
 
 
 def test_function_name_warning(log_compiles_config, caplog):
-    """Test that the proper function names are used when compiling a function decorated with `filter_jit`"""
+    """Test that the proper function names are used when compiling a function "
+    "decorated with `filter_jit`.
+    """
 
     @eqx.filter_jit
     def the_test_function_name(x):
@@ -320,7 +322,7 @@ def test_wrap_jax_partial(getkey):
 
 
 def test_buffer_donation(getkey):
-    @eqx.filter_jit
+    @eqx.filter_jit(donate="all")
     def f(x):
         return x + 1
 
@@ -341,7 +343,7 @@ def test_buffer_donation(getkey):
             self.mlp = eqx.nn.MLP(width, width, width, depth, key=getkey())
             self.buffer = jnp.zeros((100000,))
 
-        @eqx.filter_jit
+        @eqx.filter_jit(donate="all")
         def __call__(self, x):
             nonlocal num_traces
             num_traces += 1
@@ -391,12 +393,12 @@ def test_buffer_donation(getkey):
             )
 
     f = F(10, 3)
-    jit_f = eqx.filter_jit(f)
+    jit_f = eqx.filter_jit(f, donate="all")
     _, new_f = jit_f(jnp.ones((10,)))
     assert num_traces == 1
     assert f.buffer.is_deleted()
 
-    jit_f = eqx.filter_jit(new_f)
+    jit_f = eqx.filter_jit(new_f, donate="all")
     _, new_f_2 = jit_f(jnp.ones((10,)))
 
     assert num_traces == 1

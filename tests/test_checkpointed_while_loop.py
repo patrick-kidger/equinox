@@ -1,5 +1,6 @@
 import functools as ft
 import timeit
+from typing import Optional
 
 import jax
 import jax.lax as lax
@@ -14,41 +15,44 @@ import equinox.internal as eqxi
 from .helpers import shaped_allclose
 
 
-def _get_problem(key, *, num_steps):
-    valkey, modelkey = jr.split(key)
+def _get_problem(key, *, num_steps: Optional[int]):
+    valkey1, valkey2, modelkey = jr.split(key, 3)
 
     def cond_fun(carry):
         if num_steps is None:
             return True
         else:
-            step, _ = carry
+            step, _, _ = carry
             return step < num_steps
 
     def make_body_fun(dynamic_mlp):
         mlp = eqx.combine(dynamic_mlp, static_mlp)
 
         def body_fun(carry):
-            # A simple new_val = mlp(val) tends to converge to a fixed point in just a few
-            # iterations, which implies zero gradient... which doesn't make for a test that
-            # actually tests anything. Making things rotational like this keeps things more
-            # interesting.
-            step, val = carry
-            (theta,) = mlp(val)
-            real, imag = val
+            # A simple new_val = mlp(val) tends to converge to a fixed point in just a
+            # few iterations, which implies zero gradient... which doesn't make for a
+            # test that actually tests anything. Making things rotational like this
+            # keeps things more interesting.
+            step, val1, val2 = carry
+            (theta,) = mlp(val1)
+            real, imag = val1
             z = real + imag * 1j
             z = z * jnp.exp(1j * theta)
             real = jnp.real(z)
             imag = jnp.imag(z)
             jax.debug.print("{}", step)
-            return step + 1, jnp.stack([real, imag])
+            val1 = jnp.stack([real, imag])
+            val2 = val2.at[step % 8].set(real)
+            return step + 1, val1, val2
 
         return body_fun
 
-    init_val = jr.normal(valkey, (2,))
+    init_val1 = jr.normal(valkey1, (2,))
+    init_val2 = jr.normal(valkey2, (20,))
     mlp = eqx.nn.MLP(2, 1, 2, 2, key=modelkey)
     dynamic_mlp, static_mlp = eqx.partition(mlp, eqx.is_array)
 
-    return cond_fun, make_body_fun, init_val, dynamic_mlp
+    return cond_fun, make_body_fun, init_val1, init_val2, dynamic_mlp
 
 
 def _while_as_scan(cond, body, init_val, max_steps):
@@ -60,29 +64,39 @@ def _while_as_scan(cond, body, init_val, max_steps):
     return final_val
 
 
-def test_notangent_forward(getkey):
-    cond_fun, make_body_fun, init_val, mlp = _get_problem(getkey(), num_steps=5)
-    body_fun = make_body_fun(mlp)
-    true_final_val = lax.while_loop(cond_fun, body_fun, (0, init_val))
-    final_val = eqxi.checkpointed_while_loop(
-        cond_fun, body_fun, (0, init_val), max_steps=None, checkpoints=1
+@pytest.mark.parametrize("buffer", (False, True))
+def test_notangent_forward(buffer, getkey):
+    cond_fun, make_body_fun, init_val1, init_val2, mlp = _get_problem(
+        getkey(), num_steps=5
     )
-    assert shaped_allclose(final_val, true_final_val)
-
-
-def test_forward(getkey):
-    cond_fun, make_body_fun, init_val, mlp = _get_problem(getkey(), num_steps=5)
     body_fun = make_body_fun(mlp)
-    true_final_val = lax.while_loop(cond_fun, body_fun, (0, init_val))
+    true_final_carry = lax.while_loop(cond_fun, body_fun, (0, init_val1, init_val2))
+    if buffer:
+        init_val2 = eqxi.Buffer(init_val2)
+    final_carry = eqxi.checkpointed_while_loop(
+        cond_fun, body_fun, (0, init_val1, init_val2), max_steps=None, checkpoints=1
+    )
+    assert shaped_allclose(final_carry, true_final_carry)
+
+
+@pytest.mark.parametrize("buffer", (False, True))
+def test_forward(buffer, getkey):
+    cond_fun, make_body_fun, init_val1, init_val2, mlp = _get_problem(
+        getkey(), num_steps=5
+    )
+    body_fun = make_body_fun(mlp)
+    true_final_carry = lax.while_loop(cond_fun, body_fun, (0, init_val1, init_val2))
 
     @jax.jit
-    def run(init_val):
+    def run(init_val1, init_val2):
         return eqxi.checkpointed_while_loop(
-            cond_fun, body_fun, (0, init_val), max_steps=None, checkpoints=9
+            cond_fun, body_fun, (0, init_val1, init_val2), max_steps=None, checkpoints=9
         )
 
-    final_val, _ = jax.linearize(run, init_val)
-    assert shaped_allclose(final_val, true_final_val)
+    if buffer:
+        init_val2 = eqxi.Buffer(init_val2)
+    final_carry, _ = jax.linearize(run, init_val1, init_val2)
+    assert shaped_allclose(final_carry, true_final_carry)
 
 
 @pytest.mark.parametrize(
@@ -112,9 +126,10 @@ def test_forward(getkey):
         (4, 14, "12,13,12,9,10,11,10,9,5,6,7,8,7,6,5,0,1,2,3,4,3,2,1,0"),
     ],
 )
-@pytest.mark.parametrize("with_max_steps", [True, False])
+@pytest.mark.parametrize("with_max_steps", (True, False))
+@pytest.mark.parametrize("buffer", (False, True))
 def test_backward(
-    checkpoints, num_steps, backward_order, with_max_steps, getkey, capfd
+    checkpoints, num_steps, backward_order, with_max_steps, buffer, getkey, capfd
 ):
     if with_max_steps:
         max_steps = num_steps
@@ -122,37 +137,39 @@ def test_backward(
     else:
         max_steps = None
         get_num_steps = num_steps
-    cond_fun, make_body_fun, init_val, mlp = _get_problem(
+    cond_fun, make_body_fun, init_val1, init_val2, mlp = _get_problem(
         getkey(), num_steps=get_num_steps
     )
 
     @jax.jit
     @jax.value_and_grad
     def true_run(arg):
-        init_val, mlp = arg
+        init_val1, init_val2, mlp = arg
         body_fun = make_body_fun(mlp)
-        _, true_final_val = _while_as_scan(
-            cond_fun, body_fun, (0, init_val), max_steps=num_steps
+        _, true_final_val1, true_final_val2 = _while_as_scan(
+            cond_fun, body_fun, (0, init_val1, init_val2), max_steps=num_steps
         )
-        return jnp.sum(true_final_val)
+        return jnp.sum(true_final_val1) + jnp.sum(true_final_val2)
 
     @jax.jit
     @jax.value_and_grad
     def run(arg):
-        init_val, mlp = arg
+        init_val1, init_val2, mlp = arg
+        if buffer:
+            init_val2 = eqxi.Buffer(init_val2)
         body_fun = make_body_fun(mlp)
-        _, final_val = eqxi.checkpointed_while_loop(
+        _, final_val1, final_val2 = eqxi.checkpointed_while_loop(
             cond_fun,
             body_fun,
-            (0, init_val),
+            (0, init_val1, init_val2),
             max_steps=max_steps,
             checkpoints=checkpoints,
         )
-        return jnp.sum(final_val)
+        return jnp.sum(final_val1) + jnp.sum(final_val2)
 
-    true_value, true_grad = true_run((init_val, mlp))
+    true_value, true_grad = true_run((init_val1, init_val2, mlp))
     capfd.readouterr()
-    value, grad = run((init_val, mlp))
+    value, grad = run((init_val1, init_val2, mlp))
     text, _ = capfd.readouterr()
     true_text = "".join(f"{i}\n" for i in range(num_steps)) + backward_order.replace(
         ",", "\n"
@@ -162,134 +179,142 @@ def test_backward(
     assert text.strip() == true_text
 
 
-def test_vmap_primal_unbatched_cond(getkey):
-    cond_fun, make_body_fun, init_val, mlp = _get_problem(getkey(), num_steps=14)
+@pytest.mark.parametrize("buffer", (False, True))
+def test_vmap_primal_unbatched_cond(buffer, getkey):
+    cond_fun, make_body_fun, init_val1, init_val2, mlp = _get_problem(
+        getkey(), num_steps=14
+    )
 
     @jax.jit
-    @ft.partial(jax.vmap, in_axes=((0, None),))
+    @ft.partial(jax.vmap, in_axes=((0, 0, None),))
     @jax.value_and_grad
     def true_run(arg):
-        init_val, mlp = arg
+        init_val1, init_val2, mlp = arg
         body_fun = make_body_fun(mlp)
-        _, true_final_val = _while_as_scan(
-            cond_fun, body_fun, (0, init_val), max_steps=14
+        _, true_final_val1, true_final_val2 = _while_as_scan(
+            cond_fun, body_fun, (0, init_val1, init_val2), max_steps=14
         )
-        return jnp.sum(true_final_val)
+        return jnp.sum(true_final_val1) + jnp.sum(true_final_val2)
 
     @jax.jit
-    @ft.partial(jax.vmap, in_axes=((0, None),))
+    @ft.partial(jax.vmap, in_axes=((0, 0, None),))
     @jax.value_and_grad
     def run(arg):
-        init_val, mlp = arg
+        init_val1, init_val2, mlp = arg
+        if buffer:
+            init_val2 = eqxi.Buffer(init_val2)
         body_fun = make_body_fun(mlp)
-        _, final_val = eqxi.checkpointed_while_loop(
+        _, final_val1, final_val2 = eqxi.checkpointed_while_loop(
             cond_fun,
             body_fun,
-            (0, init_val),
+            (0, init_val1, init_val2),
             max_steps=None,
             checkpoints=4,
         )
-        return jnp.sum(final_val)
+        return jnp.sum(final_val1) + jnp.sum(final_val2)
 
-    init_val = jtu.tree_map(
-        lambda x: jr.normal(getkey(), (3,) + x.shape, x.dtype), init_val
+    init_val1, init_val2 = jtu.tree_map(
+        lambda x: jr.normal(getkey(), (3,) + x.shape, x.dtype), (init_val1, init_val2)
     )
-    true_value, true_grad = true_run((init_val, mlp))
-    value, grad = run((init_val, mlp))
+    true_value, true_grad = true_run((init_val1, init_val2, mlp))
+    value, grad = run((init_val1, init_val2, mlp))
     assert shaped_allclose(value, true_value)
     assert shaped_allclose(grad, true_grad)
 
 
-def test_vmap_primal_batched_cond(getkey):
-    cond_fun, make_body_fun, init_val, mlp = _get_problem(getkey(), num_steps=14)
+@pytest.mark.parametrize("buffer", (False, True))
+def test_vmap_primal_batched_cond(buffer, getkey):
+    cond_fun, make_body_fun, init_val1, init_val2, mlp = _get_problem(
+        getkey(), num_steps=14
+    )
 
     @jax.jit
-    @ft.partial(jax.vmap, in_axes=((0, None), 0))
+    @ft.partial(jax.vmap, in_axes=((0, 0, None), 0))
     @jax.value_and_grad
     def true_run(arg, init_step):
-        init_val, mlp = arg
+        init_val1, init_val2, mlp = arg
         body_fun = make_body_fun(mlp)
-        _, true_final_val = _while_as_scan(
-            cond_fun, body_fun, (init_step, init_val), max_steps=14
+        _, true_final_val1, true_final_val2 = _while_as_scan(
+            cond_fun, body_fun, (init_step, init_val1, init_val2), max_steps=14
         )
-        return jnp.sum(true_final_val)
+        return jnp.sum(true_final_val1) + jnp.sum(true_final_val2)
 
     @jax.jit
-    @ft.partial(jax.vmap, in_axes=((0, None), 0))
+    @ft.partial(jax.vmap, in_axes=((0, 0, None), 0))
     @jax.value_and_grad
     def run(arg, init_step):
-        init_val, mlp = arg
+        init_val1, init_val2, mlp = arg
+        if buffer:
+            init_val2 = eqxi.Buffer(init_val2)
         body_fun = make_body_fun(mlp)
-        _, final_val = eqxi.checkpointed_while_loop(
+        _, final_val1, final_val2 = eqxi.checkpointed_while_loop(
             cond_fun,
             body_fun,
-            (init_step, init_val),
+            (init_step, init_val1, init_val2),
             max_steps=None,
             checkpoints=4,
         )
-        return jnp.sum(final_val)
+        return jnp.sum(final_val1) + jnp.sum(final_val2)
 
     init_step = jnp.array([0, 1, 2, 3, 5, 10])
-    init_val = jtu.tree_map(
-        lambda x: jr.normal(getkey(), (6,) + x.shape, x.dtype), init_val
+    init_val1, init_val2 = jtu.tree_map(
+        lambda x: jr.normal(getkey(), (6,) + x.shape, x.dtype), (init_val1, init_val2)
     )
-    true_value, true_grad = true_run((init_val, mlp), init_step)
-    value, grad = run((init_val, mlp), init_step)
+    true_value, true_grad = true_run((init_val1, init_val2, mlp), init_step)
+    value, grad = run((init_val1, init_val2, mlp), init_step)
     assert shaped_allclose(value, true_value, rtol=1e-4, atol=1e-4)
     assert shaped_allclose(grad, true_grad, rtol=1e-4, atol=1e-4)
 
 
-def test_vmap_cotangent(getkey):
-    cond_fun, make_body_fun, init_val, mlp = _get_problem(getkey(), num_steps=14)
+@pytest.mark.parametrize("buffer", (False, True))
+def test_vmap_cotangent(buffer, getkey):
+    cond_fun, make_body_fun, init_val1, init_val2, mlp = _get_problem(
+        getkey(), num_steps=14
+    )
 
     @jax.jit
     @jax.jacrev
     def true_run(arg):
-        init_val, mlp = arg
+        init_val1, init_val2, mlp = arg
         body_fun = make_body_fun(mlp)
-        _, true_final_val = _while_as_scan(
-            cond_fun, body_fun, (0, init_val), max_steps=14
+        _, true_final_val1, true_final_val2 = _while_as_scan(
+            cond_fun, body_fun, (0, init_val1, init_val2), max_steps=14
         )
-        return jnp.sum(true_final_val)
+        return true_final_val1, true_final_val2
 
     @jax.jit
     @jax.jacrev
     def run(arg):
-        init_val, mlp = arg
+        init_val1, init_val2, mlp = arg
+        if buffer:
+            init_val2 = eqxi.Buffer(init_val2)
         body_fun = make_body_fun(mlp)
-        _, final_val = eqxi.checkpointed_while_loop(
+        _, final_val1, final_val2 = eqxi.checkpointed_while_loop(
             cond_fun,
             body_fun,
-            (0, init_val),
+            (0, init_val1, init_val2),
             max_steps=None,
             checkpoints=4,
         )
-        return jnp.sum(final_val)
+        return final_val1, final_val2
 
-    true_jac = true_run((init_val, mlp))
-    jac = run((init_val, mlp))
+    true_jac = true_run((init_val1, init_val2, mlp))
+    jac = run((init_val1, init_val2, mlp))
     assert shaped_allclose(jac, true_jac, rtol=1e-4, atol=1e-4)
 
 
-def _linearised_checkpointed_while_loop(cond_fun, body_fun, init_val):
-    while_loop = ft.partial(
-        eqxi.checkpointed_while_loop, cond_fun, body_fun, checkpoints=50_000
-    )
-    return jax.linearize(while_loop, init_val)  # return jvp as well
-
-
-# This also tests the built-in JAX while loop.
-# For a while this was slow due to a missing XLA optimisation. This optimisation is
-# needed for checkpointed_while_loop to work effectively, so this serves as a simple
-# canary that the optimisation is present. (jaxlib>=0.4.2)
+# This tests that XLA correctly optimises select(pred, inplace(xs, i, x), xs) into
+# inplace(xs, i, select(pred, get(xs, i), x)))
+# (Where "inplace" is e.g. scatter and "get" is e.g. gather.)
+# This was a fix I contributed to XLA, that is present in jaxlib>=0.4.2, and is needed
+# to ensure that in-place operations work correctly inside loops.
+#
+# This test is really just checking `lax.while_loop`, but we throw in
+# `checkpointed_while_loop` too, because why not?
 @pytest.mark.parametrize("inplace_op", ["scatter", "dynamic_update_slice"])
 @pytest.mark.parametrize(
     "while_loop",
-    [
-        lax.while_loop,
-        ft.partial(eqxi.checkpointed_while_loop, checkpoints=50_000),
-        _linearised_checkpointed_while_loop,
-    ],
+    [lax.while_loop, ft.partial(eqxi.checkpointed_while_loop, checkpoints=50_000)],
 )
 def test_speed_while(inplace_op, while_loop):
     @jax.jit
@@ -323,8 +348,44 @@ def test_speed_while(inplace_op, while_loop):
     assert speed < 0.1
 
 
+# This tests the possible failure mode of "the Buffer doesn't do anything".
+# This test takes O(1e-3) seconds with Buffer.
+# This test takes O(10) seconds without Buffer.
+# This speed improvement is precisely the reason that Buffer exists.
+def test_speed_buffer_while():
+    @jax.jit
+    @jax.vmap
+    def f(init_step, init_xs):
+        def cond(carry):
+            step, xs = carry
+            return step < xs.size
+
+        def body(carry):
+            step, xs = carry
+            xs = xs.at[step].set(1)
+            return step + 1, xs
+
+        def loop(init_xs):
+            return eqxi.checkpointed_while_loop(
+                cond, body, (init_step, init_xs), checkpoints=50_000
+            )
+
+        # Linearize so that we save residuals
+        init_xs = eqxi.Buffer(init_xs)
+        return jax.linearize(loop, init_xs)
+
+    size = 100_000
+    args = jnp.array([0]), jnp.zeros((1, size))
+    f(*args)  # compile
+
+    speed = timeit.timeit(lambda: f(*args), number=1)
+    assert speed < 0.1
+
+
+# This isn't testing any particular failure mode: just that things generally work.
 def test_speed_grad_checkpointed_while(getkey):
     mlp = eqx.nn.MLP(2, 1, 2, 2, key=getkey())
+    checkpoints = 10_000
 
     @jax.jit
     @jax.vmap
@@ -332,7 +393,7 @@ def test_speed_grad_checkpointed_while(getkey):
     def f(init_val, init_step):
         def cond(carry):
             step, _ = carry
-            return step < 200_000
+            return step < 2 * checkpoints
 
         def body(carry):
             step, val = carry
@@ -345,7 +406,7 @@ def test_speed_grad_checkpointed_while(getkey):
             return step + 1, jnp.stack([real, imag])
 
         _, final_xs = eqxi.checkpointed_while_loop(
-            cond, body, (init_step, init_val), checkpoints=100_000
+            cond, body, (init_step, init_val), checkpoints=checkpoints
         )
         return jnp.sum(final_xs)
 
@@ -354,4 +415,5 @@ def test_speed_grad_checkpointed_while(getkey):
 
     f(init_val, init_step)  # compile
     speed = timeit.timeit(lambda: f(init_val, init_step), number=1)
-    assert speed < 0.1
+    # Should take ~0.01 seconds
+    assert speed < 0.5

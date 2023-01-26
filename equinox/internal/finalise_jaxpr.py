@@ -121,7 +121,8 @@ def finalise_fn(fn):
 
     def _finalise_fn(*args):
         jaxpr, struct = jax.make_jaxpr(fn, return_shape=True)(*args)
-        out = finalise_eval_jaxpr(jaxpr.jaxpr, jaxpr.consts, *args)
+        flat_args = jtu.tree_leaves(args)
+        out = finalise_eval_jaxpr(jaxpr.jaxpr, jaxpr.consts, *flat_args)
         treedef = jtu.tree_structure(struct)
         return jtu.tree_unflatten(treedef, out)
 
@@ -177,8 +178,7 @@ primitive_finalisations[branched_error_p] = _branched_error_if_finalisation
 # To make this also useful as debugging tool, we also inline some calls.
 
 
-def _custom_jvp_finalisation(fun, jvp, *args):
-    del jvp
+def _jvp_call_p_finalisation(fun, jvp, *args):
     return fun.call_wrapped(*args)
 
 
@@ -187,7 +187,12 @@ def _xla_call_p_finalisation(fun, *args, **params):
     return fun.call_wrapped(*args)
 
 
+def _stop_gradient_finalisation(x):
+    return x
+
+
 primitive_finalisations[
     jax.custom_derivatives.custom_jvp_call_p
-] = _custom_jvp_finalisation
+] = _jvp_call_p_finalisation
 primitive_finalisations[jax.interpreters.xla.xla_call_p] = _xla_call_p_finalisation
+primitive_finalisations[jax.lax.stop_gradient_p] = _stop_gradient_finalisation

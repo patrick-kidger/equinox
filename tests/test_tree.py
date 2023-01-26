@@ -114,8 +114,8 @@ def test_tree_at_none_leaf():
 def test_tree_equal():
     key1 = jrandom.PRNGKey(0)
     key2 = jrandom.PRNGKey(1)
-    # Not using getkey as ever-so-in-principle two random keys could produce the same weights
-    # (like that's ever going to happen)
+    # Not using getkey as ever-so-in-principle two random keys could produce the same
+    # weights (like that's ever going to happen).
     pytree1 = [1, 2, 3, {"a": jnp.array([1.0, 2.0])}, eqx.nn.Linear(1, 2, key=key1)]
     pytree2 = [1, 2, 3, {"a": jnp.array([1.0, 2.0])}, eqx.nn.Linear(1, 2, key=key1)]
     pytree3 = [1, 2, 3, {"a": jnp.array([1.0, 2.0])}, eqx.nn.Linear(1, 2, key=key2)]

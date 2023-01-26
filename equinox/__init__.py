@@ -34,9 +34,14 @@ from .update import apply_updates
 from .vmap_pmap import filter_pmap, filter_vmap, if_array
 
 
-# import jaxlib
-# if tuple(int(x) for x in jaxlib.__version__.split(".")) < (0, 4, 2):
-#     raise ImportError("Equinox requires jaxlib>=0.4.2. You should run `pip install --upgrade jaxlib`.")
+# Comes after everything else, so that JAX can raise its jaxlib-doesn't-exist error
+# if need be.
+import jaxlib  # isort: skip
+
+if tuple(int(x) for x in jaxlib.__version__.split(".")) < (0, 4, 2):
+    raise ImportError(
+        "Equinox requires jaxlib>=0.4.2. You should run `pip install --upgrade jaxlib`."
+    )
 
 
 __version__ = "0.10.0"

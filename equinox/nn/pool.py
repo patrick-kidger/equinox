@@ -50,7 +50,7 @@ class Pool(Module):
             be true for all finite `x`. For further details see
             [https://www.tensorflow.org/xla/operation_semantics#reducewindow](https://www.tensorflow.org/xla/operation_semantics#reducewindow)
             and [https://github.com/google/jax/issues/7718](https://github.com/google/jax/issues/7718).
-        """
+        """  # noqa: E501
         super().__init__(**kwargs)
 
         self.operation = operation
@@ -109,7 +109,8 @@ class Pool(Module):
             if max(left_padding, right_padding) > kernel_size:
                 raise RuntimeError(
                     "Paddings should be less than the size of the kernel. "
-                    f"Padding {(left_padding, right_padding)} received for kernel size {kernel_size}."
+                    f"Padding {(left_padding, right_padding)} received for kernel size "
+                    f"{kernel_size}."
                 )
 
     def __call__(
@@ -117,8 +118,8 @@ class Pool(Module):
     ) -> Array:
         """**Arguments:**
 
-        - `x`: The input. Should be a JAX array of shape `(channels, dim_1, ..., dim_N)`, where
-            `N = num_spatial_dims`.
+        - `x`: The input. Should be a JAX array of shape
+            `(channels, dim_1, ..., dim_N)`, where `N = num_spatial_dims`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
 
@@ -462,7 +463,8 @@ def _adaptive_pool1d(x: Array, target_size: int, operation: Callable) -> Array:
     """**Arguments:**
 
     - `x`: The input. Should be a JAX array of shape `(dim,)`.
-    - `target_size`: The shape of the output after the pooling operation `(target_size,)`.
+    - `target_size`: The shape of the output after the pooling operation
+        `(target_size,)`.
     - `operation`: The pooling operation to be performed on the input array.
 
     **Returns:**

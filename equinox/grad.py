@@ -12,7 +12,6 @@ from .custom_types import sentinel
 from .deprecate import deprecated_0_10
 from .filters import (
     combine,
-    filter,
     is_array,
     is_inexact_array,
     is_inexact_array_like,
@@ -192,7 +191,8 @@ def filter_jvp(fn, primals, tangents):
     !!! Tip
 
         Unlike `jax.jvp`, this function does not support a `has_aux` argument. It isn't
-        needed, as unlike `jax.jvp` the output of this function can be of arbitrary type.
+        needed, as unlike `jax.jvp` the output of this function can be of arbitrary
+        type.
     """
     if jtu.tree_structure(primals, is_leaf=_is_none) != jtu.tree_structure(
         tangents, is_leaf=_is_none
@@ -266,19 +266,38 @@ def filter_vjp(fun, *primals, has_aux=False):
         return out, vjp_fn
 
 
+def _is_struct(x):
+    return is_array(x) or isinstance(x, jax.ShapeDtypeStruct)
+
+
 class _ClosureConvert(Module):
     # Important that `jaxpr` be a leaf (and not static), so that it is a tuple element
     # when passing through `filter_primitive_bind` and thus visible to
     # `jax.core.subjaxprs`
     jaxpr: jax.core.Jaxpr
     consts: PyTree[Array]  # Captured in the PyTree structure of _ClosureConvert
+    in_dynamic_struct: PyTree[jax.ShapeDtypeStruct] = static_field()
     out_dynamic_struct: PyTree[jax.ShapeDtypeStruct] = static_field()
+    in_static: PyTree[Any] = static_field()
     out_static: PyTree[Any] = static_field()
 
     def __call__(self, *args, **kwargs):
-        dynamic = filter((args, kwargs), is_array)
-        dynamic_flat = jtu.tree_leaves(dynamic)
-        out_dynamic_flat = jax.core.eval_jaxpr(self.jaxpr, self.consts, *dynamic_flat)
+        in_dynamic, in_static = partition((args, kwargs), is_array)
+        in_dynamic_struct = jax.eval_shape(lambda: in_dynamic)
+        if in_dynamic_struct != self.in_dynamic_struct:
+            raise ValueError(
+                "Closure-converted function called with different dynamic arguments to "
+                "the example arguments provided."
+            )
+        if in_static != self.in_static:
+            raise ValueError(
+                "Closure-converted function called with different static arguments to "
+                "the example arguments provided."
+            )
+        in_dynamic_flat = jtu.tree_leaves(in_dynamic)
+        out_dynamic_flat = jax.core.eval_jaxpr(
+            self.jaxpr, self.consts, *in_dynamic_flat
+        )
         out_dynamic_struct_flat, out_dynamic_treedef = jtu.tree_flatten(
             self.out_dynamic_struct
         )
@@ -334,9 +353,13 @@ def filter_closure_convert(fn, *args, **kwargs):
     closed_jaxpr, out_dynamic_struct, out_static = filter_make_jaxpr(fn)(
         *args, **kwargs
     )
+    in_dynamic, in_static = partition((args, kwargs), _is_struct)
+    in_dynamic_struct = jax.eval_shape(lambda: in_dynamic)
     jaxpr = closed_jaxpr.jaxpr
     consts = closed_jaxpr.consts
-    return _ClosureConvert(jaxpr, consts, out_dynamic_struct, out_static)
+    return _ClosureConvert(
+        jaxpr, consts, in_dynamic_struct, out_dynamic_struct, in_static, out_static
+    )
 
 
 class filter_custom_jvp:

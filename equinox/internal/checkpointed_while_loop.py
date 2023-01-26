@@ -48,7 +48,7 @@ and
 import functools as ft
 import math
 import operator
-from typing import Callable, Optional, TypeVar, Union
+from typing import Any, Callable, Optional, Tuple, TypeVar, Union
 
 import jax
 import jax.lax as lax
@@ -58,6 +58,7 @@ from jaxtyping import Array, Bool
 
 from ..filters import combine, is_array, is_inexact_array, partition
 from ..grad import filter_closure_convert, filter_custom_vjp, filter_vjp
+from ..module import Module, static_field
 from .errors import error_if
 from .nontraceable import nonbatchable, nondifferentiable
 from .unvmap import unvmap_any, unvmap_max
@@ -210,7 +211,116 @@ def checkpointed_while_loop(
     init_val = jtu.tree_map(jnp.asarray, init_val)
     body_fun = filter_closure_convert(body_fun, init_val)
     vjp_arg = (init_val, body_fun)
-    return _checkpointed_while_loop(vjp_arg, cond_fun, max_steps, checkpoints)
+    final_val = _checkpointed_while_loop(vjp_arg, cond_fun, max_steps, checkpoints)
+    final_val = jtu.tree_map(
+        lambda x: x._array if _is_buffer(x) else x, final_val, is_leaf=_is_buffer
+    )
+    return final_val
+
+
+# Importantly: these are write-only.
+# This simplifies our autodiff a lot!
+class Buffer(Module):
+    _array: Array
+
+    def __init__(self, array: Array):
+        self._array = array
+
+    @property
+    def at(self):
+        return _BufferAt(self._array)
+
+    @property
+    def shape(self):
+        return self._array.shape
+
+    @property
+    def dtype(self):
+        return self._array.dtype
+
+    @property
+    def size(self):
+        return self._array.size
+
+
+class _BufferAt(Module):
+    _array: Array
+
+    def __init__(self, array):
+        self._array = array
+
+    def __getitem__(self, item):
+        return _BufferItem(self._array, item)
+
+
+class _BufferItem(Module):
+    _array: Array
+    _item: Any
+
+    def __init__(self, array, item):
+        self._array = array
+        self._item = item
+
+    def set(self, x):
+        array = self._array.at[self._item].set(x)
+        return Buffer(array)
+
+
+# We don't want to save any Buffers into our residuals (that's the whole point of a
+# Buffer.) But we do need to store the shape/dtype information of the buffer, so that
+# we can still call `body_fun` with the correct signature on the backward pass. We store
+# that information in a `_DummyBuffer`.
+# (Getting the information from the gradient value wouldn't work, as primals and
+# tangents may have different dtypes.)
+class _DummyBuffer(Module):
+    shape: Tuple[int, ...] = static_field()
+    dtype: jnp.dtype = static_field()
+
+    @property
+    def at(self):
+        return _DummyBufferAt(self.shape, self.dtype)
+
+
+class _DummyBufferAt(Module):
+    shape: Tuple[int, ...] = static_field()
+    dtype: jnp.dtype = static_field()
+
+    def __getitem__(self, item):
+        return _DummyBufferItem(self.shape, self.dtype)
+
+
+class _DummyBufferItem(Module):
+    shape: Tuple[int, ...] = static_field()
+    dtype: jnp.dtype = static_field()
+
+    def set(self, x):
+        return _DummyBuffer(self.shape, self.dtype)
+
+
+_is_buffer = lambda x: isinstance(x, Buffer)
+_is_dummy_buffer = lambda x: isinstance(x, _DummyBuffer)
+
+
+def _dummy_buffer_impl(x):
+    if _is_buffer(x):
+        return _DummyBuffer(x.shape, x.dtype)
+    else:
+        return x
+
+
+def _dummy_buffer(tree):
+    return jtu.tree_map(_dummy_buffer_impl, tree, is_leaf=_is_buffer)
+
+
+def _undummy_buffer_impl(v):
+    if _is_dummy_buffer(v):
+        return Buffer(jnp.zeros(v.shape, v.dtype))
+    else:
+        return v
+
+
+def _undummy_buffer(tree):
+    return jtu.tree_map(_undummy_buffer_impl, tree, is_leaf=_is_dummy_buffer)
 
 
 @filter_custom_vjp
@@ -414,8 +524,17 @@ def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, max_steps, checkpoints):
             where_x = jnp.where(save_residual, x, _scalar_index(index, xs))
             return lax.dynamic_update_index_in_dim(xs, where_x, index, axis=0)
 
+        val_no_buffers = jtu.tree_map(
+            lambda x: _DummyBuffer(x._array.shape, x._array.dtype)
+            if _is_buffer(x)
+            else x,
+            val,
+            is_leaf=_is_buffer,
+        )
         residual_steps2, residuals2 = jtu.tree_map(
-            _maybe_update, (residual_steps, residuals), (unvmap_max(step), val)
+            _maybe_update,
+            (residual_steps, residuals),
+            (unvmap_max(step), val_no_buffers),
         )
         save_state2, residual_steps2 = nonbatchable((save_state2, residual_steps2))
         return pred2, step2, save_state2, val2, residual_steps2, residuals2
@@ -435,10 +554,15 @@ def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, max_steps, checkpoints):
     init_residual_steps = jnp.full(
         checkpoints, _unreachable_checkpoint_step(int_dtype), dtype=int_dtype
     )
-    # Fill value for the memory isn't important.
-    init_residuals = jtu.tree_map(
-        lambda x: jnp.zeros((checkpoints,) + x.shape, x.dtype), init_val
-    )
+
+    def _init_residual(x):
+        if _is_buffer(x):
+            return _DummyBuffer(x._array.shape, x._array.dtype)
+        else:
+            # Fill value for the memory isn't important.
+            return jnp.zeros((checkpoints,) + x.shape, x.dtype)
+
+    init_residuals = jtu.tree_map(_init_residual, init_val, is_leaf=_is_buffer)
     init_carry = (
         init_pred,
         init_step,
@@ -603,7 +727,9 @@ def _make_fwd(static_body_fun):
         step_val = nonbatchable(step_val)
         step_val2 = step_val + 1
         body_fun = combine(dynamic_body_fun, static_body_fun)
+        val = _undummy_buffer(val)
         val2 = body_fun(val)
+        val2 = _dummy_buffer(val2)
         step_val2 = nonbatchable(step_val2)
         return (
             step_val2,
@@ -640,6 +766,7 @@ def _make_u_turn(static_body_fun, residual_steps, residuals, checkpoints):
         # We pass in `body_fun` as an argument as it contains its closed-over values
         # in its PyTree structure, and we do want to compute cotangents wrt these.
         body_fun = combine(dynamic_body_fun, static_body_fun)
+        val = _undummy_buffer(val)
         _, vjp_fn = filter_vjp(lambda b, v: b(v), body_fun, val)
 
         grad_body_fun_update, grad_val2 = vjp_fn(grad_val)

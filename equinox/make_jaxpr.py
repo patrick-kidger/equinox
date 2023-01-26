@@ -8,7 +8,7 @@ from .module import Module, module_update_wrapper, Static
 
 
 def _is_struct(x):
-    return is_array(x) or (hasattr(x, "shape") and hasattr(x, "dtype"))
+    return is_array(x) or isinstance(x, jax.ShapeDtypeStruct)
 
 
 class _MakeJaxpr(Module):

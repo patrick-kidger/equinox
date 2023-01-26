@@ -31,7 +31,9 @@ def is_array_like(element: Any) -> bool:
 
 
 def is_inexact_array(element: Any) -> bool:
-    """Returns `True` if `element` is an inexact (i.e. floating point) JAX/NumPy array."""
+    """Returns `True` if `element` is an inexact (i.e. floating point) JAX/NumPy
+    array.
+    """
     if isinstance(element, (np.ndarray, np.generic)):
         return np.issubdtype(element.dtype, np.inexact)
     elif isinstance(element, jnp.ndarray):

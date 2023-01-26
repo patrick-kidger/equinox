@@ -225,7 +225,8 @@ class _Leaf:  # Not a PyTree
         self.value = value
 
 
-# Monkey-patch the batching rule for host_callback.call to work with get_state and set_state.
+# Monkey-patch the batching rule for host_callback.call to work with get_state and
+# set_state.
 _have_monkey_patched = False
 
 
@@ -529,7 +530,8 @@ def set_state(index: StateIndex, state: PyTree[Array]) -> None:
     !!! info
 
         The same `index` can be used multiple times, to overwrite a previously saved
-        value. The new and old `state` must both have the same PyTree structure, however.
+        value. The new and old `state` must both have the same PyTree structure,
+        however.
 
     !!! warning
 

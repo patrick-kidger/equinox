@@ -12,7 +12,9 @@ from ..pretty_print import tree_pformat
 
 
 def announce_transform(x, name=None, intermediates=False, announce=print):
-    """Identity function on an arbitrary PyTree. Announces each time it is parsed as part of a jaxpr."""
+    """Identity function on an arbitrary PyTree. Announces each time it is parsed as "
+    "part of a jaxpr.
+    """
     array, nonarray = partition(x, is_array)
     flat, treedef = jtu.tree_flatten(array)
     flat = announce_jaxpr_p.bind(

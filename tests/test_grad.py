@@ -307,9 +307,7 @@ def test_closure_convert_basic():
 
 
 def test_closure_convert_custom_jvp():
-    # Deliberately not using filter_custom_jvp to check the static fields on the
-    # closure converted function.
-    @jax.custom_jvp
+    @eqx.filter_custom_jvp
     def call(f, x):
         return f(x)
 

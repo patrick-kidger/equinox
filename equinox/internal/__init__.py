@@ -1,14 +1,10 @@
-# These are the pieces which depend on JAX-internal functionality, and thus shouldn't
-# be part of the stable Equinox API.
-# These are the pieces which just don't have a home in the main Equinox API. At some
-# point we could consider spinning them up some other namespace.
 from ..better_abc import abstractattribute
 from ..compile_utils import hashable_combine, hashable_partition
 from ..doc_utils import doc_repr
 from ..module import Static
 from ..pretty_print import tree_pp
 from ..vmap_pmap import if_mapped
-from .checkpointed_while_loop import checkpointed_while_loop
+from .checkpointed_while_loop import Buffer, checkpointed_while_loop
 from .debug import announce_jaxpr_p, announce_transform, debug_backward_nan
 from .errors import branched_error_if, branched_error_p, error_if
 from .finalise_jaxpr import (
