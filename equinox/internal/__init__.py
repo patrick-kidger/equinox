@@ -4,7 +4,7 @@ from ..doc_utils import doc_repr
 from ..module import Static
 from ..pretty_print import pp
 from ..vmap_pmap import if_mapped
-from .checkpointed_while_loop import Buffer, checkpointed_while_loop
+from .checkpointed_while_loop import checkpointed_while_loop
 from .debug import announce_jaxpr_p, announce_transform, debug_backward_nan
 from .errors import branched_error_if, branched_error_p, error_if
 from .finalise_jaxpr import (

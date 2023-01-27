@@ -72,9 +72,16 @@ def test_notangent_forward(buffer, getkey):
     body_fun = make_body_fun(mlp)
     true_final_carry = lax.while_loop(cond_fun, body_fun, (0, init_val1, init_val2))
     if buffer:
-        init_val2 = eqxi.Buffer(init_val2)
+        buffer_fn = lambda i: i[2]
+    else:
+        buffer_fn = None
     final_carry = eqxi.checkpointed_while_loop(
-        cond_fun, body_fun, (0, init_val1, init_val2), max_steps=None, checkpoints=1
+        cond_fun,
+        body_fun,
+        (0, init_val1, init_val2),
+        max_steps=None,
+        checkpoints=1,
+        buffers=buffer_fn,
     )
     assert shaped_allclose(final_carry, true_final_carry)
 
@@ -89,12 +96,19 @@ def test_forward(buffer, getkey):
 
     @jax.jit
     def run(init_val1, init_val2):
+        if buffer:
+            buffer_fn = lambda i: i[2]
+        else:
+            buffer_fn = None
         return eqxi.checkpointed_while_loop(
-            cond_fun, body_fun, (0, init_val1, init_val2), max_steps=None, checkpoints=9
+            cond_fun,
+            body_fun,
+            (0, init_val1, init_val2),
+            max_steps=None,
+            checkpoints=9,
+            buffers=buffer_fn,
         )
 
-    if buffer:
-        init_val2 = eqxi.Buffer(init_val2)
     final_carry, _ = jax.linearize(run, init_val1, init_val2)
     assert shaped_allclose(final_carry, true_final_carry)
 
@@ -156,7 +170,9 @@ def test_backward(
     def run(arg):
         init_val1, init_val2, mlp = arg
         if buffer:
-            init_val2 = eqxi.Buffer(init_val2)
+            buffer_fn = lambda i: i[2]
+        else:
+            buffer_fn = None
         body_fun = make_body_fun(mlp)
         _, final_val1, final_val2 = eqxi.checkpointed_while_loop(
             cond_fun,
@@ -164,6 +180,7 @@ def test_backward(
             (0, init_val1, init_val2),
             max_steps=max_steps,
             checkpoints=checkpoints,
+            buffers=buffer_fn,
         )
         return jnp.sum(final_val1) + jnp.sum(final_val2)
 
@@ -202,7 +219,9 @@ def test_vmap_primal_unbatched_cond(buffer, getkey):
     def run(arg):
         init_val1, init_val2, mlp = arg
         if buffer:
-            init_val2 = eqxi.Buffer(init_val2)
+            buffer_fn = lambda i: i[2]
+        else:
+            buffer_fn = None
         body_fun = make_body_fun(mlp)
         _, final_val1, final_val2 = eqxi.checkpointed_while_loop(
             cond_fun,
@@ -210,6 +229,7 @@ def test_vmap_primal_unbatched_cond(buffer, getkey):
             (0, init_val1, init_val2),
             max_steps=None,
             checkpoints=4,
+            buffers=buffer_fn,
         )
         return jnp.sum(final_val1) + jnp.sum(final_val2)
 
@@ -245,7 +265,9 @@ def test_vmap_primal_batched_cond(buffer, getkey):
     def run(arg, init_step):
         init_val1, init_val2, mlp = arg
         if buffer:
-            init_val2 = eqxi.Buffer(init_val2)
+            buffer_fn = lambda i: i[2]
+        else:
+            buffer_fn = None
         body_fun = make_body_fun(mlp)
         _, final_val1, final_val2 = eqxi.checkpointed_while_loop(
             cond_fun,
@@ -253,6 +275,7 @@ def test_vmap_primal_batched_cond(buffer, getkey):
             (init_step, init_val1, init_val2),
             max_steps=None,
             checkpoints=4,
+            buffers=buffer_fn,
         )
         return jnp.sum(final_val1) + jnp.sum(final_val2)
 
@@ -287,7 +310,9 @@ def test_vmap_cotangent(buffer, getkey):
     def run(arg):
         init_val1, init_val2, mlp = arg
         if buffer:
-            init_val2 = eqxi.Buffer(init_val2)
+            buffer_fn = lambda i: i[2]
+        else:
+            buffer_fn = None
         body_fun = make_body_fun(mlp)
         _, final_val1, final_val2 = eqxi.checkpointed_while_loop(
             cond_fun,
@@ -295,6 +320,7 @@ def test_vmap_cotangent(buffer, getkey):
             (0, init_val1, init_val2),
             max_steps=None,
             checkpoints=4,
+            buffers=buffer_fn,
         )
         return final_val1, final_val2
 
@@ -348,10 +374,10 @@ def test_speed_while(inplace_op, while_loop):
     assert speed < 0.1
 
 
-# This tests the possible failure mode of "the Buffer doesn't do anything".
-# This test takes O(1e-3) seconds with Buffer.
-# This test takes O(10) seconds without Buffer.
-# This speed improvement is precisely the reason that Buffer exists.
+# This tests the possible failure mode of "the buffer doesn't do anything".
+# This test takes O(1e-3) seconds with buffer.
+# This test takes O(10) seconds without buffer.
+# This speed improvement is precisely the reason that buffer exists.
 def test_speed_buffer_while():
     @jax.jit
     @jax.vmap
@@ -367,15 +393,21 @@ def test_speed_buffer_while():
 
         def loop(init_xs):
             return eqxi.checkpointed_while_loop(
-                cond, body, (init_step, init_xs), checkpoints=50_000
+                cond,
+                body,
+                (init_step, init_xs),
+                checkpoints=50_000,
+                buffers=lambda i: i[1],
             )
 
         # Linearize so that we save residuals
-        init_xs = eqxi.Buffer(init_xs)
         return jax.linearize(loop, init_xs)
 
     size = 100_000
-    args = jnp.array([0]), jnp.zeros((1, size))
+    # nontrivial batch size is important to ensure that the `.at[].set()` is really a
+    # scatter, and that XLA doesn't optimise it into a dynamic_update_slice. (Which
+    # can be switched with `select` in the compiler.)
+    args = jnp.array([0, 1]), jnp.zeros((2, size))
     f(*args)  # compile
 
     speed = timeit.timeit(lambda: f(*args), number=1)
