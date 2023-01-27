@@ -206,12 +206,13 @@ def checkpointed_while_loop(
             checkpoints = math.ceil(math.log2(max_steps))
     if checkpoints < 1:
         raise ValueError("Must have at least one checkpoint")
-    if max_steps == 0:
-        return init_val
     init_val = jtu.tree_map(jnp.asarray, init_val)
-    body_fun = filter_closure_convert(body_fun, init_val)
-    vjp_arg = (init_val, body_fun)
-    final_val = _checkpointed_while_loop(vjp_arg, cond_fun, max_steps, checkpoints)
+    if max_steps == 0:
+        final_val = init_val
+    else:
+        body_fun = filter_closure_convert(body_fun, init_val)
+        vjp_arg = (init_val, body_fun)
+        final_val = _checkpointed_while_loop(vjp_arg, cond_fun, max_steps, checkpoints)
     final_val = jtu.tree_map(
         lambda x: x._array if _is_buffer(x) else x, final_val, is_leaf=_is_buffer
     )
