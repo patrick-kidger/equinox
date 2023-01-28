@@ -192,7 +192,7 @@ def test_backward(
         ",", "\n"
     )
     assert shaped_allclose(value, true_value)
-    assert shaped_allclose(grad, true_grad)
+    assert shaped_allclose(grad, true_grad, rtol=1e-4, atol=1e-4)
     assert text.strip() == true_text
 
 

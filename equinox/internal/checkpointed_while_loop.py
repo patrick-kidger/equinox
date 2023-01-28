@@ -48,25 +48,26 @@ and
 import functools as ft
 import math
 import operator
-from typing import Any, Callable, Optional, Tuple, TypeVar, Union
+from typing import Any, Callable, Optional, Sequence, TypeVar, Union
 
 import jax
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.tree_util as jtu
-from jaxtyping import Array, Bool, PyTree
+from jaxtyping import Array, Bool, Shaped
 
 from ..filters import combine, is_array, is_inexact_array, partition
 from ..grad import filter_closure_convert, filter_custom_vjp, filter_vjp
 from ..module import Module, static_field
-from ..tree import tree_at
+from ..tree import tree_at, tree_equal
 from .errors import error_if
 from .nontraceable import nonbatchable, nondifferentiable
-from .unvmap import unvmap_any, unvmap_max
+from .unvmap import unvmap_any
 
 
 _T = TypeVar("T")
 _Bool = Union[bool, Bool[Array, ""]]
+_Node = Any
 
 
 def checkpointed_while_loop(
@@ -76,7 +77,7 @@ def checkpointed_while_loop(
     max_steps: Optional[int] = None,
     *,
     checkpoints: Optional[int] = None,
-    buffers: Optional[Callable[[_T], Any]] = None,
+    buffers: Optional[Callable[[_T], Union[_Node, Sequence[_Node]]]] = None,
 ):
     """Reverse-mode autodifferentiable while loop, using optimal online checkpointing.
 
@@ -102,7 +103,7 @@ def checkpointed_while_loop(
     - `checkpoints`: The number of steps at which to checkpoint. The memory consumed
         will be that of `checkpoints`-many copies of `init_val`. (As the state is
         updated throughout the loop.)
-    - `buffers`: If passed, then everything in `tree_flatten(buffers(init_val))` will
+    - `buffers`: If passed, then every array in `tree_leaves(buffers(init_val))` will
         become a write-only buffer. (Supporting only `.at[].set()`.)
 
     **Returns:**
@@ -232,30 +233,84 @@ def checkpointed_while_loop(
     init_val = jtu.tree_map(jnp.asarray, init_val)
     if max_steps == 0:
         return init_val
-    tag = object()
-    if buffers is not None:
-        init_val = tree_at(buffers, init_val, replace_fn=_make_buffer(tag))
+
+    def _cond_fun(val):
+        _, pred, _ = val
+        return unvmap_any(pred)
+
+    init_val = (jnp.asarray(0), jnp.asarray(cond_fun(init_val)), init_val)
+    body_fun = _body_fun_with_buffers(cond_fun, body_fun, max_steps, buffers)
     body_fun = filter_closure_convert(body_fun, init_val)
+    if buffers is None:
+        buffers = lambda _: ()
+    else:
+        _buffers = buffers
+        buffers = lambda val: _buffers(val[2])  # ignore step and pred
     vjp_arg = (init_val, body_fun)
-    final_val = _checkpointed_while_loop(vjp_arg, cond_fun, max_steps, checkpoints, tag)
-    if buffers is not None:
-        final_val = jtu.tree_map(
-            lambda x: x._array if _is_buffer(tag)(x) else x,
-            final_val,
-            is_leaf=_is_buffer(tag),
-        )
+    _, _, final_val = _checkpointed_while_loop(vjp_arg, _cond_fun, checkpoints, buffers)
     return final_val
+
+
+def _body_fun_with_buffers(cond_fun, body_fun, max_steps, buffers):
+    def buffered_body_fun(val):
+        tag = object()
+
+        def wrap_buffers(subtree):
+            def _wrap_buffers(leaf):
+                if not is_array(leaf):
+                    raise ValueError("Only arrays can be treated as buffers.")
+                return _Buffer(leaf, pred, tag)
+
+            return jtu.tree_map(_wrap_buffers, subtree)
+
+        def _is_buffer(node):
+            return isinstance(node, _Buffer) and node._tag is tag
+
+        def _unwrap_and_select(leaf, leaf2):
+            if _is_buffer(leaf):
+                assert _is_buffer(leaf2)
+                # sanity check that this is the lowest buffer, i.e. when nesting
+                # multiple checkpointed_while_loops.
+                assert is_array(leaf._array)
+                assert is_array(leaf2._array)
+                return leaf2._array
+            else:
+                return lax.select(pred, leaf2, leaf)
+
+        step, pred, val = val
+        if buffers is None:
+            buffer_val = val
+        else:
+            buffer_val = tree_at(buffers, val, replace_fn=wrap_buffers)
+        buffer_val2 = body_fun(buffer_val)
+        if not tree_equal(
+            jax.eval_shape(lambda: buffer_val), jax.eval_shape(lambda: buffer_val2)
+        ):
+            raise ValueError("`body_fun` must have the same input and output structure")
+        val2 = jtu.tree_map(
+            _unwrap_and_select, buffer_val, buffer_val2, is_leaf=_is_buffer
+        )
+        step2 = step + 1
+        pred2 = pred & cond_fun(buffer_val2)
+        if max_steps is not None:
+            if type(max_steps) is not int:
+                raise ValueError("`max_steps` must be a Python integer")
+            pred2 = pred2 & (step2 < max_steps)
+        return step2, pred2, val2
+
+    return buffered_body_fun
 
 
 # Importantly: these are write-only.
 # This simplifies our autodiff a lot!
 class _Buffer(Module):
-    _array: Array
+    _array: Shaped[Array, "..."]
+    _pred: Bool[Array, ""]
     _tag: object = static_field()
 
     @property
     def at(self):
-        return _BufferAt(self._array, self._tag)
+        return _BufferAt(self._array, self._pred, self._tag)
 
     @property
     def shape(self):
@@ -271,121 +326,35 @@ class _Buffer(Module):
 
 
 class _BufferAt(Module):
-    _array: Array
+    _array: Shaped[Array, "..."]
+    _pred: Bool[Array, ""]
     _tag: object = static_field()
 
     def __getitem__(self, item):
-        return _BufferItem(self._array, self._tag, item)
+        return _BufferItem(self._array, self._pred, self._tag, item)
 
 
 class _BufferItem(Module):
-    _array: Array
-    _tag: object
+    _array: Shaped[Array, "..."]
+    _pred: Bool[Array, ""]
+    _tag: object = static_field()
     _item: Any
 
     def set(self, x):
+        old_x = self._array[self._item]
+        x = jnp.where(self._pred, x, old_x)
         array = self._array.at[self._item].set(x)
-        return _Buffer(array, self._tag)
-
-
-def _make_buffer(tag: object) -> Callable[[PyTree], PyTree]:
-    def _make_buffer2(subtree: PyTree) -> PyTree:
-        def _make_buffer3(leaf: Array) -> _Buffer:
-            if not is_array(leaf):
-                raise ValueError("Only arrays can become buffers.")
-            return _Buffer(leaf, tag)
-
-        return jtu.tree_map(_make_buffer3, subtree)
-
-    return _make_buffer2
-
-
-def _is_buffer(tag: object) -> Callable[[Any], bool]:
-    def _is_buffer2(x: Any) -> bool:
-        return type(x) is _Buffer and x._tag is tag
-
-    return _is_buffer2
-
-
-# We don't want to save any Buffers into our residuals (that's the whole point of a
-# Buffer.) But we do need to store the shape/dtype information of the buffer, so that
-# we can still call `body_fun` with the correct signature on the backward pass. We store
-# that information in a `_DummyBuffer`.
-# (Getting the information from the gradient value wouldn't work, as primals and
-# tangents may have different dtypes.)
-class _DummyBuffer(Module):
-    shape: Tuple[int, ...] = static_field()
-    dtype: jnp.dtype = static_field()
-    tag: object = static_field()
-
-    @property
-    def at(self):
-        return _DummyBufferAt(self.shape, self.dtype, self.tag)
-
-
-class _DummyBufferAt(Module):
-    shape: Tuple[int, ...] = static_field()
-    dtype: jnp.dtype = static_field()
-    tag: object = static_field()
-
-    def __getitem__(self, item):
-        return _DummyBufferItem(self.shape, self.dtype, self.tag)
-
-
-class _DummyBufferItem(Module):
-    shape: Tuple[int, ...] = static_field()
-    dtype: jnp.dtype = static_field()
-    tag: object = static_field()
-
-    def set(self, x):
-        return _DummyBuffer(self.shape, self.dtype, self.tag)
-
-
-def _dummy_buffer(tree: PyTree, tag: object) -> PyTree:
-    def _dummy_buffer2(x):
-        if _is_buffer(tag)(x):
-            return _DummyBuffer(x.shape, x.dtype, tag)
-        else:
-            return x
-
-    return jtu.tree_map(_dummy_buffer2, tree, is_leaf=_is_buffer(tag))
-
-
-_is_dummy_buffer = lambda x: isinstance(x, _DummyBuffer)
-
-
-def _undummy_buffer(tree: PyTree, tag: object) -> PyTree:
-    def _undummy_buffer_impl(v):
-        if _is_dummy_buffer(v):
-            # We should never encounter anyone else's dummy buffer, but we keep the tags
-            # around as a sanity check.
-            assert v.tag is tag
-            return _Buffer(jnp.zeros(v.shape, v.dtype), tag)
-        else:
-            return v
-
-    return jtu.tree_map(_undummy_buffer_impl, tree, is_leaf=_is_dummy_buffer)
+        return _Buffer(array, self._pred, self._tag)
 
 
 @filter_custom_vjp
-def _checkpointed_while_loop(vjp_arg, cond_fun, max_steps, checkpoints, tag):
+def _checkpointed_while_loop(vjp_arg, cond_fun, checkpoints, buffers):
     """Uncheckpointed forward used when not differentiating."""
-    del checkpoints, tag
+    del checkpoints, buffers
     init_val, body_fun = vjp_arg
-
-    def _cond_fun(carry):
-        step, val = carry
-        pred = cond_fun(val)
-        if max_steps is not None:
-            pred = pred & (step < max_steps)
-        return pred
-
-    def _body_fun(carry):
-        step, val = carry
-        return step + 1, body_fun(val)
-
-    _, final_val = lax.while_loop(_cond_fun, _body_fun, (0, init_val))
-    return final_val
+    _body_fun = body_fun
+    body_fun = lambda x: _body_fun(x)  # hashable wrapper; JAX issue #13554
+    return lax.while_loop(cond_fun, body_fun, init_val)
 
 
 def _scalar_index(i, x):
@@ -512,6 +481,7 @@ def _should_save_residual(step, save_state, residual_steps, u2_minus_2):
     """
     # TODO: also implement Algorithm 2 of Stumm and Walther, which gives improved
     # results for u2 < step < u3.
+    step, u2_minus_2 = nonbatchable((step, u2_minus_2))
     return lax.cond(
         step > u2_minus_2,
         _wang_moin_wrapper,
@@ -528,7 +498,7 @@ def _unreachable_checkpoint_step(x):
     return jnp.iinfo(dtype).max
 
 
-def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, max_steps, checkpoints, tag):
+def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, checkpoints, buffers):
     """Run the while loop, saving checkpoints whenever the controller
     (`_should_save_residual`) requires.
     """
@@ -537,45 +507,33 @@ def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, max_steps, checkpoints, tag)
     u2_minus_2 = ((checkpoints + 1) * (checkpoints + 2)) // 2 - 2
 
     def _cond_fun(carry):
-        pred, *_ = carry
-        # We set things up with an unbatched cond_fun so that the body doesn't all get
-        # batched, so that `_should_save_residual` doesn't get batched inputs, so that
-        # our saved residuals are in lockstep across the batch.
-        return unvmap_any(pred)
+        _, _, val, _, _ = carry
+        return cond_fun(val)
 
     def _body_fun(carry):
-        pred, step, save_state, val, residual_steps, residuals = carry
+        step, save_state, val, residual_steps, residuals = carry
         save_state, residual_steps = nonbatchable((save_state, residual_steps))
 
         step2 = step + 1
         save_residual, index, save_state2 = _should_save_residual(
-            unvmap_max(step), save_state, residual_steps, u2_minus_2
+            step, save_state, residual_steps, u2_minus_2
         )
         val2 = body_fun(val)
-        # Manually handle only keeping batch elements that should have ran, since have
-        # an unvmap'd cond_fun.
-        pred2 = pred & cond_fun(val2)
-        if max_steps is not None:
-            pred2 = pred2 & (step2 < max_steps)
-        step2, val2 = jtu.tree_map(
-            lambda v, v2: lax.select(pred, v2, v), (step, val), (step2, val2)
-        )
 
         def _maybe_update(xs, x):
             where_x = jnp.where(save_residual, x, _scalar_index(index, xs))
             return lax.dynamic_update_index_in_dim(xs, where_x, index, axis=0)
 
-        val_no_buffers = _dummy_buffer(val, tag)
+        val_no_buffers = tree_at(buffers, val, replace_fn=lambda _: None)
         residual_steps2, residuals2 = jtu.tree_map(
             _maybe_update,
             (residual_steps, residuals),
-            (unvmap_max(step), val_no_buffers),
+            (step, val_no_buffers),
         )
         save_state2, residual_steps2 = nonbatchable((save_state2, residual_steps2))
-        return pred2, step2, save_state2, val2, residual_steps2, residuals2
+        return step2, save_state2, val2, residual_steps2, residuals2
 
     int_dtype = jnp.int64 if jax.config.jax_enable_x64 else jnp.int32
-    init_pred = cond_fun(init_val)
     init_step = jnp.array(0, dtype=int_dtype)  # dtype matches init_residual_steps
     init_save_state_sw_i = 0, checkpoints, checkpoints, True
     init_save_state_wm = (
@@ -590,24 +548,18 @@ def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, max_steps, checkpoints, tag)
         checkpoints, _unreachable_checkpoint_step(int_dtype), dtype=int_dtype
     )
 
-    def _init_residual(x):
-        if _is_buffer(tag)(x):
-            assert is_array(x._array)
-            return _DummyBuffer(x.shape, x.dtype, tag)
-        else:
-            # Fill value for the memory isn't important.
-            return jnp.zeros((checkpoints,) + x.shape, x.dtype)
-
-    init_residuals = jtu.tree_map(_init_residual, init_val, is_leaf=_is_buffer(tag))
+    init_val_no_buffers = tree_at(buffers, init_val, replace_fn=lambda _: None)
+    # Fill value for the memory isn't important.
+    init_residuals = jtu.tree_map(
+        lambda x: jnp.zeros((checkpoints,) + x.shape, x.dtype), init_val_no_buffers
+    )
     init_carry = (
-        init_pred,
         init_step,
         init_save_state,
         init_val,
         init_residual_steps,
         init_residuals,
     )
-    # `pred` is whether to make a step
     # `step` is an increasing counter 0, 1, 2, 3, ...
     # `save_state` is state used by the logic for whether to save a checkpoint each step
     # `val` is the evolving state of the loop
@@ -615,7 +567,7 @@ def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, max_steps, checkpoints, tag)
     # `residuals` is the buffer of the `val` for each checkpoint
 
     final_carry = lax.while_loop(_cond_fun, _body_fun, init_carry)
-    _, num_steps, _, final_val, final_residual_steps, final_residuals = final_carry
+    num_steps, _, final_val, final_residual_steps, final_residuals = final_carry
 
     # The above procedure may produce residuals saved in jumbled-up order. Meanwhile
     # treeverse (used on the backward pass) treats the residuals like a stack,
@@ -628,7 +580,7 @@ def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, max_steps, checkpoints, tag)
     final_residual_steps, final_residuals = jtu.tree_map(
         ft.partial(_unique_index, sort_indices), (final_residual_steps, final_residuals)
     )
-    final_residual_steps = nonbatchable(final_residual_steps)
+    num_steps, final_residual_steps = nonbatchable((num_steps, final_residual_steps))
     return final_val, (num_steps, final_residual_steps, final_residuals)
 
 
@@ -748,7 +700,14 @@ def _calc_next_checkpoint(step_val, step_grad_val, index, checkpoints):
     return step_next_checkpoint
 
 
-def _make_fwd(static_body_fun, tag):
+def _dummy_buffers(buffers, val, in_dynamic_struct):
+    (val_dynamic_struct,), _ = in_dynamic_struct
+    buffer_struct = buffers(val_dynamic_struct)
+    buffer_struct = jtu.tree_map(lambda x: jnp.zeros(x.shape, x.dtype), buffer_struct)
+    return tree_at(buffers, val, buffer_struct, is_leaf=lambda x: x is None)
+
+
+def _make_fwd(static_body_fun, buffers):
     def _fwd(
         dynamic_body_fun,
         step_val,
@@ -763,9 +722,9 @@ def _make_fwd(static_body_fun, tag):
         step_val = nonbatchable(step_val)
         step_val2 = step_val + 1
         body_fun = combine(dynamic_body_fun, static_body_fun)
-        val = _undummy_buffer(val, tag)
+        val = _dummy_buffers(buffers, val, body_fun.in_dynamic_struct)
         val2 = body_fun(val)
-        val2 = _dummy_buffer(val2, tag)
+        val2 = tree_at(buffers, val2, replace_fn=lambda _: None)
         step_val2 = nonbatchable(step_val2)
         return (
             step_val2,
@@ -780,7 +739,7 @@ def _make_fwd(static_body_fun, tag):
     return _fwd
 
 
-def _make_u_turn(static_body_fun, residual_steps, residuals, checkpoints, tag):
+def _make_u_turn(static_body_fun, buffers, residual_steps, residuals, checkpoints):
     """Propagates the cotangent backward one step."""
     residual_steps = nonbatchable(residual_steps)
 
@@ -802,7 +761,7 @@ def _make_u_turn(static_body_fun, residual_steps, residuals, checkpoints, tag):
         # We pass in `body_fun` as an argument as it contains its closed-over values
         # in its PyTree structure, and we do want to compute cotangents wrt these.
         body_fun = combine(dynamic_body_fun, static_body_fun)
-        val = _undummy_buffer(val, tag)
+        val = _dummy_buffers(buffers, val, body_fun.in_dynamic_struct)
         _, vjp_fn = filter_vjp(lambda b, v: b(v), body_fun, val)
 
         grad_body_fun_update, grad_val2 = vjp_fn(grad_val)
@@ -831,7 +790,7 @@ def _make_u_turn(static_body_fun, residual_steps, residuals, checkpoints, tag):
 
 
 def _checkpointed_while_loop_bwd(
-    remainders, grad_final_val, vjp_arg, cond_fun, max_steps, checkpoints, tag
+    remainders, grad_final_val, vjp_arg, cond_fun, checkpoints, buffers
 ):
     """Time for the complicated bit: iterate backward through a checkpointed while loop,
     loading values from checkpoints and using treeverse to toggle between forward and
@@ -841,15 +800,16 @@ def _checkpointed_while_loop_bwd(
     grad_final_body_fun = jtu.tree_map(
         lambda x: jnp.zeros_like(x) if is_inexact_array(x) else None, body_fun
     )
-    del cond_fun, max_steps
+    del cond_fun
     num_steps, init_residual_steps, init_residuals = remainders
-    init_residual_steps = nonbatchable(init_residual_steps)
+    num_steps, init_residual_steps = nonbatchable((num_steps, init_residual_steps))
 
     def _cond_fun(carry):
         _, step_grad_val, *_ = carry
         # step_grad_val is the location of our cotangent. We want to keep going until
         # this has got all the way to the start.
-        return unvmap_any(step_grad_val > 0)
+        step_grad_val = nonbatchable(step_grad_val)
+        return step_grad_val > 0
 
     def _body_fun(carry):
         (
@@ -863,8 +823,14 @@ def _checkpointed_while_loop_bwd(
             residual_steps,
             residuals,
         ) = carry
-        step_val, step_next_checkpoint, index, residual_steps = nonbatchable(
-            (step_val, step_next_checkpoint, index, residual_steps)
+        (
+            step_val,
+            step_grad_val,
+            step_next_checkpoint,
+            index,
+            residual_steps,
+        ) = nonbatchable(
+            (step_val, step_grad_val, step_next_checkpoint, index, residual_steps)
         )
 
         msg = (
@@ -872,14 +838,14 @@ def _checkpointed_while_loop_bwd(
             "`equinox.internal.checkpointed_while_loop`. "
             "Please raise an issue at https://http://github.com/patrick-kidger/equinox"
         )
-        step_val = error_if(step_val, step_val >= unvmap_max(step_grad_val), msg)
+        step_val = error_if(step_val, step_val >= step_grad_val, msg)
 
         #
         # First either propagate our primal state forward, or make a U-turn if the
         # primal state has caught up to the cotangent state.
         #
 
-        perform_u_turn = step_val + 1 == unvmap_max(step_grad_val)
+        perform_u_turn = step_val + 1 == step_grad_val
         perform_u_turn = nonbatchable(perform_u_turn)
         dynamic_body_fun, static_body_fun = partition(body_fun, is_array)
         (
@@ -892,11 +858,13 @@ def _checkpointed_while_loop_bwd(
             grad_body_fun2,
         ) = lax.cond(
             perform_u_turn,
-            _make_u_turn(static_body_fun, residual_steps, residuals, checkpoints, tag),
-            _make_fwd(static_body_fun, tag),
+            _make_u_turn(
+                static_body_fun, buffers, residual_steps, residuals, checkpoints
+            ),  # noqa: E501
+            _make_fwd(static_body_fun, buffers),
             dynamic_body_fun,
             step_val,
-            unvmap_max(step_grad_val),
+            step_grad_val,
             step_next_checkpoint,
             index,
             val,
@@ -909,11 +877,8 @@ def _checkpointed_while_loop_bwd(
         # Note that this can only actually trigger on `_fwd` and not on `_u_turn`, as
         # if `_u_turn` happens then `step_val2 < step_next_checkpoint2`, but
         # `_maybe_save_to_checkpoint` has a `step_val2 == step_next_checkpoint2` check.
-        #
-        # Nonetheless these operations have to happen outside of the `lax.cond`, so that
-        # the in-place update is the final operation happening to `residuals` and
-        # `residual_steps` in the body function. This is needed to ensure that the copy
-        # get elided when under vmap. See JAX issue #13522.
+        # (We could maybe move this inside `_fwd`? It was originally outside for
+        # efficiency reasons that I don't think apply any more.)
         #
 
         (
@@ -923,7 +888,7 @@ def _checkpointed_while_loop_bwd(
             residuals2,
         ) = _maybe_save_to_checkpoint(
             step_val2,
-            unvmap_max(step_grad_val2),
+            step_grad_val2,
             step_next_checkpoint2,
             index2,
             val2,
@@ -932,25 +897,6 @@ def _checkpointed_while_loop_bwd(
             checkpoints,
         )
 
-        #
-        # Third, handle batching appropriately. This means resetting the cotangent
-        # computation until the overall computation has got to this batch element.
-        #
-        # In particular it does *not* mean resetting the primal computation. We need to
-        # perform primal computations even before `pred == True`, in order to recover
-        # some intermediate primal states in those `_fwd` steps that occur immediately
-        # prior to the first U-turn which affects this batch element.
-        #
-
-        pred = step_grad_val == unvmap_max(step_grad_val)
-        step_grad_val2, grad_val2, grad_body_fun2 = jtu.tree_map(
-            lambda v, v2: lax.select(pred, v2, v),
-            (step_grad_val, grad_val, grad_body_fun),
-            (step_grad_val2, grad_val2, grad_body_fun2),
-        )
-        step_val2, step_next_checkpoint2, index2, residual_steps2 = nonbatchable(
-            (step_val2, step_next_checkpoint2, index2, residual_steps2)
-        )
         return (
             step_val2,
             step_grad_val2,
@@ -968,13 +914,13 @@ def _checkpointed_while_loop_bwd(
     # 0, 1, ..., checkpoints - 1, checkpoints, where `index == checkpoints` indicates
     # that there are no empty spots and the whole buffer is full. (And this is used in
     # `_calc_step_next_checkpoint`.)
-    init_index = jnp.minimum(unvmap_max(num_steps), checkpoints)
+    init_index = jnp.minimum(num_steps, checkpoints)
     init_step_grad_val = num_steps
     init_step_val, init_val, init_index = _load_from_checkpoint(
-        unvmap_max(init_step_grad_val), init_index, init_residual_steps, init_residuals
+        init_step_grad_val, init_index, init_residual_steps, init_residuals
     )
     init_step_next_checkpoint = _calc_next_checkpoint(
-        init_step_val, unvmap_max(init_step_grad_val), init_index, checkpoints
+        init_step_val, init_step_grad_val, init_index, checkpoints
     )
     init_carry = (
         init_step_val,
@@ -987,8 +933,9 @@ def _checkpointed_while_loop_bwd(
         init_residual_steps,
         init_residuals,
     )
-    # Note that the checkpoint buffers hold both values computed on the forward pass,
-    # and checkpoints recomputed on the backward pass.
+    # Note that the checkpoint buffers hold both (a) values computed on the forward
+    # pass, and (b) checkpoints recomputed on the backward pass. (We don't need to
+    # distinguish them.)
     #
     # Controller State
     # ----------------

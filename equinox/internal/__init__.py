@@ -2,7 +2,7 @@ from ..better_abc import abstractattribute
 from ..compile_utils import hashable_combine, hashable_partition
 from ..doc_utils import doc_repr
 from ..module import Static
-from ..pretty_print import pp
+from ..pretty_print import tree_pp
 from ..vmap_pmap import if_mapped
 from .checkpointed_while_loop import checkpointed_while_loop
 from .debug import announce_jaxpr_p, announce_transform, debug_backward_nan

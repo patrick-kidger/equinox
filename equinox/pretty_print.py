@@ -29,7 +29,7 @@ def _pformat_list(obj: List, **kwargs) -> pp.Doc:
         pp.concat(
             [
                 pp.text("["),
-                _nest(indent, pp.join(_comma_sep, [pp(x, **kwargs) for x in obj])),
+                _nest(indent, pp.join(_comma_sep, [tree_pp(x, **kwargs) for x in obj])),
                 pp.brk(""),
                 pp.text("]"),
             ]
@@ -40,16 +40,18 @@ def _pformat_list(obj: List, **kwargs) -> pp.Doc:
 def _pformat_tuple(obj: Tuple, **kwargs) -> pp.Doc:
     indent = kwargs["indent"]
     if len(obj) == 1:
-        entries = pp.concat([pp(obj[0], **kwargs), pp.text(",")])
+        entries = pp.concat([tree_pp(obj[0], **kwargs), pp.text(",")])
     else:
-        entries = pp.join(_comma_sep, [pp(x, **kwargs) for x in obj])
+        entries = pp.join(_comma_sep, [tree_pp(x, **kwargs) for x in obj])
     return pp.group(
         pp.concat([pp.text("("), _nest(indent, entries), pp.brk(""), pp.text(")")])
     )
 
 
 def _dict_entry(key: PrettyPrintAble, value: PrettyPrintAble, **kwargs) -> pp.Doc:
-    return pp.concat([pp(key, **kwargs), pp.text(":"), pp.brk(), pp(value, **kwargs)])
+    return pp.concat(
+        [tree_pp(key, **kwargs), pp.text(":"), pp.brk(), tree_pp(value, **kwargs)]
+    )
 
 
 def _pformat_dict(obj: Dict, **kwargs) -> pp.Doc:
@@ -68,7 +70,7 @@ def _pformat_dict(obj: Dict, **kwargs) -> pp.Doc:
 
 
 def _named_entry(name: str, value: Any, **kwargs) -> pp.Doc:
-    return pp.concat([pp.text(name), pp.text("="), pp(value, **kwargs)])
+    return pp.concat([pp.text(name), pp.text("="), tree_pp(value, **kwargs)])
 
 
 def _pformat_namedtuple(obj: NamedTuple, **kwargs) -> pp.Doc:
@@ -143,13 +145,13 @@ _Partial.__qualname__ = jtu.Partial.__qualname__
 _Partial.__module__ = jtu.Partial.__module__
 
 
-def pp(obj: PrettyPrintAble, **kwargs) -> pp.Doc:
+def tree_pp(obj: PrettyPrintAble, **kwargs) -> pp.Doc:
     follow_wrapped = kwargs["follow_wrapped"]
     truncate_leaf = kwargs["truncate_leaf"]
     if truncate_leaf(obj):
         return pp.text(f"{type(obj).__name__}(...)")
-    elif hasattr(obj, "__pp__"):
-        return pp.group(obj.__pp__(**kwargs))
+    elif hasattr(obj, "__tree_pp__"):
+        return pp.group(obj.__tree_pp__(**kwargs))
     elif dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         return _pformat_dataclass(obj, **kwargs)
     elif isinstance(obj, list):
@@ -164,16 +166,16 @@ def pp(obj: PrettyPrintAble, **kwargs) -> pp.Doc:
     elif isinstance(obj, (np.ndarray, jnp.ndarray)):
         return _pformat_array(obj, **kwargs)
     elif isinstance(obj, (jax.custom_jvp, jax.custom_vjp)):
-        return pp(obj.__wrapped__, **kwargs)
+        return tree_pp(obj.__wrapped__, **kwargs)
     elif hasattr(obj, "__wrapped__") and follow_wrapped:
         kwargs["wrapped"] = True
-        return pp(obj.__wrapped__, **kwargs)
+        return tree_pp(obj.__wrapped__, **kwargs)
     elif isinstance(obj, jtu.Partial) and follow_wrapped:
         obj = _Partial(obj.func, obj.args, obj.keywords)
         return _pformat_dataclass(obj, **kwargs)
     elif isinstance(obj, ft.partial) and follow_wrapped:
         kwargs["wrapped"] = True
-        return pp(obj.func, **kwargs)
+        return tree_pp(obj.func, **kwargs)
     elif isinstance(obj, types.FunctionType):
         return _pformat_function(obj, **kwargs)
     else:  # int, str, float, complex, bool, etc.
@@ -199,7 +201,7 @@ def tree_pformat(
     As [`equinox.tree_pprint`][], but returns the string instead of printing it.
     """
 
-    return pp(
+    return tree_pp(
         pytree,
         indent=indent,
         short_arrays=short_arrays,
