@@ -239,23 +239,29 @@ def checkpointed_while_loop(
         return unvmap_any(pred)
 
     if buffers is None:
-        buffers = lambda _: ()
+        _buffers = lambda _: lambda _: ()
     else:
-        _buffers = buffers
 
-        def buffers(val):
-            _, _, val = val  # ignore step and pred
-            bufs = _buffers(val)
-            # Ignore the ._pred attribute of nested buffers.
-            # This is kind of a hack: we're special-casing support for nested buffers
-            # so that end users don't have to do the ._array lookup themselves.
-            return jtu.tree_map(_get_buffer_leaves, bufs, is_leaf=_is_buffer)
+        def _buffers(is_leaf):
+            def _buffers2(val):
+                _, _, val = val  # ignore step and pred
+                bufs = buffers(val)
+                # Ignore the ._pred attribute of nested buffers.
+                # This is kind of a hack: we're special-casing support for nested
+                # buffers so that end users don't have to do the ._array lookup
+                # themselves.
+                tree = jtu.tree_map(_unwrap_buffers, bufs, is_leaf=_is_buffer)
+                return jtu.tree_leaves(tree, is_leaf=is_leaf)
+
+            return _buffers2
 
     init_val = (jnp.asarray(0), jnp.asarray(cond_fun(init_val)), init_val)
-    body_fun = _body_fun_with_buffers(cond_fun, body_fun, max_steps, buffers)
+    body_fun = _body_fun_with_buffers(cond_fun, body_fun, max_steps, _buffers)
     body_fun = filter_closure_convert(body_fun, init_val)
     vjp_arg = (init_val, body_fun)
-    _, _, final_val = _checkpointed_while_loop(vjp_arg, _cond_fun, checkpoints, buffers)
+    _, _, final_val = _checkpointed_while_loop(
+        vjp_arg, _cond_fun, checkpoints, _buffers
+    )
     return final_val
 
 
@@ -263,7 +269,7 @@ def _is_buffer(x):
     return isinstance(x, _Buffer)
 
 
-def _get_buffer_leaves(x):
+def _unwrap_buffers(x):
     while _is_buffer(x):
         x = x._array
     return x
@@ -293,7 +299,9 @@ def _body_fun_with_buffers(cond_fun, body_fun, max_steps, buffers):
                 return lax.select(pred, leaf2, leaf)
 
         step, pred, val = val
-        _, _, buffer_val = tree_at(buffers, (None, None, val), replace_fn=wrap_buffers)
+        _, _, buffer_val = tree_at(
+            buffers(None), (None, None, val), replace_fn=wrap_buffers
+        )
         buffer_val2 = body_fun(buffer_val)
         if not tree_equal(
             jax.eval_shape(lambda: buffer_val), jax.eval_shape(lambda: buffer_val2)
@@ -544,7 +552,7 @@ def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, checkpoints, buffers):
             where_x = jnp.where(save_residual, x, _scalar_index(index, xs))
             return lax.dynamic_update_index_in_dim(xs, where_x, index, axis=0)
 
-        val_no_buffers = tree_at(buffers, val, replace_fn=_array_to_none)
+        val_no_buffers = tree_at(buffers(None), val, replace_fn=_array_to_none)
         residual_steps2, residuals2 = jtu.tree_map(
             _maybe_update,
             (residual_steps, residuals),
@@ -568,7 +576,7 @@ def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, checkpoints, buffers):
         checkpoints, _unreachable_checkpoint_step(int_dtype), dtype=int_dtype
     )
 
-    init_val_no_buffers = tree_at(buffers, init_val, replace_fn=_array_to_none)
+    init_val_no_buffers = tree_at(buffers(None), init_val, replace_fn=_array_to_none)
     # Fill value for the memory isn't important.
     init_residuals = jtu.tree_map(
         lambda x: jnp.zeros((checkpoints,) + x.shape, x.dtype), init_val_no_buffers
@@ -720,11 +728,15 @@ def _calc_next_checkpoint(step_val, step_grad_val, index, checkpoints):
     return step_next_checkpoint
 
 
+def _is_none(x):
+    return x is None
+
+
 def _dummy_buffers(buffers, val, in_dynamic_struct):
     (val_dynamic_struct,), _ = in_dynamic_struct
-    buffer_struct = buffers(val_dynamic_struct)
+    buffer_struct = buffers(None)(val_dynamic_struct)
     buffer_struct = jtu.tree_map(lambda x: jnp.zeros(x.shape, x.dtype), buffer_struct)
-    return tree_at(buffers, val, buffer_struct, is_leaf=lambda x: x is None)
+    return tree_at(buffers(_is_none), val, buffer_struct, is_leaf=_is_none)
 
 
 def _make_fwd(static_body_fun, buffers):
@@ -744,7 +756,7 @@ def _make_fwd(static_body_fun, buffers):
         body_fun = combine(dynamic_body_fun, static_body_fun)
         val = _dummy_buffers(buffers, val, body_fun.in_dynamic_struct)
         val2 = body_fun(val)
-        val2 = tree_at(buffers, val2, replace_fn=lambda _: None)
+        val2 = tree_at(buffers(None), val2, replace_fn=lambda _: None)
         step_val2 = nonbatchable(step_val2)
         return (
             step_val2,
