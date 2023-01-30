@@ -329,11 +329,20 @@ def test_vmap_cotangent(buffer, getkey):
     assert shaped_allclose(jac, true_jac, rtol=1e-4, atol=1e-4)
 
 
-# This tests that XLA correctly optimises select(pred, inplace(xs, i, x), xs) into
-# inplace(xs, i, select(pred, get(xs, i), x)))
-# (Where "inplace" is e.g. scatter and "get" is e.g. gather.)
-# This was a fix I contributed to XLA, that is present in jaxlib>=0.4.2, and is needed
-# to ensure that in-place operations work correctly inside loops.
+# This test might be superfluous?
+#
+# This tests that XLA correctly optimises
+# select(pred, dynamic_update_slice(xs, i, x), xs)
+# into
+# dynamic_update_slice(xs, i, select(pred, dynamic_slice(xs, i), x)))
+#
+# This was a fix I contributed to XLA, that is present in jaxlib>=0.4.2.
+# In practice handling scatter as well as dynamic_update_slice was a bit too hard, and
+# in practice we do need scatter (.at[i].set() with vmap'd i) so we still need to
+# implement a workaround in the `buffers` of `checkpointed_while_loop`. So maybe this
+# doesn't matter?
+#
+# Anyway, we still test it just to be sure.
 #
 # This test is really just checking `lax.while_loop`, but we throw in
 # `checkpointed_while_loop` too, because why not?
@@ -449,3 +458,90 @@ def test_speed_grad_checkpointed_while(getkey):
     speed = timeit.timeit(lambda: f(init_val, init_step), number=1)
     # Should take ~0.01 seconds
     assert speed < 0.5
+
+
+# This is deliberately meant to emulate the pattern of saving used in
+# `diffrax.diffeqsolve(..., saveat=SaveAt(ts=...))`.
+def test_nested_loops(getkey):
+    @ft.partial(jax.jit, static_argnums=5)
+    @ft.partial(jax.vmap, in_axes=(0, 0, 0, 0, 0, None))
+    def run(step, vals, ts, final_step, cotangents, true):
+        value, vjp_fn = jax.vjp(
+            lambda *v: outer_loop(step, v, ts, true, final_step), *vals
+        )
+        cotangents = vjp_fn(cotangents)
+        return value, cotangents
+
+    def outer_loop(step, vals, ts, true, final_step):
+        def cond(carry):
+            step, _ = carry
+            return step < final_step
+
+        def body(carry):
+            step, (val1, val2, val3, val4) = carry
+            mul = 1 + 0.05 * jnp.sin(105 * val1 + 1)
+            val1 = val1 * mul
+            return inner_loop(step, (val1, val2, val3, val4), ts, true)
+
+        def buffers(carry):
+            _, (_, val2, val3, _) = carry
+            return val2, val3
+
+        if true:
+            while_loop = ft.partial(_while_as_scan, max_steps=50)
+        else:
+            while_loop = ft.partial(
+                eqxi.checkpointed_while_loop, max_steps=50, buffers=buffers
+            )
+        _, out = while_loop(cond, body, (step, vals))
+        return out
+
+    def inner_loop(step, vals, ts, true):
+        ts_done = jnp.floor(ts[step] + 1)
+
+        def cond(carry):
+            step, _ = carry
+            return ts[step] < ts_done
+
+        def body(carry):
+            step, (val1, val2, val3, val4) = carry
+            mul = 1 + 0.05 * jnp.sin(100 * val1 + 3)
+            val1 = val1 * mul
+            val2 = val2.at[step].set(val1)
+            val3 = val3.at[step].set(val1)
+            val4 = val4.at[step].set(val1)
+            return step + 1, (val1, val2, val3, val4)
+
+        def buffers(carry):
+            _, (_, _, val3, val4) = carry
+            return val3, val4
+
+        if true:
+            while_loop = ft.partial(_while_as_scan, max_steps=10)
+        else:
+            while_loop = ft.partial(
+                eqxi.checkpointed_while_loop, max_steps=10, buffers=buffers
+            )
+        return while_loop(cond, body, (step, vals))
+
+    step = jnp.array([0, 5])
+    val1 = jr.uniform(getkey(), shape=(2,), minval=0.1, maxval=0.7)
+    val2 = val3 = val4 = jnp.zeros((2, 47))
+    ts = jnp.stack([jnp.linspace(0, 19, 47), jnp.linspace(0, 13, 47)])
+    final_step = jnp.array([46, 43])
+    cotangents = (
+        jr.normal(getkey(), (2,)),
+        jr.normal(getkey(), (2, 47)),
+        jr.normal(getkey(), (2, 47)),
+        jr.normal(getkey(), (2, 47)),
+    )
+
+    value, grads = run(
+        step, (val1, val2, val3, val4), ts, final_step, cotangents, False
+    )
+    true_value, true_grads = run(
+        step, (val1, val2, val3, val4), ts, final_step, cotangents, True
+    )
+
+    assert shaped_allclose(value, true_value)
+    assert shaped_allclose(grads, true_grads, rtol=1e-4, atol=1e-5)

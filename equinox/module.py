@@ -99,7 +99,7 @@ class _ModuleMeta(ABCMeta):
         cls = dataclass(eq=False, repr=False, frozen=True, init=_init)(cls)
         if _init:
             cls.__init__.__doc__ = init_doc
-        jtu.register_pytree_node_class(cls)
+        jtu.register_pytree_node(cls, cls._tree_flatten, cls._tree_unflatten)
         return cls
 
     def __call__(cls, *args, **kwargs):
@@ -250,7 +250,10 @@ class Module(metaclass=_ModuleMeta):
     def __repr__(self):
         return tree_pformat(self)
 
-    def tree_flatten(self):
+    # TODO: move this out of being a method at all.
+    # Need to first wait until stateful operations land in JAX itself, so that we can
+    # deprecate `eqx.experimental.stateful`.
+    def _tree_flatten(self):
         dynamic_field_names = []
         dynamic_field_values = []
         static_field_names = []
@@ -280,7 +283,7 @@ class Module(metaclass=_ModuleMeta):
         )
 
     @classmethod
-    def tree_unflatten(cls, aux, dynamic_field_values):
+    def _tree_unflatten(cls, aux, dynamic_field_values):
         self = cls.__new__(cls)
         dynamic_field_names, static_field_names, static_field_values = aux
         for name, value in zip(dynamic_field_names, dynamic_field_values):
