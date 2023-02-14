@@ -54,15 +54,14 @@ import jax
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.tree_util as jtu
-from jaxtyping import Array, Bool, Shaped
+from jaxtyping import Array, Bool
 
-from ..filters import combine, is_array, is_inexact_array, partition
-from ..grad import filter_closure_convert, filter_custom_vjp, filter_vjp
-from ..module import Module, static_field
-from ..tree import tree_at, tree_equal
-from .errors import error_if
-from .nontraceable import nonbatchable, nondifferentiable
-from .unvmap import unvmap_any
+from ...filters import combine, is_array, is_inexact_array, partition
+from ...grad import filter_closure_convert, filter_custom_vjp, filter_vjp
+from ...tree import tree_at
+from ..errors import error_if
+from ..nontraceable import nonbatchable, nondifferentiable
+from .common import common_rewrite
 
 
 _T = TypeVar("T")
@@ -74,10 +73,10 @@ def checkpointed_while_loop(
     cond_fun: Callable[[_T], _Bool],
     body_fun: Callable[[_T], _T],
     init_val: _T,
-    max_steps: Optional[int] = None,
     *,
-    checkpoints: Optional[int] = None,
+    max_steps: Optional[int] = None,
     buffers: Optional[Callable[[_T], Union[_Node, Sequence[_Node]]]] = None,
+    checkpoints: Optional[int] = None,
 ):
     """Reverse-mode autodifferentiable while loop, using optimal online checkpointing.
 
@@ -233,141 +232,13 @@ def checkpointed_while_loop(
     init_val = jtu.tree_map(jnp.asarray, init_val)
     if max_steps == 0:
         return init_val
-
-    def _cond_fun(val):
-        _, pred, _ = val
-        return unvmap_any(pred)
-
-    if buffers is None:
-        _buffers = lambda _: lambda _: ()
-    else:
-
-        def _buffers(is_leaf):
-            def _buffers2(val):
-                _, _, val = val  # ignore step and pred
-                bufs = buffers(val)
-                # Ignore the ._pred attribute of nested buffers.
-                # This is kind of a hack: we're special-casing support for nested
-                # buffers so that end users don't have to do the ._array lookup
-                # themselves.
-                tree = jtu.tree_map(_unwrap_buffers, bufs, is_leaf=_is_buffer)
-                return jtu.tree_leaves(tree, is_leaf=is_leaf)
-
-            return _buffers2
-
-    init_val = (jnp.asarray(0), jnp.asarray(cond_fun(init_val)), init_val)
-    body_fun = _body_fun_with_buffers(cond_fun, body_fun, max_steps, _buffers)
+    cond_fun, body_fun, init_val, buffers = common_rewrite(
+        cond_fun, body_fun, init_val, max_steps, buffers, readable=False
+    )
     body_fun = filter_closure_convert(body_fun, init_val)
     vjp_arg = (init_val, body_fun)
-    _, _, final_val = _checkpointed_while_loop(
-        vjp_arg, _cond_fun, checkpoints, _buffers
-    )
+    _, _, final_val = _checkpointed_while_loop(vjp_arg, cond_fun, checkpoints, buffers)
     return final_val
-
-
-def _is_buffer(x):
-    return isinstance(x, _Buffer)
-
-
-def _unwrap_buffers(x):
-    while _is_buffer(x):
-        x = x._array
-    return x
-
-
-def _body_fun_with_buffers(cond_fun, body_fun, max_steps, buffers):
-    def buffered_body_fun(val):
-        tag = object()
-
-        def _is_our_buffer(node):
-            return isinstance(node, _Buffer) and node._tag is tag
-
-        def wrap_buffers(leaf):
-            if not is_array(leaf):
-                raise ValueError("Only arrays can be treated as buffers.")
-            return _Buffer(leaf, pred, tag)
-
-        def _unwrap_and_select(leaf, leaf2):
-            if _is_our_buffer(leaf):
-                assert _is_our_buffer(leaf2)
-                # sanity check that this is the lowest buffer, i.e. when nesting
-                # multiple checkpointed_while_loops.
-                assert is_array(leaf._array)
-                assert is_array(leaf2._array)
-                return leaf2._array
-            else:
-                return lax.select(pred, leaf2, leaf)
-
-        step, pred, val = val
-        _, _, buffer_val = tree_at(
-            buffers(None), (None, None, val), replace_fn=wrap_buffers
-        )
-        buffer_val2 = body_fun(buffer_val)
-        if not tree_equal(
-            jax.eval_shape(lambda: buffer_val), jax.eval_shape(lambda: buffer_val2)
-        ):
-            raise ValueError("`body_fun` must have the same input and output structure")
-        val2 = jtu.tree_map(
-            _unwrap_and_select, buffer_val, buffer_val2, is_leaf=_is_our_buffer
-        )
-        step2 = step + 1
-        pred2 = pred & cond_fun(buffer_val2)
-        if max_steps is not None:
-            if type(max_steps) is not int:
-                raise ValueError("`max_steps` must be a Python integer")
-            pred2 = pred2 & (step2 < max_steps)
-        return step2, pred2, val2
-
-    return buffered_body_fun
-
-
-# Importantly: these are write-only.
-# This simplifies our autodiff a lot!
-class _Buffer(Module):
-    _array: Union[Shaped[Array, "..."], "_Buffer"]
-    _pred: Bool[Array, ""]
-    _tag: object = static_field()
-
-    def _set(self, pred, item, x):
-        pred = pred & self._pred
-        if isinstance(self._array, _Buffer):
-            array = self._array._set(pred, item, x)
-        else:
-            old_x = self._array[item]
-            x = jnp.where(pred, x, old_x)
-            array = self._array.at[item].set(x)
-        return _Buffer(array, self._pred, self._tag)
-
-    @property
-    def at(self):
-        return _BufferAt(self)
-
-    @property
-    def shape(self):
-        return self._array.shape
-
-    @property
-    def dtype(self):
-        return self._array.dtype
-
-    @property
-    def size(self):
-        return self._array.size
-
-
-class _BufferAt(Module):
-    _buffer: _Buffer
-
-    def __getitem__(self, item):
-        return _BufferItem(self._buffer, item)
-
-
-class _BufferItem(Module):
-    _buffer: _Buffer
-    _item: Any
-
-    def set(self, x):
-        return self._buffer._set(True, self._item, x)
 
 
 @filter_custom_vjp
@@ -375,9 +246,8 @@ def _checkpointed_while_loop(vjp_arg, cond_fun, checkpoints, buffers):
     """Uncheckpointed forward used when not differentiating."""
     del checkpoints, buffers
     init_val, body_fun = vjp_arg
-    _body_fun = body_fun
-    body_fun = lambda x: _body_fun(x)  # hashable wrapper; JAX issue #13554
-    return lax.while_loop(cond_fun, body_fun, init_val)
+    _body_fun = lambda x: body_fun(x)  # hashable wrapper; JAX issue #13554
+    return lax.while_loop(cond_fun, _body_fun, init_val)
 
 
 def _scalar_index(i, x):
@@ -734,7 +604,7 @@ def _is_none(x):
 
 def _dummy_buffers(buffers, val, in_dynamic_struct):
     (val_dynamic_struct,), _ = in_dynamic_struct
-    buffer_struct = buffers(None)(val_dynamic_struct)
+    buffer_struct = buffers(_is_none)(val_dynamic_struct)
     buffer_struct = jtu.tree_map(lambda x: jnp.zeros(x.shape, x.dtype), buffer_struct)
     return tree_at(buffers(_is_none), val, buffer_struct, is_leaf=_is_none)
 

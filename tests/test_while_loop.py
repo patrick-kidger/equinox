@@ -65,7 +65,8 @@ def _while_as_scan(cond, body, init_val, max_steps):
 
 
 @pytest.mark.parametrize("buffer", (False, True))
-def test_notangent_forward(buffer, getkey):
+@pytest.mark.parametrize("kind", ("lax", "bounded", "checkpointed"))
+def test_notangent_forward(buffer, kind, getkey):
     cond_fun, make_body_fun, init_val1, init_val2, mlp = _get_problem(
         getkey(), num_steps=5
     )
@@ -75,19 +76,21 @@ def test_notangent_forward(buffer, getkey):
         buffer_fn = lambda i: i[2]
     else:
         buffer_fn = None
-    final_carry = eqxi.checkpointed_while_loop(
+    final_carry = eqxi.while_loop(
         cond_fun,
         body_fun,
         (0, init_val1, init_val2),
-        max_steps=None,
-        checkpoints=1,
+        max_steps=10 if kind == "bounded" else None,
+        kind=kind,
         buffers=buffer_fn,
+        checkpoints=1,
     )
     assert shaped_allclose(final_carry, true_final_carry)
 
 
 @pytest.mark.parametrize("buffer", (False, True))
-def test_forward(buffer, getkey):
+@pytest.mark.parametrize("kind", ("lax", "bounded", "checkpointed"))
+def test_forward(buffer, kind, getkey):
     cond_fun, make_body_fun, init_val1, init_val2, mlp = _get_problem(
         getkey(), num_steps=5
     )
@@ -100,13 +103,14 @@ def test_forward(buffer, getkey):
             buffer_fn = lambda i: i[2]
         else:
             buffer_fn = None
-        return eqxi.checkpointed_while_loop(
+        return eqxi.while_loop(
             cond_fun,
             body_fun,
             (0, init_val1, init_val2),
-            max_steps=None,
-            checkpoints=9,
+            max_steps=10 if kind == "bounded" else None,
             buffers=buffer_fn,
+            kind=kind,
+            checkpoints=9,
         )
 
     final_carry, _ = jax.linearize(run, init_val1, init_val2)
@@ -142,7 +146,7 @@ def test_forward(buffer, getkey):
 )
 @pytest.mark.parametrize("with_max_steps", (True, False))
 @pytest.mark.parametrize("buffer", (False, True))
-def test_backward(
+def test_backward_checkpointed(
     checkpoints, num_steps, backward_order, with_max_steps, buffer, getkey, capfd
 ):
     if with_max_steps:
@@ -174,13 +178,14 @@ def test_backward(
         else:
             buffer_fn = None
         body_fun = make_body_fun(mlp)
-        _, final_val1, final_val2 = eqxi.checkpointed_while_loop(
+        _, final_val1, final_val2 = eqxi.while_loop(
             cond_fun,
             body_fun,
             (0, init_val1, init_val2),
             max_steps=max_steps,
-            checkpoints=checkpoints,
             buffers=buffer_fn,
+            kind="checkpointed",
+            checkpoints=checkpoints,
         )
         return jnp.sum(final_val1) + jnp.sum(final_val2)
 
@@ -197,13 +202,12 @@ def test_backward(
 
 
 @pytest.mark.parametrize("buffer", (False, True))
-def test_vmap_primal_unbatched_cond(buffer, getkey):
+def test_backward_bounded(buffer, getkey):
     cond_fun, make_body_fun, init_val1, init_val2, mlp = _get_problem(
-        getkey(), num_steps=14
+        getkey(), num_steps=None
     )
 
     @jax.jit
-    @ft.partial(jax.vmap, in_axes=((0, 0, None),))
     @jax.value_and_grad
     def true_run(arg):
         init_val1, init_val2, mlp = arg
@@ -214,7 +218,6 @@ def test_vmap_primal_unbatched_cond(buffer, getkey):
         return jnp.sum(true_final_val1) + jnp.sum(true_final_val2)
 
     @jax.jit
-    @ft.partial(jax.vmap, in_axes=((0, 0, None),))
     @jax.value_and_grad
     def run(arg):
         init_val1, init_val2, mlp = arg
@@ -223,13 +226,74 @@ def test_vmap_primal_unbatched_cond(buffer, getkey):
         else:
             buffer_fn = None
         body_fun = make_body_fun(mlp)
-        _, final_val1, final_val2 = eqxi.checkpointed_while_loop(
+        _, final_val1, final_val2 = eqxi.while_loop(
             cond_fun,
             body_fun,
             (0, init_val1, init_val2),
-            max_steps=None,
-            checkpoints=4,
+            max_steps=14,
             buffers=buffer_fn,
+            kind="bounded",
+        )
+        return jnp.sum(final_val1) + jnp.sum(final_val2)
+
+    true_value, true_grad = true_run((init_val1, init_val2, mlp))
+    value, grad = run((init_val1, init_val2, mlp))
+    assert shaped_allclose(value, true_value)
+    assert shaped_allclose(grad, true_grad, rtol=1e-4, atol=1e-4)
+
+
+def _maybe_value_and_grad(kind):
+    if kind == "lax":
+
+        def value_and_grad(fn):
+            def wrapped(*args, **kwargs):
+                return fn(*args, **kwargs), None
+
+            return wrapped
+
+        return value_and_grad
+    else:
+        return jax.value_and_grad
+
+
+@pytest.mark.parametrize("buffer", (False, True))
+@pytest.mark.parametrize("kind", ("lax", "bounded", "checkpointed"))
+def test_vmap_primal_unbatched_cond(buffer, kind, getkey):
+    cond_fun, make_body_fun, init_val1, init_val2, mlp = _get_problem(
+        getkey(), num_steps=14
+    )
+
+    value_and_grad = _maybe_value_and_grad(kind)
+
+    @jax.jit
+    @ft.partial(jax.vmap, in_axes=((0, 0, None),))
+    @value_and_grad
+    def true_run(arg):
+        init_val1, init_val2, mlp = arg
+        body_fun = make_body_fun(mlp)
+        _, true_final_val1, true_final_val2 = _while_as_scan(
+            cond_fun, body_fun, (0, init_val1, init_val2), max_steps=14
+        )
+        return jnp.sum(true_final_val1) + jnp.sum(true_final_val2)
+
+    @jax.jit
+    @ft.partial(jax.vmap, in_axes=((0, 0, None),))
+    @value_and_grad
+    def run(arg):
+        init_val1, init_val2, mlp = arg
+        if buffer:
+            buffer_fn = lambda i: i[2]
+        else:
+            buffer_fn = None
+        body_fun = make_body_fun(mlp)
+        _, final_val1, final_val2 = eqxi.while_loop(
+            cond_fun,
+            body_fun,
+            (0, init_val1, init_val2),
+            max_steps=16 if kind == "bounded" else None,
+            buffers=buffer_fn,
+            kind=kind,
+            checkpoints=4,
         )
         return jnp.sum(final_val1) + jnp.sum(final_val2)
 
@@ -243,14 +307,17 @@ def test_vmap_primal_unbatched_cond(buffer, getkey):
 
 
 @pytest.mark.parametrize("buffer", (False, True))
-def test_vmap_primal_batched_cond(buffer, getkey):
+@pytest.mark.parametrize("kind", ("lax", "bounded", "checkpointed"))
+def test_vmap_primal_batched_cond(buffer, kind, getkey):
     cond_fun, make_body_fun, init_val1, init_val2, mlp = _get_problem(
         getkey(), num_steps=14
     )
 
+    value_and_grad = _maybe_value_and_grad(kind)
+
     @jax.jit
     @ft.partial(jax.vmap, in_axes=((0, 0, None), 0))
-    @jax.value_and_grad
+    @value_and_grad
     def true_run(arg, init_step):
         init_val1, init_val2, mlp = arg
         body_fun = make_body_fun(mlp)
@@ -261,7 +328,7 @@ def test_vmap_primal_batched_cond(buffer, getkey):
 
     @jax.jit
     @ft.partial(jax.vmap, in_axes=((0, 0, None), 0))
-    @jax.value_and_grad
+    @value_and_grad
     def run(arg, init_step):
         init_val1, init_val2, mlp = arg
         if buffer:
@@ -269,13 +336,14 @@ def test_vmap_primal_batched_cond(buffer, getkey):
         else:
             buffer_fn = None
         body_fun = make_body_fun(mlp)
-        _, final_val1, final_val2 = eqxi.checkpointed_while_loop(
+        _, final_val1, final_val2 = eqxi.while_loop(
             cond_fun,
             body_fun,
             (init_step, init_val1, init_val2),
-            max_steps=None,
-            checkpoints=4,
+            max_steps=16 if kind == "bounded" else None,
             buffers=buffer_fn,
+            kind=kind,
+            checkpoints=4,
         )
         return jnp.sum(final_val1) + jnp.sum(final_val2)
 
@@ -290,7 +358,8 @@ def test_vmap_primal_batched_cond(buffer, getkey):
 
 
 @pytest.mark.parametrize("buffer", (False, True))
-def test_vmap_cotangent(buffer, getkey):
+@pytest.mark.parametrize("kind", ("bounded", "checkpointed"))
+def test_vmap_cotangent(buffer, kind, getkey):
     cond_fun, make_body_fun, init_val1, init_val2, mlp = _get_problem(
         getkey(), num_steps=14
     )
@@ -314,13 +383,14 @@ def test_vmap_cotangent(buffer, getkey):
         else:
             buffer_fn = None
         body_fun = make_body_fun(mlp)
-        _, final_val1, final_val2 = eqxi.checkpointed_while_loop(
+        _, final_val1, final_val2 = eqxi.while_loop(
             cond_fun,
             body_fun,
             (0, init_val1, init_val2),
-            max_steps=None,
-            checkpoints=4,
+            max_steps=16 if kind == "bounded" else None,
             buffers=buffer_fn,
+            kind=kind,
+            checkpoints=4,
         )
         return final_val1, final_val2
 
@@ -339,17 +409,20 @@ def test_vmap_cotangent(buffer, getkey):
 # This was a fix I contributed to XLA, that is present in jaxlib>=0.4.2.
 # In practice handling scatter as well as dynamic_update_slice was a bit too hard, and
 # in practice we do need scatter (.at[i].set() with vmap'd i) so we still need to
-# implement a workaround in the `buffers` of `checkpointed_while_loop`. So maybe this
+# implement a workaround in the `buffers` of `while_loop`. So maybe this
 # doesn't matter?
 #
 # Anyway, we still test it just to be sure.
 #
 # This test is really just checking `lax.while_loop`, but we throw in
-# `checkpointed_while_loop` too, because why not?
+# `while_loop` too, because why not?
 @pytest.mark.parametrize("inplace_op", ["scatter", "dynamic_update_slice"])
 @pytest.mark.parametrize(
     "while_loop",
-    [lax.while_loop, ft.partial(eqxi.checkpointed_while_loop, checkpoints=50_000)],
+    [
+        lax.while_loop,
+        ft.partial(eqxi.while_loop, kind="checkpointed", checkpoints=50_000),
+    ],
 )
 def test_speed_while(inplace_op, while_loop):
     @jax.jit
@@ -401,12 +474,13 @@ def test_speed_buffer_while():
             return step + 1, xs
 
         def loop(init_xs):
-            return eqxi.checkpointed_while_loop(
+            return eqxi.while_loop(
                 cond,
                 body,
                 (init_step, init_xs),
-                checkpoints=50_000,
                 buffers=lambda i: i[1],
+                kind="checkpointed",
+                checkpoints=50_000,
             )
 
         # Linearize so that we save residuals
@@ -446,8 +520,12 @@ def test_speed_grad_checkpointed_while(getkey):
             imag = jnp.imag(z)
             return step + 1, jnp.stack([real, imag])
 
-        _, final_xs = eqxi.checkpointed_while_loop(
-            cond, body, (init_step, init_val), checkpoints=checkpoints
+        _, final_xs = eqxi.while_loop(
+            cond,
+            body,
+            (init_step, init_val),
+            kind="checkpointed",
+            checkpoints=checkpoints,
         )
         return jnp.sum(final_xs)
 
@@ -491,7 +569,7 @@ def test_nested_loops(getkey):
             while_loop = ft.partial(_while_as_scan, max_steps=50)
         else:
             while_loop = ft.partial(
-                eqxi.checkpointed_while_loop, max_steps=50, buffers=buffers
+                eqxi.while_loop, max_steps=50, buffers=buffers, kind="checkpointed"
             )
         _, out = while_loop(cond, body, (step, vals))
         return out
@@ -520,7 +598,7 @@ def test_nested_loops(getkey):
             while_loop = ft.partial(_while_as_scan, max_steps=10)
         else:
             while_loop = ft.partial(
-                eqxi.checkpointed_while_loop, max_steps=10, buffers=buffers
+                eqxi.while_loop, max_steps=10, buffers=buffers, kind="checkpointed"
             )
         return while_loop(cond, body, (step, vals))
 

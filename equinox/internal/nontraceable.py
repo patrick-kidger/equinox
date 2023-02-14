@@ -15,7 +15,7 @@ from ..filters import combine, is_array, partition
 from .errors import error_if
 
 
-_identity = lambda x, *, name: x
+_nontraceable_impl = lambda x, *, name: x
 
 
 def _make_error(opname):
@@ -26,13 +26,13 @@ def _make_error(opname):
 
 
 nontraceable_p = jax.core.Primitive("nontraceable")
-nontraceable_p.def_impl(_identity)
-nontraceable_p.def_abstract_eval(_identity)
+nontraceable_p.def_impl(_nontraceable_impl)
+nontraceable_p.def_abstract_eval(_nontraceable_impl)
 ad.primitive_jvps[nontraceable_p] = _make_error("differentiation")
 ad.primitive_transposes[nontraceable_p] = _make_error("transposition")
 batching.primitive_batchers[nontraceable_p] = _make_error("batching")
 mlir.register_lowering(
-    nontraceable_p, mlir.lower_fun(_identity, multiple_results=False)
+    nontraceable_p, mlir.lower_fun(_nontraceable_impl, multiple_results=False)
 )
 
 
@@ -47,9 +47,6 @@ def nontraceable(x, *, name="nontraceable operation"):
     bind = ft.partial(nontraceable_p.bind, name=name)
     dynamic = jtu.tree_map(bind, dynamic)
     return combine(dynamic, static)
-
-
-_identity = lambda x, *, msg: x
 
 
 @ft.partial(jax.custom_jvp, nondiff_argnums=(0,))
@@ -80,37 +77,43 @@ def nondifferentiable(
 nondifferentiable_backward_p = jax.core.Primitive("nondifferentiable_backward")
 
 
-def _nondifferentiable_backward_batch(x, batch_axes, *, msg):
+def _nondifferentiable_backward_batch(x, batch_axes, *, msg, symbolic):
     (x,) = x
     (batch_axes,) = batch_axes
-    return nondifferentiable_backward(x, msg=msg), batch_axes
+    return nondifferentiable_backward(x, msg=msg, symbolic=symbolic), batch_axes
 
 
-def _nondifferentiable_backward_jvp(primals, tangents, *, msg):
+def _nondifferentiable_backward_jvp(primals, tangents, *, msg, symbolic):
     (primals,) = primals
     (tangents,) = tangents
-    return nondifferentiable_backward(primals, msg=msg), nondifferentiable_backward(
-        tangents, msg=msg
-    )
+    primal_out = nondifferentiable_backward(primals, msg=msg, symbolic=symbolic)
+    tangent_out = nondifferentiable_backward(tangents, msg=msg, symbolic=symbolic)
+    return primal_out, tangent_out
 
 
-def _nondifferentiable_backward_transpose(cts_in, _, *, msg):
+def _nondifferentiable_backward_transpose(cts_in, _, *, msg, symbolic):
     if isinstance(cts_in, ad.Zero):
         return ad.Zero  # the class, not an instance
     else:
-        # Unfortunately there are legitimate cases where we get all-zero non-symbolic
-        # cotangents, so we have to use a runtime error here instead of just erroring
-        # at trace time.
-        # This happens when doing something like:
-        #
-        # x = nondifferentiable_backward(x)
-        # x, y = lax.cond(pred, lambda: (x, y), lambda: (x+1, y+1))
-        # return y
-        return [error_if(cts_in, (cts_in != 0).any(), msg)]
+        if symbolic:
+            raise RuntimeError(msg)
+        else:
+            # Unfortunately there are legitimate cases where we get all-zero
+            # non-symbolic cotangents, so we have to use a runtime error here instead of
+            # just erroring at trace time.
+            # This happens when doing something like:
+            #
+            # x = nondifferentiable_backward(x)
+            # x, y = lax.cond(pred, lambda: (x, y), lambda: (x+1, y+1))
+            # return y
+            return [error_if(cts_in, (cts_in != 0).any(), msg)]
 
 
-nondifferentiable_backward_p.def_impl(_identity)
-nondifferentiable_backward_p.def_abstract_eval(_identity)
+_nondifferentiable_backward_impl = lambda x, *, msg, symbolic: x
+
+
+nondifferentiable_backward_p.def_impl(_nondifferentiable_backward_impl)
+nondifferentiable_backward_p.def_abstract_eval(_nondifferentiable_backward_impl)
 ad.primitive_jvps[nondifferentiable_backward_p] = _nondifferentiable_backward_jvp
 ad.primitive_transposes[
     nondifferentiable_backward_p
@@ -120,12 +123,15 @@ batching.primitive_batchers[
 ] = _nondifferentiable_backward_batch
 mlir.register_lowering(
     nondifferentiable_backward_p,
-    mlir.lower_fun(_identity, multiple_results=False),
+    mlir.lower_fun(_nondifferentiable_backward_impl, multiple_results=False),
 )
 
 
 def nondifferentiable_backward(
-    x: PyTree, name: Optional[str] = None, msg: Optional[str] = None
+    x: PyTree,
+    name: Optional[str] = None,
+    msg: Optional[str] = None,
+    symbolic: bool = True,
 ) -> PyTree:
     """Identity function. Raises a (runtime!) error if it is differentiated in reverse
     mode.
@@ -136,7 +142,7 @@ def nondifferentiable_backward(
         if name is None:
             name = "This operation"
         msg = f"Unexpected cotangent. {name} cannot be reverse-mode autodifferentiated."
-    bind = ft.partial(nondifferentiable_backward_p.bind, msg=msg)
+    bind = ft.partial(nondifferentiable_backward_p.bind, msg=msg, symbolic=symbolic)
     flat = map(bind, flat)
     return combine(jtu.tree_unflatten(treedef, flat), static)
 
