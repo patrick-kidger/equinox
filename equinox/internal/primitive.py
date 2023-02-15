@@ -174,7 +174,10 @@ def filter_primitive_jvp(rule):
     return _wrapper
 
 
-def filter_primitive_transpose(rule):
+_sentinel = object()
+
+
+def filter_primitive_transpose(rule=_sentinel, *, materialise_zeros=False):
     """
     The `inputs` to the transpose rule are a PyTree like the primal
     inputs, with `UndefinedPrimal`s where appropriate.
@@ -187,10 +190,17 @@ def filter_primitive_transpose(rule):
     All leaves which were non-JAX-array-like, or which should have zero
     cotangent, should have cotangent `None`.
     """
+    if rule is _sentinel:
+        return ft.partial(
+            filter_primitive_transpose, materialise_zeros=materialise_zeros
+        )
 
     def _wrapper(cts_out, *dynamic, treedef, static, flatten):
         treedef_out, _ = flatten.get()
-        cts_out = [None if type(ct) is ad.Zero else ct for ct in cts_out]
+        if materialise_zeros:
+            cts_out = [ad.instantiate_zeros(ct) for ct in cts_out]
+        else:
+            cts_out = [None if type(ct) is ad.Zero else ct for ct in cts_out]
         cts_out = jtu.tree_unflatten(treedef_out, cts_out)
         wrapped_dynamic = [_wrap_undefined(x) for x in dynamic]
         wrapped_flat = _combine(wrapped_dynamic, static)

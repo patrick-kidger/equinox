@@ -223,7 +223,7 @@ def _noinline_jvp(primals, tangents):
     return primal_outs, tangent_outs
 
 
-@filter_primitive_transpose
+@filter_primitive_transpose(materialise_zeros=True)
 def _noinline_transpose(inputs, cts_out):
     dynamic_index, abstract_fn, transforms, args = inputs
     assert all(
@@ -287,7 +287,9 @@ def _pp_transform(x):
 
 
 def _noinline_pretty_print(eqn, context, settings):
-    _, abstract_fn, transforms, _ = eqn.params["static"]
+    _, abstract_fn, transforms, _ = jtu.tree_unflatten(
+        eqn.params["treedef"], eqn.params["static"]
+    )
     pretty_params = dict(abstract_fn=abstract_fn)
     if type(eqn.invars[0]) is jax.core.Literal:
         static_fn_leaves, static_fn_treedef = _index_to_fn[eqn.invars[0].val]
