@@ -6,7 +6,6 @@ import jax
 import jax.experimental.host_callback as hcb
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
-import jax.interpreters.xla as xla
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.tree_util as jtu
@@ -329,13 +328,6 @@ _batchify_p.multiple_results = True
 _batchify_p.def_impl(_batchify_impl)
 _batchify_p.def_abstract_eval(_batchify_abstract_eval)
 batching.primitive_batchers[_batchify_p] = _batchify_batching_rule
-# `xla.lower_fun` is getting removed in later JAX versions.
-# See https://github.com/patrick-kidger/diffrax/pull/91
-if hasattr(xla, "lower_fun"):
-    xla.register_translation(
-        _batchify_p,
-        xla.lower_fun(_batchify_impl, multiple_results=True, new_style=True),
-    )
 mlir.register_lowering(
     _batchify_p, mlir.lower_fun(_batchify_impl, multiple_results=True)
 )
