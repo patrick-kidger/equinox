@@ -3,6 +3,7 @@ from typing import Union
 
 import jax
 import jax.numpy as jnp
+import jax.random as jr
 import jax.tree_util as jtu
 import pytest
 
@@ -236,3 +237,11 @@ def test_map_non_jax():
         return x
 
     _ = eqx.filter_pmap(identity)(pytree_sharded)
+
+
+def test_keyword_in_axes(getkey):
+    x = jr.normal(getkey(), (1, 4))
+    y = jr.normal(getkey(), (1, 1))
+    out = eqx.filter_pmap(lambda x, y: x + y, in_axes=dict(y=1))(x, y)
+    true_out = x + y.T
+    assert shaped_allclose(out, true_out)

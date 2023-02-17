@@ -1,5 +1,6 @@
 import dataclasses
 import functools as ft
+import inspect
 import warnings
 from typing import Any, Callable, Dict, Hashable, Optional, Union
 
@@ -189,7 +190,11 @@ def filter_vmap(
         is to say it cannot accept keyword arguments.
     - `in_axes` indicates which axes of the input arrays should be vectorised over.
         It should be a PyTree of `None`, `int`, or callables `Leaf -> Union[None, int]`.
-        Its tree structure should be a prefix of the input tuple of `args`.
+        Its tree structure should either be:
+        1. a prefix of the input tuple of `args`.
+        2. a dictionary, in which case the named argments will use the specified indices
+            to vectorise over, and all other arguments will have the default
+            `eqx.if_array(0)`.
     - `out_axes` indicates which axis of the output arrays the mapped axis should appear
         at. It should be a PyTree of `None`, `int`, or callables
         `Leaf -> Union[None, int]`, and its tree structure should be a prefix of the
@@ -298,6 +303,19 @@ def filter_vmap(
     deprecated_0_10(vmapkwargs, "args")
     deprecated_0_10(vmapkwargs, "kwargs")
     deprecated_0_10(vmapkwargs, "out")
+
+    if isinstance(in_axes, dict):
+        in_axes = dict(in_axes)
+        new_in_axes = []
+        default = if_array(0)
+        for param_name in inspect.signature(fun).parameters:
+            new_in_axes.append(in_axes.pop(param_name, default))
+        if len(in_axes) != 0:
+            raise ValueError(
+                "The following `in_axes` did not correspond to any argument: "
+                f"{tuple(in_axes.keys())}"
+            )
+        in_axes = tuple(new_in_axes)
 
     vmap_wrapper = _VmapWrapper(
         _fun=fun,
@@ -466,7 +484,11 @@ def filter_pmap(
         is to say it cannot accept keyword arguments.
     - `in_axes` indicates which axes of the input arrays should be parallelised over.
         It should be a PyTree of `None`, `int`, or callables `Leaf -> Union[None, int]`.
-        Its tree structure should be a prefix of the input tuple of `args`.
+        Its tree structure should either be:
+        1. a prefix of the input tuple of `args`.
+        2. a dictionary, in which case the named argments will use the specified indices
+            to parallelise over, and all other arguments will have the default
+            `eqx.if_array(0)`.
     - `out_axes` indicates which axis of the output arrays the mapped axis should appear
         at. It should be a PyTree of `None`, `int`, or callables
         `Leaf -> Union[None, int]`, and its tree structure should be a prefix of the
@@ -540,6 +562,19 @@ def filter_pmap(
             "`pmapkwargs` cannot contain either 'static_broadcasted_argnums' or "
             "'donate_argnums'"
         )
+
+    if isinstance(in_axes, dict):
+        in_axes = dict(in_axes)
+        new_in_axes = []
+        default = if_array(0)
+        for param_name in inspect.signature(fun).parameters:
+            new_in_axes.append(in_axes.pop(param_name, default))
+        if len(in_axes) != 0:
+            raise ValueError(
+                "The following `in_axes` did not correspond to any argument: "
+                f"{tuple(in_axes.keys())}"
+            )
+        in_axes = tuple(new_in_axes)
 
     if donate not in {"arrays", "warn", "none"}:
         raise ValueError(

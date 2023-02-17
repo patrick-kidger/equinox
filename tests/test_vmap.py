@@ -141,3 +141,11 @@ def test_map_non_jax():
         return x
 
     _ = eqx.filter_vmap(identity)(pytree)
+
+
+def test_keyword_in_axes(getkey):
+    x = jr.normal(getkey(), (3, 4))
+    y = jr.normal(getkey(), (1, 3))
+    out = eqx.filter_vmap(lambda x, y: x + y, in_axes=dict(y=1))(x, y)
+    true_out = x + y.T
+    assert shaped_allclose(out, true_out)
