@@ -205,28 +205,19 @@ def checkpointed_while_loop(
             )
         # Binomial logarithmic growth is what is needed in classical treeverse.
         #
-        # Moreover this is optimal even in the online case, as provided
-        # `max_steps >= 21`
-        # then
-        # `checkpoints = ceil(log2(max_steps))`
-        # satisfies
+        # If
         # `max_steps <= (checkpoints + 1)(checkpoints + 2)/2`
-        # which is the condition for optimality.
-        #
-        # Meanwhile if
-        # `max_steps <= 20`
-        # then we handle it as a special case, to once again ensure we satisfy
-        # `max_steps <= (checkpoints + 1)(checkpoints + 2)/2`
-        #
-        # The optimality condition is equation (2.2) of
+        # then the time spend recomputing will be optimised; see equation (2.2) of
         # "New Algorithms for Optimal Online Checkpointing", Stumm and Walther 2010.
         # https://tu-dresden.de/mn/math/wir/ressourcen/dateien/forschung/publikationen/pdf2010/new_algorithms_for_optimal_online_checkpointing.pdf
-        if max_steps <= 20:
+        #
+        # So by default we use `checkpoints = O(sqrt(max_steps))`.
+        # (Classical treeverse uses only `O(log(max_steps))`, of course, but doesn't
+        # handle the online case.)
+        if max_steps == 1:
             checkpoints = 1
-            while (checkpoints + 1) * (checkpoints + 2) < 2 * max_steps:
-                checkpoints += 1
         else:
-            checkpoints = math.ceil(math.log2(max_steps))
+            checkpoints = math.ceil(-1.5 + 0.5 * math.sqrt(8 * max_steps + 1))
     if checkpoints < 1:
         raise ValueError("Must have at least one checkpoint")
     init_val = jtu.tree_map(jnp.asarray, init_val)
