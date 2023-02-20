@@ -1,11 +1,12 @@
-import abc
 import functools as ft
 import inspect
+import weakref
 from dataclasses import dataclass, field, fields
 from typing import Any
 
 import jax.tree_util as jtu
 
+from .better_abc import ABCMeta
 from .pretty_print import tree_pformat
 from .tree import tree_equal
 
@@ -28,12 +29,12 @@ def static_field(**kwargs):
         assert "static" in str(treedef)
         ```
 
-    In practice this should rarely be used; it is usually preferential to just filter
-    out each field with `eqx.filter` whenever you need to select only some fields.
+    In practice this should rarely be used; it is usually preferred to just filter
+    out each field with `eqx.partition` whenever you need to select only some fields.
 
     **Arguments:**
 
-    - `**kwargs`: If any are passed then they are passed on to `datacalss.field`.
+    - `**kwargs`: If any are passed then they are passed on to `dataclass.field`.
         (Recall that Equinox uses dataclasses for its modules.)
     """
     try:
@@ -62,9 +63,12 @@ def _not_magic(k: str) -> bool:
     return not (k.startswith("__") and k.endswith("__"))
 
 
-# Inherits from abc.ABCMeta as a convenience for a common use-case.
+_has_dataclass_init = weakref.WeakKeyDictionary()
+
+
+# Inherits from ABCMeta as a convenience for a common use-case.
 # It's not a feature we use ourselves.
-class _ModuleMeta(abc.ABCMeta):
+class _ModuleMeta(ABCMeta):
     def __new__(mcs, name, bases, dict_):
         dict_ = {
             k: _wrap_method(v) if _not_magic(k) and inspect.isfunction(v) else v
@@ -76,13 +80,26 @@ class _ModuleMeta(abc.ABCMeta):
         # Don't override custom __init__'s, which leads to poor ergonomics:
         # e.g. if `B` has a custom init then `class A(B): pass` would otherwise set a
         # dataclass init that overrides the custom __init__.
-        _init = cls._has_dataclass_init = _has_dataclass_init(cls)
+        if "__init__" in cls.__dict__:
+            _init = False
+        else:
+            for kls in cls.__mro__:
+                try:
+                    _init = _has_dataclass_init[kls]
+                except KeyError:
+                    pass
+                else:
+                    break
+            else:
+                assert name == "Module"
+                _init = True  # eqx.Module itself
+        _has_dataclass_init[cls] = _init
         if _init:
             init_doc = cls.__init__.__doc__
         cls = dataclass(eq=False, repr=False, frozen=True, init=_init)(cls)
         if _init:
             cls.__init__.__doc__ = init_doc
-        jtu.register_pytree_node_class(cls)
+        jtu.register_pytree_node(cls, cls._tree_flatten, cls._tree_unflatten)
         return cls
 
     def __call__(cls, *args, **kwargs):
@@ -102,22 +119,26 @@ class _ModuleMeta(abc.ABCMeta):
         }
         if len(missing_names):
             raise ValueError(
-                f"The following fields were not initialised during __init__: {missing_names}"
+                f"The following fields were not initialised during __init__: "
+                f"{missing_names}"
             )
         return self
+
+
+_wrapper_field_names = {
+    "__module__",
+    "__name__",
+    "__qualname__",
+    "__doc__",
+    "__annotations__",
+    "__wrapped__",
+}
 
 
 @ft.lru_cache(maxsize=128)
 def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
     if wraps:
-        field_names = {
-            "__module__",
-            "__name__",
-            "__qualname__",
-            "__doc__",
-            "__annotations__",
-            "__wrapped__",
-        }
+        field_names = _wrapper_field_names
     else:
         field_names = {field.name for field in fields(cls)}
 
@@ -135,12 +156,6 @@ def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
     _InitableModule.__setattr__ = __setattr__
 
     return _InitableModule
-
-
-def _has_dataclass_init(cls: _ModuleMeta) -> bool:
-    if "__init__" in cls.__dict__:
-        return False
-    return cls._has_dataclass_init
 
 
 class Module(metaclass=_ModuleMeta):
@@ -181,7 +196,8 @@ class Module(metaclass=_ModuleMeta):
 
     **Methods**
 
-    It is common to create some methods on the class -- for example to define the forward pass of a model.
+    It is common to create some methods on the class -- for example to define the
+    forward pass of a model.
 
     ```python
     class MyModule(equinox.Module):
@@ -225,8 +241,6 @@ class Module(metaclass=_ModuleMeta):
         can mix Equinox and native JAX without any difficulties at all.
     """
 
-    _has_dataclass_init = True
-
     def __hash__(self):
         return hash(tuple(jtu.tree_leaves(self)))
 
@@ -236,7 +250,10 @@ class Module(metaclass=_ModuleMeta):
     def __repr__(self):
         return tree_pformat(self)
 
-    def tree_flatten(self):
+    # TODO: move this out of being a method at all.
+    # Need to first wait until stateful operations land in JAX itself, so that we can
+    # deprecate `eqx.experimental.stateful`.
+    def _tree_flatten(self):
         dynamic_field_names = []
         dynamic_field_values = []
         static_field_names = []
@@ -253,6 +270,12 @@ class Module(metaclass=_ModuleMeta):
             else:
                 dynamic_field_names.append(name)
                 dynamic_field_values.append(value)
+        sentinel = object()
+        for name in _wrapper_field_names:
+            value = getattr(self, name, sentinel)
+            if value is not sentinel:
+                static_field_names.append(name)
+                static_field_values.append(value)
         return tuple(dynamic_field_values), (
             tuple(dynamic_field_names),
             tuple(static_field_names),
@@ -260,7 +283,7 @@ class Module(metaclass=_ModuleMeta):
         )
 
     @classmethod
-    def tree_unflatten(cls, aux, dynamic_field_values):
+    def _tree_unflatten(cls, aux, dynamic_field_values):
         self = cls.__new__(cls)
         dynamic_field_names, static_field_names, static_field_values = aux
         for name, value in zip(dynamic_field_names, dynamic_field_values):
@@ -272,6 +295,26 @@ class Module(metaclass=_ModuleMeta):
 
 # Modifies in-place, just like functools.update_wrapper
 def module_update_wrapper(wrapper: Module, wrapped) -> Module:
+    """Like `functools.update_wrapper` (or its better-known cousin, `functools.wraps`),
+    but can be used on [`equinox.Module`][]s. (Which are normally immutable.)
+
+    !!! Example
+
+        ```python
+        class Wrapper(eqx.Module):
+            fn: Callable
+
+            def __call__(self, *args, **kwargs):
+                return self.fn(*args, **kwargs)
+
+        def make_wrapper(fn):
+            return eqx.module_update_wrapper(Wrapper(fn), fn)
+        ```
+
+    For example, [`equinox.filter_jit`][] returns a module representing the JIT'd
+    computation. `module_update_wrapper` is used on this module to indicate that this
+    JIT'd computation wraps the original one. (Just like how `functools.wraps` is used.)
+    """
     cls = wrapper.__class__
     initable_cls = _make_initable(cls, wraps=True)
     object.__setattr__(wrapper, "__class__", initable_cls)

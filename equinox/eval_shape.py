@@ -14,7 +14,8 @@ def _filter(x):
 def filter_eval_shape(fun: Callable, *args, **kwargs):
     """As `jax.eval_shape`, but allows any Python object as inputs and outputs.
 
-    (`jax.eval_shape` is constrained to only work with JAX arrays, Python float/int/etc.)
+    (`jax.eval_shape` is constrained to only work with JAX arrays, Python
+    float/int/etc.)
     """
 
     def _fn(_static, _dynamic):

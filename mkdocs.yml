@@ -111,16 +111,18 @@ nav:
             - 'api/nn/normalisation.md'
             - 'api/nn/embedding.md'
             - 'api/nn/composed.md'
+            - 'api/nn/activations.md'
         - Filtering:
-            - 'api/filtering/filter-operations.md'
-            - 'api/filtering/filter-functions.md'
-            - 'api/filtering/filtered-transformations.md'
+            - 'api/filtering/partition-combine.md'
+            - 'api/filtering/transformations.md'
         - Utilities:
             - 'api/utilities/manipulation.md'
             - 'api/utilities/serialisation.md'
+            - 'api/utilities/pretty-printing.md'
             - 'api/utilities/miscellaneous.md'
         - Experimental:
             - 'api/experimental/stateful.md'
     - Misc:
+        - 'tricks.md'
         - 'citation.md'
         - 'faq.md'

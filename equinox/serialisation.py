@@ -40,7 +40,8 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
 
     !!! info
 
-        This function can be extended to customise the serialisation behaviour for leaves.
+        This function can be extended to customise the serialisation behaviour for
+        leaves.
 
     !!! example
 
@@ -56,7 +57,7 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
         )
         eqx.tree_serialise_leaves("some_filename.eqx", tree, filter_spec=new_filter_spec)
         ```
-    """
+    """  # noqa: E501
     if isinstance(x, jnp.ndarray):
         jnp.save(f, x)
     elif isinstance(x, np.ndarray):
@@ -112,7 +113,8 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
 
     !!! info
 
-        This function can be extended to customise the deserialisation behaviour for leaves.
+        This function can be extended to customise the deserialisation behaviour for
+        leaves.
 
     !!! example
 
@@ -128,7 +130,7 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
         )
         new_tree = eqx.tree_deserialise_leaves("some_filename.eqx", tree, filter_spec=new_filter_spec)
         ```
-    """
+    """  # noqa: E501
     if isinstance(x, jnp.ndarray):
         return jnp.load(f)
     elif isinstance(x, np.ndarray):
@@ -181,16 +183,19 @@ def _maybe_open(path_or_file: Union[str, pathlib.Path, BinaryIO], mode: str):
 def _assert_same(new, old):
     if type(new) is not type(old):
         raise RuntimeError(
-            f"Deserialised leaf has changed type from {type(old)} in `like` to {type(new)} on disk."
+            f"Deserialised leaf has changed type from {type(old)} in `like` to "
+            f"{type(new)} on disk."
         )
     if isinstance(new, (np.ndarray, jnp.ndarray)):
         if new.shape != old.shape:
             raise RuntimeError(
-                f"Deserialised leaf has changed shape from {old.shape} in `like` to {new.shape} on disk."
+                f"Deserialised leaf has changed shape from {old.shape} in `like` to "
+                f"{new.shape} on disk."
             )
         if new.dtype != old.dtype:
             raise RuntimeError(
-                f"Deserialised leaf has changed dtype from {old.dtype} in `like` to {new.dtype} on disk."
+                f"Deserialised leaf has changed dtype from {old.dtype} in `like` to "
+                f"{new.dtype} on disk."
             )
 
 
@@ -266,7 +271,8 @@ def tree_deserialise_leaves(
 
     **Arguments:**
 
-    - `path_or_file`: The file location to load values from or a binary file-like object.
+    - `path_or_file`: The file location to load values from or a binary file-like
+        object.
     - `like`: A PyTree of same structure, and with leaves of the same type, as the
         PyTree being loaded. Those leaves which are loaded will replace the
         corresponding leaves of `like`.
@@ -307,7 +313,7 @@ def tree_deserialise_leaves(
         It can also be a PyTree of such functions, in which case the PyTree structure
         should be a prefix of `pytree`, and each function will be mapped over the
         corresponding sub-PyTree of `pytree`.
-    """
+    """  # noqa: E501
     with _maybe_open(path_or_file, "rb") as f:
 
         def _deserialise(spec, x):

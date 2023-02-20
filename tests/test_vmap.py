@@ -3,7 +3,6 @@ from typing import Union
 import jax
 import jax.numpy as jnp
 import jax.random as jr
-import jax.tree_util as jtu
 import pytest
 
 import equinox as eqx
@@ -15,22 +14,9 @@ def _zero_if_inexact_array_else_none(x):
     return 0 if eqx.is_inexact_array(x) else None
 
 
-def _zero_if_array_else_none(x):
-    return 0 if eqx.is_array(x) else None
-
-
 def test_args():
-    @eqx.filter_vmap(args=(_zero_if_inexact_array_else_none, [{"a": None}], 0))
-    def f(a, b, c, d):
-        return a + b[0]["a"] + c + d
-
-    out = f(jnp.array([1]), [{"a": jnp.array([2])}], jnp.array([3]), 4)
-    assert shaped_allclose(out, jnp.array([[10]]))
-
-
-def test_kwargs():
     @eqx.filter_vmap(
-        kwargs=dict(a=_zero_if_inexact_array_else_none, b=[{"a": None}], c=0)
+        in_axes=(_zero_if_inexact_array_else_none, [{"a": None}], 0, eqx.if_array(0))
     )
     def f(a, b, c, d):
         return a + b[0]["a"] + c + d
@@ -40,40 +26,24 @@ def test_kwargs():
 
 
 def test_default():
-    @eqx.filter_vmap(default=_zero_if_inexact_array_else_none)
+    @eqx.filter_vmap(in_axes=_zero_if_inexact_array_else_none)
     def f(a, b):
         return a + b
 
     assert shaped_allclose(f(jnp.array(3), jnp.array([3.0])), jnp.array([6.0]))
 
     with pytest.raises(ValueError):
-        assert shaped_allclose(f(jnp.array(3.0), jnp.array([3.0])), jnp.array([6.0]))
-
-
-def test_fn():
-    class M(eqx.Module):
-        increment: jnp.ndarray
-
-        def __call__(self, x):
-            return x + self.increment
-
-    m = M(jnp.array([1, 2]))
-    o1 = eqx.filter_vmap(m, fn=0)(1)
-    o2 = eqx.filter_vmap(m, fn=0)(jnp.array([3, 4]))
-    o3 = eqx.filter_vmap(m, default=None, fn=0)(jnp.array([3, 4]))
-    assert shaped_allclose(o1, jnp.array([2, 3]))
-    assert shaped_allclose(o2, jnp.array([4, 6]))
-    assert shaped_allclose(o3, jnp.array([[4, 5], [5, 6]]))
+        f(jnp.array(3.0), jnp.array([3.0]))
 
 
 def test_out():
     def f(x):
         return x
 
-    o1 = eqx.filter_vmap(f, out=None, axis_size=5)(1)
-    o2 = eqx.filter_vmap(f, default=None, out=None, axis_size=5)(jnp.array([3, 4]))
-    o3 = eqx.filter_vmap(f, out=0, axis_size=5)(1)
-    o4 = eqx.filter_vmap(f, default=None, out=0, axis_size=5)(jnp.array([3, 4]))
+    o1 = eqx.filter_vmap(f, out_axes=None, axis_size=5)(1)
+    o2 = eqx.filter_vmap(f, in_axes=None, out_axes=None, axis_size=5)(jnp.array([3, 4]))
+    o3 = eqx.filter_vmap(f, out_axes=0, axis_size=5)(1)
+    o4 = eqx.filter_vmap(f, in_axes=None, out_axes=0, axis_size=5)(jnp.array([3, 4]))
 
     assert shaped_allclose(o1, 1)
     assert shaped_allclose(o2, jnp.array([3, 4]))
@@ -82,7 +52,7 @@ def test_out():
 
 
 def test_no_arrays():
-    @eqx.filter_vmap(out=_zero_if_inexact_array_else_none, axis_size=5)
+    @eqx.filter_vmap(out_axes=_zero_if_inexact_array_else_none, axis_size=5)
     def f(x):
         return x
 
@@ -94,21 +64,17 @@ def test_ensemble(getkey):
         return eqx.nn.MLP(5, 4, 3, 2, key=getkey())
 
     keys = jr.split(getkey(), 7)
-    models = eqx.filter_vmap(make, out=lambda x: 0 if eqx.is_array(x) else None)(keys)
+    models = eqx.filter_vmap(make)(keys)
 
     def call(model, x):
         return model(x)
 
     xs1 = jr.normal(getkey(), (7, 5))
     assert eqx.filter_vmap(call)(models, xs1).shape == (7, 4)
-    assert eqx.filter_vmap(models, fn=_zero_if_array_else_none)(xs1).shape == (7, 4)
 
     xs2 = jr.normal(getkey(), (5,))
-    assert eqx.filter_vmap(call, args=(_zero_if_array_else_none, None))(
+    assert eqx.filter_vmap(call, in_axes=(eqx.if_array(0), None))(
         models, xs2
-    ).shape == (7, 4)
-    assert eqx.filter_vmap(models, default=None, fn=_zero_if_array_else_none,)(
-        xs2
     ).shape == (7, 4)
 
 
@@ -148,39 +114,13 @@ def test_methods(call, outer):
             assert m.method(y) == 6
 
 
-def test_args_kwargs():
-    @eqx.filter_vmap(kwargs=dict(x=0))
-    def f(*args, **kwargs):
-        return kwargs["x"]
-
-    # check we can use other kwargs
-    assert shaped_allclose(f(x=jnp.array([3]), y=4), jnp.array([3]))
-    assert shaped_allclose(f(x=jnp.array([3]), y=jnp.array([4])), jnp.array([3]))
-
-    with pytest.raises(ValueError):
-        f(x=jnp.array([3]), y=jnp.array(4))
-
-    with pytest.raises(ValueError):
-        f(x=jnp.array(3))
-
-    @eqx.filter_vmap(args=(_zero_if_array_else_none,))
-    def h(*args, **kwargs):
-        return args[0]
-
-    # check we can use other args
-    assert h(1, jnp.array([2])) == 1
-    assert shaped_allclose(h(jnp.array([2]), 3), jnp.array([2]))
-
-
 def test_named_reduction():
     def f(x):
         y = x + 1
         return jax.lax.psum(y, axis_name="device")
 
-    n = 2
-    output = eqx.filter_vmap(f, axis_name="device")(jnp.zeros(n))
-
-    assert shaped_allclose(output, n * jnp.ones(n))
+    output = eqx.filter_vmap(f, axis_name="device")(jnp.zeros(2))
+    assert shaped_allclose(output, jnp.array([2.0, 2.0]))
 
 
 def test_map_non_jax():
@@ -200,10 +140,12 @@ def test_map_non_jax():
         """will return a pytree with non-jax fields, which could break filter_vmap"""
         return x
 
-    _ = eqx.filter_vmap(
-        identity,
-        out=jtu.tree_map(
-            lambda value: 0 if eqx.is_array(value) else None,
-            pytree,
-        ),
-    )(pytree)
+    _ = eqx.filter_vmap(identity)(pytree)
+
+
+def test_keyword_in_axes(getkey):
+    x = jr.normal(getkey(), (3, 4))
+    y = jr.normal(getkey(), (1, 3))
+    out = eqx.filter_vmap(lambda x, y: x + y, in_axes=dict(y=1))(x, y)
+    true_out = x + y.T
+    assert shaped_allclose(out, true_out)

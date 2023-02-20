@@ -29,7 +29,10 @@ treedefs = [
 ]
 
 
-def _shaped_allclose(x, y, **kwargs):
+def _shaped_allclose(x, y, *, match_weak, **kwargs):
+    if match_weak:
+        x = jnp.asarray(x)
+        y = jnp.asarray(y)
     if type(x) is not type(y):
         return False
     if isinstance(x, jnp.ndarray):
@@ -54,13 +57,13 @@ def _shaped_allclose(x, y, **kwargs):
         return x == y
 
 
-def shaped_allclose(x, y, **kwargs):
+def shaped_allclose(x, y, *, match_weak=False, **kwargs):
     """As `jnp.allclose`, except:
     - It also supports PyTree arguments.
     - It mandates that shapes match as well (no broadcasting)
     """
     same_structure = jtu.tree_structure(x) == jtu.tree_structure(y)
-    allclose = ft.partial(_shaped_allclose, **kwargs)
+    allclose = ft.partial(_shaped_allclose, match_weak=match_weak, **kwargs)
     return same_structure and jtu.tree_reduce(
         operator.and_, jtu.tree_map(allclose, x, y), True
     )

@@ -1018,7 +1018,7 @@ def test_poolnetworkbackprop(getkey):
         conv_layer: List[Union[eqx.nn.Conv2d, eqx.nn.MaxPool2d]]
         linear_layers: List[eqx.nn.Linear]
 
-        def __init__(self, key):
+        def __init__(self, key: "jax.random.PRNGKey"):
             key1, key2, key3 = jax.random.split(key, 3)
             self.conv_layer = [eqx.nn.Conv2d(3, 2, 3, key=key1), eqx.nn.MaxPool2d(2, 2)]
             self.linear_layers = [
@@ -1058,3 +1058,24 @@ def test_lambda_layer(getkey):
     output = net(x)
     assert output.shape == (2, 3)
     assert (output >= 0).all()
+
+
+def test_prelu(getkey):
+    # Test single-channel mode
+    activation = eqx.nn.PReLU(0.1)
+
+    x = jnp.array([[-1, -2, -3], [-1, 2, 3]])
+    expected = jnp.array([[-0.1, -0.2, -0.3], [-0.1, 2, 3]])
+    output = activation(x)
+
+    assert jnp.all(output == expected)
+
+    # Test multi-channel mode
+    per_channel_alphas = jnp.array([0.2, 0.1, 0.1])
+    activation = eqx.nn.PReLU(per_channel_alphas)
+
+    expected_multi_output = jnp.array([[-0.2, -0.2, -0.3], [-0.2, 2, 3]])
+    output = activation(x)
+
+    assert activation.negative_slope.shape == (x.shape[-1],)
+    assert jnp.all(output == expected_multi_output)

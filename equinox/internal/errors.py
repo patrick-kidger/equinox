@@ -26,7 +26,7 @@ def _error_abstract(pred, index, *x, msgs):
 
 def _error_jvp(primals, tangents, *, msgs):
     _, _, *tx = tangents
-    return _branched_error_p.bind(*primals, msgs=msgs), tx
+    return branched_error_p.bind(*primals, msgs=msgs), tx
 
 
 def _error_transpose(cts, pred, index, *x, msgs):
@@ -37,18 +37,18 @@ def _error_batching(inputs, batch_axes, *, msgs):
     pred_bdim, index_bdim, *xs_bdim = batch_axes
     assert pred_bdim is batching.not_mapped
     assert index_bdim is batching.not_mapped
-    return _branched_error_p.bind(*inputs, msgs=msgs), xs_bdim
+    return branched_error_p.bind(*inputs, msgs=msgs), xs_bdim
 
 
-_branched_error_p = jax.core.Primitive("branched_error")
-_branched_error_p.multiple_results = True
-_branched_error_p.def_impl(_error_impl)
-_branched_error_p.def_abstract_eval(_error_abstract)
-ad.primitive_jvps[_branched_error_p] = _error_jvp
-ad.primitive_transposes[_branched_error_p] = _error_transpose
-batching.primitive_batchers[_branched_error_p] = _error_batching
+branched_error_p = jax.core.Primitive("branched_error")
+branched_error_p.multiple_results = True
+branched_error_p.def_impl(_error_impl)
+branched_error_p.def_abstract_eval(_error_abstract)
+ad.primitive_jvps[branched_error_p] = _error_jvp
+ad.primitive_transposes[branched_error_p] = _error_transpose
+batching.primitive_batchers[branched_error_p] = _error_batching
 mlir.register_lowering(
-    _branched_error_p, mlir.lower_fun(_error_impl, multiple_results=True)
+    branched_error_p, mlir.lower_fun(_error_impl, multiple_results=True)
 )
 
 
@@ -106,6 +106,6 @@ def branched_error_if(
     # Use a primitive to put the lax.cond inside the impl rule.
     # This is needed as lax.cond will unnecessarily promote symbolic
     # zeros to non-symbolic-zeros, and we'd really like to avoid that.
-    flat = _branched_error_p.bind(pred, index, *flat, msgs=msgs)
+    flat = branched_error_p.bind(pred, index, *flat, msgs=msgs)
     dynamic_x = jtu.tree_unflatten(treedef, flat)
     return combine(dynamic_x, static_x)

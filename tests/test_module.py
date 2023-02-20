@@ -16,7 +16,7 @@ def test_module_not_enough_attributes():
     class MyModule2(eqx.Module):
         weight: Any
 
-        def __init__(self):
+        def __init__(self) -> None:
             pass
 
     with pytest.raises(ValueError):
@@ -35,7 +35,7 @@ def test_module_too_many_attributes():
     class MyModule2(eqx.Module):
         weight: Any
 
-        def __init__(self, weight):
+        def __init__(self, weight: Any):
             self.weight = weight
             self.something_else = True
 
@@ -56,7 +56,7 @@ def test_wrong_attribute():
     class MyModule(eqx.Module):
         weight: Any
 
-        def __init__(self, value):
+        def __init__(self, value: Any):
             self.not_weight = value
 
     with pytest.raises(AttributeError):
@@ -90,7 +90,7 @@ def test_inheritance():
     class MyModule3(MyModule):
         weight3: Any
 
-        def __init__(self, *, weight3, **kwargs):
+        def __init__(self, *, weight3: Any, **kwargs):
             self.weight3 = weight3
             super().__init__(**kwargs)
 
@@ -103,7 +103,7 @@ def test_inheritance():
     class MyModule4(eqx.Module):
         weight4: Any
 
-        def __init__(self, value4, **kwargs):
+        def __init__(self, value4: Any, **kwargs):
             self.weight4 = value4
             super().__init__(**kwargs)
 
@@ -124,7 +124,7 @@ def test_inheritance():
     class MyModule7(MyModule4):
         weight7: Any
 
-        def __init__(self, value7, **kwargs):
+        def __init__(self, value7: Any, **kwargs):
             self.weight7 = value7
             super().__init__(**kwargs)
 
@@ -176,3 +176,17 @@ def test_init_subclass():
         pass
 
     assert ran == [True]
+
+
+def test_wrapper_attributes():
+    def f(x):
+        pass
+
+    fjit = eqx.filter_jit(f)
+    # Gets __name__ attribute from module_update_wrapper
+
+    @eqx.filter_jit  # Flattens and unflattens
+    def g(k):
+        k.__name__
+
+    g(fjit)

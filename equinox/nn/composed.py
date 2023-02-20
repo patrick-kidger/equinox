@@ -1,5 +1,5 @@
 import typing
-from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Optional, Sequence, Tuple, Union
 
 import jax
 import jax.nn as jnn
@@ -31,7 +31,7 @@ class MLP(Module):
         If you get a TypeError saying an object is not a valid JAX type, see the
             [FAQ](https://docs.kidger.site/equinox/faq/)."""
 
-    layers: List[Linear]
+    layers: Tuple[Linear, ...]
     activation: Callable
     final_activation: Callable
     in_size: int = static_field()
@@ -75,7 +75,7 @@ class MLP(Module):
             for i in range(depth - 1):
                 layers.append(Linear(width_size, width_size, key=keys[i + 1]))
             layers.append(Linear(width_size, out_size, key=keys[-1]))
-        self.layers = layers
+        self.layers = tuple(layers)
         self.in_size = in_size
         self.out_size = out_size
         self.width_size = width_size

@@ -4,10 +4,7 @@ import jax
 import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
-import jax.lax as lax
-import jax.numpy as jnp
 import jax.tree_util as jtu
-import numpy as np
 from jaxtyping import PyTree
 
 from ..filters import combine, is_array, is_array_like, partition
@@ -25,6 +22,7 @@ from ..tree import tree_equal
 
 _like_sentinel = object()
 _dummy_none = object()
+_missing_dynamic = object()
 
 
 # Not a PyTree
@@ -58,9 +56,14 @@ def _is_array_like_internal(x):
 
 def _zero_from_primal(p):
     assert type(p) is not ad.UndefinedPrimal
-    shape = jnp.shape(p)
-    dtype = jax.core.primal_dtype_to_tangent_dtype(jnp.result_type(p))
-    return ad.Zero(jax.core.ShapedArray(shape, dtype))
+    return ad.Zero(jax.core.get_aval(p).at_least_vspace())
+
+
+def _combine(dynamic, static):
+    iter_dynamic = iter(dynamic)
+    out = [next(iter_dynamic) if x is _missing_dynamic else x for x in static]
+    assert next(iter_dynamic, None) is None
+    return out
 
 
 def _is_none(x):
@@ -137,8 +140,8 @@ def filter_primitive_def(rule):
     These can now take arbitrary inputs and outputs.
     """
 
-    def _wrapper(*flat, treedef, static, flatten):
-        args = combine(jtu.tree_unflatten(treedef, flat), static)
+    def _wrapper(*dynamic, treedef, static, flatten):
+        args = jtu.tree_unflatten(treedef, _combine(dynamic, static))
         out = rule(*args)
         return flatten(out)
 
@@ -156,9 +159,10 @@ def filter_primitive_jvp(rule):
     """
 
     def _wrapper(primals, tangents, *, treedef, static, flatten):
-        primals = combine(jtu.tree_unflatten(treedef, primals), static)
         tangents = [None if type(t) is ad.Zero else t for t in tangents]
-        tangents = jtu.tree_unflatten(treedef, tangents)
+        tangents_static = [x if x is _missing_dynamic else None for x in static]
+        primals = jtu.tree_unflatten(treedef, _combine(primals, static))
+        tangents = jtu.tree_unflatten(treedef, _combine(tangents, tangents_static))
         primals_out, tangents_out = rule(primals, tangents)
         flat_primals_out, flat_tangents_out = flatten(primals_out, tangents_out)
         flat_tangents_out = [
@@ -170,7 +174,10 @@ def filter_primitive_jvp(rule):
     return _wrapper
 
 
-def filter_primitive_transpose(rule):
+_sentinel = object()
+
+
+def filter_primitive_transpose(rule=_sentinel, *, materialise_zeros=False):
     """
     The `inputs` to the transpose rule are a PyTree like the primal
     inputs, with `UndefinedPrimal`s where appropriate.
@@ -183,14 +190,21 @@ def filter_primitive_transpose(rule):
     All leaves which were non-JAX-array-like, or which should have zero
     cotangent, should have cotangent `None`.
     """
+    if rule is _sentinel:
+        return ft.partial(
+            filter_primitive_transpose, materialise_zeros=materialise_zeros
+        )
 
-    def _wrapper(cts_out, *flat, treedef, static, flatten):
+    def _wrapper(cts_out, *dynamic, treedef, static, flatten):
         treedef_out, _ = flatten.get()
-        cts_out = [None if type(ct) is ad.Zero else ct for ct in cts_out]
+        if materialise_zeros:
+            cts_out = [ad.instantiate_zeros(ct) for ct in cts_out]
+        else:
+            cts_out = [None if type(ct) is ad.Zero else ct for ct in cts_out]
         cts_out = jtu.tree_unflatten(treedef_out, cts_out)
-        wrapped_flat = [_wrap_undefined(x) for x in flat]
-        wrapped_dynamic = jtu.tree_unflatten(treedef, wrapped_flat)
-        wrapped_inputs = combine(wrapped_dynamic, static)
+        wrapped_dynamic = [_wrap_undefined(x) for x in dynamic]
+        wrapped_flat = _combine(wrapped_dynamic, static)
+        wrapped_inputs = jtu.tree_unflatten(treedef, wrapped_flat)
         inputs = jtu.tree_map(_unwrap_undefined, wrapped_inputs)
         cts = rule(inputs, cts_out)
         flat_inputs, flat_cts = Flatten()(wrapped_inputs, cts)
@@ -199,7 +213,7 @@ def filter_primitive_transpose(rule):
             _zero_from_primal(p) if ct is None else ct
             for p, ct in zip(flat_inputs, flat_cts)
         ]
-        assert len(flat) == len(flat_cts)
+        assert len(dynamic) == len(flat_cts)
         return flat_cts
 
     return _wrapper
@@ -214,9 +228,12 @@ def filter_primitive_batching(rule):
     for all non-JAX-arrays.
     """
 
-    def _wrapper(flat, batch_axes, *, treedef, static, flatten):
-        inputs = combine(jtu.tree_unflatten(treedef, flat), static)
+    def _wrapper(dynamic, batch_axes, *, treedef, static, flatten):
+        flat = _combine(dynamic, static)
+        inputs = jtu.tree_unflatten(treedef, flat)
         batch_axes = [None if b is batching.not_mapped else b for b in batch_axes]
+        batch_axes_static = [x if x is _missing_dynamic else None for x in static]
+        batch_axes = _combine(batch_axes, batch_axes_static)
         batch_axes = jtu.tree_unflatten(treedef, batch_axes)
         out, batch_axes = rule(inputs, batch_axes)
         flat_out, flat_batch_axes = flatten(out, batch_axes)
@@ -233,10 +250,16 @@ def filter_primitive_bind(prim: jax.core.Primitive, *args) -> PyTree:
     functions above.
     """
     assert prim.multiple_results
-    dynamic, static = partition(args, is_array)
-    flat, treedef = jtu.tree_flatten(dynamic)
+    # If `args` constains a Jaxpr or ClosedJaxpr in its leaves, then it ends up as a
+    # member of the `static` tuple. This is important to ensure that jaxpr-rewriting
+    # passes are able to find it.
+    # (E.g. if `eqx.filter_closure_convert(...)` is an argument and we apply
+    # `jax.core.jaxprs_in_params`.)
+    flat, treedef = jtu.tree_flatten(args)
+    dynamic = [x for x in flat if is_array(x)]
+    static = tuple(_missing_dynamic if is_array(x) else x for x in flat)
     flatten = Flatten()
-    flat_out = prim.bind(*flat, treedef=treedef, static=static, flatten=flatten)
+    flat_out = prim.bind(*dynamic, treedef=treedef, static=static, flatten=flatten)
     treedef_out, static_out = flatten.get()
     return combine(jtu.tree_unflatten(treedef_out, flat_out), static_out)
 
@@ -244,16 +267,8 @@ def filter_primitive_bind(prim: jax.core.Primitive, *args) -> PyTree:
 # Useful helper for JVP rules of higher-order primitives.
 def materialise_zeros(primal, tangent):
     if tangent is None and is_array_like(primal):
-        shape = jnp.shape(primal)
-        dtype = jax.core.primal_dtype_to_tangent_dtype(jnp.result_type(primal))
-        if dtype == jax.dtypes.float0:
-            return np.broadcast_to(np.zeros((), dtype=dtype), shape)
-        else:
-            weak_type = hasattr(primal, "weak_type") and primal.weak_type
-            if weak_type:
-                return lax.broadcast(jnp.array(0, dtype=dtype), shape)
-            else:
-                return jnp.zeros(shape, dtype=dtype)
+        tangent = _zero_from_primal(primal)
+        return ad.instantiate_zeros(tangent)
     else:
         return tangent
 
@@ -302,6 +317,10 @@ def _vprim_impl(*inputs, prim, __batch_axes, params):
 
 
 def _to_struct(x):
+    if type(x) is not jax.core.ShapedArray:
+        raise NotImplementedError(
+            "vprim only currently supports ShapedArrays for abstract evaluation"
+        )
     return jax.ShapeDtypeStruct(x.shape, x.dtype)
 
 
@@ -320,9 +339,10 @@ def _vprim_abstract_eval(*inputs, prim, __batch_axes, params):
 def _resolve_zeros_t(tangent, batch_axis):
     if type(tangent) is ad.Zero and isinstance(batch_axis, int):
         aval = tangent.aval
-        if type(aval) is not jax.core.ShapedArray:
+        # Also accepts ConcreteArrays
+        if not isinstance(aval, jax.core.ShapedArray):
             raise NotImplementedError(
-                "vprim only currently supports shaped arrays for symbolic zeros"
+                "vprim only currently supports ShapedArrays for symbolic zeros"
             )
         shape = aval.shape[:batch_axis] + aval.shape[batch_axis + 1 :]
         return ad.Zero(jax.core.ShapedArray(shape, aval.dtype))
@@ -350,9 +370,10 @@ def _vprim_jvp(primals, tangents, *, prim, __batch_axes, params):
 def _resolve_undefined_i(input, batch_axis):
     if type(input) is ad.UndefinedPrimal and isinstance(batch_axis, int):
         aval = input.aval
-        if type(aval) is not jax.core.ShapedArray:
+        # Also accepts ConcreteArrays
+        if not isinstance(aval, jax.core.ShapedArray):
             raise NotImplementedError(
-                "vprim only currently supports shaped arrays for undefined primals"
+                "vprim only currently supports ShapedArrays for undefined primals"
             )
         shape = aval.shape[:batch_axis] + aval.shape[batch_axis + 1 :]
         return ad.UndefinedPrimal(jax.core.ShapedArray(shape, aval.dtype))

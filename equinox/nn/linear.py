@@ -1,5 +1,5 @@
 import math
-from typing import Optional, TypeVar
+from typing import Any, Optional, TypeVar
 
 import jax
 import jax.random as jrandom
@@ -59,8 +59,9 @@ class Linear(Module):
 
         !!! info
 
-            If you want to use higher order tensors as inputs (for example featuring batch dimensions) then use
-            `jax.vmap`. For example, for an input `x` of shape `(batch, in_features)`, using
+            If you want to use higher order tensors as inputs (for example featuring "
+            "batch dimensions) then use `jax.vmap`. For example, for an input `x` of "
+            "shape `(batch, in_features)`, using
             ```python
             linear = equinox.nn.Linear(...)
             jax.vmap(linear)(x)
@@ -86,7 +87,7 @@ class Identity(Module):
     another Module.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any):
         """Consumes arbitrary `*args` and `**kwargs` but ignores them."""
         # Ignores args and kwargs
         super().__init__()

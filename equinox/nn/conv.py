@@ -74,7 +74,8 @@ class Conv(Module):
         - `out_channels`: The number of output channels.
         - `kernel_size`: The size of the convolutional kernel.
         - `stride`: The stride of the convolution.
-        - `padding`: The amount of padding to apply before and after each spatial dimension.
+        - `padding`: The amount of padding to apply before and after each spatial
+            dimension.
         - `dilation`: The dilation of the convolution.
         - `groups`: The number of input channel groups. At `groups=1`,
             all input channels contribute to all output channels. Values
@@ -160,8 +161,8 @@ class Conv(Module):
     ) -> Array:
         """**Arguments:**
 
-        - `x`: The input. Should be a JAX array of shape `(in_channels, dim_1, ..., dim_N)`, where
-            `N = num_spatial_dims`.
+        - `x`: The input. Should be a JAX array of shape
+            `(in_channels, dim_1, ..., dim_N)`, where `N = num_spatial_dims`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
 
@@ -434,8 +435,8 @@ class ConvTranspose(Module):
     ) -> Array:
         """**Arguments:**
 
-        - `x`: The input. Should be a JAX array of shape `(in_channels, dim_1, ..., dim_N)`, where
-            `N = num_spatial_dims`.
+        - `x`: The input. Should be a JAX array of shape
+            `(in_channels, dim_1, ..., dim_N)`, where `N = num_spatial_dims`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
 

@@ -6,7 +6,6 @@ import jax
 import jax.experimental.host_callback as hcb
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
-import jax.interpreters.xla as xla
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.tree_util as jtu
@@ -167,7 +166,7 @@ class StateIndex(Module):
     # - Note that this happens during flatten, not unflatten, so that it happens
     #   outside a JIT region.
     #
-    def tree_flatten(self):
+    def _tree_flatten(self):
         try:
             new_state, _, new_version = self.unsafe_get()
         except KeyError:
@@ -175,8 +174,8 @@ class StateIndex(Module):
             new_version = -1
         if new_version != self._version.value:
             # Make a copy of self so we can make our modifications.
-            leaves, aux = super().tree_flatten()
-            self = super().tree_unflatten(aux, leaves)
+            leaves, aux = super()._tree_flatten()
+            self = super()._tree_unflatten(aux, leaves)
             # Not using `tree_at` because that goes via flattening and we'd get an
             # infinite loop.
             new_state = jtu.tree_map(jnp.asarray, new_state)
@@ -184,7 +183,7 @@ class StateIndex(Module):
             object.__setattr__(self, "_version", _FixedInt(new_version))
 
         # explicit self as we may have a different self
-        return super(StateIndex, self).tree_flatten()
+        return super(StateIndex, self)._tree_flatten()
 
     #
     # What happens when someone passes in a StateIndex into a JIT region via a hashable
@@ -225,7 +224,8 @@ class _Leaf:  # Not a PyTree
         self.value = value
 
 
-# Monkey-patch the batching rule for host_callback.call to work with get_state and set_state.
+# Monkey-patch the batching rule for host_callback.call to work with get_state and
+# set_state.
 _have_monkey_patched = False
 
 
@@ -328,13 +328,6 @@ _batchify_p.multiple_results = True
 _batchify_p.def_impl(_batchify_impl)
 _batchify_p.def_abstract_eval(_batchify_abstract_eval)
 batching.primitive_batchers[_batchify_p] = _batchify_batching_rule
-# `xla.lower_fun` is getting removed in later JAX versions.
-# See https://github.com/patrick-kidger/diffrax/pull/91
-if hasattr(xla, "lower_fun"):
-    xla.register_translation(
-        _batchify_p,
-        xla.lower_fun(_batchify_impl, multiple_results=True, new_style=True),
-    )
 mlir.register_lowering(
     _batchify_p, mlir.lower_fun(_batchify_impl, multiple_results=True)
 )
@@ -529,7 +522,8 @@ def set_state(index: StateIndex, state: PyTree[Array]) -> None:
     !!! info
 
         The same `index` can be used multiple times, to overwrite a previously saved
-        value. The new and old `state` must both have the same PyTree structure, however.
+        value. The new and old `state` must both have the same PyTree structure,
+        however.
 
     !!! warning
 

@@ -16,12 +16,16 @@ def _is_none(x):
 def apply_updates(model: PyTree, updates: PyTree) -> PyTree:
     """A `jtu.tree_map`-broadcasted version of
     ```python
-    model = model if update is None else model + update
+    if update is None:
+        return model
+    else:
+        return model + update
     ```
 
     This is often useful when updating a model's parameters via stochastic gradient
     descent. (This function is essentially the same as `optax.apply_updates`, except
-    that it understands `None`.)
+    that it understands `None`.) For example see the
+    [Train RNN example](../../../examples/train_rnn/).
 
     **Arguments:**
 

@@ -3,6 +3,8 @@ from typing import Tuple
 import jax.numpy as jnp
 from jaxtyping import Array
 
+from ..filters import is_array
+
 
 def left_broadcast_to(arr: Array, shape: Tuple[int, ...]) -> Array:
     arr = arr.reshape(arr.shape + (1,) * (len(shape) - arr.ndim))
@@ -26,7 +28,10 @@ class ContainerMeta(type):
         return super().__new__(cls, name, bases, _dict)
 
     def __instancecheck__(cls, instance):
-        return isinstance(instance, int) or super().__instancecheck__(instance)
+        if is_array(instance):
+            return instance.shape == () and jnp.issubdtype(instance.dtype, jnp.integer)
+        else:
+            return isinstance(instance, int) or super().__instancecheck__(instance)
 
     def __getitem__(cls, item):
         return cls.reverse_lookup[item]

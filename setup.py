@@ -44,9 +44,9 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Mathematics",
 ]
 
-python_requires = "~=3.7"
+python_requires = "~=3.8"
 
-install_requires = ["jax>=0.3.4", "jaxtyping>=0.2.5"]
+install_requires = ["jax>=0.4.3", "jaxtyping>=0.2.12"]
 
 setuptools.setup(
     name=name,

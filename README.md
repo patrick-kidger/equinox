@@ -18,7 +18,7 @@ _(In other words, why should you care? Because Equinox is really simple to learn
 pip install equinox
 ```
 
-Requires Python 3.7+ and JAX 0.3.4+.
+Requires Python 3.8+ and JAX 0.4.3+.
 
 ## Documentation
 
@@ -84,5 +84,7 @@ If you found this library to be useful in academic work, then please cite: ([arX
 Numerical differential equation solvers: [Diffrax](https://github.com/patrick-kidger/diffrax).
 
 Type annotations and runtime checking for PyTrees and shape/dtype of JAX arrays: [jaxtyping](https://github.com/google/jaxtyping).
+
+Computer vision models: [Eqxvision](https://github.com/paganpasta/eqxvision).
 
 SymPy<->JAX conversion; train symbolic expressions via gradient descent: [sympy2jax](https://github.com/google/sympy2jax).

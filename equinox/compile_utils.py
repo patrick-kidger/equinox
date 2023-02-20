@@ -1,21 +1,21 @@
 import functools as ft
+from typing import Callable
 
 import jax.tree_util as jtu
-
-from .filters import combine, partition
-
-
-def hashable_partition(pytree, filter_spec):
-    dynamic, static = partition(pytree, filter_spec)
-    static_leaves, static_treedef = jtu.tree_flatten(static)
-    static_leaves = tuple(static_leaves)
-    return dynamic, (static_leaves, static_treedef)
+from jaxtyping import PyTree
 
 
-def hashable_combine(dynamic, static):
-    static_leaves, static_treedef = static
-    static = jtu.tree_unflatten(static_treedef, static_leaves)
-    return combine(dynamic, static)
+def hashable_partition(pytree: PyTree, filter_fn: Callable):
+    leaves, treedef = jtu.tree_flatten(pytree)
+    dynamic_leaves = tuple(x if filter_fn(x) else None for x in leaves)
+    static_leaves = tuple(None if filter_fn(x) else x for x in leaves)
+    return dynamic_leaves, (static_leaves, treedef)
+
+
+def hashable_combine(dynamic_leaves, static) -> PyTree:
+    static_leaves, treedef = static
+    leaves = [d if s is None else s for d, s in zip(dynamic_leaves, static_leaves)]
+    return jtu.tree_unflatten(treedef, leaves)
 
 
 def _strip_wrapped_partial(fun):

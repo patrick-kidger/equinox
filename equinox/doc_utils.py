@@ -1,5 +1,6 @@
+import inspect
 import typing
-from typing import Any, Callable
+from typing import TYPE_CHECKING, TypeVar
 
 
 # Inherits from type so that _WithRepr instances are types and can be used as
@@ -18,14 +19,28 @@ class _WithRepr(type):
         return self.string
 
 
-def doc_repr(obj: Any, string: str):
-    if getattr(typing, "GENERATING_DOCUMENTATION", False):
-        return _WithRepr(string)
-    else:
+_T = TypeVar("_T")
+
+
+def doc_repr(obj: _T, string: str) -> _T:
+    if TYPE_CHECKING:
         return obj
+    else:
+        if getattr(typing, "GENERATING_DOCUMENTATION", False):
+            return _WithRepr(string)
+        else:
+            return obj
 
 
-def doc_strip_annotations(fn: Callable) -> Callable:
-    if getattr(typing, "GENERATING_DOCUMENTATION", False):
-        fn.__annotations__ = None
-    return fn
+def doc_remove_args(*args):
+    def doc_remove_args_impl(fn):
+        sig = inspect.signature(fn)
+        new_params = []
+        for param in sig.parameters.values():
+            if param.name not in args:
+                new_params.append(param)
+        sig = sig.replace(parameters=new_params)
+        fn.__signature__ = sig
+        return fn
+
+    return doc_remove_args_impl

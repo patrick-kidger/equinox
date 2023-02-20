@@ -1,19 +1,18 @@
 import functools as ft
 import types
 import typing
-import warnings
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 import jax
 import jax.interpreters.ad as ad
 import jax.tree_util as jtu
 from jaxtyping import Array, PyTree
 
-from .custom_types import BoolAxisSpec, sentinel
-from .doc_utils import doc_strip_annotations
+from .custom_types import sentinel
+from .deprecate import deprecated_0_10
+from .doc_utils import doc_remove_args
 from .filters import (
     combine,
-    filter,
     is_array,
     is_inexact_array,
     is_inexact_array_like,
@@ -25,18 +24,16 @@ from .module import Module, module_update_wrapper, Static, static_field
 
 class _ValueAndGradWrapper(Module):
     _fun: Callable
-    _arg: PyTree[BoolAxisSpec]
+    _has_aux: bool
     _gradkwargs: Dict[str, Any]
 
-    # Try to avoid clashes with existing argument names.
-    # TODO: use "/" once we're on Python 3.8.
-    def __call__(__self, __x, *args, **kwargs):
-        @ft.partial(jax.value_and_grad, argnums=0, **__self._gradkwargs)
+    def __call__(self, x, /, *args, **kwargs):
+        @ft.partial(jax.value_and_grad, has_aux=self._has_aux, **self._gradkwargs)
         def fun_value_and_grad(_diff_x, _nondiff_x, *_args, **_kwargs):
             _x = combine(_diff_x, _nondiff_x)
-            return __self._fun(_x, *_args, **_kwargs)
+            return self._fun(_x, *_args, **_kwargs)
 
-        diff_x, nondiff_x = partition(__x, __self._arg)
+        diff_x, nondiff_x = partition(x, is_inexact_array)
         return fun_value_and_grad(diff_x, nondiff_x, *args, **kwargs)
 
     def __get__(self, instance, owner):
@@ -49,9 +46,9 @@ class _GradWrapper(Module):
     _fun_value_and_grad: _ValueAndGradWrapper
     _has_aux: bool
 
-    def __call__(__self, *args, **kwargs):
-        value, grad = __self._fun_value_and_grad(*args, **kwargs)
-        if __self._has_aux:
+    def __call__(self, /, *args, **kwargs):
+        value, grad = self._fun_value_and_grad(*args, **kwargs)
+        if self._has_aux:
             _, aux = value
             return grad, aux
         else:
@@ -63,25 +60,38 @@ class _GradWrapper(Module):
         return jtu.Partial(self, instance)
 
 
-@doc_strip_annotations
+@doc_remove_args("gradkwargs")
 def filter_value_and_grad(
-    fun: Callable = sentinel,
-    *,
-    arg: PyTree[BoolAxisSpec] = is_inexact_array,
-    **gradkwargs,
+    fun: Callable = sentinel, *, has_aux: bool = False, **gradkwargs
 ) -> Callable:
-    """As [`equinox.filter_grad`][], except that it is `jax.value_and_grad` that is
-    wrapped.
+    """Creates a function that evaluates both `fun` and the gradient of `fun`.
+
+    The gradient will be computed with respect to all floating-point JAX/NumPy arrays
+    in the first argument. (Which should be a PyTree.)
+
+    Any nondifferentiable leaves in the first argument will have `None` as the gradient.
+
+    **Arguments:**
+
+    - `fun` is a pure function to differentiate.
+    - `has_aux`: if `True` then `fun` should return a pair; the first element is the
+        output to be differentiated and the second element is auxiliary data.
+
+    **Returns:**
+
+    A function with the same arguments as `fun`, that evaluates both `fun` and computes
+    the derivative of `fun` with respect to its first input. Any nondifferentiable
+    leaves will have `None` as the gradient.
+
+    If `has_aux` is `True` then a nested tuple `((value, aux), gradient)` is returned.
+    If `has_aux` is `False` then the pair `(value, gradient)` is returned.
     """
 
     if fun is sentinel:
-        return ft.partial(filter_value_and_grad, arg=arg, **gradkwargs)
+        return ft.partial(filter_value_and_grad, has_aux=has_aux, **gradkwargs)
 
-    filter_spec = gradkwargs.pop("filter_spec", None)
-    if filter_spec is not None:
-        warnings.warn("For brevity the `filter_spec` argument has been renamed `arg`")
-        arg = filter_spec
-
+    deprecated_0_10(gradkwargs, "arg")
+    deprecated_0_10(gradkwargs, "filter_spec")
     argnums = gradkwargs.pop("argnums", None)
     if argnums is not None:
         raise ValueError(
@@ -90,39 +100,32 @@ def filter_value_and_grad(
             "as the first argument."
         )
 
-    return module_update_wrapper(_ValueAndGradWrapper(fun, arg, gradkwargs), fun)
+    return module_update_wrapper(_ValueAndGradWrapper(fun, has_aux, gradkwargs), fun)
 
 
-@doc_strip_annotations
-def filter_grad(
-    fun: Callable = sentinel,
-    *,
-    arg: PyTree[BoolAxisSpec] = is_inexact_array,
-    **gradkwargs,
-):
-    """As `jax.grad`, but accepts arbitrary PyTrees as inputs. (Not just JAXable types.)
+@doc_remove_args("gradkwargs")
+def filter_grad(fun: Callable = sentinel, *, has_aux: bool = False, **gradkwargs):
+    """Creates a function that computes the gradient of `fun`.
 
-    !!! info
+    The gradient will be computed with respect to all floating-point JAX/NumPy arrays
+    in the first argument. (Which should be a PyTree.)
 
-        By default, all inexact (floating-point) JAX arrays are differentiated. Any
-        nondifferentiable leaves will have `None` as the gradient.
-
+    Any nondifferentiable leaves in the first argument will have `None` as the gradient.
 
     **Arguments:**
 
-    - `fun` is a pure function to JIT compile.
-    - `arg` is a PyTree whose structure should be a prefix of the structure of
-        the **first** argument to `fun`. It behaves as the `filter_spec` argument to
-        [`equinox.filter`][]. Truthy values will be differentiated; falsey values will
-        not.
-    - `**gradkwargs` are any other keyword arguments to `jax.grad`.
+    - `fun` is a pure function to differentiate.
+    - `has_aux`: if `True` then `fun` should return a pair; the first element is the
+        output to be differentiated and the second element is auxiliary data.
 
     **Returns:**
 
-    A function computing the derivative of `fun` with respect to its first input. Any
-    nondifferentiable leaves will have `None` as the gradient. See
-    [`equinox.apply_updates`][] for a convenience function that will only attempt to
-    apply non-`None` updates.
+    A function with the same arguments as `fun`, that computes the derivative of `fun`
+    with respect to its first input. Any nondifferentiable leaves will have `None` as
+    the gradient.
+
+    If `has_aux` is `True` then a pair `(gradient, aux)` is returned. If `has_aux` is
+    `False` then just the `gradient` is returned.
 
     !!! tip
 
@@ -138,14 +141,18 @@ def filter_grad(
             x, y = x__y
             return func(x, y)
         ```
+
+    !!! info
+
+        See also [`equinox.apply_updates`][] for a convenience function that applies
+        non-`None` gradient updates to a model.
+
     """
 
     if fun is sentinel:
-        return ft.partial(filter_grad, arg=arg, **gradkwargs)
+        return ft.partial(filter_grad, has_aux=has_aux, **gradkwargs)
 
-    has_aux = gradkwargs.get("has_aux", False)
-
-    fun_value_and_grad = filter_value_and_grad(fun, arg=arg, **gradkwargs)
+    fun_value_and_grad = filter_value_and_grad(fun, has_aux=has_aux, **gradkwargs)
     return module_update_wrapper(_GradWrapper(fun_value_and_grad, has_aux), fun)
 
 
@@ -185,7 +192,8 @@ def filter_jvp(fn, primals, tangents):
     !!! Tip
 
         Unlike `jax.jvp`, this function does not support a `has_aux` argument. It isn't
-        needed, as unlike `jax.jvp` the output of this function can be of arbitrary type.
+        needed, as unlike `jax.jvp` the output of this function can be of arbitrary
+        type.
     """
     if jtu.tree_structure(primals, is_leaf=_is_none) != jtu.tree_structure(
         tangents, is_leaf=_is_none
@@ -259,16 +267,38 @@ def filter_vjp(fun, *primals, has_aux=False):
         return out, vjp_fn
 
 
+def _is_struct(x):
+    return is_array(x) or isinstance(x, jax.ShapeDtypeStruct)
+
+
 class _ClosureConvert(Module):
-    jaxpr: jax.core.Jaxpr = static_field()
+    # Important that `jaxpr` be a leaf (and not static), so that it is a tuple element
+    # when passing through `filter_primitive_bind` and thus visible to
+    # `jax.core.subjaxprs`
+    jaxpr: jax.core.Jaxpr
     consts: PyTree[Array]  # Captured in the PyTree structure of _ClosureConvert
+    in_dynamic_struct: PyTree[jax.ShapeDtypeStruct] = static_field()
     out_dynamic_struct: PyTree[jax.ShapeDtypeStruct] = static_field()
+    in_static: PyTree[Any] = static_field()
     out_static: PyTree[Any] = static_field()
 
     def __call__(self, *args, **kwargs):
-        dynamic = filter((args, kwargs), is_array)
-        dynamic_flat = jtu.tree_leaves(dynamic)
-        out_dynamic_flat = jax.core.eval_jaxpr(self.jaxpr, self.consts, *dynamic_flat)
+        in_dynamic, in_static = partition((args, kwargs), is_array)
+        in_dynamic_struct = jax.eval_shape(lambda: in_dynamic)
+        if in_dynamic_struct != self.in_dynamic_struct:
+            raise ValueError(
+                "Closure-converted function called with different dynamic arguments to "
+                "the example arguments provided."
+            )
+        if in_static != self.in_static:
+            raise ValueError(
+                "Closure-converted function called with different static arguments to "
+                "the example arguments provided."
+            )
+        in_dynamic_flat = jtu.tree_leaves(in_dynamic)
+        out_dynamic_flat = jax.core.eval_jaxpr(
+            self.jaxpr, self.consts, *in_dynamic_flat
+        )
         out_dynamic_struct_flat, out_dynamic_treedef = jtu.tree_flatten(
             self.out_dynamic_struct
         )
@@ -317,15 +347,20 @@ def filter_closure_convert(fn, *args, **kwargs):
         f(1., 1.)
         ```
     """
-    if fn.__closure__ is None:
+    if isinstance(fn, types.FunctionType) and fn.__closure__ is None:
         # In this case, it's not possible to have any closed-over tracers.
+        # Skip jaxpr tracing for efficiency.
         return fn
     closed_jaxpr, out_dynamic_struct, out_static = filter_make_jaxpr(fn)(
         *args, **kwargs
     )
+    in_dynamic, in_static = partition((args, kwargs), _is_struct)
+    in_dynamic_struct = jax.eval_shape(lambda: in_dynamic)
     jaxpr = closed_jaxpr.jaxpr
     consts = closed_jaxpr.consts
-    return _ClosureConvert(jaxpr, consts, out_dynamic_struct, out_static)
+    return _ClosureConvert(
+        jaxpr, consts, in_dynamic_struct, out_dynamic_struct, in_static, out_static
+    )
 
 
 class filter_custom_jvp:
@@ -339,25 +374,29 @@ class filter_custom_jvp:
 
     The return types must still all be JAX types.
 
-    Example:
-    ```python
-    @equinox.filter_custom_jvp
-    def call(fn, x):
-        return fn(x)
+    Supports keyword arguments, which are always treated as nondifferentiable.
 
-    @call.defjvp
-    def call_jvp(primals, tangents):
-        fn, x = primals
-        _, tx = tangents
-        primal_out = call(fn, x)
-        tangent_out = tx**2
-        return primal_out, tangent_out
-    ```
+    !!! Example
+
+        ```python
+        @equinox.filter_custom_jvp
+        def call(x, y, *, fn):
+            return fn(x, y)
+
+        @call.defjvp
+        def call_jvp(primals, tangents, *, fn):
+            x, y = primals
+            tx, ty = tangents
+            primal_out = call(x, y, fn=fn)
+            tangent_out = tx**2 + ty
+            return primal_out, tangent_out
+        ```
     """
 
     def __init__(self, fn):
         def fn_wrapper(static, dynamic):
-            return fn(*combine(dynamic, static))
+            args, kwargs = combine(dynamic, static)
+            return fn(*args, **kwargs)
 
         self.fn = jax.custom_jvp(fn_wrapper, nondiff_argnums=(0,))
 
@@ -365,17 +404,45 @@ class filter_custom_jvp:
         def fn_jvp_wrapper(static, dynamic, tangents):
             (dynamic,) = dynamic
             (tangents,) = tangents
-            primals = combine(dynamic, static)
-            return fn_jvp(primals, tangents)
+            args, kwargs = combine(dynamic, static)
+            t_args, t_kwargs = tangents
+            if any(x is not None for x in jtu.tree_leaves(t_kwargs)):
+                raise ValueError("Received keyword tangent")
+            return fn_jvp(args, t_args, **kwargs)
 
         self.fn.defjvp(fn_jvp_wrapper)
 
     def defjvps(self, *a, **kw):
         raise NotImplementedError("filter_custom_jvp().defjvps is not implemented")
 
-    def __call__(self, *args):
-        dynamic, static = partition(args, is_inexact_array_like)
+    def __call__(self, *args, **kwargs):
+        dynamic, static = partition((args, kwargs), is_inexact_array_like)
         return self.fn(static, dynamic)
+
+
+@ft.partial(jax.custom_jvp, nondiff_argnums=(0,))
+def _nondifferentiable(msg: str, x: PyTree[Array]):
+    return x
+
+
+@_nondifferentiable.defjvp
+def _nondifferentiable_jvp(msg: str, primals, tangents):
+    raise RuntimeError(msg)
+
+
+def nondifferentiable(
+    x: PyTree, *, name: Optional[str] = None, msg: Optional[str] = None
+) -> PyTree:
+    """Identity function, which raises an error if it is differentiated (in forward or
+    reverse mode).
+    """
+    dynamic, static = partition(x, is_array)
+    if msg is None:
+        if name is None:
+            name = "This operation"
+        msg = f"Unexpected tangent. {name} cannot be autodifferentiated."
+    dynamic = _nondifferentiable(msg, dynamic)
+    return combine(dynamic, static)
 
 
 class filter_custom_vjp:
@@ -493,12 +560,7 @@ class filter_custom_vjp:
         fn_wrapped.defvjp(fn_fwd_wrapped, fn_bwd_wrapped)
         self.fn_wrapped = fn_wrapped
 
-    def __call__(__self, __vjp_arg, *args, **kwargs):
-        # Try and avoid name collisions with the arguments of the wrapped function.
-        # TODO: once we switch to Python 3.8, use (self, vjp_arg, /, *args, **kwargs).
-        self = __self
-        vjp_arg = __vjp_arg
-        del __self, __vjp_arg
+    def __call__(self, vjp_arg, /, *args, **kwargs):
         if self.fn_wrapped is None:
             raise RuntimeError(f"defvjp not yet called for {self.fn.__name__}")
         array_vjp_arg, nonarray_vjp_arg = partition(vjp_arg, is_array)
@@ -506,6 +568,9 @@ class filter_custom_vjp:
             array_vjp_arg, is_inexact_array
         )
         array_args_kwargs, nonarray_args_kwargs = partition((args, kwargs), is_array)
+        array_args_kwargs = nondifferentiable(
+            array_args_kwargs, name="`*args` and `**kwargs` to `filter_custom_vjp`"
+        )
         out = self.fn_wrapped(
             nonarray_vjp_arg,
             nonarray_args_kwargs,

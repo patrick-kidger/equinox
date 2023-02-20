@@ -1,11 +1,12 @@
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Tuple, Union
 
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
 from jaxtyping import PyTree
 
-from .custom_types import BoolAxisSpec, ResolvedBoolAxisSpec
+
+AxisSpec = Union[bool, Callable[[Any], bool]]
 
 
 #
@@ -30,7 +31,9 @@ def is_array_like(element: Any) -> bool:
 
 
 def is_inexact_array(element: Any) -> bool:
-    """Returns `True` if `element` is an inexact (i.e. floating point) JAX/NumPy array."""
+    """Returns `True` if `element` is an inexact (i.e. floating point) JAX/NumPy
+    array.
+    """
     if isinstance(element, (np.ndarray, np.generic)):
         return np.issubdtype(element.dtype, np.inexact)
     elif isinstance(element, jnp.ndarray):
@@ -59,7 +62,7 @@ def is_inexact_array_like(element: Any) -> bool:
 
 
 def _make_filter_tree(is_leaf):
-    def _filter_tree(mask: BoolAxisSpec, arg: Any) -> PyTree[ResolvedBoolAxisSpec]:
+    def _filter_tree(mask: AxisSpec, arg: Any) -> PyTree[bool]:
         if isinstance(mask, bool):
             return jtu.tree_map(lambda _: mask, arg, is_leaf=is_leaf)
         elif callable(mask):
@@ -74,7 +77,7 @@ def _make_filter_tree(is_leaf):
 
 def filter(
     pytree: PyTree,
-    filter_spec: PyTree[BoolAxisSpec],
+    filter_spec: PyTree[AxisSpec],
     inverse: bool = False,
     replace: Any = None,
     is_leaf: Optional[Callable[[Any], bool]] = None,
@@ -82,6 +85,22 @@ def filter(
     """
     Filters out the leaves of a PyTree not satisfying a condition. Those not satisfying
     the condition are replaced with `replace`.
+
+    !!! Example
+
+        ```python
+        pytree = [(jnp.array(0), 1), object()]
+        result = eqx.filter(pytree, eqx.is_array)
+        # [(jnp.array(0), None), None]
+        ```
+
+    !!! Example
+
+        ```python
+        pytree = [(jnp.array(0), 1), object()]
+        result = eqx.filter(pytree, [(False, False), True])
+        # [(None, None), object()]
+        ```
 
     **Arguments:**
 
@@ -97,19 +116,11 @@ def filter(
     - `replace` is what to replace any falsey leaves with. Defaults to `None`.
     - `is_leaf`: Optional function called at each node of the PyTree. It should return
         a boolean. `True` indicates that the whole subtree should be treated as leaf;
-        `False` indicates that the subtree should be traversed as a PyTree. This is
-        mostly useful for evaluating a callable `filter_spec` on a node instead of a
-        leaf.
+        `False` indicates that the subtree should be traversed as a PyTree.
 
     **Returns:**
 
     A PyTree of the same structure as `pytree`.
-
-    !!! info
-
-        A common special case is `equinox.filter(pytree, equinox.is_array)`. Then
-        `equinox.is_array` is evaluted on all of `pytree`'s leaves, and each leaf then
-        kept or replaced.
     """
 
     inverse = bool(inverse)  # just in case, to make the != trick below work reliably
@@ -121,12 +132,12 @@ def filter(
 
 def partition(
     pytree: PyTree,
-    filter_spec: PyTree[BoolAxisSpec],
+    filter_spec: PyTree[AxisSpec],
     replace: Any = None,
     is_leaf: Optional[Callable[[Any], bool]] = None,
-) -> PyTree:
-    """Equivalent to `filter(...), filter(..., inverse=True)`, but slightly more
-    efficient.
+) -> Tuple[PyTree, PyTree]:
+    """Splits a PyTree into two pieces. Equivalent to
+    `filter(...), filter(..., inverse=True)`, but slightly more efficient.
 
     !!! info
 
@@ -150,7 +161,9 @@ def _is_none(x):
     return x is None
 
 
-def combine(*pytrees: PyTree) -> PyTree:
+def combine(
+    *pytrees: PyTree, is_leaf: Optional[Callable[[Any], bool]] = None
+) -> PyTree:
     """Combines multiple PyTrees into one PyTree, by replacing `None` leaves.
 
     !!! example
@@ -169,6 +182,7 @@ def combine(*pytrees: PyTree) -> PyTree:
     **Arguments:**
 
     - `*pytrees`: a sequence of PyTrees all with the same structure.
+    - `is_leaf`: As [`equinox.partition`][].
 
     **Returns:**
 
@@ -176,5 +190,9 @@ def combine(*pytrees: PyTree) -> PyTree:
     non-`None` leaf found in the corresponding leaves of `pytrees` as they are
     iterated over.
     """
+    if is_leaf is None:
+        _is_leaf = _is_none
+    else:
+        _is_leaf = lambda x: _is_none(x) or is_leaf(x)
 
-    return jtu.tree_map(_combine, *pytrees, is_leaf=_is_none)
+    return jtu.tree_map(_combine, *pytrees, is_leaf=_is_leaf)

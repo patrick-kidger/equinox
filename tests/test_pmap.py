@@ -3,6 +3,7 @@ from typing import Union
 
 import jax
 import jax.numpy as jnp
+import jax.random as jr
 import jax.tree_util as jtu
 import pytest
 
@@ -26,16 +27,9 @@ def _zero_if_inexact_array_else_none(x):
 
 
 def test_args():
-    @filter_pmap(args=(_zero_if_inexact_array_else_none, [{"a": None}], 0))
-    def f(a, b, c, d):
-        return a + b[0]["a"] + c + d
-
-    out = f(jnp.array([1]), [{"a": jnp.array([2])}], jnp.array([3]), 4)
-    assert shaped_allclose(out, jnp.array([[10]]))
-
-
-def test_kwargs():
-    @filter_pmap(kwargs=dict(a=_zero_if_inexact_array_else_none, b=[{"a": None}], c=0))
+    @filter_pmap(
+        in_axes=(_zero_if_inexact_array_else_none, [{"a": None}], 0, eqx.if_array(0))
+    )
     def f(a, b, c, d):
         return a + b[0]["a"] + c + d
 
@@ -44,39 +38,23 @@ def test_kwargs():
 
 
 def test_default():
-    @filter_pmap(default=_zero_if_inexact_array_else_none)
+    @filter_pmap(in_axes=_zero_if_inexact_array_else_none)
     def f(a, b):
         return a + b
 
     assert shaped_allclose(f(jnp.array(3), jnp.array([3.0])), jnp.array([6.0]))
 
     with pytest.raises(ValueError):
-        assert shaped_allclose(f(jnp.array(3.0), jnp.array([3.0])), jnp.array([6.0]))
-
-
-def test_fn():
-    class M(eqx.Module):
-        increment: jnp.ndarray
-
-        def __call__(self, x):
-            return x + self.increment
-
-    m = M(jnp.array([1]))
-    o1 = filter_pmap(m, fn=0)(1)
-    o2 = filter_pmap(m, fn=0)(jnp.array([3]))
-    o3 = filter_pmap(m, default=None, fn=0)(jnp.array([3]))
-    assert shaped_allclose(o1, jnp.array([2]))
-    assert shaped_allclose(o2, jnp.array([4]))
-    assert shaped_allclose(o3, jnp.array([[4]]))
+        f(jnp.array(3.0), jnp.array([3.0]))
 
 
 def test_out():
     def f(x):
         return x
 
-    o1 = filter_pmap(f, default=None, out=None, axis_size=1)(jnp.array([3, 4]))
-    o2 = filter_pmap(f, out=0, axis_size=1)(1)
-    o3 = filter_pmap(f, default=None, out=0, axis_size=1)(jnp.array([3, 4]))
+    o1 = filter_pmap(f, in_axes=None, out_axes=None, axis_size=1)(jnp.array([3, 4]))
+    o2 = filter_pmap(f, out_axes=0, axis_size=1)(1)
+    o3 = filter_pmap(f, in_axes=None, out_axes=0, axis_size=1)(jnp.array([3, 4]))
 
     assert shaped_allclose(o1, jnp.array([3, 4]))
     assert shaped_allclose(o2, jnp.array([1]))
@@ -84,35 +62,32 @@ def test_out():
 
 
 def test_no_arrays():
-    @filter_pmap(out=None, axis_size=1)
+    @filter_pmap(out_axes=None, axis_size=1)
     def f(x):
         return x
 
     assert shaped_allclose(f(1), 1)
 
 
-def test_bool():
+def test_num_traces():
     num_traces = 0
 
-    @filter_pmap(args=(True, False), axis_size=1)
+    @filter_pmap(in_axes=None, axis_size=1)
     def f(x, y):
         nonlocal num_traces
         num_traces += 1
         return x + y
 
-    assert shaped_allclose(f(1, 2), jnp.array([3]))
+    assert shaped_allclose(f(jnp.array(1), 2), jnp.array([3]))
     assert num_traces == 2  # eval_shape + pmap
-    assert shaped_allclose(f(3, 2), jnp.array([5]))
-    assert num_traces == 3  # eval_shape (pmap cached)
-    assert shaped_allclose(f(1, 3), jnp.array([4]))
-    assert num_traces == 5  # eval_shape + pmap
-    assert shaped_allclose(f(3, 3), jnp.array([6]))
-    assert num_traces == 6  # eval_shape (pmap cached)
-
+    assert shaped_allclose(f(jnp.array(3), 2), jnp.array([5]))
+    assert num_traces == 2
+    assert shaped_allclose(f(jnp.array(1), 3), jnp.array([4]))
+    assert num_traces == 4
     assert shaped_allclose(f(jnp.array([3]), 3), jnp.array([[6]]))
-    assert num_traces == 8  # eval_shape + pmap
+    assert num_traces == 6
     assert shaped_allclose(f(jnp.array([4]), 3), jnp.array([[7]]))
-    assert num_traces == 8  # (eval_shape cached; pmap cached)
+    assert num_traces == 6
 
 
 @pytest.mark.parametrize("call", [False, True])
@@ -216,49 +191,11 @@ def test_pmap_vmap():
 
     out = eqx.filter_pmap(eqx.filter_vmap(f))(jnp.array([[1, 2]]))
     assert shaped_allclose(out, jnp.array([[2, 3]]))
-    assert num_traces == 2  # eval_shape in pmap + pmap
+    assert num_traces == 2  # eval_shape, pmap
 
     out = eqx.filter_pmap(eqx.filter_vmap(f))(jnp.array([[2, 3]]))
     assert shaped_allclose(out, jnp.array([[3, 4]]))
     assert num_traces == 2  # both cached
-
-
-def test_args_kwargs():
-    num_traces = 0
-
-    @eqx.filter_pmap(kwargs=dict(x=True), axis_size=1)
-    def f(*args, **kwargs):
-        nonlocal num_traces
-        num_traces += 1
-        return kwargs["x"]
-
-    assert f(x=jnp.array(2)) == 2
-    assert num_traces == 2
-    assert f(x=jnp.array(3)) == 3
-    assert num_traces == 2
-
-    assert f(x=jnp.array(3), y=4) == 3  # check we can use other kwargs
-    assert num_traces == 4
-
-    @eqx.filter_pmap(default=eqx.is_array_like, axis_size=1)
-    def g(*args, **kwargs):
-        nonlocal num_traces
-        num_traces += 1
-        return kwargs["x"]
-
-    assert g(x=jnp.array(1), y=jnp.array(1)) == 1
-    assert num_traces == 6
-    assert g(x=jnp.array(1), y=jnp.array(2)) == 1
-    assert num_traces == 6
-
-    @eqx.filter_pmap(args=(eqx.is_array,), axis_size=1)
-    def h(*args, **kwargs):
-        nonlocal num_traces
-        num_traces += 1
-        return args[0]
-
-    assert h(1, 2) == 1  # check we can use other args
-    assert num_traces == 8
 
 
 def test_named_reduction():
@@ -299,10 +236,12 @@ def test_map_non_jax():
         """will return a pytree with non-jax fields, which could break filter_pmap"""
         return x
 
-    _ = eqx.filter_pmap(
-        identity,
-        out=jtu.tree_map(
-            lambda value: 0 if eqx.is_array(value) else None,
-            pytree_sharded,
-        ),
-    )(pytree_sharded)
+    _ = eqx.filter_pmap(identity)(pytree_sharded)
+
+
+def test_keyword_in_axes(getkey):
+    x = jr.normal(getkey(), (1, 4))
+    y = jr.normal(getkey(), (1, 1))
+    out = eqx.filter_pmap(lambda x, y: x + y, in_axes=dict(y=1))(x, y)
+    true_out = x + y.T
+    assert shaped_allclose(out, true_out)

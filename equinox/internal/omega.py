@@ -1,5 +1,5 @@
 import operator
-from typing import Optional
+from typing import Callable, Optional
 
 import jax.numpy as jnp
 import jax.tree_util as jtu
@@ -47,6 +47,9 @@ class ω(metaclass=_Metaω):
         self.ω = value
         self.is_leaf = is_leaf
 
+    def __repr__(self):
+        return f"ω({self.ω})"
+
     def __getitem__(self, item):
         return ω(
             jtu.tree_map(lambda x: x[item], self.ω, is_leaf=self.is_leaf),
@@ -64,7 +67,7 @@ class ω(metaclass=_Metaω):
         return _ωUpdateHelper(self.ω, self.is_leaf)
 
 
-def _equal_code(fn1: Optional[callable], fn2: Optional[callable]):
+def _equal_code(fn1: Optional[Callable], fn2: Optional[Callable]):
     """Checks whether fn1 and fn2 both have the same code.
 
     It's essentially impossible to see if two functions are equivalent, so this won't,
@@ -182,10 +185,6 @@ class _ωUpdateRef:
         self.value = value
         self.item = item
         self.is_leaf = is_leaf
-
-    def get(self, **kwargs):
-        value, item = self.ω
-        return value.at[item].get(**kwargs)
 
 
 def _set_binary_at(base, name: str, op: callable) -> callable:

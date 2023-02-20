@@ -8,4 +8,8 @@
 
 ---
 
+::: equinox.tree_equal
+
+---
+
 ::: equinox.tree_inference

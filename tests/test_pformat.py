@@ -43,10 +43,9 @@ def test_named_tuple():
 def test_jax_array():
     assert eqx.tree_pformat(jnp.array(1)) == "i32[]"
     assert eqx.tree_pformat(jnp.arange(12).reshape(3, 4)) == "i32[3,4]"
-    assert (
-        eqx.tree_pformat(jnp.array(1), short_arrays=False)
-        == "DeviceArray(1, dtype=int32, weak_type=True)"
-    )
+    array = "Array(1, dtype=int32, weak_type=True)"
+    device_array = "DeviceArray(1, dtype=int32, weak_type=True)"
+    assert eqx.tree_pformat(jnp.array(1), short_arrays=False) in (array, device_array)
 
 
 def test_numpy_array():

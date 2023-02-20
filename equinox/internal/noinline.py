@@ -1,5 +1,5 @@
 import functools as ft
-from typing import Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 import jax
 import jax._src.pretty_printer as pp
@@ -12,12 +12,13 @@ import jax.tree_util as jtu
 import numpy as np
 from jaxtyping import Array, Int, PyTree
 
+from ..ad import filter_jvp
 from ..compile_utils import hashable_combine, hashable_partition
 from ..eval_shape import filter_eval_shape
 from ..filters import combine, is_array, partition
-from ..grad import filter_jvp
 from ..module import Module, module_update_wrapper, static_field
 from ..vmap_pmap import filter_vmap
+from . import primitive
 from .primitive import (
     filter_primitive_batching,
     filter_primitive_bind,
@@ -37,6 +38,18 @@ def _to_shapedarray(x):
         return jax.core.ShapedArray(x.shape, x.dtype)
     else:
         return x
+
+
+def _only_shapedarrays(rule):
+    def _rule_wrapper(*args, **params):
+        for arg in args:
+            if not _is_shapedarray(arg):
+                raise NotImplementedError(
+                    "noinline only supports ShapedArrays in abstract evaluation"
+                )
+        return rule(*args, **params)
+
+    return _rule_wrapper
 
 
 @ft.lru_cache(maxsize=128)
@@ -83,27 +96,27 @@ def _int_to_zero(batch_axis):
 
 
 @ft.lru_cache(maxsize=None)
-def _get_callback(treedef, static_leaves, static_treedef, is_float0):
-    static = jtu.tree_unflatten(static_treedef, static_leaves)
-    assert treedef.num_leaves == len(is_float0)
-
+def _get_callback(treedef, static, is_float0):
     @ft.partial(jax.jit, static_argnums=0)
-    def callback(static_fn, flat):
+    def callback(static_fn, dynamic):
         # pure_callback casts float0 to bool, so need to cast back
-        assert len(flat) == len(is_float0)
-        flat = [
+        assert len(dynamic) == len(is_float0)
+        dynamic = [
             np.broadcast_to(np.zeros((), dtype=jax.dtypes.float0), x.shape) if y else x
-            for x, y in zip(flat, is_float0)
+            for x, y in zip(dynamic, is_float0)
         ]
-        transforms, args = combine(jtu.tree_unflatten(treedef, flat), static)
+        iter_dynamic = iter(dynamic)
+        flat = [next(iter_dynamic) if x is None else x for x in static]
+        assert next(iter_dynamic, None) is None
+        transforms, args = jtu.tree_unflatten(treedef, flat)
         for transform in transforms:
             static_fn = transform(static_fn)
         out = static_fn(args)
         return tuple(jtu.tree_leaves(out))
 
-    def callback_lookup(dynamic_index, *flat):
+    def callback_lookup(dynamic_index, *dynamic):
         static_fn = _index_to_fn[dynamic_index.item()]
-        return callback(static_fn, flat)
+        return callback(static_fn, dynamic)
 
     return callback_lookup
 
@@ -164,7 +177,7 @@ class _MetaBatchTransform(Module):
     batch_axes: PyTree[Union[batching.not_mapped, int]]
 
     def __call__(self, static_fn):
-        return filter_vmap(static_fn, args=(self.batch_axes,))
+        return filter_vmap(static_fn, in_axes=(self.batch_axes,))
 
 
 @filter_primitive_def
@@ -176,6 +189,7 @@ def _noinline_impl(dynamic_index, abstract_fn, transforms, args):
     return static_fn(args)
 
 
+@_only_shapedarrays
 @filter_primitive_def
 def _noinline_abstract(dynamic_index, abstract_fn, transforms, args):
     del dynamic_index
@@ -198,9 +212,9 @@ def _noinline_jvp(primals, tangents):
     )  # all none
     del t_dynamic_index, t_abstract_fn, t_transforms
     tangents = jtu.tree_map(materialise_zeros, args, t_args, is_leaf=_is_none)
-    primal_outs = filter_primitive_bind(_noinline_p, *primals)
+    primal_outs = filter_primitive_bind(noinline_p, *primals)
     tangent_outs = filter_primitive_bind(
-        _noinline_p,
+        noinline_p,
         dynamic_index,
         abstract_fn,
         transforms + [_jvp_transform],
@@ -209,7 +223,7 @@ def _noinline_jvp(primals, tangents):
     return primal_outs, tangent_outs
 
 
-@filter_primitive_transpose
+@filter_primitive_transpose(materialise_zeros=True)
 def _noinline_transpose(inputs, cts_out):
     dynamic_index, abstract_fn, transforms, args = inputs
     assert all(
@@ -222,7 +236,7 @@ def _noinline_transpose(inputs, cts_out):
     undefined, defined = partition(args, _is_undefined, is_leaf=_is_undefined)
     undefined = jtu.tree_map(lambda x: x.aval, undefined, is_leaf=_is_undefined)
     cts_args = filter_primitive_bind(
-        _noinline_p,
+        noinline_p,
         dynamic_index,
         abstract_fn,
         transforms + [_MetaTransposeTransform(undefined)],
@@ -252,7 +266,7 @@ def _noinline_batch(inputs, batch_axes):
     args = jtu.tree_map(_move_to_front, args, args_bdim, is_leaf=_is_not_mapped)
     args_bdim = jtu.tree_map(_int_to_zero, args_bdim, is_leaf=_is_not_mapped)
     out = filter_primitive_bind(
-        _noinline_p,
+        noinline_p,
         dynamic_index,
         abstract_fn,
         transforms + [_MetaBatchTransform(args_bdim)],
@@ -273,8 +287,9 @@ def _pp_transform(x):
 
 
 def _noinline_pretty_print(eqn, context, settings):
-    _, (abstract_fn_leaves, abstract_fn_treedef), transforms, _ = eqn.params["static"]
-    abstract_fn = jtu.tree_unflatten(abstract_fn_treedef, abstract_fn_leaves)
+    _, abstract_fn, transforms, _ = jtu.tree_unflatten(
+        eqn.params["treedef"], eqn.params["static"]
+    )
     pretty_params = dict(abstract_fn=abstract_fn)
     if type(eqn.invars[0]) is jax.core.Literal:
         static_fn_leaves, static_fn_treedef = _index_to_fn[eqn.invars[0].val]
@@ -297,26 +312,39 @@ def _noinline_pretty_print(eqn, context, settings):
     return [lhs, pp.text(" = ", annotation=annotation), *rhs]
 
 
-def _noinline_mlir(ctx, *flat, treedef, static, flatten):
+# Not a PyTree
+class _MlirWrapper:
+    def __init__(self, val):
+        self.val = val
+
+
+def _noinline_mlir(ctx, *dynamic, treedef, static, flatten):
     assert flatten.called()
-    dynamic = jtu.tree_unflatten(treedef, flat)
-    dynamic_avals = jtu.tree_unflatten(treedef, ctx.avals_in)
-    dynamic_index, _, dynamic_transforms, dynamic_args = dynamic
-    dynamic_index_aval, _, dynamic_transforms_avals, dynamic_args_avals = dynamic_avals
+    dynamic = [_MlirWrapper(x) for x in dynamic]
+    abstract_dynamic = [_MlirWrapper(x) for x in ctx.avals_in]
+    # This is really an internal implementation detail of another component that we're
+    # messing with here.
+    # Fortunately `noinline` and `primitive` are both inside Equinox, so this isn't too
+    # bad.
+    flat = primitive._combine(dynamic, static)
+    abstract_flat = primitive._combine(abstract_dynamic, static)
+    index, _, transforms, args = jtu.tree_unflatten(treedef, flat)
+    abstract_index, _, abstract_transforms, abstract_args = jtu.tree_unflatten(
+        treedef, abstract_flat
+    )
+    flat, treedef = jtu.tree_flatten((transforms, args))
+    abstract_flat, abstract_treedef = jtu.tree_flatten(
+        (abstract_transforms, abstract_args)
+    )
+    assert treedef == abstract_treedef
+    dynamic = [x.val for x in flat if type(x) is _MlirWrapper]
+    abstract_dynamic = [x.val for x in abstract_flat if type(x) is _MlirWrapper]
+    static = tuple(None if type(x) is _MlirWrapper else x for x in flat)
+    is_float0 = tuple(x.dtype == jax.dtypes.float0 for x in abstract_dynamic)
+    callback = _get_callback(treedef, static, is_float0)
 
-    vals_in, treedef = jtu.tree_flatten((dynamic_transforms, dynamic_args))
-    avals_in = jtu.tree_leaves((dynamic_transforms_avals, dynamic_args_avals))
-
-    _, _, static_transforms, static_args = static
-    static = (static_transforms, static_args)
-    static_leaves, static_treedef = jtu.tree_flatten(static)
-    static_leaves = tuple(static_leaves)
-
-    is_float0 = tuple(x.dtype == jax.dtypes.float0 for x in avals_in)
-    callback = _get_callback(treedef, static_leaves, static_treedef, is_float0)
-
-    vals_in = [dynamic_index] + vals_in
-    avals_in = [dynamic_index_aval] + avals_in
+    vals_in = [index.val] + dynamic
+    avals_in = [abstract_index.val] + abstract_dynamic
     result, _, keepalive = mlir.emit_python_callback(
         ctx,
         callback,
@@ -331,15 +359,15 @@ def _noinline_mlir(ctx, *flat, treedef, static, flatten):
     return result
 
 
-_noinline_p = jax.core.Primitive("noinline")
-_noinline_p.multiple_results = True
-_noinline_p.def_impl(_noinline_impl)
-_noinline_p.def_abstract_eval(_noinline_abstract)
-ad.primitive_jvps[_noinline_p] = _noinline_jvp
-ad.primitive_transposes[_noinline_p] = _noinline_transpose
-batching.primitive_batchers[_noinline_p] = _noinline_batch
-jax.core.pp_eqn_rules[_noinline_p] = _noinline_pretty_print
-mlir.register_lowering(_noinline_p, _noinline_mlir)
+noinline_p = jax.core.Primitive("noinline")
+noinline_p.multiple_results = True
+noinline_p.def_impl(_noinline_impl)
+noinline_p.def_abstract_eval(_noinline_abstract)
+ad.primitive_jvps[noinline_p] = _noinline_jvp
+ad.primitive_transposes[noinline_p] = _noinline_transpose
+batching.primitive_batchers[noinline_p] = _noinline_batch
+jax.core.pp_eqn_rules[noinline_p] = _noinline_pretty_print
+mlir.register_lowering(noinline_p, _noinline_mlir)
 
 
 _fn_to_index = {}
@@ -349,11 +377,11 @@ _index_to_fn = []
 class _NoInlineWrapper(Module):
     dynamic_index: Int[Array, ""]
     abstract_fn: Callable = static_field()
-    dynamic_fn: Callable
+    dynamic_fn: Any
 
     def __call__(self, *args, **kwargs):
         return filter_primitive_bind(
-            _noinline_p,
+            noinline_p,
             self.dynamic_index,
             self.abstract_fn,
             [_impl_transform],
@@ -462,4 +490,4 @@ def noinline(fn: Callable, abstract_fn: Optional[Callable] = None) -> Callable:
         _index_to_fn.append(static_fn)
     dynamic_index = jnp.array(dynamic_index)
     noinline_fn = _NoInlineWrapper(dynamic_index, abstract_fn, dynamic_fn)
-    return module_update_wrapper(noinline_fn, fn)
+    return module_update_wrapper(noinline_fn, abstract_fn)

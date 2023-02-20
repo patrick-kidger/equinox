@@ -122,7 +122,7 @@ class GroupNorm(Module):
             journal={arXiv:1803.08494},
         }
         ```
-    """
+    """  # noqa: E501
 
     groups: int = static_field()
     channels: int = static_field()
@@ -151,7 +151,8 @@ class GroupNorm(Module):
             raise ValueError("The number of groups must divide the number of channels.")
         if (channels is None) and channelwise_affine:
             raise ValueError(
-                "The number of channels should be specified if `channelwise_affine=True`"
+                "The number of channels should be specified if "
+                "`channelwise_affine=True`"
             )
         super().__init__(**kwargs)
         self.groups = groups
