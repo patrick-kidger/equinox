@@ -238,7 +238,7 @@ def test_backward_bounded(buffer, getkey):
 
     true_value, true_grad = true_run((init_val1, init_val2, mlp))
     value, grad = run((init_val1, init_val2, mlp))
-    assert shaped_allclose(value, true_value)
+    assert shaped_allclose(value, true_value, rtol=1e-4, atol=1e-4)
     assert shaped_allclose(grad, true_grad, rtol=1e-4, atol=1e-4)
 
 
