@@ -1,5 +1,5 @@
 import typing
-from typing import Any
+from typing import TYPE_CHECKING, TypeVar
 
 
 # Inherits from type so that _WithRepr instances are types and can be used as
@@ -18,8 +18,14 @@ class _WithRepr(type):
         return self.string
 
 
-def doc_repr(obj: Any, string: str):
-    if getattr(typing, "GENERATING_DOCUMENTATION", False):
-        return _WithRepr(string)
-    else:
+_T = TypeVar("_T")
+
+
+def doc_repr(obj: _T, string: str) -> _T:
+    if TYPE_CHECKING:
         return obj
+    else:
+        if getattr(typing, "GENERATING_DOCUMENTATION", False):
+            return _WithRepr(string)
+        else:
+            return obj

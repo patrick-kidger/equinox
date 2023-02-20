@@ -1,4 +1,13 @@
 from . import experimental, internal, nn
+from .ad import (
+    filter_closure_convert,
+    filter_custom_jvp,
+    filter_custom_vjp,
+    filter_grad,
+    filter_jvp,
+    filter_value_and_grad,
+    filter_vjp,
+)
 from .callback import filter_pure_callback
 from .eval_shape import filter_eval_shape
 from .filters import (
@@ -9,15 +18,6 @@ from .filters import (
     is_inexact_array,
     is_inexact_array_like,
     partition,
-)
-from .grad import (
-    filter_closure_convert,
-    filter_custom_jvp,
-    filter_custom_vjp,
-    filter_grad,
-    filter_jvp,
-    filter_value_and_grad,
-    filter_vjp,
 )
 from .jit import filter_jit
 from .make_jaxpr import filter_make_jaxpr

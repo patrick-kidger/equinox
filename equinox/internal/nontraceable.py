@@ -9,8 +9,10 @@ import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
 import jax.tree_util as jtu
-from jaxtyping import Array, PyTree
+from jaxtyping import PyTree
 
+# public re-export
+from ..ad import nondifferentiable as nondifferentiable  # noqa: F401
 from ..filters import combine, is_array, partition
 from .errors import error_if
 
@@ -46,31 +48,6 @@ def nontraceable(x, *, name="nontraceable operation"):
     dynamic, static = partition(x, is_array)
     bind = ft.partial(nontraceable_p.bind, name=name)
     dynamic = jtu.tree_map(bind, dynamic)
-    return combine(dynamic, static)
-
-
-@ft.partial(jax.custom_jvp, nondiff_argnums=(0,))
-def _nondifferentiable(msg: str, x: PyTree[Array]):
-    return x
-
-
-@_nondifferentiable.defjvp
-def _nondifferentiable_jvp(msg: str, primals, tangents):
-    raise RuntimeError(msg)
-
-
-def nondifferentiable(
-    x: PyTree, *, name: Optional[str] = None, msg: Optional[str] = None
-) -> PyTree:
-    """Identity function, which raises an error if it is differentiated (in forward or
-    reverse mode).
-    """
-    dynamic, static = partition(x, is_array)
-    if msg is None:
-        if name is None:
-            name = "This operation"
-        msg = f"Unexpected tangent. {name} cannot be autodifferentiated."
-    dynamic = _nondifferentiable(msg, dynamic)
     return combine(dynamic, static)
 
 
@@ -133,9 +110,7 @@ def nondifferentiable_backward(
     msg: Optional[str] = None,
     symbolic: bool = True,
 ) -> PyTree:
-    """Identity function. Raises a (runtime!) error if it is differentiated in reverse
-    mode.
-    """
+    """Identity function. Raises an error if it is differentiated in reverse mode."""
     dynamic, static = partition(x, is_array)
     flat, treedef = jtu.tree_flatten(dynamic)
     if msg is None:

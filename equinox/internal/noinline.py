@@ -12,10 +12,10 @@ import jax.tree_util as jtu
 import numpy as np
 from jaxtyping import Array, Int, PyTree
 
+from ..ad import filter_jvp
 from ..compile_utils import hashable_combine, hashable_partition
 from ..eval_shape import filter_eval_shape
 from ..filters import combine, is_array, partition
-from ..grad import filter_jvp
 from ..module import Module, module_update_wrapper, static_field
 from ..vmap_pmap import filter_vmap
 from . import primitive

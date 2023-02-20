@@ -1,7 +1,7 @@
 import functools as ft
 import types
 import typing
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 import jax
 import jax.interpreters.ad as ad
@@ -26,15 +26,13 @@ class _ValueAndGradWrapper(Module):
     _has_aux: bool
     _gradkwargs: Dict[str, Any]
 
-    # Try to avoid clashes with existing argument names.
-    # TODO: use "/" once we're on Python 3.8.
-    def __call__(__self, __x, *args, **kwargs):
-        @ft.partial(jax.value_and_grad, has_aux=__self._has_aux, **__self._gradkwargs)
+    def __call__(self, x, /, *args, **kwargs):
+        @ft.partial(jax.value_and_grad, has_aux=self._has_aux, **self._gradkwargs)
         def fun_value_and_grad(_diff_x, _nondiff_x, *_args, **_kwargs):
             _x = combine(_diff_x, _nondiff_x)
-            return __self._fun(_x, *_args, **_kwargs)
+            return self._fun(_x, *_args, **_kwargs)
 
-        diff_x, nondiff_x = partition(__x, is_inexact_array)
+        diff_x, nondiff_x = partition(x, is_inexact_array)
         return fun_value_and_grad(diff_x, nondiff_x, *args, **kwargs)
 
     def __get__(self, instance, owner):
@@ -47,9 +45,9 @@ class _GradWrapper(Module):
     _fun_value_and_grad: _ValueAndGradWrapper
     _has_aux: bool
 
-    def __call__(__self, *args, **kwargs):
-        value, grad = __self._fun_value_and_grad(*args, **kwargs)
-        if __self._has_aux:
+    def __call__(self, /, *args, **kwargs):
+        value, grad = self._fun_value_and_grad(*args, **kwargs)
+        if self._has_aux:
             _, aux = value
             return grad, aux
         else:
@@ -419,6 +417,31 @@ class filter_custom_jvp:
         return self.fn(static, dynamic)
 
 
+@ft.partial(jax.custom_jvp, nondiff_argnums=(0,))
+def _nondifferentiable(msg: str, x: PyTree[Array]):
+    return x
+
+
+@_nondifferentiable.defjvp
+def _nondifferentiable_jvp(msg: str, primals, tangents):
+    raise RuntimeError(msg)
+
+
+def nondifferentiable(
+    x: PyTree, *, name: Optional[str] = None, msg: Optional[str] = None
+) -> PyTree:
+    """Identity function, which raises an error if it is differentiated (in forward or
+    reverse mode).
+    """
+    dynamic, static = partition(x, is_array)
+    if msg is None:
+        if name is None:
+            name = "This operation"
+        msg = f"Unexpected tangent. {name} cannot be autodifferentiated."
+    dynamic = _nondifferentiable(msg, dynamic)
+    return combine(dynamic, static)
+
+
 class filter_custom_vjp:
     """As `jax.custom_vjp`, but with a nicer interface.
 
@@ -534,12 +557,7 @@ class filter_custom_vjp:
         fn_wrapped.defvjp(fn_fwd_wrapped, fn_bwd_wrapped)
         self.fn_wrapped = fn_wrapped
 
-    def __call__(__self, __vjp_arg, *args, **kwargs):
-        # Try and avoid name collisions with the arguments of the wrapped function.
-        # TODO: once we switch to Python 3.8, use (self, vjp_arg, /, *args, **kwargs).
-        self = __self
-        vjp_arg = __vjp_arg
-        del __self, __vjp_arg
+    def __call__(self, vjp_arg, /, *args, **kwargs):
         if self.fn_wrapped is None:
             raise RuntimeError(f"defvjp not yet called for {self.fn.__name__}")
         array_vjp_arg, nonarray_vjp_arg = partition(vjp_arg, is_array)
@@ -547,6 +565,9 @@ class filter_custom_vjp:
             array_vjp_arg, is_inexact_array
         )
         array_args_kwargs, nonarray_args_kwargs = partition((args, kwargs), is_array)
+        array_args_kwargs = nondifferentiable(
+            array_args_kwargs, name="`*args` and `**kwargs` to `filter_custom_vjp`"
+        )
         out = self.fn_wrapped(
             nonarray_vjp_arg,
             nonarray_args_kwargs,

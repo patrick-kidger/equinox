@@ -5,9 +5,9 @@ import jax.interpreters.mlir as mlir
 import jax.tree_util as jtu
 import numpy as np
 
+from ..ad import filter_custom_vjp
 from ..callback import filter_pure_callback
 from ..filters import combine, filter, is_array, partition
-from ..grad import filter_custom_vjp
 from ..pretty_print import tree_pformat
 
 

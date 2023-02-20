@@ -58,18 +58,18 @@ class _JitWrapper(Module):
             dynamic_out, static_out = self._cached(dynamic, static)
             return combine(dynamic_out, static_out.value)
 
-    def __call__(__self, *args, **kwargs):
-        if __self._filter_warning is True:
+    def __call__(self, /, *args, **kwargs):
+        if self._filter_warning is True:
             with warnings.catch_warnings():
                 warnings.filterwarnings(
                     "ignore", message="Some donated buffers were not usable*"
                 )
-                return __self._fun_wrapper(False, args, kwargs)
+                return self._fun_wrapper(False, args, kwargs)
         else:
-            return __self._fun_wrapper(False, args, kwargs)
+            return self._fun_wrapper(False, args, kwargs)
 
-    def lower(__self, *args, **kwargs):
-        return __self._fun_wrapper(True, args, kwargs)
+    def lower(self, /, *args, **kwargs):
+        return self._fun_wrapper(True, args, kwargs)
 
     def __get__(self, instance, owner):
         if instance is None:
@@ -145,7 +145,7 @@ def filter_jit(
 
     if donate not in {"all", "warn", "none"}:
         raise ValueError(
-            "`filter_jit(..., donate=...)` must be one of 'arrays', 'warn', or 'none'"
+            "`filter_jit(..., donate=...)` must be one of 'all', 'warn', or 'none'"
         )
     filter_warning = True if donate == "all" else False
     if donate != "none":

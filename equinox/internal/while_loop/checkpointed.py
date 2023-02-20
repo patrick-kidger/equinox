@@ -56,8 +56,8 @@ import jax.numpy as jnp
 import jax.tree_util as jtu
 from jaxtyping import Array, Bool
 
+from ...ad import filter_closure_convert, filter_custom_vjp, filter_vjp
 from ...filters import combine, is_array, is_inexact_array, partition
-from ...grad import filter_closure_convert, filter_custom_vjp, filter_vjp
 from ...tree import tree_at
 from ..errors import error_if
 from ..nontraceable import nonbatchable, nondifferentiable
@@ -247,7 +247,8 @@ def _checkpointed_while_loop(vjp_arg, cond_fun, checkpoints, buffers):
     del checkpoints, buffers
     init_val, body_fun = vjp_arg
     _body_fun = lambda x: body_fun(x)  # hashable wrapper; JAX issue #13554
-    return lax.while_loop(cond_fun, _body_fun, init_val)
+    while_loop = jax.named_call(lax.while_loop, name="checkpointed-fwd-no-vjp")
+    return while_loop(cond_fun, _body_fun, init_val)
 
 
 def _scalar_index(i, x):
@@ -464,7 +465,8 @@ def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, checkpoints, buffers):
     # `residual_steps` is the buffer of the `step` for each checkpoint
     # `residuals` is the buffer of the `val` for each checkpoint
 
-    final_carry = lax.while_loop(_cond_fun, _body_fun, init_carry)
+    while_loop = jax.named_call(lax.while_loop, name="checkpointed-fwd")
+    final_carry = while_loop(_cond_fun, _body_fun, init_carry)
     num_steps, _, final_val, final_residual_steps, final_residuals = final_carry
 
     # The above procedure may produce residuals saved in jumbled-up order. Meanwhile
@@ -867,7 +869,8 @@ def _checkpointed_while_loop_bwd(
     # `residual_steps` is the memory holding the `step` for each checkpoint
     # `residuals` is the memory holding the `val` for each checkpoint
 
-    final_carry = lax.while_loop(_cond_fun, _body_fun, init_carry)
+    while_loop = jax.named_call(lax.while_loop, name="checkpointed-bwd")
+    final_carry = while_loop(_cond_fun, _body_fun, init_carry)
     *_, grad_init_val, grad_body_fun, _, _ = final_carry
     out = grad_init_val, grad_body_fun
     # I think combining higher-order autodifferentiation with treeverse is an open

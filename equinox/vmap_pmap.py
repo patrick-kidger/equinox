@@ -113,7 +113,7 @@ class _VmapWrapper(Module):
     _axis_size: Optional[int]
     _vmapkwargs: Dict[str, Any]
 
-    def __call__(__self, *args, **kwargs):
+    def __call__(self, /, *args, **kwargs):
         if len(kwargs) != 0:
             raise RuntimeError(
                 "`filter_vmap` cannot be applied to functions accepting keyword "
@@ -131,26 +131,26 @@ class _VmapWrapper(Module):
         # jax.vmap(lambda x, y, z: 0,
         #          in_axes=(0, 0, None))(jnp.arange(3), jnp.arange(5), object())
         # ```
-        unmapped_axis = jtu.tree_map(_is_none, __self._in_axes, is_leaf=_is_none)
+        unmapped_axis = jtu.tree_map(_is_none, self._in_axes, is_leaf=_is_none)
         static_args, dynamic_args = partition(args, unmapped_axis)
 
         def _fun_wrapper(_dynamic_args):
             _args = combine(_dynamic_args, static_args)
-            _out = __self._fun(*_args)
-            _out_axes = _resolve_axes(_out, __self._out_axes)
+            _out = self._fun(*_args)
+            _out_axes = _resolve_axes(_out, self._out_axes)
             _none_axes = jtu.tree_map(_is_none, _out_axes, is_leaf=_is_none)
             _nonvmapd, _vmapd = partition(_out, _none_axes)
             return _vmapd, Static((_nonvmapd, _out_axes))
 
-        in_axes = _resolve_axes(args, __self._in_axes)
+        in_axes = _resolve_axes(args, self._in_axes)
 
         vmapd, static = jax.vmap(
             _fun_wrapper,
             in_axes=(in_axes,),
             out_axes=(0, None),
-            axis_name=__self._axis_name,
-            axis_size=__self._axis_size,
-            **__self._vmapkwargs,
+            axis_name=self._axis_name,
+            axis_size=self._axis_size,
+            **self._vmapkwargs,
         )(dynamic_args)
         nonvmapd, out_axes = static.value
 
@@ -437,18 +437,18 @@ class _PmapWrapper(Module):
             nonpmapd = hashable_combine(dynamic_nonpmapd, static_nonpmapd.value)
             return combine(*pmapd, nonpmapd)
 
-    def __call__(__self, *args, **kwargs):
-        if __self._filter_warning is True:
+    def __call__(self, /, *args, **kwargs):
+        if self._filter_warning is True:
             with warnings.catch_warnings():
                 warnings.filterwarnings(
                     "ignore", message="Some donated buffers were not usable*"
                 )
-                return __self._call(False, args, kwargs)
+                return self._call(False, args, kwargs)
         else:
-            return __self._call(False, args, kwargs)
+            return self._call(False, args, kwargs)
 
-    def lower(__self, *args, **kwargs):
-        return __self._call(True, args, kwargs)
+    def lower(self, /, *args, **kwargs):
+        return self._call(True, args, kwargs)
 
     def __get__(self, instance, owner):
         if instance is None:
