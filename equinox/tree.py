@@ -78,20 +78,8 @@ def tree_at(
 
     !!! example
 
-        This can be used to help specify the weights of a model to train or not to
-        train. For example the following will train only the weight of the final linear
-        layer of an MLP:
-
-        ```python
-        def loss(model, ...):
-            ...
-
-        model = eqx.nn.MLP(...)
-        trainable = jtu.tree_map(lambda _: False, model)
-        trainable = equinox.tree_at(lambda mlp: mlp.layers[-1].linear.weight, model, replace=True)
-        grad_loss = equinox.filter_grad(loss, arg=trainable)
-        grads = grad_loss(model)
-        ```
+        This is useful for performing model surgery. See the [Tricks](../../../tricks)
+        page.
     """  # noqa: E501
 
     # We need to specify a particular node in a PyTree.
@@ -219,13 +207,15 @@ def tree_equal(*pytrees: PyTree) -> Union[bool, np.bool_, Bool[Array, ""]]:
     values to be considered equal. JAX arrays and NumPy arrays are considered equal
     to each other.
 
+    If used under JIT then this may return a tracer.
+
     **Arguments:**
 
     - `*pytrees`: Any number of PyTrees each with any structure.
 
     **Returns:**
 
-    A boolean.
+    A boolean, or bool-typed tracer.
     """
     flat, treedef = jtu.tree_flatten(pytrees[0])
     out = True

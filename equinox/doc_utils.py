@@ -1,3 +1,4 @@
+import inspect
 import typing
 from typing import TYPE_CHECKING, TypeVar
 
@@ -29,3 +30,17 @@ def doc_repr(obj: _T, string: str) -> _T:
             return _WithRepr(string)
         else:
             return obj
+
+
+def doc_remove_args(*args):
+    def doc_remove_args_impl(fn):
+        sig = inspect.signature(fn)
+        new_params = []
+        for param in sig.parameters.values():
+            if param.name not in args:
+                new_params.append(param)
+        sig = sig.replace(parameters=new_params)
+        fn.__signature__ = sig
+        return fn
+
+    return doc_remove_args_impl

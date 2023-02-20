@@ -118,6 +118,7 @@ nav:
         - Utilities:
             - 'api/utilities/manipulation.md'
             - 'api/utilities/serialisation.md'
+            - 'api/utilities/pretty-printing.md'
             - 'api/utilities/miscellaneous.md'
         - Experimental:
             - 'api/experimental/stateful.md'

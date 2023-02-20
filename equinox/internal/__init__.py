@@ -1,6 +1,6 @@
 from ..better_abc import abstractattribute
 from ..compile_utils import hashable_combine, hashable_partition
-from ..doc_utils import doc_repr
+from ..doc_utils import doc_remove_args, doc_repr
 from ..module import Static
 from ..pretty_print import tree_pp
 from ..vmap_pmap import if_mapped

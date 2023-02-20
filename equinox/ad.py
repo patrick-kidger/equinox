@@ -10,6 +10,7 @@ from jaxtyping import Array, PyTree
 
 from .custom_types import sentinel
 from .deprecate import deprecated_0_10
+from .doc_utils import doc_remove_args
 from .filters import (
     combine,
     is_array,
@@ -59,6 +60,7 @@ class _GradWrapper(Module):
         return jtu.Partial(self, instance)
 
 
+@doc_remove_args("gradkwargs")
 def filter_value_and_grad(
     fun: Callable = sentinel, *, has_aux: bool = False, **gradkwargs
 ) -> Callable:
@@ -101,6 +103,7 @@ def filter_value_and_grad(
     return module_update_wrapper(_ValueAndGradWrapper(fun, has_aux, gradkwargs), fun)
 
 
+@doc_remove_args("gradkwargs")
 def filter_grad(fun: Callable = sentinel, *, has_aux: bool = False, **gradkwargs):
     """Creates a function that computes the gradient of `fun`.
 

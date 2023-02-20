@@ -1,4 +1,4 @@
-# Miscellaneous
+# Pretty printing
 
 ::: equinox.tree_pprint
 

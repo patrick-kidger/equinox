@@ -9,7 +9,8 @@ This can be done using [`equinox.tree_at`][]. For example, here's how to replace
 ```python
 mlp = eqx.nn.MLP(...)
 new_final_layer = eqx.nn.Linear(...)
-new_mlp = eqx.tree_at(lambda m: m.layers[-1], mlp, new_final_layer)
+where = lambda m: m.layers[-1]
+new_mlp = eqx.tree_at(where, mlp, new_final_layer)
 ```
 
 This is a nice example of the simplicity of Equinox's model-as-PyTree approach.
@@ -24,12 +25,13 @@ For example, here is how to change the `weight` of a linear layer:
 ```python
 linear = eqx.nn.Linear(...)
 new_weight = jax.random.normal(...)
-new_linear = eqx.tree_at(lambda l: l.weight, linear, new_weight)
+where = lambda l: l.weight
+new_linear = eqx.tree_at(where, linear, new_weight)
 ```
 
 And here is how to replace the `weight` of every linear layer in some arbitrary model. In this example we draw samples from a truncated normal distribution.
 ```python
-def trunc_init(weight: jax.Array, key: jr.PRNGKey) -> jax.Array:
+def trunc_init(weight: jax.Array, key: jax.random.PRNGKey) -> jax.Array:
   out, in_ = weight.shape
   stddev = math.sqrt(1 / in_)
   return stddev * jax.random.truncated_normal(key, lower=-2, upper=2)

@@ -15,6 +15,7 @@ from .compile_utils import (
 )
 from .custom_types import sentinel
 from .deprecate import deprecated_0_10
+from .doc_utils import doc_remove_args
 from .filters import combine, is_array, partition
 from .module import Module, module_update_wrapper, Static
 
@@ -77,6 +78,7 @@ class _JitWrapper(Module):
         return jtu.Partial(self, instance)
 
 
+@doc_remove_args("jitkwargs")
 def filter_jit(
     fun: Callable = sentinel, *, donate: str = "none", **jitkwargs
 ) -> Callable:
@@ -88,9 +90,9 @@ def filter_jit(
     - `fun` is a pure function to JIT compile.
     - `donate` indicates whether the buffers of JAX arrays are donated or not. It
         should either be:
-        - 'all': donate all arrays and suppress all warnings about unused buffers;
-        - 'warn': as above, but don't suppress unused buffer warnings;
-        - 'none': no buffer donation. (This the default.)
+        - `'all'`: donate all arrays and suppress all warnings about unused buffers;
+        - `'warn'`: as above, but don't suppress unused buffer warnings;
+        - `'none'`: no buffer donation. (This the default.)
 
     **Returns:**
 

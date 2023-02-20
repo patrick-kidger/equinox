@@ -20,6 +20,7 @@ from .compile_utils import (
 )
 from .custom_types import sentinel
 from .deprecate import deprecated_0_10
+from .doc_utils import doc_remove_args
 from .filters import combine, filter, is_array, is_array_like, partition
 from .module import Module, module_update_wrapper, Static
 
@@ -165,8 +166,7 @@ class _VmapWrapper(Module):
         return jtu.Partial(self, instance)
 
 
-# Note the use of AxisSpec rather than MapAxisSpec.
-# This is to support seamlessly switching out filter_pmap for filter_vmap.
+@doc_remove_args("vmapkwargs")
 def filter_vmap(
     fun: Callable = sentinel,
     *,
@@ -456,6 +456,7 @@ class _PmapWrapper(Module):
         return jtu.Partial(self, instance)
 
 
+@doc_remove_args("pmapkwargs")
 def filter_pmap(
     fun: Callable = sentinel,
     *,
@@ -463,15 +464,15 @@ def filter_pmap(
     out_axes=if_array(0),
     axis_name: Hashable = None,
     axis_size: Optional[int] = None,
-    donate: str = "arrays",
+    donate: str = "none",
     **pmapkwargs,
 ) -> Callable:
     """Parallelises a function. By default, all JAX/NumPy arrays are parallelised down
     their leading axis (i.e. axis index 0), and all other types are broadcast.
 
     `jax.pmap`, and thus `equinox.filter_pmap`, also compiles their function in the same
-    way as `jax.jit`. By default, all JAX arrays are traced and donated, and all other
-    arrays are treated as static inputs.
+    way as `jax.jit`. By default, all JAX arrays are traced, and all other arguments are
+    treated as static inputs.
 
     **Arguments:**
 
@@ -500,10 +501,10 @@ def filter_pmap(
         it can be deduced by looking at the argument shapes.
     - `donate` indicates whether the buffers of JAX arrays are donated or not, it
         should either be:
-        - 'arrays': the default, donate all arrays and suppress all warnings about
+        - `'all'`: the default, donate all arrays and suppress all warnings about
             unused buffers;
-        - 'warn': as above, but don't suppress unused buffer warnings;
-        - 'none': disables buffer donation.
+        - `'warn'`: as above, but don't suppress unused buffer warnings;
+        - `'none'`: disables buffer donation.
 
     **Returns:**
 

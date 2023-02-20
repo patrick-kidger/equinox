@@ -1,8 +1,12 @@
 # Transformations
 
-These offer an alternate API on to JAX transformations. For example, JAX uses `jax.jit(..., static_argnums=...)` to indicate which arguments should be treated dynamically/statically. Meanwhile `equinox.filter_jit` will automatically treat JAX arrays dynamically, and everything else statically. (It does this by doing something like `eqx.partition(args, eqx.is_array)` under-the-hood.)
+These offer an alternate API on to JAX transformations, by combining filtering with a JAX transformation.
 
-Generally speaking, this means producing an enhanced version of the JAX transformation, that operates on arbitrary PyTrees instead of specifically just JAX arrays.
+For example, JAX uses `jax.jit(..., static_argnums=...)` to manually indicate which arguments should be treated dynamically/statically. Meanwhile `equinox.filter_jit` automatically treats all JAX/NumPy arrays dynamically, and everything else statically. Moreover, this is done at the level of individual PyTree leaves, so that unlike `jax.jit`, one argment can have both dynamic (array-valued) and static leaves.
+
+Most users find that this is a simpler API when working with complicated PyTrees, such as produced when using Equinox modules. (But you can also still use Equinox with normal `jax.jit` etc. if you so prefer.)
+
+Likewise, `eqx.filter_grad` will automatically differentiate all floating-point JAX arrays and treat the rest nondifferentiably, etc. Each transformation here just combines [`equinox.partition`][], `jax.{jit, ...}` and [`equinox.combine`][] together.
 
 ## Just-in-time compilation
 
@@ -51,3 +55,7 @@ Generally speaking, this means producing an enhanced version of the JAX transfor
 ---
 
 ::: equinox.filter_pmap
+
+## Callbacks
+
+::: equinox.filter_pure_callback

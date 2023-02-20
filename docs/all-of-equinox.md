@@ -110,7 +110,7 @@ loss(params, static, x, y)
 
 Here, `params` and `static` are both instances of `AnotherModule`: `params` keeps just the leaves that are JAX arrays; `static` keeps everything else. Then `combine` merges the two PyTrees back together after crossing the `jax.jit` and `jax.grad` API boundaries.
 
-The choice of `eqx.is_array` is a *filter function*: a boolean function specifying whether each leaf should go into `params` or into `static`. In this case very simply `eqx.is_array(x)` returns `True` for JAX and NumPy arrays.
+The choice of `eqx.is_array` is a *filter function*: a boolean function specifying whether each leaf should go into `params` or into `static`. In this case very simply `eqx.is_array(x)` returns `True` for JAX and NumPy arrays, and `False` for everything else.
 
 **Option 2: use filtered transformations**
 
@@ -142,7 +142,7 @@ Equinox includes four main things:
 
 - For building models: `equinox.Module`.
 - Prebuilt neural network layers: `equinox.nn.Linear`, `equinox.nn.Conv2d`, etc.
-- Filtering, and filtered transformations: `equinox.filter`, `equinox.filter_jit` etc.
+- Filtering, and filtered transformations: `equinox.partition`, `equinox.filter_jit` etc.
 - Some utilities to help manipulate PyTrees: `equinox.tree_at` etc.
 
 See also the API reference on the left.
@@ -155,4 +155,4 @@ And that's it! That's pretty much everything you need to know about Equinox. Eve
 
     One common question: a lot of other libraries introduce custom `library.jit` etc. operations, specifically to work with `library.Module`. What makes the filtered transformations of Equinox different?
 
-    The answer is that filtered transformations and `eqx.Module` are not coupled together; they are independent tools. Filtered transformations work with any PyTree. And `eqx.Module`s just happens to be a PyTree!
+    The answer is that filtered transformations and `eqx.Module` are not coupled together; they are independent tools. Filtered transformations work with any PyTree. And `eqx.Module`s just happens to be a PyTree.

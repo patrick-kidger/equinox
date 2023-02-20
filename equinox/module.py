@@ -29,7 +29,7 @@ def static_field(**kwargs):
         assert "static" in str(treedef)
         ```
 
-    In practice this should rarely be used; it is usually preferential to just filter
+    In practice this should rarely be used; it is usually preferred to just filter
     out each field with `eqx.partition` whenever you need to select only some fields.
 
     **Arguments:**
@@ -298,7 +298,7 @@ def module_update_wrapper(wrapper: Module, wrapped) -> Module:
     """Like `functools.update_wrapper` (or its better-known cousin, `functools.wraps`),
     but can be used on [`equinox.Module`][]s. (Which are normally immutable.)
 
-    !!! Example:
+    !!! Example
 
         ```python
         class Wrapper(eqx.Module):
