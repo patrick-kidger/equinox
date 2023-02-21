@@ -106,6 +106,39 @@ def _swapaxes(array, axis):
     return jnp.swapaxes(array, 0, axis)
 
 
+def _named_in_axes(fun, in_axes, args):
+    if isinstance(in_axes, dict):
+        in_axes = dict(in_axes)
+        new_in_axes = []
+        default = if_array(0)
+        params = inspect.signature(fun).parameters
+        # We may have that len(args) < len(params) due to default arguments.
+        # Truncate to considering just the argments that have been passed.
+        #
+        # (If len(args) > len(params) then we'll get the usual error later when
+        # attempting to call with the wrong number of arguments.)
+        for _, param_name in zip(args, params):
+            new_in_axes.append(in_axes.pop(param_name, default))
+        if len(in_axes) != 0:
+            raise ValueError(
+                "The following `in_axes` did not correspond to any argument: "
+                f"{tuple(in_axes.keys())}"
+            )
+        # Note that this requires all named arguments to be passed; they cannot take
+        # default values. That is, we deliberately don't allow something like
+        # ```python
+        # @eqx.filter_vmap(in_axes=dict(foo=0))
+        # def fn(foo=default_value):
+        #     ...
+        #
+        # fn()
+        # ```
+        # This is because it is ambiguous whether the default value is vectorised or
+        # not.
+        in_axes = tuple(new_in_axes)
+    return in_axes
+
+
 class _VmapWrapper(Module):
     _fun: Callable
     _in_axes: PyTree[AxisSpec]
@@ -117,10 +150,12 @@ class _VmapWrapper(Module):
     def __call__(self, /, *args, **kwargs):
         if len(kwargs) != 0:
             raise RuntimeError(
-                "`filter_vmap` cannot be applied to functions accepting keyword "
-                "arguments."
+                "keyword arguments cannot be used with functions wrapped with "
+                "`filter_vmap`"
             )
         del kwargs
+
+        in_axes = _named_in_axes(self._fun, self._in_axes, args)
 
         # JAX only actually supports passing array-typed values as inputs.
         # Interestingly it's usually still fine to pass non-array-typed values as
@@ -132,7 +167,7 @@ class _VmapWrapper(Module):
         # jax.vmap(lambda x, y, z: 0,
         #          in_axes=(0, 0, None))(jnp.arange(3), jnp.arange(5), object())
         # ```
-        unmapped_axis = jtu.tree_map(_is_none, self._in_axes, is_leaf=_is_none)
+        unmapped_axis = jtu.tree_map(_is_none, in_axes, is_leaf=_is_none)
         static_args, dynamic_args = partition(args, unmapped_axis)
 
         def _fun_wrapper(_dynamic_args):
@@ -143,7 +178,7 @@ class _VmapWrapper(Module):
             _nonvmapd, _vmapd = partition(_out, _none_axes)
             return _vmapd, Static((_nonvmapd, _out_axes))
 
-        in_axes = _resolve_axes(args, self._in_axes)
+        in_axes = _resolve_axes(args, in_axes)
 
         vmapd, static = jax.vmap(
             _fun_wrapper,
@@ -304,19 +339,6 @@ def filter_vmap(
     deprecated_0_10(vmapkwargs, "kwargs")
     deprecated_0_10(vmapkwargs, "out")
 
-    if isinstance(in_axes, dict):
-        in_axes = dict(in_axes)
-        new_in_axes = []
-        default = if_array(0)
-        for param_name in inspect.signature(fun).parameters:
-            new_in_axes.append(in_axes.pop(param_name, default))
-        if len(in_axes) != 0:
-            raise ValueError(
-                "The following `in_axes` did not correspond to any argument: "
-                f"{tuple(in_axes.keys())}"
-            )
-        in_axes = tuple(new_in_axes)
-
     vmap_wrapper = _VmapWrapper(
         _fun=fun,
         _in_axes=in_axes,
@@ -400,8 +422,8 @@ class _PmapWrapper(Module):
     def _call(self, is_lower, args, kwargs):
         if len(kwargs) != 0:
             raise RuntimeError(
-                "`filter_pmap` cannot be applied to functions accepting keyword "
-                "arguments."
+                "keyword arguments cannot be used with functions wrapped with "
+                "`filter_pmap`"
             )
         del kwargs
 
@@ -410,7 +432,9 @@ class _PmapWrapper(Module):
         else:
             # Work around JAX issue #9252
             maybe_dummy = np.broadcast_to(0, self._axis_size)
-        in_axes = _resolve_axes(args, self._in_axes)
+
+        in_axes = _named_in_axes(self._fun, self._in_axes, args)
+        in_axes = _resolve_axes(args, in_axes)
         in_axes = (None, in_axes, 0, None)
 
         dynamic, static = partition(
@@ -563,19 +587,6 @@ def filter_pmap(
             "`pmapkwargs` cannot contain either 'static_broadcasted_argnums' or "
             "'donate_argnums'"
         )
-
-    if isinstance(in_axes, dict):
-        in_axes = dict(in_axes)
-        new_in_axes = []
-        default = if_array(0)
-        for param_name in inspect.signature(fun).parameters:
-            new_in_axes.append(in_axes.pop(param_name, default))
-        if len(in_axes) != 0:
-            raise ValueError(
-                "The following `in_axes` did not correspond to any argument: "
-                f"{tuple(in_axes.keys())}"
-            )
-        in_axes = tuple(new_in_axes)
 
     if donate not in {"arrays", "warn", "none"}:
         raise ValueError(
