@@ -79,7 +79,7 @@ class Linear(Module):
         return x
 
 
-_T = TypeVar("T")
+_T = TypeVar("_T")
 
 
 class Identity(Module):

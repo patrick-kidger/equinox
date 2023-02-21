@@ -290,7 +290,7 @@ def _stumm_walther_i(step, save_state):
     msg = (
         "Internal run-time error when checkpointing "
         "`equinox.internal.checkpointed_while_loop`. "
-        "Please raise an issue at https://http://github.com/patrick-kidger/equinox"
+        "Please raise an issue at https://github.com/patrick-kidger/equinox"
     )
     out = error_if(out, pred & (o == -1), msg)
     out = nonbatchable(out)
@@ -731,7 +731,7 @@ def _checkpointed_while_loop_bwd(
         msg = (
             "Internal run-time error when backpropagating through "
             "`equinox.internal.checkpointed_while_loop`. "
-            "Please raise an issue at https://http://github.com/patrick-kidger/equinox"
+            "Please raise an issue at https://github.com/patrick-kidger/equinox"
         )
         step_val = error_if(step_val, step_val >= step_grad_val, msg)
 

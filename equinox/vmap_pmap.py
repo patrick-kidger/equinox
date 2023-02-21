@@ -127,7 +127,7 @@ class _VmapWrapper(Module):
         # broadcast inputs. *Unless* you mess up with an inconsistent axis size, in
         # which case it tries to get the axis sizes of all inputs and then fails on the
         # non-array inputs.
-        # e.g:
+        # e.g.:
         # ```
         # jax.vmap(lambda x, y, z: 0,
         #          in_axes=(0, 0, None))(jnp.arange(3), jnp.arange(5), object())

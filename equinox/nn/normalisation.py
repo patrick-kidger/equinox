@@ -49,8 +49,8 @@ class LayerNorm(Module):
     shape: Union[None, int, Sequence[int]] = static_field()
     eps: float = static_field()
     elementwise_affine: bool = static_field()
-    weight: Array
-    bias: Array
+    weight: Optional[Array]
+    bias: Optional[Array]
 
     def __init__(
         self,
@@ -125,11 +125,11 @@ class GroupNorm(Module):
     """  # noqa: E501
 
     groups: int = static_field()
-    channels: int = static_field()
+    channels: Optional[int] = static_field()
     eps: float = static_field()
     channelwise_affine: bool = static_field()
-    weight: Array
-    bias: Array
+    weight: Optional[Array]
+    bias: Optional[Array]
 
     def __init__(
         self,

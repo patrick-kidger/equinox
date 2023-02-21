@@ -1,15 +1,14 @@
-from typing import Any, Callable, Optional, Sequence, TypeVar, Union
+from typing import Any, Callable, Literal, Optional, Sequence, TypeVar, Union
 
 import jax.lax as lax
 from jaxtyping import Array, Bool
-from typing_extensions import Literal
 
 from .bounded import bounded_while_loop
 from .checkpointed import checkpointed_while_loop
 from .common import common_rewrite
 
 
-_T = TypeVar("T")
+_T = TypeVar("_T")
 _Bool = Union[bool, Bool[Array, ""]]
 _Node = Any
 
