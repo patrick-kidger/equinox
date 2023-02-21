@@ -149,3 +149,13 @@ def test_keyword_in_axes(getkey):
     out = eqx.filter_vmap(lambda x, y: x + y, in_axes=dict(y=1))(x, y)
     true_out = x + y.T
     assert shaped_allclose(out, true_out)
+
+
+def test_keyword_default(getkey):
+    x = jr.normal(getkey(), (3, 4))
+    out = eqx.filter_vmap(lambda x, y=1: x + y, in_axes=dict(x=0))(x)
+    true_out = x + 1
+    assert shaped_allclose(out, true_out)
+
+    with pytest.raises(ValueError):
+        eqx.filter_vmap(lambda x, y=1: x, in_axes=dict(y=0))(x)
