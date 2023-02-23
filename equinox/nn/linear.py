@@ -1,7 +1,8 @@
 import math
-from typing import Any, Optional, TypeVar
+from typing import Any, Literal, Optional, TypeVar, Union
 
 import jax
+import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array
 
@@ -13,34 +14,44 @@ class Linear(Module):
 
     weight: Array
     bias: Optional[Array]
-    in_features: int = static_field()
-    out_features: int = static_field()
+    in_features: Union[int, Literal["scalar"]] = static_field()
+    out_features: Union[int, Literal["scalar"]] = static_field()
     use_bias: bool = static_field()
 
     def __init__(
         self,
-        in_features: int,
-        out_features: int,
+        in_features: Union[int, Literal["scalar"]],
+        out_features: Union[int, Literal["scalar"]],
         use_bias: bool = True,
         *,
         key: "jax.random.PRNGKey"
     ):
         """**Arguments:**
 
-        - `in_features`: The input size.
-        - `out_features`: The output size.
+        - `in_features`: The input size. The input to the layer should be a vector of
+            shape `(in_features,)`
+        - `out_features`: The output size. The output from the layer will be a vector
+            of shape `(out_features,)`.
         - `use_bias`: Whether to add on a bias as well.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
+
+        Note that `in_features` also supports the string `"scalar"` as a special value.
+        In this case the input to the layer should be of shape `()`.
+
+        Likewise `out_features` can also be a string `"scalar"`, in which case the
+        output from the layer will have shape `()`.
         """
         super().__init__()
         wkey, bkey = jrandom.split(key, 2)
         lim = 1 / math.sqrt(in_features)
+        in_features_ = 1 if in_features == "scalar" else in_features
+        out_features_ = 1 if out_features == "scalar" else out_features
         self.weight = jrandom.uniform(
-            wkey, (out_features, in_features), minval=-lim, maxval=lim
+            wkey, (out_features_, in_features_), minval=-lim, maxval=lim
         )
         if use_bias:
-            self.bias = jrandom.uniform(bkey, (out_features,), minval=-lim, maxval=lim)
+            self.bias = jrandom.uniform(bkey, (out_features_,), minval=-lim, maxval=lim)
         else:
             self.bias = None
 
@@ -53,7 +64,8 @@ class Linear(Module):
     ) -> Array:
         """**Arguments:**
 
-        - `x`: The input. Should be a JAX array of shape `(in_features,)`.
+        - `x`: The input. Should be a JAX array of shape `(in_features,)`. (Or shape
+            `()` if `in_features="scalar"`.)
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
 
@@ -70,12 +82,20 @@ class Linear(Module):
 
         **Returns:**
 
-        A JAX array of shape `(out_features,)`
+        A JAX array of shape `(out_features,)`. (Or shape `()` if
+        `out_features="scalar"`.)
         """
 
+        if self.in_features == "scalar":
+            if jnp.shape(x) != ():
+                raise ValueError("x must have scalar shape")
+            x = jnp.broadcast_to(x, (1,))
         x = self.weight @ x
         if self.bias is not None:
             x = x + self.bias
+        if self.out_features == "scalar":
+            assert jnp.shape(x) == (1,)
+            x = jnp.squeeze(x)
         return x
 
 
