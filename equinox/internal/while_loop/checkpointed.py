@@ -596,7 +596,8 @@ def _is_none(x):
 
 
 def _dummy_buffers(buffers, val, in_dynamic_struct):
-    (val_dynamic_struct,), _ = in_dynamic_struct
+    leaves, treedef = in_dynamic_struct
+    (val_dynamic_struct,), _ = jtu.tree_unflatten(treedef, leaves)
     buffer_struct = buffers(_is_none)(val_dynamic_struct)
     buffer_struct = jtu.tree_map(lambda x: jnp.zeros(x.shape, x.dtype), buffer_struct)
     return tree_at(buffers(_is_none), val, buffer_struct, is_leaf=_is_none)

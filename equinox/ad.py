@@ -1,14 +1,14 @@
 import functools as ft
 import types
 import typing
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
 
 import jax
 import jax.interpreters.ad as ad
 import jax.tree_util as jtu
 from jaxtyping import Array, PyTree
 
-from .custom_types import sentinel
+from .custom_types import sentinel, TreeDef
 from .deprecate import deprecated_0_10
 from .doc_utils import doc_remove_args
 from .filters import (
@@ -20,6 +20,7 @@ from .filters import (
 )
 from .make_jaxpr import filter_make_jaxpr
 from .module import Module, module_update_wrapper, Static, static_field
+from .tree import tree_equal
 
 
 class _ValueAndGradWrapper(Module):
@@ -271,26 +272,40 @@ def _is_struct(x):
     return is_array(x) or isinstance(x, jax.ShapeDtypeStruct)
 
 
+def _unflatten(flat_pytree):
+    leaves, treedef = flat_pytree
+    return jtu.tree_unflatten(treedef, leaves)
+
+
+_T = TypeVar("_T")
+_FlatPyTree = Tuple[List[_T], TreeDef]
+
+
 class _ClosureConvert(Module):
     # Important that `jaxpr` be a leaf (and not static), so that it is a tuple element
     # when passing through `filter_primitive_bind` and thus visible to
     # `jax.core.subjaxprs`
     jaxpr: jax.core.Jaxpr
     consts: PyTree[Array]  # Captured in the PyTree structure of _ClosureConvert
-    in_dynamic_struct: PyTree[jax.ShapeDtypeStruct] = static_field()
-    out_dynamic_struct: PyTree[jax.ShapeDtypeStruct] = static_field()
-    in_static: PyTree[Any] = static_field()
-    out_static: PyTree[Any] = static_field()
+    in_dynamic_struct: _FlatPyTree[jax.ShapeDtypeStruct] = static_field()
+    out_dynamic_struct: _FlatPyTree[jax.ShapeDtypeStruct] = static_field()
+    in_static: _FlatPyTree[Any] = static_field()
+    out_static: _FlatPyTree[Any] = static_field()
 
     def __call__(self, *args, **kwargs):
+        self_in_dynamic_struct = _unflatten(self.in_dynamic_struct)
+        self_out_dynamic_struct = _unflatten(self.out_dynamic_struct)
+        self_in_static = _unflatten(self.in_static)
+        self_out_static = _unflatten(self.out_static)
         in_dynamic, in_static = partition((args, kwargs), is_array)
         in_dynamic_struct = jax.eval_shape(lambda: in_dynamic)
-        if in_dynamic_struct != self.in_dynamic_struct:
+        # `is` because `tree_equal` may return a tracer
+        if tree_equal(in_dynamic_struct, self_in_dynamic_struct) is not True:
             raise ValueError(
                 "Closure-converted function called with different dynamic arguments to "
                 "the example arguments provided."
             )
-        if in_static != self.in_static:
+        if tree_equal(in_static, self_in_static) is not True:
             raise ValueError(
                 "Closure-converted function called with different static arguments to "
                 "the example arguments provided."
@@ -300,14 +315,14 @@ class _ClosureConvert(Module):
             self.jaxpr, self.consts, *in_dynamic_flat
         )
         out_dynamic_struct_flat, out_dynamic_treedef = jtu.tree_flatten(
-            self.out_dynamic_struct
+            self_out_dynamic_struct
         )
         assert len(out_dynamic_flat) == len(out_dynamic_struct_flat)
         for o1, o2 in zip(out_dynamic_flat, out_dynamic_struct_flat):
             assert o1.shape == o2.shape
             assert o1.dtype == o2.dtype
         out = jtu.tree_unflatten(out_dynamic_treedef, out_dynamic_flat)
-        out = combine(out, self.out_static)
+        out = combine(out, self_out_static)
         return out
 
 
@@ -358,6 +373,10 @@ def filter_closure_convert(fn, *args, **kwargs):
     in_dynamic_struct = jax.eval_shape(lambda: in_dynamic)
     jaxpr = closed_jaxpr.jaxpr
     consts = closed_jaxpr.consts
+    in_dynamic_struct = jtu.tree_flatten(in_dynamic_struct)
+    out_dynamic_struct = jtu.tree_flatten(out_dynamic_struct)
+    in_static = jtu.tree_flatten(in_static)
+    out_static = jtu.tree_flatten(out_static)
     return _ClosureConvert(
         jaxpr, consts, in_dynamic_struct, out_dynamic_struct, in_static, out_static
     )
