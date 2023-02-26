@@ -1,5 +1,5 @@
 import typing
-from typing import Any, Callable, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Literal, Optional, Sequence, Tuple, Union
 
 import jax
 import jax.nn as jnn
@@ -34,15 +34,15 @@ class MLP(Module):
     layers: Tuple[Linear, ...]
     activation: Callable
     final_activation: Callable
-    in_size: int = static_field()
-    out_size: int = static_field()
+    in_size: Union[int, Literal["scalar"]] = static_field()
+    out_size: Union[int, Literal["scalar"]] = static_field()
     width_size: int = static_field()
     depth: int = static_field()
 
     def __init__(
         self,
-        in_size: int,
-        out_size: int,
+        in_size: Union[int, Literal["scalar"]],
+        out_size: Union[int, Literal["scalar"]],
         width_size: int,
         depth: int,
         activation: Callable = jnn.relu,
@@ -53,8 +53,10 @@ class MLP(Module):
     ):
         """**Arguments**:
 
-        - `in_size`: The size of the input layer.
-        - `out_size`: The size of the output layer.
+        - `in_size`: The input size. The input to the module should be a vector of
+            shape `(in_features,)`
+        - `out_size`: The output size. The output from the module will be a vector
+            of shape `(out_features,)`.
         - `width_size`: The size of each hidden layer.
         - `depth`: The number of hidden layers.
         - `activation`: The activation function after each hidden layer. Defaults to
@@ -63,6 +65,12 @@ class MLP(Module):
             to the identity.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
+
+        Note that `in_size` also supports the string `"scalar"` as a special value.
+        In this case the input to the module should be of shape `()`.
+
+        Likewise `out_size` can also be a string `"scalar"`, in which case the
+        output from the module will have shape `()`.
         """
 
         super().__init__(**kwargs)
@@ -88,13 +96,14 @@ class MLP(Module):
     ) -> Array:
         """**Arguments:**
 
-        - `x`: A JAX array with shape `(in_size,)`.
+        - `x`: A JAX array with shape `(in_size,)`. (Or shape `()` if
+            `in_size="scalar"`.)
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
 
         **Returns:**
 
-        A JAX array with shape `(out_size,)`.
+        A JAX array with shape `(out_size,)`. (Or shape `()` if `out_size="scalar"`.)
         """
         for layer in self.layers[:-1]:
             x = layer(x)
