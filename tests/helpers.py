@@ -1,6 +1,7 @@
 import functools as ft
 import operator
 
+import jax
 import jax.numpy as jnp
 import jax.random as jr
 import jax.tree_util as jtu
@@ -53,6 +54,8 @@ def _shaped_allclose(x, y, *, match_weak, **kwargs):
             )
         else:
             return x.shape == y.shape and x.dtype == y.dtype and np.all(x == y)
+    elif isinstance(x, jax.ShapeDtypeStruct):
+        assert x.shape == y.shape and x.dtype == y.dtype
     else:
         return x == y
 

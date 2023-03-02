@@ -291,9 +291,17 @@ def create_vprim(name: str, impl, abstract_eval, jvp, transpose):
     prim = jax.core.Primitive(name)
     prim.multiple_results = True
 
-    def batch_rule(inputs, batch_axes, **params):
+    def batch_rule(axis_size, axis_name, trace_type, inputs, batch_axes, **params):
+        del trace_type
         # delegates batching to `_vprim_p`
-        out = _vprim_p.bind(*inputs, prim=prim, __batch_axes=batch_axes, params=params)
+        out = _vprim_p.bind(
+            *inputs,
+            prim=prim,
+            __axis_size=axis_size,
+            __axis_name=axis_name,
+            __batch_axes=batch_axes,
+            params=params
+        )
         batch_axes_out = jtu.tree_map(lambda _: 0, out)
         return out, batch_axes_out
 
@@ -301,7 +309,7 @@ def create_vprim(name: str, impl, abstract_eval, jvp, transpose):
     prim.def_abstract_eval(abstract_eval)
     ad.primitive_jvps[prim] = jvp
     ad.primitive_transposes[prim] = transpose
-    batching.primitive_batchers[prim] = batch_rule
+    batching.axis_primitive_batchers[prim] = batch_rule
     mlir.register_lowering(prim, mlir.lower_fun(impl, multiple_results=True))
     _vprim_impl_registry[prim] = impl
     _vprim_abstract_eval_registry[prim] = abstract_eval
@@ -310,30 +318,23 @@ def create_vprim(name: str, impl, abstract_eval, jvp, transpose):
     return prim
 
 
-def _vprim_impl(*inputs, prim, __batch_axes, params):
+def _vprim_impl(*inputs, prim, __axis_size, __axis_name, __batch_axes, params):
     impl = ft.partial(_vprim_impl_registry[prim], **params)
-    impl = jax.vmap(impl, in_axes=__batch_axes)
+    impl = jax.vmap(
+        impl, in_axes=__batch_axes, axis_size=__axis_size, axis_name=__axis_name
+    )
     return impl(*inputs)
 
 
-def _to_struct(x):
-    if type(x) is not jax.core.ShapedArray:
-        raise NotImplementedError(
-            "vprim only currently supports ShapedArrays for abstract evaluation"
-        )
-    return jax.ShapeDtypeStruct(x.shape, x.dtype)
-
-
-def _to_shapedarray(x):
-    return jax.core.ShapedArray(x.shape, x.dtype)
-
-
-def _vprim_abstract_eval(*inputs, prim, __batch_axes, params):
-    abstract_eval = ft.partial(_vprim_abstract_eval_registry[prim], **params)
-    abstract_eval = jax.vmap(abstract_eval, in_axes=__batch_axes)
-    inputs = [_to_struct(x) for x in inputs]
-    out = jax.eval_shape(abstract_eval, *inputs)
-    return [_to_shapedarray(x) for x in out]
+def _vprim_abstract_eval(*inputs, prim, __axis_size, __axis_name, __batch_axes, params):
+    assert len(inputs) == len(__batch_axes)
+    inputs = [
+        jax.core.mapped_aval(__axis_size, b, x) for x, b in zip(inputs, __batch_axes)
+    ]
+    abstract_eval = _vprim_abstract_eval_registry[prim]
+    outs = abstract_eval(*inputs, **params)
+    outs = [jax.core.unmapped_aval(__axis_size, __axis_name, 0, x) for x in outs]
+    return outs
 
 
 def _resolve_zeros_t(tangent, batch_axis):
@@ -357,13 +358,20 @@ def _resolve_zeros_b(tangent, batch_axis):
         return batch_axis
 
 
-def _vprim_jvp(primals, tangents, *, prim, __batch_axes, params):
+def _vprim_jvp(
+    primals, tangents, *, prim, __axis_size, __axis_name, __batch_axes, params
+):
     assert len(primals) == len(__batch_axes)
     assert len(tangents) == len(__batch_axes)
     tangents = [_resolve_zeros_t(t, b) for t, b in zip(tangents, __batch_axes)]
     batch_axes_t = [_resolve_zeros_b(t, b) for t, b in zip(tangents, __batch_axes)]
     jvp = ft.partial(_vprim_jvp_registry[prim], **params)
-    jvp = jax.vmap(jvp, in_axes=(__batch_axes, batch_axes_t))
+    jvp = jax.vmap(
+        jvp,
+        in_axes=(__batch_axes, batch_axes_t),
+        axis_size=__axis_size,
+        axis_name=__axis_name,
+    )
     return jvp(primals, tangents)
 
 
@@ -388,11 +396,18 @@ def _resolve_undefined_b(input, batch_axis):
         return batch_axis
 
 
-def _vprim_transpose(cts, *inputs, prim, __batch_axes, params):
+def _vprim_transpose(
+    cts, *inputs, prim, __axis_size, __axis_name, __batch_axes, params
+):
     inputs = [_resolve_undefined_i(i, b) for i, b in zip(inputs, __batch_axes)]
     batch_axes = [_resolve_undefined_b(i, b) for i, b in zip(inputs, __batch_axes)]
     transpose = ft.partial(_vprim_transpose_registry[prim], **params)
-    transpose = jax.vmap(transpose, in_axes=(0, *batch_axes))
+    transpose = jax.vmap(
+        transpose,
+        in_axes=(0, *batch_axes),
+        axis_size=__axis_size,
+        axis_name=__axis_name,
+    )
     return transpose(cts, *inputs)
 
 
