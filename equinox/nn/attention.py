@@ -19,8 +19,8 @@ def dot_product_attention_weights(
     mask: Optional[Bool[Array, "q_seq kv_seq"]] = None,
 ) -> Float[Array, "q_seq kv_seq"]:
 
+    query = query / math.sqrt(query.shape[-1])
     logits = jnp.einsum("sd,Sd->sS", query, key)
-    logits = logits / math.sqrt(query.shape[-1])
     if mask is not None:
         if mask.shape != logits.shape:
             raise ValueError(
@@ -28,7 +28,7 @@ def dot_product_attention_weights(
                 f"kv_seq_length)=({query.shape[0]}, "
                 f"{key.shape[0]}). Got {mask.shape}."
             )
-        logits = jnp.where(mask, logits, -jnp.inf)
+        logits = jnp.where(mask, logits, jnp.finfo(logits.dtype).min)
 
     return jax.nn.softmax(logits, axis=-1)
 
