@@ -1,6 +1,7 @@
 import functools as ft
 
 import jax
+import jax.core
 import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir

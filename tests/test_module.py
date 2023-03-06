@@ -11,7 +11,7 @@ def test_module_not_enough_attributes():
         weight: Any
 
     with pytest.raises(TypeError):
-        MyModule1()
+        MyModule1()  # pyright: ignore
 
     class MyModule2(eqx.Module):
         weight: Any
@@ -22,7 +22,7 @@ def test_module_not_enough_attributes():
     with pytest.raises(ValueError):
         MyModule2()
     with pytest.raises(TypeError):
-        MyModule2(1)
+        MyModule2(1)  # pyright: ignore
 
 
 def test_module_too_many_attributes():
@@ -30,7 +30,7 @@ def test_module_too_many_attributes():
         weight: Any
 
     with pytest.raises(TypeError):
-        MyModule1(1, 2)
+        MyModule1(1, 2)  # pyright: ignore
 
     class MyModule2(eqx.Module):
         weight: Any
@@ -49,7 +49,7 @@ def test_module_setattr_after_init():
 
     m = MyModule(1)
     with pytest.raises(AttributeError):
-        m.asdf = True
+        m.asdf = True  # pyright: ignore
 
 
 def test_wrong_attribute():
@@ -83,7 +83,7 @@ def test_inheritance():
     assert m.weight == 1
     assert m.weight2 == 2
     with pytest.raises(TypeError):
-        m = MyModule2(2, weight=2)
+        m = MyModule2(2, weight=2)  # pyright: ignore
 
     # not custom init / custom init
 
@@ -111,12 +111,12 @@ def test_inheritance():
         weight5: Any
 
     with pytest.raises(TypeError):
-        m = MyModule5(value4=1, weight5=2)
+        m = MyModule5(value4=1, weight5=2)  # pyright: ignore
 
     class MyModule6(MyModule4):
         pass
 
-    m = MyModule6(value4=1)
+    m = MyModule6(value4=1)  # pyright: ignore
     assert m.weight4 == 1
 
     # custom init / custom init

@@ -77,10 +77,10 @@ def test_aux(getkey):
     assert jnp.all(grad == 1)
 
     @eqx.filter_value_and_grad(has_aux=True)
-    def f(x):
+    def g(x):
         return jnp.sum(x), "hi"
 
-    (value, aux), grad = f(a)
+    (value, aux), grad = g(a)
     assert value == jnp.sum(a)
     assert aux == "hi"
     assert jnp.all(grad == 1)
@@ -90,7 +90,7 @@ def test_aux(getkey):
 @pytest.mark.parametrize("outer", [False, True])
 def test_methods(call, outer):
     class M(eqx.Module):
-        increment: Union[int, jnp.ndarray]
+        increment: Union[int, jax.Array]
 
         if call:
 

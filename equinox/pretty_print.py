@@ -5,7 +5,6 @@ from typing import Any, Callable, Dict, List, Tuple, Union
 
 import jax
 import jax._src.pretty_printer as pp
-import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
 from jaxtyping import PyTree
@@ -91,11 +90,18 @@ def _pformat_namedtuple(obj: NamedTuple, **kwargs) -> pp.Doc:
 
 def _pformat_dataclass(obj: Dataclass, **kwargs) -> pp.Doc:
     indent = kwargs["indent"]
-    entries = [
-        _named_entry(f.name, getattr(obj, f.name), **kwargs)
-        for f in dataclasses.fields(obj)
-        if f.repr
-    ]
+    entries = []
+    for f in dataclasses.fields(obj):
+        if f.repr:
+            try:
+                val = getattr(obj, f.name)
+            except AttributeError:
+                # This can happen when typechecking an `eqx.Module`'s `__init__` method
+                # with beartype, and printing args using pytest. We haven't yet actually
+                # assigned values to the module so the repr fails.
+                pass
+            else:
+                entries.append(_named_entry(f.name, val, **kwargs))
     return pp.group(
         pp.concat(
             [
@@ -109,7 +115,7 @@ def _pformat_dataclass(obj: Dataclass, **kwargs) -> pp.Doc:
     )
 
 
-def _pformat_array(obj: Union[jnp.ndarray, np.ndarray], **kwargs) -> pp.Doc:
+def _pformat_array(obj: Union[jax.Array, np.ndarray], **kwargs) -> pp.Doc:
     short = kwargs["short_arrays"]
     if short:
         dtype_str = (
@@ -163,13 +169,13 @@ def tree_pp(obj: PrettyPrintAble, **kwargs) -> pp.Doc:
             return _pformat_namedtuple(obj, **kwargs)
         else:
             return _pformat_tuple(obj, **kwargs)
-    elif isinstance(obj, (np.ndarray, jnp.ndarray)):
+    elif isinstance(obj, (np.ndarray, jax.Array)):
         return _pformat_array(obj, **kwargs)
     elif isinstance(obj, (jax.custom_jvp, jax.custom_vjp)):
         return tree_pp(obj.__wrapped__, **kwargs)
     elif hasattr(obj, "__wrapped__") and follow_wrapped:
         kwargs["wrapped"] = True
-        return tree_pp(obj.__wrapped__, **kwargs)
+        return tree_pp(obj.__wrapped__, **kwargs)  # pyright: ignore
     elif isinstance(obj, jtu.Partial) and follow_wrapped:
         obj = _Partial(obj.func, obj.args, obj.keywords)
         return _pformat_dataclass(obj, **kwargs)

@@ -1,7 +1,8 @@
 import functools as ft
-from typing import Callable
+from typing import Any, Callable, Union
 
 import jax
+from jaxtyping import PyTree
 
 from .filters import combine, is_array, partition
 from .module import Static
@@ -11,7 +12,9 @@ def _filter(x):
     return isinstance(x, jax.ShapeDtypeStruct) or is_array(x)
 
 
-def filter_eval_shape(fun: Callable, *args, **kwargs):
+def filter_eval_shape(
+    fun: Callable[..., Any], *args, **kwargs
+) -> PyTree[Union[jax.ShapeDtypeStruct, Any]]:
     """As `jax.eval_shape`, but allows any Python object as inputs and outputs.
 
     (`jax.eval_shape` is constrained to only work with JAX arrays, Python

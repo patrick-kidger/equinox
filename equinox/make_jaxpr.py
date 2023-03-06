@@ -1,10 +1,16 @@
-from typing import Callable
+from typing import Any, Callable, Tuple
+from typing_extensions import ParamSpec
 
 import jax
+import jax.core
 import jax.tree_util as jtu
+from jaxtyping import PyTree
 
 from .filters import combine, is_array, partition
 from .module import Module, module_update_wrapper, Static
+
+
+_P = ParamSpec("_P")
 
 
 def _is_struct(x):
@@ -25,13 +31,19 @@ class _MakeJaxpr(Module):
             _out_dynamic, _out_static = partition(_out, is_array)
             return _out_dynamic, Static(_out_static)
 
-        jaxpr, out_struct = jax.make_jaxpr(_fn, return_shape=True)(*dynamic_flat)
+        jaxpr, out_struct = jax.make_jaxpr(_fn, return_shape=True)(
+            *dynamic_flat
+        )  # pyright: ignore
         dynamic_out_struct, static_out = out_struct
         static_out = static_out.value
         return jaxpr, dynamic_out_struct, static_out
 
 
-def filter_make_jaxpr(fun):
+def filter_make_jaxpr(
+    fun: Callable[_P, Any]
+) -> Callable[
+    _P, Tuple[jax.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct], PyTree[Any]]
+]:
     """As `jax.make_jaxpr`, but accepts arbitrary PyTrees as input and output.
 
     **Arguments:**

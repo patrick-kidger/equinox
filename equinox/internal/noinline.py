@@ -4,6 +4,7 @@ from typing import Any, Callable, Optional, Union
 import jax
 import jax._src.pretty_printer as pp
 import jax._src.source_info_util as source_info_util
+import jax.core
 import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
@@ -174,7 +175,7 @@ class _MetaTransposeTransform(Module):
 
 
 class _MetaBatchTransform(Module):
-    batch_axes: PyTree[Union[batching.not_mapped, int]]
+    batch_axes: PyTree[Union[batching.NotMapped, int]]
 
     def __call__(self, static_fn):
         return filter_vmap(static_fn, in_axes=(self.batch_axes,))
@@ -223,7 +224,7 @@ def _noinline_jvp(primals, tangents):
     return primal_outs, tangent_outs
 
 
-@filter_primitive_transpose(materialise_zeros=True)
+@filter_primitive_transpose(materialise_zeros=True)  # pyright: ignore
 def _noinline_transpose(inputs, cts_out):
     dynamic_index, abstract_fn, transforms, args = inputs
     assert all(
@@ -309,7 +310,7 @@ def _noinline_pretty_print(eqn, context, settings):
     annotation = (
         source_info_util.summarize(eqn.source_info) if settings.source_info else None
     )
-    return [lhs, pp.text(" = ", annotation=annotation), *rhs]
+    return pp.concat([lhs, pp.text(" = ", annotation=annotation), *rhs])
 
 
 # Not a PyTree
@@ -318,7 +319,8 @@ class _MlirWrapper:
         self.val = val
 
 
-def _noinline_mlir(ctx, *dynamic, treedef, static, flatten):
+def _noinline_mlir(ctx, *dynamic, treedef, static, flatten, **kwargs):
+    assert len(kwargs) == 0
     assert flatten.called()
     dynamic = [_MlirWrapper(x) for x in dynamic]
     abstract_dynamic = [_MlirWrapper(x) for x in ctx.avals_in]
@@ -389,7 +391,9 @@ class _NoInlineWrapper(Module):
         )
 
 
-def noinline(fn: Callable, abstract_fn: Optional[Callable] = None) -> Callable:
+def noinline(
+    fn: Callable, abstract_fn: Optional[Callable] = None  # pyright: ignore
+) -> Callable:
     """Marks a function as not being inlined into a larger computation.
     This can help to reduce compile time at the expense of increased runtime.
 

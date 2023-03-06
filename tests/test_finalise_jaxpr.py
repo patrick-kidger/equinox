@@ -1,4 +1,5 @@
 import jax
+import jax.core
 import jax.lax as lax
 import jax.numpy as jnp
 
@@ -36,7 +37,7 @@ def _assert_jaxpr_equal(jaxpr1: jax.core.ClosedJaxpr, jaxpr2: jax.core.ClosedJax
 def test_jaxpr2jaxpr_nocustom_idempotent():
     def fn(x):
         x = x + 1
-        x + x * 2
+        x = x * 2
         return x
 
     jaxpr = jax.make_jaxpr(fn)(1)
@@ -65,7 +66,7 @@ def test_jaxpr2jaxpr_custom_idempotent():
 def test_fn2fn_nocustom_idempotent():
     def fn(x):
         x = x + 1
-        x + x * 2
+        x = x * 2
         return x
 
     finalised_fn = eqxi.finalise_fn(fn)
@@ -145,7 +146,7 @@ def test_custom_jvp():
         assert False
 
     jaxpr = eqxi.finalise_make_jaxpr(f)(True, 1.0)
-    _assert_no_unvmap(jaxpr)
+    _assert_no_unvmap(jaxpr.jaxpr)
 
 
 def test_custom_vjp():
@@ -163,7 +164,7 @@ def test_custom_vjp():
     f.defvjp(f_fwd, f_bwd)
 
     jaxpr = eqxi.finalise_make_jaxpr(f)(True, 1.0)
-    _assert_no_unvmap(jaxpr)
+    _assert_no_unvmap(jaxpr.jaxpr)
 
 
 def test_checkpoint():
@@ -173,4 +174,4 @@ def test_checkpoint():
         return lax.cond(pred, lambda y: y, lambda y: y + 1, x)
 
     jaxpr = eqxi.finalise_make_jaxpr(f)(True, 1.0)
-    _assert_no_unvmap(jaxpr)
+    _assert_no_unvmap(jaxpr.jaxpr)

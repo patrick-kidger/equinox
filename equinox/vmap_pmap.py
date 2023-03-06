@@ -2,7 +2,7 @@ import dataclasses
 import functools as ft
 import inspect
 import warnings
-from typing import Any, Callable, Dict, Hashable, Optional, Union
+from typing import Any, Callable, Dict, Hashable, Optional, overload, Union
 
 import jax
 import jax.interpreters.batching as batching
@@ -201,16 +201,39 @@ class _VmapWrapper(Module):
         return jtu.Partial(self, instance)
 
 
+@overload
+def filter_vmap(
+    *,
+    in_axes: PyTree[AxisSpec] = if_array(0),
+    out_axes: PyTree[AxisSpec] = if_array(0),
+    axis_name: Hashable = None,
+    axis_size: Optional[int] = None,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    ...
+
+
+@overload
+def filter_vmap(
+    fun: Callable[..., Any],
+    *,
+    in_axes: PyTree[AxisSpec] = if_array(0),
+    out_axes: PyTree[AxisSpec] = if_array(0),
+    axis_name: Hashable = None,
+    axis_size: Optional[int] = None,
+) -> Callable[..., Any]:
+    ...
+
+
 @doc_remove_args("vmapkwargs")
 def filter_vmap(
-    fun: Callable = sentinel,
+    fun=sentinel,
     *,
-    in_axes=if_array(0),
-    out_axes=if_array(0),
+    in_axes: PyTree[AxisSpec] = if_array(0),
+    out_axes: PyTree[AxisSpec] = if_array(0),
     axis_name: Hashable = None,
     axis_size: Optional[int] = None,
     **vmapkwargs,
-) -> Callable:
+):
     """Vectorises a function. By default, all JAX/NumPy arrays are vectorised down their
     leading axis (i.e. axis index 0), and all other types are broadcast.
 
@@ -402,8 +425,8 @@ def _filter_pmap_cache(
 
     return jax.pmap(
         fun_wrapped,
-        in_axes=(in_axes,),
-        out_axes=out_axes,
+        in_axes=(in_axes,),  # pyright: ignore
+        out_axes=out_axes,  # pyright: ignore
         axis_name=axis_name,
         axis_size=axis_size,
         **pmapkwargs,
@@ -480,17 +503,45 @@ class _PmapWrapper(Module):
         return jtu.Partial(self, instance)
 
 
+# Deliberately using `Callable[..., Any]` as `filter_pmap` does change the input and
+# out args in ways not expressible in the static type system (changing the number of
+# axes).
+@overload
+def filter_pmap(
+    *,
+    in_axes: PyTree[AxisSpec] = if_array(0),
+    out_axes: PyTree[AxisSpec] = if_array(0),
+    axis_name: Hashable = None,
+    axis_size: Optional[int] = None,
+    donate: str = "none",
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    ...
+
+
+@overload
+def filter_pmap(
+    fun: Callable[..., Any],
+    *,
+    in_axes: PyTree[AxisSpec] = if_array(0),
+    out_axes: PyTree[AxisSpec] = if_array(0),
+    axis_name: Hashable = None,
+    axis_size: Optional[int] = None,
+    donate: str = "none",
+) -> Callable[..., Any]:
+    ...
+
+
 @doc_remove_args("pmapkwargs")
 def filter_pmap(
-    fun: Callable = sentinel,
+    fun=sentinel,
     *,
-    in_axes=if_array(0),
-    out_axes=if_array(0),
+    in_axes: PyTree[AxisSpec] = if_array(0),
+    out_axes: PyTree[AxisSpec] = if_array(0),
     axis_name: Hashable = None,
     axis_size: Optional[int] = None,
     donate: str = "none",
     **pmapkwargs,
-) -> Callable:
+):
     """Parallelises a function. By default, all JAX/NumPy arrays are parallelised down
     their leading axis (i.e. axis index 0), and all other types are broadcast.
 

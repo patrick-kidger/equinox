@@ -1,5 +1,6 @@
 from typing import Any, Callable, Optional, Tuple, Union
 
+import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
@@ -16,7 +17,7 @@ AxisSpec = Union[bool, Callable[[Any], bool]]
 
 def is_array(element: Any) -> bool:
     """Returns `True` if `element` is a JAX array or NumPy array."""
-    return isinstance(element, (np.ndarray, np.generic, jnp.ndarray))
+    return isinstance(element, (np.ndarray, np.generic, jax.Array))
 
 
 # Chosen to match
@@ -26,7 +27,7 @@ def is_array_like(element: Any) -> bool:
     `float`/`complex`/`bool`/`int`.
     """
     return isinstance(
-        element, (jnp.ndarray, np.ndarray, np.generic, float, complex, bool, int)
+        element, (jax.Array, np.ndarray, np.generic, float, complex, bool, int)
     ) or hasattr(element, "__jax_array__")
 
 
@@ -36,7 +37,7 @@ def is_inexact_array(element: Any) -> bool:
     """
     if isinstance(element, (np.ndarray, np.generic)):
         return np.issubdtype(element.dtype, np.inexact)
-    elif isinstance(element, jnp.ndarray):
+    elif isinstance(element, jax.Array):
         return jnp.issubdtype(element.dtype, jnp.inexact)
     else:
         return False
@@ -50,7 +51,7 @@ def is_inexact_array_like(element: Any) -> bool:
         element = element.__jax_array__()
     if isinstance(element, (np.ndarray, np.generic)):
         return np.issubdtype(element.dtype, np.inexact)
-    elif isinstance(element, jnp.ndarray):
+    elif isinstance(element, jax.Array):
         return jnp.issubdtype(element.dtype, jnp.inexact)
     else:
         return isinstance(element, (float, complex))

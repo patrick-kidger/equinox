@@ -1,7 +1,11 @@
 import random
+import typing
 
 import jax.random as jrandom
 import pytest
+
+
+typing.TESTING = True  # pyright: ignore
 
 
 @pytest.fixture()

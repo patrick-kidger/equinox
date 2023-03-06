@@ -1,12 +1,12 @@
 import math
 from typing import Optional
 
-import jax
 import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array
 
+from ..custom_types import PRNGKey
 from ..module import Module, static_field
 
 
@@ -46,7 +46,7 @@ class GRUCell(Module):
         hidden_size: int,
         use_bias: bool = True,
         *,
-        key: Optional["jax.random.PRNGKey"],
+        key: PRNGKey,
         **kwargs
     ):
         """**Arguments:**
@@ -84,9 +84,7 @@ class GRUCell(Module):
         self.hidden_size = hidden_size
         self.use_bias = use_bias
 
-    def __call__(
-        self, input: Array, hidden: Array, *, key: Optional["jax.random.PRNGKey"] = None
-    ):
+    def __call__(self, input: Array, hidden: Array, *, key: Optional[PRNGKey] = None):
         """**Arguments:**
 
         - `input`: The input, which should be a JAX array of shape `(input_size,)`.
@@ -149,7 +147,7 @@ class LSTMCell(Module):
         hidden_size: int,
         use_bias: bool = True,
         *,
-        key: "jax.random.PRNGKey",
+        key: PRNGKey,
         **kwargs
     ):
         """**Arguments:**

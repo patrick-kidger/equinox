@@ -2,13 +2,18 @@ import functools as ft
 import inspect
 import weakref
 from dataclasses import dataclass, field, fields
-from typing import Any
+from typing import Any, Callable, cast, TypeVar
+from typing_extensions import dataclass_transform, ParamSpec
 
 import jax.tree_util as jtu
 
 from .better_abc import ABCMeta
 from .pretty_print import tree_pformat
 from .tree import tree_equal
+
+
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
 
 
 def static_field(**kwargs):
@@ -69,7 +74,7 @@ _has_dataclass_init = weakref.WeakKeyDictionary()
 # Inherits from ABCMeta as a convenience for a common use-case.
 # It's not a feature we use ourselves.
 class _ModuleMeta(ABCMeta):
-    def __new__(mcs, name, bases, dict_):
+    def __new__(mcs, name, bases, dict_):  # pyright: ignore
         dict_ = {
             k: _wrap_method(v) if _not_magic(k) and inspect.isfunction(v) else v
             for k, v in dict_.items()
@@ -96,10 +101,15 @@ class _ModuleMeta(ABCMeta):
         _has_dataclass_init[cls] = _init
         if _init:
             init_doc = cls.__init__.__doc__
-        cls = dataclass(eq=False, repr=False, frozen=True, init=_init)(cls)
+        cls = dataclass(eq=False, repr=False, frozen=True, init=_init)(
+            cls  # pyright: ignore
+        )
         if _init:
-            cls.__init__.__doc__ = init_doc
-        jtu.register_pytree_node(cls, cls._tree_flatten, cls._tree_unflatten)
+            cls.__init__.__doc__ = init_doc  # pyright: ignore
+            cls.__init__.__module__ = cls.__module__
+        jtu.register_pytree_node(
+            cls, cls._tree_flatten, cls._tree_unflatten  # pyright: ignore
+        )
         return cls
 
     def __call__(cls, *args, **kwargs):
@@ -142,7 +152,7 @@ def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
     else:
         field_names = {field.name for field in fields(cls)}
 
-    class _InitableModule(cls):
+    class _InitableModule(cls):  # pyright: ignore
         pass
 
     # Done like this to avoid dataclasses complaining about overriding setattr on a
@@ -158,6 +168,7 @@ def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
     return _InitableModule
 
 
+@dataclass_transform(field_specifiers=(field, static_field))
 class Module(metaclass=_ModuleMeta):
     """Base class. Create your model by inheriting from this.
 
@@ -169,8 +180,8 @@ class Module(metaclass=_ModuleMeta):
 
     ```python
     class MyModule(equinox.Module):
-        weight: jax.numpy.ndarray
-        bias: jax.numpy.ndarray
+        weight: jax.Array
+        bias: jax.Array
         submodule: equinox.Module
     ```
 
@@ -183,8 +194,8 @@ class Module(metaclass=_ModuleMeta):
 
     ```python
     class MyModule(equinox.Module):
-        weight: jax.numpy.ndarray
-        bias: jax.numpy.ndarray
+        weight: jax.Array
+        bias: jax.Array
         submodule: equinox.Module
 
         def __init__(self, in_size, out_size, key):
@@ -294,7 +305,9 @@ class Module(metaclass=_ModuleMeta):
 
 
 # Modifies in-place, just like functools.update_wrapper
-def module_update_wrapper(wrapper: Module, wrapped) -> Module:
+def module_update_wrapper(
+    wrapper: Module, wrapped: Callable[_P, _T]
+) -> Callable[_P, _T]:
     """Like `functools.update_wrapper` (or its better-known cousin, `functools.wraps`),
     but can be used on [`equinox.Module`][]s. (Which are normally immutable.)
 
@@ -326,7 +339,7 @@ def module_update_wrapper(wrapper: Module, wrapped) -> Module:
         ft.update_wrapper(wrapper, wrapped, updated=())
     finally:
         object.__setattr__(wrapper, "__class__", cls)
-    return wrapper
+    return cast(Callable[_P, _T], wrapper)
 
 
 class Static(Module):

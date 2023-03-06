@@ -20,7 +20,7 @@ def test_basic(getkey):
 
     class _M(eqx.Module):
         mlp_pytree: eqx.nn.MLP
-        int_pytree: jnp.array
+        int_pytree: jax.Array
 
         def __call__(self, mlp_arg, x):
             x = self.mlp_pytree(x)

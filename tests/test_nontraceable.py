@@ -1,4 +1,5 @@
 import jax
+import jax.core
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import pytest
@@ -73,12 +74,12 @@ def test_nontraceable(getkey):
     jaxpr = jax.make_jaxpr(run, static_argnums=1)(dynamic, static)
     run2 = jax.core.jaxpr_as_fun(jaxpr)
 
-    run2(*dynamic_flat)
-    jax.jit(run2)(*dynamic_flat)
+    run2(*dynamic_flat)  # pyright: ignore
+    jax.jit(run2)(*dynamic_flat)  # pyright: ignore
 
     with pytest.raises(RuntimeError):
-        jax.grad(run2)(*dynamic_flat)
+        jax.grad(run2)(*dynamic_flat)  # pyright: ignore
     with pytest.raises(RuntimeError):
-        jax.jit(jax.grad(run2))(*dynamic_flat)
+        jax.jit(jax.grad(run2))(*dynamic_flat)  # pyright: ignore
     with pytest.raises(RuntimeError):
-        jax.vmap(run2, in_axes=0)(*dynamic_batch_flat)
+        jax.vmap(run2, in_axes=0)(*dynamic_batch_flat)  # pyright: ignore

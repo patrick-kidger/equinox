@@ -1,7 +1,7 @@
 import operator
-from typing import Callable, Optional
+from typing import Any, Callable, Optional, TYPE_CHECKING
 
-import jax.numpy as jnp
+import jax
 import jax.tree_util as jtu
 
 
@@ -10,7 +10,7 @@ class _Metaω(type):
         return cls(value)
 
 
-class ω(metaclass=_Metaω):
+class _ω(metaclass=_Metaω):
     """Provides friendlier syntax for mapping with `jax.tree_util.tree_map`.
 
     !!! example
@@ -67,6 +67,12 @@ class ω(metaclass=_Metaω):
         return _ωUpdateHelper(self.ω, self.is_leaf)
 
 
+if TYPE_CHECKING:
+    ω = Any
+else:
+    ω = _ω
+
+
 def _equal_code(fn1: Optional[Callable], fn2: Optional[Callable]):
     """Checks whether fn1 and fn2 both have the same code.
 
@@ -82,7 +88,7 @@ def _equal_code(fn1: Optional[Callable], fn2: Optional[Callable]):
     return type(code1) == type(code2) and code1 == code2
 
 
-def _set_binary(base, name: str, op: callable) -> callable:
+def _set_binary(base, name: str, op: Callable[[Any, Any], Any]) -> None:
     def fn(self, other):
         if isinstance(other, ω):
             if jtu.tree_structure(self.ω) != jtu.tree_structure(other.ω):
@@ -93,7 +99,7 @@ def _set_binary(base, name: str, op: callable) -> callable:
                 jtu.tree_map(op, self.ω, other.ω, is_leaf=self.is_leaf),
                 is_leaf=self.is_leaf,
             )
-        elif isinstance(other, (bool, complex, float, int, jnp.ndarray)):
+        elif isinstance(other, (bool, complex, float, int, jax.Array)):
             return ω(
                 jtu.tree_map(lambda x: op(x, other), self.ω, is_leaf=self.is_leaf),
                 is_leaf=self.is_leaf,
@@ -106,7 +112,7 @@ def _set_binary(base, name: str, op: callable) -> callable:
     setattr(base, name, fn)
 
 
-def _set_unary(base, name: str, op: callable) -> callable:
+def _set_unary(base, name: str, op: Callable[[Any], Any]) -> None:
     def fn(self):
         return ω(
             jtu.tree_map(op, self.ω, is_leaf=self.is_leaf),
@@ -187,7 +193,7 @@ class _ωUpdateRef:
         self.is_leaf = is_leaf
 
 
-def _set_binary_at(base, name: str, op: callable) -> callable:
+def _set_binary_at(base, name: str, op: Callable[[Any, Any, Any], Any]) -> None:
     def fn(self, other):
         if isinstance(other, ω):
             if jtu.tree_structure(self.value) != jtu.tree_structure(other.ω):
@@ -203,7 +209,7 @@ def _set_binary_at(base, name: str, op: callable) -> callable:
                 ),
                 is_leaf=self.is_leaf,
             )
-        elif isinstance(other, (bool, complex, float, int, jnp.ndarray)):
+        elif isinstance(other, (bool, complex, float, int, jax.Array)):
             return ω(
                 jtu.tree_map(
                     lambda x: op(x, self.item, other), self.value, is_leaf=self.is_leaf

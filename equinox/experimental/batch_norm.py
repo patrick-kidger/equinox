@@ -118,7 +118,7 @@ class BatchNorm(Module):
         self,
         x: Array,
         *,
-        key: Optional["jax.random.PRNGKey"] = None,
+        key: Optional["jax.random.PRNGKey"] = None,  # pyright: ignore
         inference: Optional[bool] = None,
     ) -> Array:
         """**Arguments:**

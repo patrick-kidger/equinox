@@ -40,7 +40,7 @@ def _get_problem(key, *, num_steps: Optional[int]):
             z = z * jnp.exp(1j * theta)
             real = jnp.real(z)
             imag = jnp.imag(z)
-            jax.debug.print("{}", step)
+            jax.debug.print("{}", step)  # pyright: ignore
             val1 = jnp.stack([real, imag])
             val2 = val2.at[step % 8].set(real)
             return step + 1, val1, val2

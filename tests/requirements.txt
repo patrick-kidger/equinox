@@ -1,5 +1,5 @@
 jaxlib
 pytest
-typeguard
+beartype
 tensorflow
 tf2onnx
