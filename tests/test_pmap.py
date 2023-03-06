@@ -1,5 +1,5 @@
 import functools as ft
-from typing import Union
+from typing import Any, Union
 
 import jax
 import jax.numpy as jnp
@@ -13,11 +13,11 @@ from .helpers import shaped_allclose as _shaped_allclose
 
 
 (cpu,) = jax.devices("cpu")
-filter_pmap = ft.partial(eqx.filter_pmap, devices=[cpu])
+filter_pmap: Any = ft.partial(eqx.filter_pmap, devices=[cpu])
 
 
 def shaped_allclose(x, y, **kwargs):
-    if isinstance(x, jnp.ndarray):
+    if isinstance(x, jax.Array):
         x = jax.device_put(x)
     return _shaped_allclose(x, y, **kwargs)
 
@@ -96,7 +96,7 @@ def test_methods(call, outer):
     num_traces = 0
 
     class M(eqx.Module):
-        increment: Union[int, jnp.ndarray]
+        increment: Union[int, jax.Array]
 
         if call:
 

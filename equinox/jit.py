@@ -1,7 +1,8 @@
 import functools as ft
 import inspect
 import warnings
-from typing import Any, Callable
+from typing import Any, Callable, overload, TypeVar
+from typing_extensions import ParamSpec
 
 import jax
 import jax.tree_util as jtu
@@ -18,6 +19,10 @@ from .deprecate import deprecated_0_10
 from .doc_utils import doc_remove_args
 from .filters import combine, is_array, partition
 from .module import Module, module_update_wrapper, Static
+
+
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
 
 
 @compile_cache
@@ -78,10 +83,20 @@ class _JitWrapper(Module):
         return jtu.Partial(self, instance)
 
 
-@doc_remove_args("jitkwargs")
+@overload
 def filter_jit(
-    fun: Callable = sentinel, *, donate: str = "none", **jitkwargs
-) -> Callable:
+    *, donate: str = "none"
+) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]:
+    ...
+
+
+@overload
+def filter_jit(fun: Callable[_P, _T], *, donate: str = "none") -> Callable[_P, _T]:
+    ...
+
+
+@doc_remove_args("jitkwargs")
+def filter_jit(fun=sentinel, *, donate: str = "none", **jitkwargs):
     """An easier-to-use version of `jax.jit`. All JAX and NumPy arrays are traced, and
     all other types are held static.
 

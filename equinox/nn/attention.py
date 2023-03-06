@@ -1,12 +1,13 @@
 import math
 from functools import partial
-from typing import Callable, Optional
+from typing import Optional
 
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array, Bool, Float
 
+from ..custom_types import PRNGKey
 from ..module import Module, static_field
 from .dropout import Dropout
 from .linear import Linear
@@ -37,9 +38,9 @@ def dot_product_attention(
     key_: Float[Array, "kv_seq qk_size"],
     value: Float[Array, "kv_seq v_size"],
     mask: Optional[Bool[Array, "q_seq kv_seq"]] = None,
-    dropout: Optional[Callable[[Array], Array]] = None,
+    dropout: Optional[Dropout] = None,
     *,
-    key: Optional["jax.random.PRNGKey"] = None,
+    key: Optional[PRNGKey] = None,
     inference: Optional[bool] = None,
 ) -> Float[Array, "q_seq v_size"]:
 
@@ -146,7 +147,7 @@ class MultiheadAttention(Module):
         dropout_p: float = 0.0,
         inference: bool = False,
         *,
-        key: "jax.random.PRNGKey",
+        key: PRNGKey,
         **kwargs,
     ):
         r"""**Arguments:**
@@ -220,7 +221,7 @@ class MultiheadAttention(Module):
         value: Float[Array, "kv_seq v_size"],
         mask: Optional[Bool[Array, "num_heads q_seq kv_seq"]] = None,
         *,
-        key: Optional["jax.random.PRNGKey"] = None,
+        key: Optional[PRNGKey] = None,
         inference: Optional[bool] = None,
         deterministic: Optional[bool] = None,
     ) -> Float[Array, "q_seq o_size"]:

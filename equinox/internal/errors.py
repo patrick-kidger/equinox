@@ -1,6 +1,7 @@
 from typing import Sequence, Union
 
 import jax
+import jax.core
 import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
@@ -30,14 +31,14 @@ def _error_jvp(primals, tangents, *, msgs):
 
 
 def _error_transpose(cts, pred, index, *x, msgs):
-    return (None, None) + cts
+    return [None, None] + cts
 
 
 def _error_batching(inputs, batch_axes, *, msgs):
     pred_bdim, index_bdim, *xs_bdim = batch_axes
     assert pred_bdim is batching.not_mapped
     assert index_bdim is batching.not_mapped
-    return branched_error_p.bind(*inputs, msgs=msgs), xs_bdim
+    return branched_error_p.bind(*inputs, msgs=msgs), tuple(xs_bdim)
 
 
 branched_error_p = jax.core.Primitive("branched_error")

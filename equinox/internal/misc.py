@@ -12,6 +12,8 @@ def left_broadcast_to(arr: Array, shape: Tuple[int, ...]) -> Array:
 
 
 class ContainerMeta(type):
+    reverse_lookup: dict
+
     def __new__(cls, name, bases, dict):
         assert "reverse_lookup" not in dict
         _dict = {}

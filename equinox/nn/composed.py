@@ -1,11 +1,21 @@
 import typing
-from typing import Any, Callable, Literal, Optional, Sequence, Tuple, Union
+from typing import (
+    Any,
+    Callable,
+    Literal,
+    Optional,
+    Protocol,
+    runtime_checkable,
+    Sequence,
+    Tuple,
+    Union,
+)
 
-import jax
 import jax.nn as jnn
 import jax.random as jrandom
 from jaxtyping import Array
 
+from ..custom_types import PRNGKey
 from ..module import Module, static_field
 from .linear import Linear
 
@@ -48,7 +58,7 @@ class MLP(Module):
         activation: Callable = jnn.relu,
         final_activation: Callable = _identity,
         *,
-        key: "jax.random.PRNGKey",
+        key: PRNGKey,
         **kwargs,
     ):
         """**Arguments**:
@@ -91,9 +101,7 @@ class MLP(Module):
         self.activation = activation
         self.final_activation = final_activation
 
-    def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
-    ) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
         """**Arguments:**
 
         - `x`: A JAX array with shape `(in_size,)`. (Or shape `()` if
@@ -113,6 +121,12 @@ class MLP(Module):
         return x
 
 
+@runtime_checkable
+class _SequentialLayer(Protocol):
+    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+        ...
+
+
 class Sequential(Module):
     """A sequence of [`equinox.Module`][]s applied in order.
 
@@ -121,12 +135,12 @@ class Sequential(Module):
         Activation functions can be added by wrapping them in [`equinox.nn.Lambda`][].
     """
 
-    layers: Tuple[Module, ...]
+    layers: Tuple[_SequentialLayer, ...]
 
-    def __init__(self, layers: Sequence[Module]):
+    def __init__(self, layers: Sequence[_SequentialLayer]):
         self.layers = tuple(layers)
 
-    def __call__(self, x: Any, *, key: Optional["jax.random.PRNGKey"] = None) -> Any:
+    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
         """**Arguments:**
 
         - `x`: Argument passed to the first member of the sequence.
@@ -146,7 +160,7 @@ class Sequential(Module):
             x = layer(x, key=key)
         return x
 
-    def __getitem__(self, i: Union[int, slice]) -> Module:
+    def __getitem__(self, i: Union[int, slice]) -> _SequentialLayer:
         if isinstance(i, int):
             return self.layers[i]
         elif isinstance(i, slice):
@@ -192,11 +206,9 @@ class Lambda(Module):
         ```
     """
 
-    fn: Callable
+    fn: Callable[[Any], Any]
 
-    def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
-    ) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input JAX array.

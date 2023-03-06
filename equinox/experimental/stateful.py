@@ -1,8 +1,11 @@
+import typing
 import weakref
 from dataclasses import field
-from typing import List
+from typing import Any, List, TYPE_CHECKING
+from typing_extensions import TypeAlias
 
 import jax
+import jax.core
 import jax.experimental.host_callback as hcb
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
@@ -75,7 +78,7 @@ class StateIndex(Module):
     """
 
     _obj: _IndexObj = static_field(repr=False)
-    _version: int = static_field(repr=False)
+    _version: _FixedInt = static_field(repr=False)
     _state: PyTree[Array] = field(repr=False)
     inference: bool
 
@@ -200,7 +203,7 @@ class StateIndex(Module):
     # to avoid potential bugs.
     #
 
-    __hash__ = None
+    __hash__ = None  # pyright: ignore
 
 
 def _delete_smuggled_state(x: StateIndex) -> StateIndex:
@@ -270,7 +273,7 @@ def _monkey_patch():
                 state_leaves, state_treedef = jtu.tree_flatten(state)
                 assert state_treedef == result_treedef
                 assert len(state_leaves) == len(batch_axes_like_flat)
-                return state_leaves, batch_axes_like_flat
+                return state_leaves, tuple(batch_axes_like_flat)
             elif type(arg) is _SetStateArg:
                 batch_axes_state_flat = _target_batch_axes(
                     batch_axes_flat, arg_treedef, "state"
@@ -298,7 +301,7 @@ def _batchify_impl(*flat, treedef, like_batch_axes, current_batch_axes):
 
 def _batchify_abstract_eval(*flat, treedef, like_batch_axes, current_batch_axes):
     state, like = jtu.tree_unflatten(treedef, flat)
-    like_avals = jtu.tree_map(lambda l: jax.ShapedArray(l.shape, l.dtype), like)
+    like_avals = jtu.tree_map(lambda l: jax.core.ShapedArray(l.shape, l.dtype), like)
     return jtu.tree_leaves(like_avals)
 
 
@@ -319,7 +322,7 @@ def _batchify_batching_rule(
             like_batch_axes=like_batch_axes + like_batch_axis,
             current_batch_axes=current_batch_axes,
         ),
-        like_batch_axis,
+        tuple(like_batch_axis),
     )
 
 
@@ -494,7 +497,16 @@ def _set_state_hcb(arg: _SetStateArg) -> None:
     _state_cache[index._obj] = (state, batch_axes, current_version + 1)
 
 
-def set_state(index: StateIndex, state: PyTree[Array]) -> None:
+if TYPE_CHECKING:
+    StateAnnotation: TypeAlias = PyTree[Array]
+else:
+    if getattr(typing, "TESTING", False):
+        StateAnnotation = Any
+    else:
+        StateAnnotation = PyTree[Array]
+
+
+def set_state(index: StateIndex, state: StateAnnotation) -> None:
     """Save a PyTree of JAX arrays as a side-effect.
 
     **Arguments:**

@@ -1,6 +1,7 @@
-from typing import Any, Callable, Optional, Sequence, Union
+from typing import Any, Callable, Optional, Sequence, TYPE_CHECKING, Union
 
 import jax
+import jax.core
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
@@ -11,7 +12,10 @@ from .doc_utils import doc_repr
 from .filters import is_array
 
 
-_Node = doc_repr(Any, "Node")
+if TYPE_CHECKING:
+    _Node = Any
+else:
+    _Node = doc_repr(Any, "Node")
 
 
 class _LeafWrapper:

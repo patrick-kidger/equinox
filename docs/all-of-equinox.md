@@ -20,7 +20,7 @@ import jax
 
 class MyModule(eqx.Module):
     layers: list
-    extra_bias: jax.numpy.ndarray
+    extra_bias: jax.Array
 
     def __init__(self, key):
         key1, key2, key3 = jax.random.split(key, 3)

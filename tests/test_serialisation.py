@@ -1,5 +1,6 @@
 import os
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -113,7 +114,7 @@ def test_custom_leaf_serialisation(getkey, tmp_path):
     )
 
     def ser_filter_spec(f, x):
-        if isinstance(x, jnp.ndarray):
+        if isinstance(x, jax.Array):
             pass
         else:
             return eqx.default_serialise_filter_spec(f, x)

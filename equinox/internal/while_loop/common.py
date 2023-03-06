@@ -97,7 +97,7 @@ def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers, readable):
     """
 
     if buffers is None:
-        new_buffers = lambda _: lambda _: ()
+        new_buffers = lambda is_leaf: lambda val: []
     else:
 
         def new_buffers(is_leaf):

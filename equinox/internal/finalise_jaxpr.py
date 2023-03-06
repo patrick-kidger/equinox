@@ -16,10 +16,14 @@ Library authors may wish to register their primitives with `primitive_finalisati
 """
 
 import functools as ft
-from typing import Any, Dict
+from typing import Any, Callable, Dict, Literal, overload, Tuple, Union
 
 import jax
+import jax.core
+import jax.custom_derivatives
+import jax.interpreters.xla
 import jax.tree_util as jtu
+from jaxtyping import PyTree
 
 
 def _safe_map(f, *args):
@@ -120,7 +124,7 @@ def finalise_fn(fn):
     """
 
     def _finalise_fn(*args):
-        jaxpr, struct = jax.make_jaxpr(fn, return_shape=True)(*args)
+        jaxpr, struct = jax.make_jaxpr(fn, return_shape=True)(*args)  # pyright: ignore
         flat_args = jtu.tree_leaves(args)
         out = finalise_eval_jaxpr(jaxpr.jaxpr, jaxpr.consts, *flat_args)
         treedef = jtu.tree_structure(struct)
@@ -129,13 +133,39 @@ def finalise_fn(fn):
     return _finalise_fn
 
 
-def finalise_make_jaxpr(fn, *, return_shape=False):
+@overload
+def finalise_make_jaxpr(
+    fn, *, return_shape: Literal[False] = False
+) -> Callable[..., jax.core.ClosedJaxpr]:
+    ...
+
+
+@overload
+def finalise_make_jaxpr(
+    fn, *, return_shape: Literal[True] = True
+) -> Callable[..., Tuple[jax.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct]]]:
+    ...
+
+
+@overload
+def finalise_make_jaxpr(
+    fn, *, return_shape: bool = False
+) -> Callable[
+    ...,
+    Union[
+        jax.core.ClosedJaxpr, Tuple[jax.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct]]
+    ],
+]:
+    ...
+
+
+def finalise_make_jaxpr(fn, *, return_shape: bool = False):
     """As `jax.make_jaxpr`, but finalises the result."""
 
     def _finalise_make_jaxpr(*args):
         jaxpr = jax.make_jaxpr(fn, return_shape=return_shape)(*args)
         if return_shape:
-            jaxpr, struct = jaxpr
+            jaxpr, struct = jaxpr  # pyright: ignore
             jaxpr = finalise_jaxpr(jaxpr)
             return jaxpr, struct
         else:
@@ -178,7 +208,7 @@ primitive_finalisations[branched_error_p] = _branched_error_if_finalisation
 # To make this also useful as debugging tool, we also inline some calls.
 
 
-def _jvp_call_p_finalisation(fun, jvp, *args):
+def _jvp_call_p_finalisation(fun, jvp, *args, symbolic_zeros=None):
     return fun.call_wrapped(*args)
 
 

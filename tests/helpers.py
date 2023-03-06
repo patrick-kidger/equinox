@@ -13,8 +13,8 @@ def random_pytree(key, treedef):
     leaves = []
     for key in keys:
         dimkey, sizekey, valuekey = jr.split(key, 3)
-        num_dims = jr.randint(dimkey, (), 0, 5)
-        dim_sizes = jr.randint(sizekey, (num_dims,), 0, 5)
+        num_dims = jr.randint(dimkey, (), 0, 5).item()
+        dim_sizes = jr.randint(sizekey, (num_dims,), 0, 5).tolist()
         value = jr.normal(valuekey, dim_sizes)
         leaves.append(value)
     return jtu.tree_unflatten(treedef, leaves)
@@ -36,7 +36,7 @@ def _shaped_allclose(x, y, *, match_weak, **kwargs):
         y = jnp.asarray(y)
     if type(x) is not type(y):
         return False
-    if isinstance(x, jnp.ndarray):
+    if isinstance(x, jax.Array):
         if jnp.issubdtype(x.dtype, jnp.inexact):
             return (
                 x.shape == y.shape

@@ -45,13 +45,13 @@ def test_ω_is_leaf(getkey):
     for treedef in treedefs:
         a = b = random_pytree(getkey(), treedef)
         with pytest.raises(ValueError):
-            ω(a) + ω(b, is_leaf=lambda x: isinstance(x, int))
+            ω(a) + ω(b, is_leaf=lambda x: isinstance(x, int))  # pyright: ignore
         with pytest.raises(ValueError):
-            ω(a, is_leaf=lambda x: isinstance(x, int)) + ω(b)
+            ω(a, is_leaf=lambda x: isinstance(x, int)) + ω(b)  # pyright: ignore
         with pytest.raises(ValueError):
             ω(a, is_leaf=lambda x: isinstance(x, int)) + ω(
                 b, is_leaf=lambda x: isinstance(x, (int, str))
-            )
+            )  # pyright: ignore
 
         out = ω(a, is_leaf=lambda x: isinstance(x, int)) + ω(
             b, is_leaf=lambda x: isinstance(x, int)

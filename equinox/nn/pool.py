@@ -1,12 +1,15 @@
 from typing import Callable, Optional, Sequence, Tuple, Union
 
+import jax
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.random
 import numpy as np
 from jaxtyping import Array
 
+from ..custom_types import PRNGKey
 from ..module import Module, static_field
+from .misc import all_sequences
 
 
 class Pool(Module):
@@ -15,9 +18,9 @@ class Pool(Module):
     init: Union[int, float, Array]
     operation: Callable[[Array, Array], Array]
     num_spatial_dims: int = static_field()
-    kernel_size: Sequence[int] = static_field()
-    stride: Sequence[int] = static_field()
-    padding: Sequence[Tuple[int, int]] = static_field()
+    kernel_size: Tuple[int, ...] = static_field()
+    stride: Tuple[int, ...] = static_field()
+    padding: Tuple[Tuple[int, int], ...] = static_field()
     use_ceil: bool = static_field()
 
     def __init__(
@@ -61,7 +64,7 @@ class Pool(Module):
         if isinstance(kernel_size, int):
             self.kernel_size = (kernel_size,) * num_spatial_dims
         elif isinstance(kernel_size, Sequence):
-            self.kernel_size = kernel_size
+            self.kernel_size = tuple(kernel_size)
         else:
             raise ValueError(
                 "`kernel_size` must either be an int or tuple of length "
@@ -71,7 +74,7 @@ class Pool(Module):
         if isinstance(stride, int):
             self.stride = (stride,) * num_spatial_dims
         elif isinstance(stride, Sequence):
-            self.stride = stride
+            self.stride = tuple(stride)
         else:
             raise ValueError(
                 "`stride` must either be an int or tuple of length "
@@ -81,8 +84,8 @@ class Pool(Module):
         if isinstance(padding, int):
             self.padding = tuple((padding, padding) for _ in range(num_spatial_dims))
         elif isinstance(padding, Sequence) and len(padding) == num_spatial_dims:
-            if all(isinstance(element, Sequence) for element in padding):
-                self.padding = padding
+            if all_sequences(padding):
+                self.padding = tuple(padding)
             else:
                 self.padding = tuple((p, p) for p in padding)
         else:
@@ -113,9 +116,7 @@ class Pool(Module):
                     f"{kernel_size}."
                 )
 
-    def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
-    ) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape
@@ -188,9 +189,7 @@ class AvgPool1d(Pool):
             **kwargs,
         )
 
-    def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
-    ) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape `(channels, dim)`.
@@ -239,9 +238,7 @@ class MaxPool1d(Pool):
         )
 
     # Redefined to get them in the right order in docs
-    def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
-    ) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape `(channels, dim)`.
@@ -289,9 +286,7 @@ class AvgPool2d(Pool):
             **kwargs,
         )
 
-    def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
-    ) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape `(channels, dim_1, dim_2)`.
@@ -340,9 +335,7 @@ class MaxPool2d(Pool):
         )
 
     # Redefined to get them in the right order in docs
-    def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
-    ) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape `(channels, dim_1, dim_2)`.
@@ -390,9 +383,7 @@ class AvgPool3d(Pool):
             **kwargs,
         )
 
-    def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
-    ) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape
@@ -441,9 +432,7 @@ class MaxPool3d(Pool):
             **kwargs,
         )
 
-    def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
-    ) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape
@@ -459,7 +448,9 @@ class MaxPool3d(Pool):
         return super().__call__(x)
 
 
-def _adaptive_pool1d(x: Array, target_size: int, operation: Callable) -> Array:
+def _adaptive_pool1d(
+    x: Array, target_size: int, operation: Callable[[Array], Array]
+) -> Array:
     """**Arguments:**
 
     - `x`: The input. Should be a JAX array of shape `(dim,)`.
@@ -491,7 +482,7 @@ class AdaptivePool(Module):
     """General N dimensional adaptive downsampling to a target shape."""
 
     target_shape: Sequence[int] = static_field()
-    operation: Callable
+    operation: Callable[[Array], Array]
 
     def __init__(
         self,
@@ -520,9 +511,7 @@ class AdaptivePool(Module):
                 f"{num_spatial_dims} containing ints."
             )
 
-    def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
-    ) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape

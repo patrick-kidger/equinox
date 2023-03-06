@@ -9,7 +9,11 @@ def _is_struct(x):
 
 
 def filter_pure_callback(
-    callback, *args, result_shape_dtypes, vectorized=False, **kwargs
+    callback,
+    *args,
+    result_shape_dtypes,  # pyright: ignore
+    vectorized=False,  # pyright: ignore
+    **kwargs,
 ):
     """Calls a Python function inside a JIT region. As `jax.pure_callback` but accepts
     arbitrary Python objects as inputs and outputs. (Not just JAXable types.)
@@ -34,7 +38,7 @@ def filter_pure_callback(
 
     def _callback(_dynamic):
         _args, _kwargs = combine(_dynamic, static)
-        _out = callback(*_args, **_kwargs)
+        _out = callback(*_args, **_kwargs)  # pyright: ignore
         _dynamic_out, _static_out = partition(_out, is_array)
         if not tree_equal(_static_out, static_struct):
             raise ValueError("Callback did not return matching static elements")

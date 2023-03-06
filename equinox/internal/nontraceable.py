@@ -5,6 +5,7 @@ import functools as ft
 from typing import Optional
 
 import jax
+import jax.core
 import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir

@@ -1,6 +1,8 @@
 import functools as ft
+from typing import Any
 
 import jax
+import jax.core
 import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
@@ -174,7 +176,7 @@ def filter_primitive_jvp(rule):
     return _wrapper
 
 
-_sentinel = object()
+_sentinel: Any = object()
 
 
 def filter_primitive_transpose(rule=_sentinel, *, materialise_zeros=False):

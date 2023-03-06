@@ -7,6 +7,8 @@ import pytest
 
 import equinox as eqx
 
+from .helpers import shaped_allclose
+
 
 def test_basic():
     a = [jnp.array(3), jnp.array(2)]
@@ -34,6 +36,7 @@ def test_jit():
 
 
 def test_no_nonjaxarray():
+    del eqx.experimental.set_state.__wrapped__.__wrapped__.__annotations__["state"]
     c = 0
     index = eqx.experimental.StateIndex()
     with pytest.raises(TypeError):
@@ -122,7 +125,7 @@ def test_vmap(with_jit, with_pytree):
         set_ = a
         get_ = b
     vmap_set_state(index1, set_)
-    assert jnp.array_equal(vmap_get_state(index1, get_), set_)
+    assert shaped_allclose(vmap_get_state(index1, get_), set_)
 
     with pytest.raises(RuntimeError):
         # setting state without vmap, after setting state with vmap
@@ -177,7 +180,7 @@ def test_multi_vmap(with_jit, with_pytree):
         set_ = lambda: jnp.copy(a)
         get_ = lambda: jnp.copy(b)
     set_state(set_())
-    assert jnp.array_equal(get_state(get_()), set_())
+    assert shaped_allclose(get_state(get_()), set_())
 
     with pytest.raises(RuntimeError):
         eqx.experimental.get_state(index, get_())
@@ -375,7 +378,7 @@ def test_inference_vmap(with_jit, with_pytree):
         set_ = a
         get_ = b
     vmap_set_state(index1, set_)
-    assert jnp.array_equal(vmap_get_state(index1_inference, get_), set_)
+    assert shaped_allclose(vmap_get_state(index1_inference, get_), set_)
 
     with pytest.raises(RuntimeError):
         # getting state without vmap, after setting state with vmap
@@ -423,7 +426,7 @@ def test_inference_multi_vmap(with_jit, with_pytree):
         set_ = a
         get_ = b
     set_state(set_)
-    assert jnp.array_equal(get_state(get_), set_)
+    assert shaped_allclose(get_state(get_), set_)
 
     with pytest.raises(RuntimeError):
         eqx.experimental.get_state(index_inference, get_)

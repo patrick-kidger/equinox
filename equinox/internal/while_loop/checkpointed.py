@@ -48,13 +48,14 @@ and
 import functools as ft
 import math
 import operator
-from typing import Any, Callable, Optional, Sequence, TypeVar, Union
+from typing import Any, Callable, cast, Optional, Sequence, TypeVar, Union
 
 import jax
+import jax.core
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.tree_util as jtu
-from jaxtyping import Array, Bool
+from jaxtyping import Array, ArrayLike, Bool
 
 from ...ad import filter_closure_convert, filter_custom_vjp, filter_vjp
 from ...filters import combine, is_array, is_inexact_array, partition
@@ -64,7 +65,7 @@ from ..nontraceable import nonbatchable, nondifferentiable
 from .common import common_rewrite
 
 
-_T = TypeVar("T")
+_T = TypeVar("_T")
 _Bool = Union[bool, Bool[Array, ""]]
 _Node = Any
 
@@ -223,12 +224,15 @@ def checkpointed_while_loop(
     init_val = jtu.tree_map(jnp.asarray, init_val)
     if max_steps == 0:
         return init_val
-    cond_fun, body_fun, init_val, buffers = common_rewrite(
+    cond_fun_, body_fun_, init_val_, buffers_ = common_rewrite(
         cond_fun, body_fun, init_val, max_steps, buffers, readable=False
     )
-    body_fun = filter_closure_convert(body_fun, init_val)
-    vjp_arg = (init_val, body_fun)
-    _, _, final_val = _checkpointed_while_loop(vjp_arg, cond_fun, checkpoints, buffers)
+    del cond_fun, body_fun, init_val, buffers
+    body_fun_ = filter_closure_convert(body_fun_, init_val_)
+    vjp_arg = (init_val_, body_fun_)
+    _, _, final_val = _checkpointed_while_loop(
+        vjp_arg, cond_fun_, checkpoints, buffers_
+    )
     return final_val
 
 
@@ -263,7 +267,7 @@ def _unique_index(i, x):
     new_eqn = eqn.replace(params=new_params)
     new_eqns = (*rest_eqns, new_eqn)
     new_jaxpr = jaxpr.replace(jaxpr=jaxpr.jaxpr.replace(eqns=new_eqns))
-    (out,) = jax.core.jaxpr_as_fun(new_jaxpr)(x, i)
+    (out,) = jax.core.jaxpr_as_fun(new_jaxpr)(x, i)  # pyright: ignore
     return out
 
 
@@ -276,6 +280,8 @@ def _stumm_walther_i(step, save_state):
     """
     step, save_state = nonbatchable((step, save_state))
     i, o, p, s = save_state
+    i = cast(ArrayLike, i)
+    s = cast(ArrayLike, s)
     index = i
     save_residual = s
     i = jnp.where(s, i + 1, i)
@@ -297,7 +303,7 @@ def _stumm_walther_i(step, save_state):
     return out
 
 
-def _any_dispensable(dispensable, residual_steps, levels):
+def _any_dispensable(dispensable, residual_steps: Array, levels):
     del levels
     dispensable_steps = jnp.where(dispensable, residual_steps, 0)
     index = dispensable_steps.argmax()
@@ -412,6 +418,7 @@ def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, checkpoints, buffers):
 
         def _maybe_update(xs, x):
             where_x = jnp.where(save_residual, x, _scalar_index(index, xs))
+            where_x = cast(Array, where_x)
             return lax.dynamic_update_index_in_dim(xs, where_x, index, axis=0)
 
         val_no_buffers = tree_at(buffers(None), val, replace_fn=_array_to_none)
@@ -423,11 +430,12 @@ def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, checkpoints, buffers):
         save_state2, residual_steps2 = nonbatchable((save_state2, residual_steps2))
         return step2, save_state2, val2, residual_steps2, residuals2
 
-    int_dtype = jnp.int64 if jax.config.jax_enable_x64 else jnp.int32
+    int_dtype = jnp.int64 if jax.config.jax_enable_x64 else jnp.int32  # pyright: ignore
     init_step = jnp.array(0, dtype=int_dtype)  # dtype matches init_residual_steps
     init_save_state_sw_i = 0, checkpoints, checkpoints, True
+    dtype_max = jnp.iinfo(int_dtype).max  # pyright: ignore
     init_save_state_wm = (
-        jnp.zeros(checkpoints, dtype=int_dtype).at[0].set(jnp.iinfo(int_dtype).max),
+        jnp.zeros(checkpoints, dtype=int_dtype).at[0].set(dtype_max),
         jnp.full((checkpoints,), False),
     )
     init_save_state = (init_save_state_sw_i, init_save_state_wm)
@@ -527,6 +535,7 @@ def _maybe_save_to_checkpoint(
 
     def _maybe_update(xs, x):
         where_x = jnp.where(save_checkpoint, x, _scalar_index(index, xs))
+        where_x = cast(Array, where_x)
         return lax.dynamic_update_index_in_dim(xs, where_x, index, axis=0)
 
     residual_steps2, residuals2 = jtu.tree_map(

@@ -14,16 +14,13 @@ import equinox as eqx
 
 def test_custom_init():
     with pytest.raises(TypeError):
-        eqx.nn.Linear(1, 1, 1)  # Matches the number of dataclass fields Linear has
+        eqx.nn.Linear(3, 4)  # pyright: ignore
 
     with pytest.raises(TypeError):
-        eqx.nn.Linear(3, 4)
+        eqx.nn.Linear(3)  # pyright: ignore
 
     with pytest.raises(TypeError):
-        eqx.nn.Linear(3)
-
-    with pytest.raises(TypeError):
-        eqx.nn.Linear(out_features=4)
+        eqx.nn.Linear(out_features=4)  # pyright: ignore
 
 
 def test_linear(getkey):
@@ -41,6 +38,14 @@ def test_linear(getkey):
     linear = eqx.nn.Linear(in_features=3, out_features=4, key=getkey())
     x = jrandom.normal(getkey(), (3,))
     assert linear(x).shape == (4,)
+
+    linear = eqx.nn.Linear("scalar", 2, key=getkey())
+    x = jrandom.normal(getkey(), ())
+    assert linear(x).shape == (2,)
+
+    linear = eqx.nn.Linear(2, "scalar", key=getkey())
+    x = jrandom.normal(getkey(), (2,))
+    assert linear(x).shape == ()
 
 
 def test_identity(getkey):
@@ -132,10 +137,6 @@ def test_sequential(getkey):
     assert isinstance(seq[1:], eqx.nn.Sequential)
     x = jrandom.normal(getkey(), (4,))
     assert seq[1:](x).shape == (3,)
-
-    with pytest.raises(TypeError):
-        seq[[0, 1, 2]]
-
     assert len(seq) == 3
     assert eqx.nn.Sequential(list(seq)) == seq
 
@@ -148,6 +149,14 @@ def test_mlp(getkey):
     mlp = eqx.nn.MLP(in_size=2, out_size=3, width_size=8, depth=2, key=getkey())
     x = jrandom.normal(getkey(), (2,))
     assert mlp(x).shape == (3,)
+
+    mlp = eqx.nn.MLP("scalar", 2, 2, 2, key=getkey())
+    x = jrandom.normal(getkey(), ())
+    assert mlp(x).shape == (2,)
+
+    mlp = eqx.nn.MLP(2, "scalar", 2, 2, key=getkey())
+    x = jrandom.normal(getkey(), (2,))
+    assert mlp(x).shape == ()
 
 
 def test_conv1d(getkey):
@@ -192,7 +201,7 @@ def test_conv1d(getkey):
     new_bias = jnp.array([1, 2, 3]).reshape(3, 1)
     data = jnp.arange(-3, 3).reshape(1, -1)
     assert new_weight.shape == conv.weight.shape
-    assert new_bias.shape == conv.bias.shape
+    assert new_bias.shape == conv.bias.shape  # pyright: ignore
     conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
     answer = jnp.array(
         [-6, -3, 0, 3, 6, 3, -20, -20, -8, 4, 16, 13, -34, -37, -16, 5, 26, 23]
@@ -242,7 +251,7 @@ def test_conv2d(getkey):
     new_bias = jnp.array([1]).reshape(1, 1, 1)
     data = jnp.arange(-4, 5).reshape(1, 3, 3)
     assert new_weight.shape == conv.weight.shape
-    assert new_bias.shape == conv.bias.shape
+    assert new_bias.shape == conv.bias.shape  # pyright: ignore
     conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
     answer = jnp.array([-37, -31, -9, 25, 61, 49, 23, 41, 27]).reshape(1, 3, 3)
     assert jnp.allclose(conv(data), answer)
@@ -265,7 +274,7 @@ def test_conv2d(getkey):
         (2, 3, 3),
     )
     assert new_weight.shape == conv.weight.shape
-    assert new_bias.shape == conv.bias.shape
+    assert new_bias.shape == conv.bias.shape  # pyright: ignore
     conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
     # this is the multiplication part, without the bias
     answer_part = jnp.array([-38, -32, -10, 24, 60, 48, 22, 40, 26]).reshape(1, 3, 3)
@@ -324,7 +333,7 @@ def test_conv3d(getkey):
     new_bias = jnp.array([1]).reshape(1, 1, 1, 1)
     data = jnp.arange(-4, 4).reshape(1, 2, 2, 2)
     assert new_weight.shape == conv.weight.shape
-    assert new_bias.shape == conv.bias.shape
+    assert new_bias.shape == conv.bias.shape  # pyright: ignore
     conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
     answer = jnp.array([-3, -2, -1, 0, 1, 2, 3, 4, 1, 1, 1, 1]).reshape(1, 3, 2, 2)
     assert jnp.allclose(conv(data), answer)
@@ -364,7 +373,7 @@ def test_convtranspose1d(getkey):
     new_bias = jnp.array([1, 2, 3]).reshape(3, 1)
     data = jnp.arange(-3, 3).reshape(1, -1)
     assert new_weight.shape == conv.weight.shape
-    assert new_bias.shape == conv.bias.shape
+    assert new_bias.shape == conv.bias.shape  # pyright: ignore
     conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
     answer = jnp.array(
         [
@@ -424,7 +433,7 @@ def test_convtranspose2d(getkey):
     new_bias = jnp.array([1]).reshape(1, 1, 1)
     data = jnp.arange(-4, 5).reshape(1, 3, 3)
     assert new_weight.shape == conv.weight.shape
-    assert new_bias.shape == conv.bias.shape
+    assert new_bias.shape == conv.bias.shape  # pyright: ignore
     conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
     answer = jnp.array([-37, -31, -9, 25, 61, 49, 23, 41, 27]).reshape(1, 3, 3)
     assert jnp.all(conv(data) == answer)
@@ -449,7 +458,7 @@ def test_convtranspose2d(getkey):
         (2, 3, 3),
     )
     assert new_weight.shape == conv.weight.shape
-    assert new_bias.shape == conv.bias.shape
+    assert new_bias.shape == conv.bias.shape  # pyright: ignore
     conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
     # this is the multiplication part, without the bias
     answer_part = jnp.array([-38, -32, -10, 24, 60, 48, 22, 40, 26]).reshape(1, 3, 3)
@@ -495,7 +504,7 @@ def test_convtranspose3d(getkey):
     new_bias = jnp.array([1]).reshape(1, 1, 1, 1)
     data = jnp.arange(-4, 4).reshape(1, 2, 2, 2)
     assert new_weight.shape == conv.weight.shape
-    assert new_bias.shape == conv.bias.shape
+    assert new_bias.shape == conv.bias.shape  # pyright: ignore
     conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
     answer = jnp.array(
         [
@@ -1018,7 +1027,7 @@ def test_poolnetworkbackprop(getkey):
         conv_layer: List[Union[eqx.nn.Conv2d, eqx.nn.MaxPool2d]]
         linear_layers: List[eqx.nn.Linear]
 
-        def __init__(self, key: "jax.random.PRNGKey"):
+        def __init__(self, key):
             key1, key2, key3 = jax.random.split(key, 3)
             self.conv_layer = [eqx.nn.Conv2d(3, 2, 3, key=key1), eqx.nn.MaxPool2d(2, 2)]
             self.linear_layers = [
