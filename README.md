@@ -33,8 +33,8 @@ import equinox as eqx
 import jax
 
 class Linear(eqx.Module):
-    weight: jax.numpy.ndarray
-    bias: jax.numpy.ndarray
+    weight: jax.Array
+    bias: jax.Array
 
     def __init__(self, in_size, out_size, key):
         wkey, bkey = jax.random.split(key)

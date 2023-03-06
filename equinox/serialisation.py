@@ -2,6 +2,7 @@ import pathlib
 from contextlib import contextmanager
 from typing import Any, BinaryIO, Callable, Optional, Union
 
+import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
@@ -45,7 +46,7 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
 
     !!! example
 
-        Skipping saving of jnp.ndarray.
+        Skipping saving of jax.Array.
 
         ```python
         import jax.numpy as jnp
@@ -53,12 +54,12 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
 
         tree = (jnp.array([1,2,3]), [4,5,6])
         new_filter_spec = lambda f,x: (
-            None if isinstance(x, jnp.ndarray) else eqx.default_serialise_filter_spec(f, x)
+            None if isinstance(x, jax.Array) else eqx.default_serialise_filter_spec(f, x)
         )
         eqx.tree_serialise_leaves("some_filename.eqx", tree, filter_spec=new_filter_spec)
         ```
     """  # noqa: E501
-    if isinstance(x, jnp.ndarray):
+    if isinstance(x, jax.Array):
         jnp.save(f, x)
     elif isinstance(x, np.ndarray):
         np.save(f, x)
@@ -83,7 +84,7 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
                     value_str = tree_pformat(value)
                     raise NotImplementedError(
                         "Can only serialise usages of StateIndex storing np.ndarray "
-                        f"or tuples of jnp.ndarray, got {value_str}"
+                        f"or tuples of jax.Array, got {value_str}"
                     )
                 np.save(f, False)
                 np.save(f, len(value))
@@ -93,7 +94,7 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
                 value_str = tree_pformat(value)
                 raise NotImplementedError(
                     "Can only serialise usages of StateIndex storing np.ndarray "
-                    f"or tuples of jnp.ndarray, got {value_str}"
+                    f"or tuples of jax.Array, got {value_str}"
                 )
     else:
         pass
@@ -118,7 +119,7 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
 
     !!! example
 
-        Skipping loading of jnp.ndarray.
+        Skipping loading of jax.Array.
 
         ```python
         import jax.numpy as jnp
@@ -126,12 +127,12 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
 
         tree = (jnp.array([4,5,6]), [1,2,3])
         new_filter_spec = lambda f,x: (
-            x if isinstance(x, jnp.ndarray) else eqx.default_deserialise_filter_spec(f, x)
+            x if isinstance(x, jax.Array) else eqx.default_deserialise_filter_spec(f, x)
         )
         new_tree = eqx.tree_deserialise_leaves("some_filename.eqx", tree, filter_spec=new_filter_spec)
         ```
     """  # noqa: E501
-    if isinstance(x, jnp.ndarray):
+    if isinstance(x, jax.Array):
         return jnp.load(f)
     elif isinstance(x, np.ndarray):
         return np.load(f)
@@ -186,7 +187,7 @@ def _assert_same(new, old):
             f"Deserialised leaf has changed type from {type(old)} in `like` to "
             f"{type(new)} on disk."
         )
-    if isinstance(new, (np.ndarray, jnp.ndarray)):
+    if isinstance(new, (np.ndarray, jax.Array)):
         if new.shape != old.shape:
             raise RuntimeError(
                 f"Deserialised leaf has changed shape from {old.shape} in `like` to "

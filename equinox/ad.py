@@ -1,12 +1,28 @@
 import functools as ft
 import types
 import typing
-from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
+from typing import (
+    Any,
+    Callable,
+    cast,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    overload,
+    Sequence,
+    Tuple,
+    TYPE_CHECKING,
+    TypeVar,
+    Union,
+)
+from typing_extensions import ParamSpec
 
 import jax
+import jax.core
 import jax.interpreters.ad as ad
 import jax.tree_util as jtu
-from jaxtyping import Array, PyTree
+from jaxtyping import Array, ArrayLike, Complex, Float, PyTree
 
 from .custom_types import sentinel, TreeDef
 from .deprecate import deprecated_0_10
@@ -21,6 +37,11 @@ from .filters import (
 from .make_jaxpr import filter_make_jaxpr
 from .module import Module, module_update_wrapper, Static, static_field
 from .tree import tree_equal
+
+
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
+_S = TypeVar("_S")
 
 
 class _ValueAndGradWrapper(Module):
@@ -61,9 +82,49 @@ class _GradWrapper(Module):
         return jtu.Partial(self, instance)
 
 
+_Scalar = Union[float, complex, Float[ArrayLike, ""], Complex[ArrayLike, ""]]
+
+
+@overload
+def filter_value_and_grad(
+    *, has_aux: Literal[False] = False
+) -> Callable[[Callable[_P, _Scalar]], Callable[_P, Tuple[_Scalar, PyTree]]]:
+    ...
+
+
+@overload
+def filter_value_and_grad(
+    fun: Callable[_P, _Scalar], *, has_aux: Literal[False] = False
+) -> Callable[_P, Tuple[_Scalar, PyTree]]:
+    ...
+
+
+@overload
+def filter_value_and_grad(
+    *, has_aux: Literal[True] = True
+) -> Callable[
+    [Callable[_P, Tuple[_Scalar, _T]]], Callable[_P, Tuple[Tuple[_Scalar, _T], PyTree]]
+]:
+    ...
+
+
+@overload
+def filter_value_and_grad(
+    fun: Callable[_P, Tuple[_Scalar, _T]], *, has_aux: Literal[True] = True
+) -> Callable[_P, Tuple[Tuple[_Scalar, _T], PyTree]]:
+    ...
+
+
+@overload
+def filter_value_and_grad(
+    fun: Callable[_P, _T], *, has_aux: bool = False
+) -> Callable[_P, Tuple[_T, PyTree]]:
+    ...
+
+
 @doc_remove_args("gradkwargs")
 def filter_value_and_grad(
-    fun: Callable = sentinel, *, has_aux: bool = False, **gradkwargs
+    fun=sentinel, *, has_aux: bool = False, **gradkwargs
 ) -> Callable:
     """Creates a function that evaluates both `fun` and the gradient of `fun`.
 
@@ -104,8 +165,44 @@ def filter_value_and_grad(
     return module_update_wrapper(_ValueAndGradWrapper(fun, has_aux, gradkwargs), fun)
 
 
+@overload
+def filter_grad(
+    *, has_aux: Literal[False] = False
+) -> Callable[[Callable[_P, _Scalar]], Callable[_P, PyTree[Float[Array, "..."]]]]:
+    ...
+
+
+@overload
+def filter_grad(
+    fun: Callable[_P, _Scalar], *, has_aux: Literal[False] = False
+) -> Callable[_P, PyTree[Float[Array, "..."]]]:
+    ...
+
+
+@overload
+def filter_grad(
+    *, has_aux: Literal[True] = True
+) -> Callable[
+    [Callable[_P, Tuple[_Scalar, _T]]],
+    Callable[_P, Tuple[PyTree[Float[Array, "..."]], _T]],
+]:
+    ...
+
+
+@overload
+def filter_grad(
+    fun: Callable[_P, Tuple[_Scalar, _T]], *, has_aux: Literal[True] = True
+) -> Callable[_P, Tuple[PyTree[Float[Array, "..."]], _T]]:
+    ...
+
+
+@overload
+def filter_grad(fun: Callable[_P, Any], *, has_aux: bool = False) -> Callable[_P, Any]:
+    ...
+
+
 @doc_remove_args("gradkwargs")
-def filter_grad(fun: Callable = sentinel, *, has_aux: bool = False, **gradkwargs):
+def filter_grad(fun=sentinel, *, has_aux: bool = False, **gradkwargs):
     """Creates a function that computes the gradient of `fun`.
 
     The gradient will be computed with respect to all floating-point JAX/NumPy arrays
@@ -154,6 +251,7 @@ def filter_grad(fun: Callable = sentinel, *, has_aux: bool = False, **gradkwargs
         return ft.partial(filter_grad, has_aux=has_aux, **gradkwargs)
 
     fun_value_and_grad = filter_value_and_grad(fun, has_aux=has_aux, **gradkwargs)
+    fun_value_and_grad = cast(_ValueAndGradWrapper, fun_value_and_grad)
     return module_update_wrapper(_GradWrapper(fun_value_and_grad, has_aux), fun)
 
 
@@ -165,7 +263,9 @@ def _is_jvp_tracer(x):
     return isinstance(x, ad.JVPTracer)
 
 
-def filter_jvp(fn, primals, tangents):
+def filter_jvp(
+    fn: Callable[..., _T], primals: Sequence, tangents: Sequence
+) -> Tuple[_T, PyTree]:
     """Like `jax.jvp`, but accepts arbitrary PyTrees. (Not just JAXable types.)
 
     **Arguments:**
@@ -220,7 +320,21 @@ def filter_jvp(fn, primals, tangents):
     return primal_out, tangent_out
 
 
-def filter_vjp(fun, *primals, has_aux=False):
+@overload
+def filter_vjp(
+    fun: Callable[..., _T], *primals, has_aux: Literal[False] = False
+) -> Tuple[_T, Callable[..., Tuple[PyTree, ...]]]:
+    ...
+
+
+@overload
+def filter_vjp(
+    fun: Callable[..., Tuple[_T, _S]], *primals, has_aux: Literal[True] = True
+) -> Tuple[_T, Callable[..., Tuple[PyTree, ...]], _S]:
+    ...
+
+
+def filter_vjp(fun, *primals, has_aux: bool = False):
     """Filtered version of `jax.vjp`.
 
     **Arguments:**
@@ -326,7 +440,7 @@ class _ClosureConvert(Module):
         return out
 
 
-def filter_closure_convert(fn, *args, **kwargs):
+def filter_closure_convert(fn: Callable[_P, _T], *args, **kwargs) -> Callable[_P, _T]:
     """As `jax.closure_convert`, but works on functions accepting and returning
     arbitrary PyTree objects. In addition, all JAX arrays are hoisted into constants
     (not just floating point arrays).
@@ -368,7 +482,7 @@ def filter_closure_convert(fn, *args, **kwargs):
         return fn
     closed_jaxpr, out_dynamic_struct, out_static = filter_make_jaxpr(fn)(
         *args, **kwargs
-    )
+    )  # pyright: ignore
     in_dynamic, in_static = partition((args, kwargs), _is_struct)
     in_dynamic_struct = jax.eval_shape(lambda: in_dynamic)
     jaxpr = closed_jaxpr.jaxpr
@@ -377,9 +491,11 @@ def filter_closure_convert(fn, *args, **kwargs):
     out_dynamic_struct = jtu.tree_flatten(out_dynamic_struct)
     in_static = jtu.tree_flatten(in_static)
     out_static = jtu.tree_flatten(out_static)
-    return _ClosureConvert(
+    closure_converted = _ClosureConvert(
         jaxpr, consts, in_dynamic_struct, out_dynamic_struct, in_static, out_static
     )
+    closure_converted = cast(Callable[_P, _T], closure_converted)
+    return closure_converted
 
 
 class filter_custom_jvp:
@@ -601,7 +717,7 @@ class filter_custom_vjp:
         return combine(diff_array_out, nondiff_array_out, nonarray_out.value)
 
 
-if getattr(typing, "GENERATING_DOCUMENTATION", False):
+if getattr(typing, "GENERATING_DOCUMENTATION", False) and not TYPE_CHECKING:
     _filter_custom_jvp_doc = filter_custom_jvp.__doc__
     _filter_custom_vjp_doc = filter_custom_vjp.__doc__
 

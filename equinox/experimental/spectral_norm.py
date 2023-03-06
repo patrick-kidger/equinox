@@ -1,11 +1,11 @@
 from typing import Tuple
 
-import jax
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.random as jr
 from jaxtyping import Array
 
+from ..custom_types import PRNGKey
 from ..module import Module, static_field
 from .stateful import get_state, set_state, StateIndex
 
@@ -127,7 +127,7 @@ class SpectralNorm(Module):
         eps: float = 1e-12,
         inference: bool = False,
         *,
-        key: "jax.random.PRNGKey",
+        key: PRNGKey,
         **kwargs
     ):
         """**Arguments:**
@@ -176,5 +176,5 @@ class SpectralNorm(Module):
         return jnp.reshape(self.weight / σ, self.weight_shape)
 
     @classmethod
-    def withkey(cls, key: "jax.random.PRNGKey"):
+    def withkey(cls, key: PRNGKey):
         return lambda *args, **kwargs: cls(*args, key=key, **kwargs)

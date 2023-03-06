@@ -1,4 +1,7 @@
+from typing import Any, Callable
+
 import jax
+import jax.core
 import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
@@ -11,7 +14,9 @@ from ..filters import combine, filter, is_array, partition
 from ..pretty_print import tree_pformat
 
 
-def announce_transform(x, name=None, intermediates=False, announce=print):
+def announce_transform(
+    x, name=None, intermediates=False, announce: Callable[[str], Any] = print
+):
     """Identity function on an arbitrary PyTree. Announces each time it is parsed as "
     "part of a jaxpr.
     """

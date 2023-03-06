@@ -119,7 +119,7 @@ def test_methods(call, outer):
     num_traces = 0
 
     class M(eqx.Module):
-        increment: Union[int, jnp.ndarray]
+        increment: Union[int, jax.Array]
 
         if call:
 
@@ -299,11 +299,11 @@ def test_function_name_warning(log_compiles_config, caplog):
     def wrapped_fun(y):
         pass
 
-    def the_test_function_name(x, y):
+    def the_test_function_name2(x, y):
         return x + y
 
     fun = eqx.filter_jit(
-        ft.wraps(wrapped_fun)(ft.partial(the_test_function_name, jnp.array(1.0)))
+        ft.wraps(wrapped_fun)(ft.partial(the_test_function_name2, jnp.array(1.0)))
     )
 
     fun(jnp.array(1.0))
@@ -336,7 +336,7 @@ def test_buffer_donation(getkey):
     num_traces = 0
 
     class M(eqx.Module):
-        buffer: jnp.ndarray
+        buffer: jax.Array
         mlp: eqx.nn.MLP
 
         def __init__(self, width: int, depth: int):
@@ -378,7 +378,7 @@ def test_buffer_donation(getkey):
     num_traces = 0
 
     class F(eqx.Module):
-        buffer: jnp.ndarray
+        buffer: jax.Array
         mlp: eqx.nn.MLP
 
         def __init__(self, width: int, depth: int):

@@ -1,11 +1,11 @@
 import math
 from typing import Any, Literal, Optional, TypeVar, Union
 
-import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array
 
+from ..custom_types import PRNGKey
 from ..module import Module, static_field
 
 
@@ -24,7 +24,7 @@ class Linear(Module):
         out_features: Union[int, Literal["scalar"]],
         use_bias: bool = True,
         *,
-        key: "jax.random.PRNGKey"
+        key: PRNGKey
     ):
         """**Arguments:**
 
@@ -44,9 +44,9 @@ class Linear(Module):
         """
         super().__init__()
         wkey, bkey = jrandom.split(key, 2)
-        lim = 1 / math.sqrt(in_features)
         in_features_ = 1 if in_features == "scalar" else in_features
         out_features_ = 1 if out_features == "scalar" else out_features
+        lim = 1 / math.sqrt(in_features_)
         self.weight = jrandom.uniform(
             wkey, (out_features_, in_features_), minval=-lim, maxval=lim
         )
@@ -59,9 +59,7 @@ class Linear(Module):
         self.out_features = out_features
         self.use_bias = use_bias
 
-    def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
-    ) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape `(in_features,)`. (Or shape
@@ -112,7 +110,7 @@ class Identity(Module):
         # Ignores args and kwargs
         super().__init__()
 
-    def __call__(self, x: _T, *, key: Optional["jax.random.PRNGKey"] = None) -> _T:
+    def __call__(self, x: _T, *, key: Optional[PRNGKey] = None) -> _T:
         """**Arguments:**
 
         - `x`: The input, of any type.

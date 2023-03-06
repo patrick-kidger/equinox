@@ -75,10 +75,11 @@ def while_loop(
 
     if kind == "lax":
         del kind, checkpoints, base
-        cond_fun, body_fun, init_val, _ = common_rewrite(
+        cond_fun_, body_fun_, init_val_, _ = common_rewrite(
             cond_fun, body_fun, init_val, max_steps, buffers, readable=True
         )
-        _, _, final_val = lax.while_loop(cond_fun, body_fun, init_val)
+        del cond_fun, body_fun, init_val
+        _, _, final_val = lax.while_loop(cond_fun_, body_fun_, init_val_)
         return final_val
     elif kind == "checkpointed":
         del kind, base

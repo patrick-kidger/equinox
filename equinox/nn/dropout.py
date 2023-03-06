@@ -1,11 +1,11 @@
 import warnings
 from typing import Optional
 
-import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array
 
+from ..custom_types import PRNGKey
 from ..module import Module
 
 
@@ -51,7 +51,7 @@ class Dropout(Module):
         self,
         x: Array,
         *,
-        key: Optional["jax.random.PRNGKey"] = None,
+        key: Optional[PRNGKey] = None,
         inference: Optional[bool] = None,
         deterministic: Optional[bool] = None
     ) -> Array:

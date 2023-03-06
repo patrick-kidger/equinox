@@ -82,7 +82,7 @@ def test_ensemble(getkey):
 @pytest.mark.parametrize("outer", [False, True])
 def test_methods(call, outer):
     class M(eqx.Module):
-        increment: Union[int, jnp.ndarray]
+        increment: Union[int, jax.Array]
 
         if call:
 

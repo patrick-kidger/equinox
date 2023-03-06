@@ -5,6 +5,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array
 
+from ..custom_types import PRNGKey
 from ..internal import left_broadcast_to
 from ..module import Module, static_field
 
@@ -73,9 +74,7 @@ class LayerNorm(Module):
         self.weight = jnp.ones(shape) if elementwise_affine else None
         self.bias = jnp.zeros(shape) if elementwise_affine else None
 
-    def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
-    ) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
         """**Arguments:**
 
         - `x`: A JAX array whose shape is given by `shape`.
@@ -162,9 +161,7 @@ class GroupNorm(Module):
         self.weight = jnp.ones(channels) if channelwise_affine else None
         self.bias = jnp.zeros(channels) if channelwise_affine else None
 
-    def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
-    ) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
         """**Arguments:**
 
         - `x`: A JAX array of shape `(channels, ...)`.
@@ -183,7 +180,7 @@ class GroupNorm(Module):
         out = (y - mean) * inv
         out = out.reshape(x.shape)
         if self.channelwise_affine:
-            weight = left_broadcast_to(self.weight, out.shape)
-            bias = left_broadcast_to(self.bias, out.shape)
+            weight = left_broadcast_to(self.weight, out.shape)  # pyright: ignore
+            bias = left_broadcast_to(self.bias, out.shape)  # pyright: ignore
             out = weight * out + bias
         return out

@@ -1,18 +1,22 @@
 import itertools as it
-from typing import Any, Optional, Sequence, Tuple, Union
+from typing import Callable, Optional, Sequence, Tuple, TypeVar, Union
 
-import jax
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.random as jrandom
 import numpy as np
 from jaxtyping import Array
 
+from ..custom_types import PRNGKey
 from ..module import Module, static_field
+from .misc import all_sequences
 
 
-def _ntuple(n: int) -> callable:
-    def parse(x: Any) -> tuple:
+_T = TypeVar("_T")
+
+
+def _ntuple(n: int) -> Callable[[Union[_T, Sequence[_T]]], Tuple[_T, ...]]:
+    def parse(x: Union[_T, Sequence[_T]]) -> Tuple[_T, ...]:
         if isinstance(x, Sequence):
             if len(x) == n:
                 return tuple(x)
@@ -63,7 +67,7 @@ class Conv(Module):
         groups: int = 1,
         use_bias: bool = True,
         *,
-        key: "jax.random.PRNGKey",
+        key: PRNGKey,
         **kwargs,
     ):
         """**Arguments:**
@@ -143,7 +147,7 @@ class Conv(Module):
         if isinstance(padding, int):
             self.padding = tuple((padding, padding) for _ in range(num_spatial_dims))
         elif isinstance(padding, Sequence) and len(padding) == num_spatial_dims:
-            if all(isinstance(element, Sequence) for element in padding):
+            if all_sequences(padding):
                 self.padding = tuple(padding)
             else:
                 self.padding = tuple((p, p) for p in padding)
@@ -156,9 +160,7 @@ class Conv(Module):
         self.groups = groups
         self.use_bias = use_bias
 
-    def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
-    ) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape
@@ -206,7 +208,7 @@ class Conv1d(Conv):
         groups: int = 1,
         use_bias: bool = True,
         *,
-        key: "jax.random.PRNGKey",
+        key: PRNGKey,
         **kwargs,
     ):
         super().__init__(
@@ -238,7 +240,7 @@ class Conv2d(Conv):
         groups: int = 1,
         use_bias: bool = True,
         *,
-        key: "jax.random.PRNGKey",
+        key: PRNGKey,
         **kwargs,
     ):
         super().__init__(
@@ -270,7 +272,7 @@ class Conv3d(Conv):
         groups: int = 1,
         use_bias: bool = True,
         *,
-        key: "jax.random.PRNGKey",
+        key: PRNGKey,
         **kwargs,
     ):
         super().__init__(
@@ -317,7 +319,7 @@ class ConvTranspose(Module):
         groups: int = 1,
         use_bias: bool = True,
         *,
-        key: "jax.random.PRNGKey",
+        key: PRNGKey,
         **kwargs,
     ):
         """**Arguments:**
@@ -416,7 +418,7 @@ class ConvTranspose(Module):
         if isinstance(padding, int):
             self.padding = tuple((padding, padding) for _ in range(num_spatial_dims))
         elif isinstance(padding, Sequence) and len(padding) == num_spatial_dims:
-            if all(isinstance(element, Sequence) for element in padding):
+            if all_sequences(padding):
                 self.padding = tuple(padding)
             else:
                 self.padding = tuple((p, p) for p in padding)
@@ -430,9 +432,7 @@ class ConvTranspose(Module):
         self.groups = groups
         self.use_bias = use_bias
 
-    def __call__(
-        self, x: Array, *, key: Optional["jax.random.PRNGKey"] = None
-    ) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape
@@ -488,7 +488,7 @@ class ConvTranspose1d(ConvTranspose):
         groups: int = 1,
         use_bias: bool = True,
         *,
-        key: "jax.random.PRNGKey",
+        key: PRNGKey,
         **kwargs,
     ):
         super().__init__(
@@ -522,7 +522,7 @@ class ConvTranspose2d(ConvTranspose):
         groups: int = 1,
         use_bias: bool = True,
         *,
-        key: "jax.random.PRNGKey",
+        key: PRNGKey,
         **kwargs,
     ):
         super().__init__(
@@ -556,7 +556,7 @@ class ConvTranspose3d(ConvTranspose):
         groups: int = 1,
         use_bias: bool = True,
         *,
-        key: "jax.random.PRNGKey",
+        key: PRNGKey,
         **kwargs,
     ):
         super().__init__(

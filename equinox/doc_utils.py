@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, TypeVar
 # Inherits from type so that _WithRepr instances are types and can be used as
 # e.g. Sequence[_WithRepr(...)]
 class _WithRepr(type):
-    def __new__(self, string):
-        out = super().__new__(self, string, (), {})
+    def __new__(cls, string):
+        out = super().__new__(cls, string, (), {})
         # prevent the custom typing repr from doing the wrong thing
         out.__module__ = "builtins"
         return out
