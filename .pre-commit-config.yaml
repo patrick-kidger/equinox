@@ -21,4 +21,4 @@ repos:
     rev: v1.1.292
     hooks:
     - id: pyright
-      additional_dependencies: [jax, jaxtyping, pytest, beartype, tensorflow, tf2onnx, typing_extensions]
+      additional_dependencies: [beartype, einops, jax, jaxtyping, pytest, tensorflow, tf2onnx, typing_extensions]
