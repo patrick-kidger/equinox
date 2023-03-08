@@ -116,7 +116,7 @@ def make_ensemble(key):
 mlp_ensemble = make_ensemble(keys)
 
 # Evaluate each member of the ensemble on the same data
-@eqx.filter_vmap(in_axes=(0, None))
+@eqx.filter_vmap(in_axes=(eqx.if_array(0), None))
 def evaluate_ensemble(model, x):
     return model(x)
 
