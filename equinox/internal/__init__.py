@@ -15,6 +15,7 @@ from .finalise_jaxpr import (
     primitive_finalisations,
     register_impl_finalisation,
 )
+from .loop import scan, while_loop
 from .misc import ContainerMeta, left_broadcast_to
 from .nextafter import nextafter, prevbefore
 from .noinline import noinline, noinline_p
@@ -47,4 +48,3 @@ from .unvmap import (
     unvmap_max,
     unvmap_max_p,
 )
-from .while_loop import while_loop
