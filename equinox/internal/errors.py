@@ -31,7 +31,7 @@ def _error_jvp(primals, tangents, *, msgs):
 
 
 def _error_transpose(cts, pred, index, *x, msgs):
-    return (None, None) + cts
+    return [None, None] + cts
 
 
 def _error_batching(inputs, batch_axes, *, msgs):
