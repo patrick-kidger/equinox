@@ -99,6 +99,7 @@ nav:
         - Generative score-based diffusion: 'examples/score_based_diffusion.ipynb'
         - Freezing parameters: 'examples/frozen_layer.ipynb'
         - Compatibility with init-apply libraries: 'examples/init_apply.ipynb'
+        - Convolutional Neural Network on MNIST: 'examples/mnist_cnn_examples.ipynb'
     - Full API:
         - 'api/module.md'
         - Neural network layers:
