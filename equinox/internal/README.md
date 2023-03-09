@@ -6,7 +6,7 @@ This means that it is full of lots of fun toys for the JAX enthusiast! If you're
 
 A few of the highlights available here are:
 
-**while_loop/** A while loop which may be backpropagated through, using an online checkpointing scheme.
+**loop/** A while loop which may be backpropagated through, using an online checkpointing scheme. Also implements a recursive checkpointed ("treeverse") scan.
 
 **errors.py:** Runtime errors. For verifying arguments or for checking that a computation succeeded. Only tested on CPU.
 

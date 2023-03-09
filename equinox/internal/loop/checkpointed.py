@@ -78,7 +78,7 @@ def checkpointed_while_loop(
     max_steps: Optional[int] = None,
     buffers: Optional[Callable[[_T], Union[_Node, Sequence[_Node]]]] = None,
     checkpoints: Optional[int] = None,
-):
+) -> _T:
     """Reverse-mode autodifferentiable while loop, using optimal online checkpointing.
 
     The usual `jax.lax.while_loop` is not reverse-mode autodifferentiable, since it
