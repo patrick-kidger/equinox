@@ -126,9 +126,16 @@ def checkpointed_while_loop(
         As this slows things down, we offer a special API specifically to handle this
         case.
 
-        Note that these buffers do *not* support being read from during the loop. This
-        is because the autodifferentiation then becomes substantially more complicated,
-        so this case isn't supported.
+    !!! Danger
+
+        Note that `buffers` is subject to the following restrictions:
+
+        - You should never write to the same location twice.
+        - You should only read from it (`buf[i]`) at locations (`i`) that you have
+          written to previously.
+
+        These assumptions are *completely unchecked* and you will get incorrect
+        gradients if you violate these assumptions.
 
     ??? cite "References"
 
@@ -225,7 +232,7 @@ def checkpointed_while_loop(
     if max_steps == 0:
         return init_val
     cond_fun_, body_fun_, init_val_, buffers_ = common_rewrite(
-        cond_fun, body_fun, init_val, max_steps, buffers, readable=False
+        cond_fun, body_fun, init_val, max_steps, buffers
     )
     del cond_fun, body_fun, init_val, buffers
     body_fun_ = filter_closure_convert(body_fun_, init_val_)
@@ -467,6 +474,7 @@ def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, checkpoints, buffers):
     while_loop = jax.named_call(lax.while_loop, name="checkpointed-fwd")
     final_carry = while_loop(_cond_fun, _body_fun, init_carry)
     num_steps, _, final_val, final_residual_steps, final_residuals = final_carry
+    filled_buffers = buffers(_is_none)(final_val)
 
     # The above procedure may produce residuals saved in jumbled-up order. Meanwhile
     # treeverse (used on the backward pass) treats the residuals like a stack,
@@ -480,7 +488,7 @@ def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, checkpoints, buffers):
         ft.partial(_unique_index, sort_indices), (final_residual_steps, final_residuals)
     )
     num_steps, final_residual_steps = nonbatchable((num_steps, final_residual_steps))
-    return final_val, (num_steps, final_residual_steps, final_residuals)
+    return final_val, (num_steps, final_residual_steps, final_residuals, filled_buffers)
 
 
 def _load_from_checkpoint(step_grad_val, index, residual_steps, residuals):
@@ -604,14 +612,6 @@ def _is_none(x):
     return x is None
 
 
-def _dummy_buffers(buffers, val, in_dynamic_struct):
-    leaves, treedef = in_dynamic_struct
-    (val_dynamic_struct,), _ = jtu.tree_unflatten(treedef, leaves)
-    buffer_struct = buffers(_is_none)(val_dynamic_struct)
-    buffer_struct = jtu.tree_map(lambda x: jnp.zeros(x.shape, x.dtype), buffer_struct)
-    return tree_at(buffers(_is_none), val, buffer_struct, is_leaf=_is_none)
-
-
 def _make_fwd(static_body_fun, buffers):
     def _fwd(
         dynamic_body_fun,
@@ -622,12 +622,13 @@ def _make_fwd(static_body_fun, buffers):
         val,
         grad_val,
         grad_body_fun,
+        filled_buffers,
     ):
         """Propagates the primal forward one step."""
         step_val = nonbatchable(step_val)
         step_val2 = step_val + 1
         body_fun = combine(dynamic_body_fun, static_body_fun)
-        val = _dummy_buffers(buffers, val, body_fun.in_dynamic_struct)
+        val = tree_at(buffers(_is_none), val, filled_buffers, is_leaf=_is_none)
         val2 = body_fun(val)
         val2 = tree_at(buffers(None), val2, replace_fn=lambda _: None)
         step_val2 = nonbatchable(step_val2)
@@ -657,6 +658,7 @@ def _make_u_turn(static_body_fun, buffers, residual_steps, residuals, checkpoint
         val,
         grad_val,
         grad_body_fun,
+        filled_buffers,
     ):
         del step_val, step_next_checkpoint
         step_grad_val, index = nonbatchable((step_grad_val, index))
@@ -666,7 +668,7 @@ def _make_u_turn(static_body_fun, buffers, residual_steps, residuals, checkpoint
         # We pass in `body_fun` as an argument as it contains its closed-over values
         # in its PyTree structure, and we do want to compute cotangents wrt these.
         body_fun = combine(dynamic_body_fun, static_body_fun)
-        val = _dummy_buffers(buffers, val, body_fun.in_dynamic_struct)
+        val = tree_at(buffers(_is_none), val, filled_buffers, is_leaf=_is_none)
         _, vjp_fn = filter_vjp(lambda b, v: b(v), body_fun, val)
 
         grad_body_fun_update, grad_val2 = vjp_fn(grad_val)
@@ -706,7 +708,7 @@ def _checkpointed_while_loop_bwd(
         lambda x: jnp.zeros_like(x) if is_inexact_array(x) else None, body_fun
     )
     del cond_fun
-    num_steps, init_residual_steps, init_residuals = remainders
+    num_steps, init_residual_steps, init_residuals, filled_buffers = remainders
     num_steps, init_residual_steps = nonbatchable((num_steps, init_residual_steps))
 
     def _cond_fun(carry):
@@ -775,6 +777,7 @@ def _checkpointed_while_loop_bwd(
             val,
             grad_val,
             grad_body_fun,
+            filled_buffers,
         )
 
         #

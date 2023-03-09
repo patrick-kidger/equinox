@@ -16,13 +16,9 @@ class _Buffer(Module):
     _array: Union[Shaped[Array, "..."], "_Buffer"]
     _pred: Bool[Array, ""]
     _tag: object = static_field()
-    _readable: bool = static_field()
 
     def __getitem__(self, item):
-        if self._readable:
-            return self._array[item]
-        else:
-            raise ValueError("Cannot read from write-only buffer inside loop.")
+        return self._array[item]
 
     def _set(self, pred, item, x):
         pred = pred & self._pred
@@ -32,7 +28,7 @@ class _Buffer(Module):
             old_x = self._array[item]
             x = jnp.where(pred, x, old_x)
             array = self._array.at[item].set(x)
-        return _Buffer(array, self._pred, self._tag, self._readable)
+        return _Buffer(array, self._pred, self._tag)
 
     @property
     def at(self):
@@ -76,7 +72,7 @@ def _unwrap_buffers(x):
     return x
 
 
-def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers, readable):
+def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers):
     """Handles:
 
     - Efficient in-place updates;
@@ -126,7 +122,7 @@ def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers, readable):
         def wrap_buffer(leaf):
             if not is_array(leaf):
                 raise ValueError("Only arrays can be treated as buffers.")
-            return _Buffer(leaf, pred, tag, readable)
+            return _Buffer(leaf, pred, tag)
 
         def unwrap_and_select(leaf, leaf2):
             if is_our_buffer(leaf):

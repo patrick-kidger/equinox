@@ -460,7 +460,8 @@ def test_speed_while(inplace_op, while_loop):
 # This test takes O(1e-3) seconds with buffer.
 # This test takes O(10) seconds without buffer.
 # This speed improvement is precisely the reason that buffer exists.
-def test_speed_buffer_while():
+@pytest.mark.parametrize("read", (False, True))
+def test_speed_buffer_while(read):
     @jax.jit
     @jax.vmap
     def f(init_step, init_xs):
@@ -470,7 +471,11 @@ def test_speed_buffer_while():
 
         def body(carry):
             step, xs = carry
-            xs = xs.at[step].set(1)
+            if read:
+                i = jr.randint(jr.PRNGKey(step), shape=(), minval=0, maxval=step)
+                xs = xs.at[step].set(2 * jnp.tanh(xs[i]))
+            else:
+                xs = xs.at[step].set(1)
             return step + 1, xs
 
         def loop(init_xs):
@@ -540,7 +545,8 @@ def test_speed_grad_checkpointed_while(getkey):
 
 # This is deliberately meant to emulate the pattern of saving used in
 # `diffrax.diffeqsolve(..., saveat=SaveAt(ts=...))`.
-def test_nested_loops(getkey):
+@pytest.mark.parametrize("read", (False, True))
+def test_nested_loops(read, getkey):
     @ft.partial(jax.jit, static_argnums=5)
     @ft.partial(jax.vmap, in_axes=(0, 0, 0, 0, 0, None))
     def run(step, vals, ts, final_step, cotangents, true):
@@ -585,9 +591,23 @@ def test_nested_loops(getkey):
             step, (val1, val2, val3, val4) = carry
             mul = 1 + 0.05 * jnp.sin(100 * val1 + 3)
             val1 = val1 * mul
-            val2 = val2.at[step].set(val1)
-            val3 = val3.at[step].set(val1)
-            val4 = val4.at[step].set(val1)
+            if read:
+                i2 = jr.randint(jr.PRNGKey(step), shape=(), minval=0, maxval=step)
+                i3 = jr.randint(jr.PRNGKey(step + 100), shape=(), minval=0, maxval=step)
+                i4 = jr.randint(jr.PRNGKey(step + 200), shape=(), minval=0, maxval=step)
+                setval2 = val1 + val2[i2]
+                setval3 = 0.8 * val1 + val2[i3] + val3[i3]
+                setval4 = val1 + jnp.tanh(val2[i2] * val4[i4])
+                setval2 = jnp.where(step == 0, 2.0, setval2)
+                setval3 = jnp.where(step == 0, 3.0, setval3)
+                setval4 = jnp.where(step == 0, 4.0, setval4)
+            else:
+                setval2 = val1
+                setval3 = val1
+                setval4 = val1
+            val2 = val2.at[step].set(setval2)
+            val3 = val3.at[step].set(setval3)
+            val4 = val4.at[step].set(setval4)
             return step + 1, (val1, val2, val3, val4)
 
         def buffers(carry):
