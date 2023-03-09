@@ -1,6 +1,9 @@
-from typing import Any, Callable, Literal, Optional, Sequence, TypeVar, Union
+from typing import Any, Callable, Literal, Optional, Sequence, Tuple, TypeVar, Union
 
+import jax
 import jax.lax as lax
+import jax.numpy as jnp
+import jax.tree_util as jtu
 from jaxtyping import Array, Bool
 
 from .bounded import bounded_while_loop
@@ -8,7 +11,9 @@ from .checkpointed import checkpointed_while_loop
 from .common import common_rewrite
 
 
-_T = TypeVar("_T")
+_Carry = TypeVar("_Carry")
+_X = TypeVar("_X")
+_Y = TypeVar("_Y")
 _Bool = Union[bool, Bool[Array, ""]]
 _Node = Any
 
@@ -18,16 +23,16 @@ _Node = Any
 # - stateful ops might make efficient scatters happen automatically.
 # So the only bit we have to do ourselves will be online checkpointing.
 def while_loop(
-    cond_fun: Callable[[_T], _Bool],
-    body_fun: Callable[[_T], _T],
-    init_val: _T,
+    cond_fun: Callable[[_Carry], _Bool],
+    body_fun: Callable[[_Carry], _Carry],
+    init_val: _Carry,
     *,
     max_steps: Optional[int] = None,
-    buffers: Optional[Callable[[_T], Union[_Node, Sequence[_Node]]]] = None,
+    buffers: Optional[Callable[[_Carry], Union[_Node, Sequence[_Node]]]] = None,
     kind: Literal["lax", "checkpointed", "bounded"],
     checkpoints: Optional[int] = None,
     base: int = 16,
-) -> _T:
+) -> _Carry:
     """A better while loop, supporting (1) reverse-mode autodifferentiation; (2) online
     checkpointing schemes; (3) efficient in-place scatters (normally XLA tends to make
     unnecessary copies).
@@ -46,7 +51,7 @@ def while_loop(
         `.at[].set()`. However they will act efficiently, without spurious copies.
 
     - `kind`: The type of while loop that is lowered to underneath. This may either be
-        `None`, an `int`, `"lax"`, or `"bounded"`.
+        `"lax"`, `"checkpointed"`, or `"bounded"`.
 
         If `kind` is `"lax"` then the loop is efficiently forward-mode
         autodifferentiable, but does not support reverse-mode autodifferentiation.
@@ -105,3 +110,77 @@ def while_loop(
         )
     else:
         raise ValueError(f"Unrecognised kind of while loop '{kind}'")
+
+
+def scan(
+    f: Callable[[_Carry, _X], Tuple[_Carry, _Y]],
+    init: _Carry,
+    xs: _X,
+    length: Optional[int] = None,
+    *,
+    kind: Literal["lax", "checkpointed"],
+    checkpoints: Optional[int] = None,
+) -> Tuple[_Carry, _Y]:
+    """As `jax.lax.scan`, but with optional checkpointing to reduce memory usage.
+
+    **Arguments:**
+
+    - `f`: As `jax.lax.scan`.
+    - `init`: As `jax.lax.scan`.
+    - `xs`: As `jax.lax.scan`.
+    - `length`: As `jax.lax.scan`.
+
+    - `kind`: The type of scan that is lowered to underneath. This may either be
+        `"lax"` or `"checkpointed"`.
+
+        If `kind` is `"lax"` then the usual `lax.scan` is used.
+
+        If `kind` is `"checkpointed"` then the scan uses checkpointing to reduce memory
+        usage. It will not be forward-mode autodifferentiable.
+
+    - `checkpoints`: Only used if `kind="checkpointed"`. Specifies the number of
+        checkpoints to use; if `None` then this is automatically derived from
+        `max_steps`.
+
+    Returns:
+
+    As `jax.lax.scan`.
+    """
+
+    if kind == "lax":
+        return lax.scan(f, init, xs, length)
+
+    lengths = {jnp.shape(x)[0] for x in jtu.tree_leaves(xs)}
+    if length is not None:
+        lengths.add(length)
+    if len(lengths) == 1:
+        length = lengths.pop()
+    else:
+        raise ValueError(f"Got inconsistent lengths in scan: {lengths}.")
+    del lengths
+
+    def cond_fun(val):
+        return True
+
+    def body_fun(val):
+        i, carry, ys = val
+        x = jtu.tree_map(lambda z: z[i], xs)
+        carry, y = f(carry, x)
+        ys = jtu.tree_map(lambda z, zs: zs.at[i].set(z), y, ys)
+        return i + 1, carry, ys
+
+    x0 = jtu.tree_map(lambda z: z[0], xs)
+    _, y0_shape = jax.eval_shape(f, init, x0)
+    ys = jtu.tree_map(lambda z: jnp.empty((length,) + z.shape, z.dtype), y0_shape)
+    init_val = (0, init, ys)
+    buffers = lambda val: val[2]
+
+    _, carry, ys = checkpointed_while_loop(
+        cond_fun,
+        body_fun,
+        init_val,
+        buffers=buffers,
+        max_steps=length,
+        checkpoints=checkpoints,
+    )
+    return carry, ys
