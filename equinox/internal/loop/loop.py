@@ -49,6 +49,8 @@ def while_loop(
     - `buffers`: If passed, then every leaf of `tree_leaves(buffers(init_val))` must
         be an array; all such arrays become buffers supporting only `[]` and
         `.at[].set()`. However they will act efficiently, without spurious copies.
+        You should avoid performing in-place updates to any quantity that is not a
+        buffer.
 
     - `kind`: The type of while loop that is lowered to underneath. This may either be
         `"lax"`, `"checkpointed"`, or `"bounded"`.
@@ -73,6 +75,17 @@ def while_loop(
         `math.ceil(math.log(max_steps, base))` decreases. (Which happens as `base`
         increases.)
 
+    !!! Danger
+
+        Note that `buffers` is subject to the following restrictions:
+
+        - You should never write to the same location twice.
+        - You should only read from it (`buf[i]`) at locations (`i`) that you have
+          written to previously.
+
+        These assumptions are *completely unchecked* and you will get incorrect
+        gradients if you violate these assumptions.
+
     **Returns:**
 
     The final value; as `lax.while_loop`.
@@ -81,7 +94,7 @@ def while_loop(
     if kind == "lax":
         del kind, checkpoints, base
         cond_fun_, body_fun_, init_val_, _ = common_rewrite(
-            cond_fun, body_fun, init_val, max_steps, buffers, readable=True
+            cond_fun, body_fun, init_val, max_steps, buffers
         )
         del cond_fun, body_fun, init_val
         _, _, final_val = lax.while_loop(cond_fun_, body_fun_, init_val_)
