@@ -1,3 +1,5 @@
+from typing import cast
+
 import jax
 import jax.core
 import jax.numpy as jnp
@@ -72,6 +74,7 @@ def test_nontraceable(getkey):
         jax.vmap(run, in_axes=(0, None))(dynamic_batch, static)
 
     jaxpr = jax.make_jaxpr(run, static_argnums=1)(dynamic, static)
+    jaxpr = cast(jax.core.ClosedJaxpr, jaxpr)
     run2 = jax.core.jaxpr_as_fun(jaxpr)
 
     run2(*dynamic_flat)  # pyright: ignore

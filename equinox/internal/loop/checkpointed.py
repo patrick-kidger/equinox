@@ -267,6 +267,7 @@ def _unique_index(i, x):
     """As `x[i]`, but states that `i` has unique indices."""
     # lax.gather's API is impenetrable. This is way easier...
     jaxpr = jax.make_jaxpr(lambda _x, _i: _x[_i])(x, i)
+    jaxpr = cast(jax.core.ClosedJaxpr, jaxpr)
     *rest_eqns, eqn = jaxpr.jaxpr.eqns
     assert eqn.primitive == jax.lax.gather_p
     new_params = dict(eqn.params)
