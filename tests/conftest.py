@@ -1,11 +1,17 @@
 import random
 import typing
+import warnings
 
+import beartype
 import jax.random as jrandom
 import pytest
 
 
 typing.TESTING = True  # pyright: ignore
+warnings.filterwarnings(
+    "ignore",
+    category=beartype.roar.BeartypeDecorHintPep585DeprecationWarning,  # pyright: ignore
+)
 
 
 @pytest.fixture()

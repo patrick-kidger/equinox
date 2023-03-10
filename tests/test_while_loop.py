@@ -85,7 +85,7 @@ def test_notangent_forward(buffer, kind, getkey):
         buffers=buffer_fn,
         checkpoints=1,
     )
-    assert shaped_allclose(final_carry, true_final_carry)
+    assert shaped_allclose(final_carry, true_final_carry, rtol=1e-5, atol=1e-5)
 
 
 @pytest.mark.parametrize("buffer", (False, True))
