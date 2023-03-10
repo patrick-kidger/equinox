@@ -16,7 +16,7 @@ Library authors may wish to register their primitives with `primitive_finalisati
 """
 
 import functools as ft
-from typing import Any, Callable, Dict, Literal, overload, Tuple, Union
+from typing import Any, Callable, cast, Dict, Literal, overload, Tuple, Union
 
 import jax
 import jax.core
@@ -109,13 +109,13 @@ def finalise_jaxpr_as_fn(jaxpr: jax.core.ClosedJaxpr):
     return ft.partial(finalise_eval_jaxpr, jaxpr.jaxpr, jaxpr.consts)
 
 
-def finalise_jaxpr(jaxpr: jax.core.ClosedJaxpr):
+def finalise_jaxpr(jaxpr: jax.core.ClosedJaxpr) -> jax.core.ClosedJaxpr:
     """A jaxpr-to-jaxpr transformation that performs finalisation."""
     fn = finalise_jaxpr_as_fn(jaxpr)
     args = [
         jax.ShapeDtypeStruct(x.aval.shape, x.aval.dtype) for x in jaxpr.jaxpr.invars
     ]
-    return jax.make_jaxpr(fn)(*args)
+    return cast(jax.core.ClosedJaxpr, jax.make_jaxpr(fn)(*args))
 
 
 def finalise_fn(fn):
@@ -163,13 +163,15 @@ def finalise_make_jaxpr(fn, *, return_shape: bool = False):
     """As `jax.make_jaxpr`, but finalises the result."""
 
     def _finalise_make_jaxpr(*args):
-        jaxpr = jax.make_jaxpr(fn, return_shape=return_shape)(*args)
+        jaxpr_struct = jax.make_jaxpr(fn, return_shape=return_shape)(*args)
         if return_shape:
-            jaxpr, struct = jaxpr  # pyright: ignore
+            jaxpr_struct = cast(Tuple[jax.core.ClosedJaxpr, Any], jaxpr_struct)
+            jaxpr, struct = jaxpr_struct
             jaxpr = finalise_jaxpr(jaxpr)
             return jaxpr, struct
         else:
-            jaxpr = finalise_jaxpr(jaxpr)
+            jaxpr_struct = cast(jax.core.ClosedJaxpr, jaxpr_struct)
+            jaxpr = finalise_jaxpr(jaxpr_struct)
             return jaxpr
 
     return _finalise_make_jaxpr

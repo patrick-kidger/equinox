@@ -1,3 +1,5 @@
+from typing import cast
+
 import jax
 import jax.core
 import jax.lax as lax
@@ -40,7 +42,7 @@ def test_jaxpr2jaxpr_nocustom_idempotent():
         x = x * 2
         return x
 
-    jaxpr = jax.make_jaxpr(fn)(1)
+    jaxpr = cast(jax.core.ClosedJaxpr, jax.make_jaxpr(fn)(1))
     jaxpr2 = eqxi.finalise_jaxpr(jaxpr)
     _assert_jaxpr_equal(jaxpr, jaxpr2)
 
@@ -52,12 +54,13 @@ def test_jaxpr2jaxpr_custom_idempotent():
         x = jnp.invert(x)
         return x
 
-    jaxpr = jax.make_jaxpr(fn)(True)
+    jaxpr = cast(jax.core.ClosedJaxpr, jax.make_jaxpr(fn)(True))
     jaxpr2 = eqxi.finalise_jaxpr(jaxpr)
     jaxpr3 = eqxi.finalise_jaxpr(jaxpr2)
     _assert_jaxpr_equal(jaxpr2, jaxpr3)
 
     jaxpr = jax.make_jaxpr(jax.vmap(fn))(jnp.array([True, False]))
+    jaxpr = cast(jax.core.ClosedJaxpr, jaxpr)
     jaxpr2 = eqxi.finalise_jaxpr(jaxpr)
     jaxpr3 = eqxi.finalise_jaxpr(jaxpr2)
     _assert_jaxpr_equal(jaxpr2, jaxpr3)
@@ -75,7 +78,9 @@ def test_fn2fn_nocustom_idempotent():
     assert shaped_allclose(fn(-1), finalised_fn(-1), match_weak=True)
 
     jaxpr = jax.make_jaxpr(fn)(1)
+    jaxpr = cast(jax.core.ClosedJaxpr, jaxpr)
     finalised_jaxpr = jax.make_jaxpr(finalised_fn)(1)
+    finalised_jaxpr = cast(jax.core.ClosedJaxpr, finalised_jaxpr)
     _assert_jaxpr_equal(finalised_jaxpr, jaxpr)
 
 
@@ -91,7 +96,9 @@ def test_fn2fn_custom_idempotent():
     assert shaped_allclose(fn(True), finalised_fn(True))
 
     finalised_jaxpr = jax.make_jaxpr(finalised_fn)(True)
+    finalised_jaxpr = cast(jax.core.ClosedJaxpr, finalised_jaxpr)
     finalised_finalised_jaxpr = jax.make_jaxpr(eqxi.finalise_fn(finalised_fn))(True)
+    finalised_finalised_jaxpr = cast(jax.core.ClosedJaxpr, finalised_finalised_jaxpr)
     _assert_jaxpr_equal(finalised_jaxpr, finalised_finalised_jaxpr)
     for eqn in finalised_jaxpr.eqns:
         assert eqn.primitive != eqxi.unvmap_any_p
@@ -107,9 +114,13 @@ def test_fn2fn_custom_idempotent():
         assert shaped_allclose(vmap_fn(arg), finalised_vmap_fn(arg))
 
     finalised_vmap_jaxpr = jax.make_jaxpr(finalised_vmap_fn)(jnp.array([False, False]))
+    finalised_vmap_jaxpr = cast(jax.core.ClosedJaxpr, finalised_vmap_jaxpr)
     finalised_finalised_vmap_jaxpr = jax.make_jaxpr(
         eqxi.finalise_fn(finalised_vmap_fn)
     )(jnp.array([False, False]))
+    finalised_finalised_vmap_jaxpr = cast(
+        jax.core.ClosedJaxpr, finalised_finalised_vmap_jaxpr
+    )
     for eqn in finalised_vmap_jaxpr.eqns:
         assert eqn.primitive != eqxi.unvmap_any_p
     _assert_jaxpr_equal(finalised_vmap_jaxpr, finalised_finalised_vmap_jaxpr)
