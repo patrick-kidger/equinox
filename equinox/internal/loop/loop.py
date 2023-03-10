@@ -18,10 +18,6 @@ _Bool = Union[bool, Bool[Array, ""]]
 _Node = Any
 
 
-# In time we may be able to deprecate this:
-# - bloops will support reverse-mode autodiff;
-# - stateful ops might make efficient scatters happen automatically.
-# So the only bit we have to do ourselves will be online checkpointing.
 def while_loop(
     cond_fun: Callable[[_Carry], _Bool],
     body_fun: Callable[[_Carry], _Carry],
