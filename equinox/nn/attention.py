@@ -1,4 +1,5 @@
 import math
+import warnings
 from functools import partial
 from typing import Optional
 
@@ -245,6 +246,13 @@ class MultiheadAttention(Module):
 
         A JAX array of shape `(query_seq_length, output_size)`.
         """
+
+        if deterministic is not None:
+            inference = deterministic
+            warnings.warn(
+                "MultiheadAttention()(deterministic=...) is deprecated "
+                "in favour of MultiheadAttention()(inference=...)"
+            )
 
         query_seq_length, _ = query.shape
         kv_seq_length, _ = key_.shape
