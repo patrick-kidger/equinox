@@ -608,6 +608,39 @@ def test_multihead_attention(getkey):
     )
 
 
+def test_multihead_attention_inference(getkey):
+    attn = eqx.nn.MultiheadAttention(
+        num_heads=2, query_size=10, dropout_p=0.5, key=getkey()
+    )
+    x = jrandom.normal(getkey(), (3, 10))
+    z1 = attn(x, x, x, key=getkey(), inference=True)
+    z2 = attn(x, x, x, inference=True)
+    assert jnp.all(z1 == z2)
+
+    z1 = attn(x, x, x, key=getkey())
+    z2 = attn(x, x, x, key=getkey())
+    assert jnp.any(z1 != z2)
+
+    attn2 = eqx.nn.MultiheadAttention(
+        num_heads=2, query_size=10, dropout_p=0.5, inference=True, key=getkey()
+    )
+    z1 = attn2(x, x, x, key=getkey())
+    z2 = attn2(x, x, x, key=getkey())
+    assert jnp.all(z1 == z2)
+
+
+def test_multihead_attention_deterministic(getkey):
+    with warnings.catch_warnings():
+        attn = eqx.nn.MultiheadAttention(
+            num_heads=2, query_size=10, dropout_p=0.5, key=getkey()
+        )
+        x = jrandom.normal(getkey(), (3, 10))
+        warnings.simplefilter("ignore")
+        z1 = attn(x, x, x, key=getkey(), deterministic=True)
+        z2 = attn(x, x, x, deterministic=True)
+        assert jnp.all(z1 == z2)
+
+
 def test_embedding(getkey):
     emb = eqx.nn.Embedding(100, 512, key=getkey())
     x = jnp.array([1])
