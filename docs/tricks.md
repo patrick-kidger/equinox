@@ -176,3 +176,54 @@ model = jax.tree_util.tree_unflatten(treedef_model, flat_model)
 ```
 
 This trick can be useful if the numerical computations inside your JIT region are very fast (and the overhead dominates), or if you are using models which are slow to flatten or unflatten (e.g. some external libraries).
+
+## Improve compilation speed with scan-over-layers
+
+It is relatively common to have multiple layers that all have the same PyTree structure (same input size, same output size, weights all of the same size, etc.), and which are all called sequentially. For example, the linear layers in an MLP, or the attention layers in a Transformer.
+
+In this case, it is possible to improve compilation speed, by using `vmap` to create multiple layers all at the same time, and then iterating over the extra dimension using `jax.lax.scan`. See the following toy example, which chains ten MLPs together one-after-the-other.
+
+```python
+import equinox as eqx
+import jax.lax as lax
+import jax.random as jr
+
+class TenMLPs(eqx.Module):
+    mlps: eqx.nn.MLP
+  
+    def __init__(self, size, key):
+        keys = jr.split(key, 10)
+        make_mlp = lambda k: eqx.nn.MLP(size, size, size, 1, key=k)
+        self.mlps = eqx.filter_vmap(make_mlp)(keys)
+        # Store a single `eqx.nn.MLP` object, with each of its parameters (JAX
+        # arrays) having an extra length-10 dimension at the start.
+        #
+        # This works because `make_mlp` is just a function returning a PyTree,
+        # and `eqx.filter_vmap` operates on functions between PyTrees.
+        #
+        # `self.mlps` should not be called directly: it should only be
+        # used inside a `vmap` or `scan`, to first unpeel the extra dimension.
+  
+    def __call__(self, x):
+        dynamic_mlps, static_mlps = eqx.partition(self.mlps, eqx.is_array)
+        # `dynamic_mlps` has all the parameters, with their extra length-10
+        # dimension.
+        # `static_mlps` has all the non-parameters, e.g. activation functions,
+        # which are shared across all layers.
+    
+        def f(_x, _dynamic_mlp):
+            mlp = eqx.combine(_dynamic_mlp, static_mlps)
+            return mlp(x), None
+    
+        out, _ = lax.scan(f, x, dynamic_mlps)
+        return out
+
+size = 3
+key = jr.PRNGKey(0)
+model_key, data_key = jr.split(key, 2)
+model = TenMLPs(size, model_key)
+x = jr.normal(data_key, (size,))
+model(x)
+```
+
+Writing out each layer manually (`y = self.mlp1(x); z = self.mlp2(y); ...`) means that JAX needs to compile each MLP separately. However the compiler knows that every iteration of a `jax.lax.scan` has the same structure, so this trick allows us to compile our models faster.
