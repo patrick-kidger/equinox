@@ -21,7 +21,6 @@ from typing import Any, Callable, cast, Dict, Literal, overload, Tuple, Union
 import jax
 import jax.core
 import jax.custom_derivatives
-import jax.interpreters.xla
 import jax.tree_util as jtu
 from jaxtyping import PyTree
 
@@ -214,11 +213,6 @@ def _jvp_call_p_finalisation(fun, jvp, *args, symbolic_zeros=None):
     return fun.call_wrapped(*args)
 
 
-def _xla_call_p_finalisation(fun, *args, **params):
-    del params
-    return fun.call_wrapped(*args)
-
-
 def _stop_gradient_finalisation(x):
     return x
 
@@ -226,5 +220,4 @@ def _stop_gradient_finalisation(x):
 primitive_finalisations[
     jax.custom_derivatives.custom_jvp_call_p
 ] = _jvp_call_p_finalisation
-primitive_finalisations[jax.interpreters.xla.xla_call_p] = _xla_call_p_finalisation
 primitive_finalisations[jax.lax.stop_gradient_p] = _stop_gradient_finalisation
