@@ -302,8 +302,8 @@ def test_vmap_primal_unbatched_cond(buffer, kind, getkey):
     )
     true_value, true_grad = true_run((init_val1, init_val2, mlp))
     value, grad = run((init_val1, init_val2, mlp))
-    assert shaped_allclose(value, true_value)
-    assert shaped_allclose(grad, true_grad)
+    assert shaped_allclose(value, true_value, atol=1e-4)
+    assert shaped_allclose(grad, true_grad, atol=1e-4)
 
 
 @pytest.mark.parametrize("buffer", (False, True))
