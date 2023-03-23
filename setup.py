@@ -46,7 +46,7 @@ classifiers = [
 
 python_requires = "~=3.8"
 
-install_requires = ["jax>=0.4.3", "jaxtyping>=0.2.14", "typing_extensions>=4.5.0"]
+install_requires = ["jax>=0.4.4", "jaxtyping>=0.2.14", "typing_extensions>=4.5.0"]
 
 setuptools.setup(
     name=name,
