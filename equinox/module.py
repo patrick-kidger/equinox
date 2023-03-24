@@ -295,7 +295,7 @@ class Module(metaclass=_ModuleMeta):
 
     @classmethod
     def _tree_unflatten(cls, aux, dynamic_field_values):
-        self = cls.__new__(cls)
+        self = object.__new__(cls)
         dynamic_field_names, static_field_names, static_field_values = aux
         for name, value in zip(dynamic_field_names, dynamic_field_values):
             object.__setattr__(self, name, value)
