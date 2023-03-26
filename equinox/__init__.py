@@ -1,37 +1,49 @@
-from . import experimental, internal, nn
-from .ad import (
-    filter_closure_convert,
-    filter_custom_jvp,
-    filter_custom_vjp,
-    filter_grad,
-    filter_jvp,
-    filter_value_and_grad,
-    filter_vjp,
+from . import experimental as experimental, internal as internal, nn as nn
+from ._ad import (
+    filter_closure_convert as filter_closure_convert,
+    filter_custom_jvp as filter_custom_jvp,
+    filter_custom_vjp as filter_custom_vjp,
+    filter_grad as filter_grad,
+    filter_jvp as filter_jvp,
+    filter_value_and_grad as filter_value_and_grad,
+    filter_vjp as filter_vjp,
 )
-from .callback import filter_pure_callback
-from .eval_shape import filter_eval_shape
-from .filters import (
-    combine,
-    filter,
-    is_array,
-    is_array_like,
-    is_inexact_array,
-    is_inexact_array_like,
-    partition,
+from ._callback import filter_pure_callback as filter_pure_callback
+from ._eval_shape import filter_eval_shape as filter_eval_shape
+from ._filters import (
+    combine as combine,
+    filter as filter,
+    is_array as is_array,
+    is_array_like as is_array_like,
+    is_inexact_array as is_inexact_array,
+    is_inexact_array_like as is_inexact_array_like,
+    partition as partition,
 )
-from .jit import filter_jit
-from .make_jaxpr import filter_make_jaxpr
-from .module import Module, module_update_wrapper, static_field
-from .pretty_print import tree_pformat, tree_pprint
-from .serialisation import (
-    default_deserialise_filter_spec,
-    default_serialise_filter_spec,
-    tree_deserialise_leaves,
-    tree_serialise_leaves,
+from ._jit import filter_jit as filter_jit
+from ._make_jaxpr import filter_make_jaxpr as filter_make_jaxpr
+from ._module import (
+    Module as Module,
+    module_update_wrapper as module_update_wrapper,
+    static_field as static_field,
 )
-from .tree import tree_at, tree_equal, tree_inference
-from .update import apply_updates
-from .vmap_pmap import filter_pmap, filter_vmap, if_array
+from ._pretty_print import tree_pformat as tree_pformat, tree_pprint as tree_pprint
+from ._serialisation import (
+    default_deserialise_filter_spec as default_deserialise_filter_spec,
+    default_serialise_filter_spec as default_serialise_filter_spec,
+    tree_deserialise_leaves as tree_deserialise_leaves,
+    tree_serialise_leaves as tree_serialise_leaves,
+)
+from ._tree import (
+    tree_at as tree_at,
+    tree_equal as tree_equal,
+    tree_inference as tree_inference,
+)
+from ._update import apply_updates as apply_updates
+from ._vmap_pmap import (
+    filter_pmap as filter_pmap,
+    filter_vmap as filter_vmap,
+    if_array as if_array,
+)
 
 
 __version__ = "0.10.1"

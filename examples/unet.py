@@ -118,7 +118,7 @@ class ResnetBlock(eqx.Module):
     block2_layers: List[
         Union[eqx.nn.GroupNorm, eqx.nn.Dropout, eqx.nn.Conv2d, Callable]
     ]
-    res_conv: eqx.nn.conv.Conv2d
+    res_conv: eqx.nn.Conv2d
     attn: Optional[Residual]
 
     def __init__(

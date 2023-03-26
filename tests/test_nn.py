@@ -550,11 +550,11 @@ def test_convtranspose_padding(getkey):
 def test_dot_product_attention_weights(getkey):
     q = jnp.array([[0.0, 2**0.5]])
     k = jnp.array([[1.0, 0.0], [0.0, 1.0]])
-    weights = eqx.nn.attention.dot_product_attention_weights(q, k)
+    weights = eqx.nn._attention.dot_product_attention_weights(q, k)
     assert weights.shape == (1, 2)
     assert jnp.allclose(weights, jnp.array([[1, jnp.e]]) / (1 + jnp.e))
     mask = jnp.array([[True, False]])
-    weights = eqx.nn.attention.dot_product_attention_weights(q, k, mask)
+    weights = eqx.nn._attention.dot_product_attention_weights(q, k, mask)
     assert jnp.allclose(weights, jnp.array([[1.0, 0.0]]))
 
 
@@ -562,11 +562,11 @@ def test_dot_product_attention(getkey):
     q = jnp.array([[0.0, 2**0.5]])
     k = jnp.array([[1.0, 0.0], [0.0, 1.0]])
     v = jnp.array([[1.0], [0.0]])
-    attn = eqx.nn.attention.dot_product_attention(q, k, v)
+    attn = eqx.nn._attention.dot_product_attention(q, k, v)
     assert attn.shape == (1, 1)
     assert jnp.allclose(attn, jnp.array([[1 / (1 + jnp.e)]]))
     mask = jnp.array([[True, False]])
-    attn = eqx.nn.attention.dot_product_attention(q, k, v, mask)
+    attn = eqx.nn._attention.dot_product_attention(q, k, v, mask)
     assert attn == jnp.array([[1.0]])
 
 
