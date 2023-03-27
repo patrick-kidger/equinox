@@ -15,6 +15,7 @@ jobs:
             python-version: "3.8"
             test-script: |
                 cp -r ${{ github.workspace }}/tests ./tests
+                cp ${{ github.workspace }}/pyproject.toml ./pyproject.toml
                 python -m pip install -r ./tests/requirements.txt
                 pytest
             pypi-token: ${{ secrets.pypi_token }}
