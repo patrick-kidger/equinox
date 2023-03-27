@@ -160,3 +160,8 @@ h5.doc-heading, h6.heading {
     border-radius: 2pt;
     padding: 0pt 5pt 2pt 5pt;
 }
+
+/* Make errors in notebooks have scrolling */
+.output_error > pre {
+    overflow: auto;
+}
