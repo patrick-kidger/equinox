@@ -68,7 +68,7 @@ class MLP(Module):
         - `out_size`: The output size. The output from the module will be a vector
             of shape `(out_features,)`.
         - `width_size`: The size of each hidden layer.
-        - `depth`: The number of hidden layers including the output layer. ie. depth=2
+        - `depth`: The number of hidden layers, including the output layer. For Example, `depth=2`
             results in an network with layers [`Linear(in_size, width_size)`,
             `Linear(width_size, width_size)`, `Linear(width_size, out_size)`].
         - `activation`: The activation function after each hidden layer. Defaults to
