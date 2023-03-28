@@ -29,13 +29,23 @@ class _ω(metaclass=_Metaω):
         ```
 
         This is entirely equivalent to the above.
+
+    !!! edge case
+
+        If if a tuple `(a, b)` is passed then
+        ```
+        ω(a,b).call(fn) = jax.tree_util.tree_map(lambda x,y: fn(y), b, a)
+        ```
+        where b is a prefix PyTree of a. This evaluates a at the nodes corresponding
+        to the leaves of b.
     """
 
-    def __init__(self, value, is_leaf=None):
+    def __init__(self, *value, is_leaf=None):
         """
         **Arguments:**
 
-        - `value`: The PyTree to wrap.
+        - `value`: The PyTree to wrap. If value is a two tuple then the first
+           PyTree must be a prefix of the second.
         - `is_leaf`: An optional value for the `is_leaf` argument to
           `jax.tree_util.tree_map`.
 
@@ -44,7 +54,13 @@ class _ω(metaclass=_Metaω):
             The `is_leaf` argument cannot be set when using the `__rpow__` syntax for
             initialisation.
         """
-        self.ω = value
+        prefixed = len(value) > 1
+        if prefixed:
+            self.ω, self.struct = value
+        else:
+            (self.ω,) = value
+            self.struct = self.ω
+
         self.is_leaf = is_leaf
 
     def __repr__(self):
@@ -52,19 +68,23 @@ class _ω(metaclass=_Metaω):
 
     def __getitem__(self, item):
         return ω(
-            jtu.tree_map(lambda x: x[item], self.ω, is_leaf=self.is_leaf),
-            is_leaf=self.is_leaf,
-        )
+                    jtu.tree_map(
+                    lambda x, y: y[item], self.struct, self.ω, is_leaf=self.is_leaf
+                    ),
+                    self.struct,
+                    is_leaf=self.is_leaf
+                )
 
     def call(self, fn):
         return ω(
-            jtu.tree_map(fn, self.ω, is_leaf=self.is_leaf),
+            jtu.tree_map(lambda x, y: fn(y), self.struct, self.ω, is_leaf=self.is_leaf),
+            self.struct,
             is_leaf=self.is_leaf,
         )
 
     @property
     def at(self):
-        return _ωUpdateHelper(self.ω, self.is_leaf)
+        return _ωUpdateHelper(self.ω, self.struct, self.is_leaf)
 
 
 if TYPE_CHECKING:
@@ -91,17 +111,21 @@ def _equal_code(fn1: Optional[Callable], fn2: Optional[Callable]):
 def _set_binary(base, name: str, op: Callable[[Any, Any], Any]) -> None:
     def fn(self, other):
         if isinstance(other, ω):
-            if jtu.tree_structure(self.ω) != jtu.tree_structure(other.ω):
+            if jtu.tree_structure(self.struct) != jtu.tree_structure(other.struct):
                 raise ValueError("PyTree structures must match.")
             if not _equal_code(self.is_leaf, other.is_leaf):
                 raise ValueError("`is_leaf` must match.")
             return ω(
-                jtu.tree_map(op, self.ω, other.ω, is_leaf=self.is_leaf),
+                jtu.tree_map(
+                    lambda x, y, z: op(y, z), self.struct, self.ω, other.ω, is_leaf=self.is_leaf
+                ),
+                self.struct,
                 is_leaf=self.is_leaf,
             )
         elif isinstance(other, (bool, complex, float, int, jax.Array)):
             return ω(
-                jtu.tree_map(lambda x: op(x, other), self.ω, is_leaf=self.is_leaf),
+                jtu.tree_map(lambda x, y: op(y, other), self.struct, self.ω, is_leaf=self.is_leaf),
+                self.struct,
                 is_leaf=self.is_leaf,
             )
         else:
@@ -115,7 +139,8 @@ def _set_binary(base, name: str, op: Callable[[Any, Any], Any]) -> None:
 def _set_unary(base, name: str, op: Callable[[Any], Any]) -> None:
     def fn(self):
         return ω(
-            jtu.tree_map(op, self.ω, is_leaf=self.is_leaf),
+            jtu.tree_map(lambda x, y: op(y), self.struct, self.ω, is_leaf=self.is_leaf),
+            self.struct,
             is_leaf=self.is_leaf,
         )
 
@@ -178,17 +203,19 @@ for (name, op) in [
 
 
 class _ωUpdateHelper:
-    def __init__(self, value, is_leaf):
+    def __init__(self, value, struct, is_leaf):
         self.value = value
+        self.struct = struct
         self.is_leaf = is_leaf
 
     def __getitem__(self, item):
-        return _ωUpdateRef(self.value, item, self.is_leaf)
+        return _ωUpdateRef(self.value, self.struct, item, self.is_leaf)
 
 
 class _ωUpdateRef:
-    def __init__(self, value, item, is_leaf):
+    def __init__(self,value, struct, item, is_leaf):
         self.value = value
+        self.struct = struct
         self.item = item
         self.is_leaf = is_leaf
 
@@ -196,14 +223,16 @@ class _ωUpdateRef:
 def _set_binary_at(base, name: str, op: Callable[[Any, Any, Any], Any]) -> None:
     def fn(self, other):
         if isinstance(other, ω):
-            if jtu.tree_structure(self.value) != jtu.tree_structure(other.ω):
+            if jtu.tree_structure(self.struct) != jtu.tree_structure(other.struct):
                 raise ValueError("PyTree structures must match.")
             if not _equal_code(self.is_leaf, other.is_leaf):
                 raise ValueError("is_leaf specifications must match.")
             return ω(
+                self.struct,
                 jtu.tree_map(
-                    lambda x, y: op(x, self.item, y),
+                    lambda x, y, z: op(y, self.item, z),
                     self.value,
+                    self.struct,
                     other.ω,
                     is_leaf=self.is_leaf,
                 ),
@@ -211,8 +240,12 @@ def _set_binary_at(base, name: str, op: Callable[[Any, Any, Any], Any]) -> None:
             )
         elif isinstance(other, (bool, complex, float, int, jax.Array)):
             return ω(
+                self.struct,
                 jtu.tree_map(
-                    lambda x: op(x, self.item, other), self.value, is_leaf=self.is_leaf
+                    lambda x, y: op(y, self.item, other),
+                    self.value,
+                    self.struct,
+                    is_leaf=self.is_leaf
                 ),
                 is_leaf=self.is_leaf,
             )
