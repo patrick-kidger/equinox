@@ -61,6 +61,17 @@ class _BufferItem(Module):
     def set(self, x, *, pred=True):
         return self._buffer._set(pred, self._item, x)
 
+    def add(self, x, *, pred=True):
+        return self._buffer._set(pred, self._item, self._buffer[self._item] + x)
+
+    def multiply(self, x, *, pred=True):
+        return self._buffer._set(pred, self._item, self._buffer[self._item] * x)
+
+    def divide(self, x, *, pred=True):
+        return self._buffer._set(pred, self._item, self._buffer[self._item] / x)
+
+    def power(self, x, *, pred=True):
+        return self._buffer._set(pred, self._item, self._buffer[self._item] ** x)
 
 def _is_buffer(x):
     return isinstance(x, _Buffer)

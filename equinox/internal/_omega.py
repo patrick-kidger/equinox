@@ -77,7 +77,7 @@ class _ω(metaclass=_Metaω):
 
     def call(self, fn):
         return ω(
-            jtu.tree_map(lambda x, y: fn(y), self.struct, self.ω, is_leaf=self.is_leaf),
+            jtu.tree_map(lambda x, y: fn(y[...]), self.struct, self.ω, is_leaf=self.is_leaf),
             self.struct,
             is_leaf=self.is_leaf,
         )
@@ -117,14 +117,14 @@ def _set_binary(base, name: str, op: Callable[[Any, Any], Any]) -> None:
                 raise ValueError("`is_leaf` must match.")
             return ω(
                 jtu.tree_map(
-                    lambda x, y, z: op(y, z), self.struct, self.ω, other.ω, is_leaf=self.is_leaf
+                    lambda x, y, z: op(y[...], z[...]), self.struct, self.ω, other.ω, is_leaf=self.is_leaf
                 ),
                 self.struct,
                 is_leaf=self.is_leaf,
             )
         elif isinstance(other, (bool, complex, float, int, jax.Array)):
             return ω(
-                jtu.tree_map(lambda x, y: op(y, other), self.struct, self.ω, is_leaf=self.is_leaf),
+                jtu.tree_map(lambda x, y: op(y[...], other), self.struct, self.ω, is_leaf=self.is_leaf),
                 self.struct,
                 is_leaf=self.is_leaf,
             )
@@ -228,25 +228,25 @@ def _set_binary_at(base, name: str, op: Callable[[Any, Any, Any], Any]) -> None:
             if not _equal_code(self.is_leaf, other.is_leaf):
                 raise ValueError("is_leaf specifications must match.")
             return ω(
-                self.struct,
                 jtu.tree_map(
-                    lambda x, y, z: op(y, self.item, z),
-                    self.value,
+                    lambda x, y, z: op(y, self.item, z[...]),
                     self.struct,
+                    self.value,
                     other.ω,
                     is_leaf=self.is_leaf,
                 ),
+                self.struct,
                 is_leaf=self.is_leaf,
             )
         elif isinstance(other, (bool, complex, float, int, jax.Array)):
             return ω(
-                self.struct,
                 jtu.tree_map(
                     lambda x, y: op(y, self.item, other),
-                    self.value,
                     self.struct,
+                    self.value,
                     is_leaf=self.is_leaf
                 ),
+                self.struct,
                 is_leaf=self.is_leaf,
             )
         else:
@@ -260,6 +260,7 @@ def _set_binary_at(base, name: str, op: Callable[[Any, Any, Any], Any]) -> None:
 for (name, op) in [
     ("set", lambda x, y, z, **kwargs: x.at[y].set(z, **kwargs)),
     ("add", lambda x, y, z, **kwargs: x.at[y].add(z, **kwargs)),
+    ("sub", lambda x, y, z, **kwargs: x.at[y].add(-z, **kwargs)),
     ("multiply", lambda x, y, z, **kwargs: x.at[y].multiply(z, **kwargs)),
     ("divide", lambda x, y, z, **kwargs: x.at[y].divide(z, **kwargs)),
     ("power", lambda x, y, z, **kwargs: x.at[y].power(z, **kwargs)),
