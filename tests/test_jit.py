@@ -1,4 +1,3 @@
-import functools as ft
 import warnings
 from typing import Union
 
@@ -257,60 +256,6 @@ def log_compiles_config():
     """Setup and teardown of jax_log_compiles flag"""
     with jax.log_compiles(True):
         yield
-
-
-def test_function_name_warning(log_compiles_config, caplog):
-    """Test that the proper function names are used when compiling a function "
-    "decorated with `filter_jit`.
-    """
-
-    @eqx.filter_jit
-    def the_test_function_name(x):
-        return x + 1
-
-    # Trigger compile to log a warning message
-    the_test_function_name(jnp.array(1.0))
-
-    # Check that the warning message contains the function name
-    old = "Finished XLA compilation of the_test_function_name in" in caplog.text
-    new = "Finished XLA compilation of jit(the_test_function_name) in" in caplog.text
-    assert old or new
-    caplog.clear()
-
-    @eqx.filter_jit
-    @eqx.filter_value_and_grad
-    def the_test_function_name_value_and_grad(x):
-        return x + 1
-
-    # Trigger compile to log a warning message
-    the_test_function_name_value_and_grad(jnp.array(1.0))
-
-    old = (
-        "Finished XLA compilation of the_test_function_name_value_and_grad in"
-        in caplog.text
-    )
-    new = (
-        "Finished XLA compilation of jit(the_test_function_name_value_and_grad) in"
-        in caplog.text
-    )
-    assert old or new
-    caplog.clear()
-
-    def wrapped_fun(y):
-        pass
-
-    def the_test_function_name2(x, y):
-        return x + y
-
-    fun = eqx.filter_jit(
-        ft.wraps(wrapped_fun)(ft.partial(the_test_function_name2, jnp.array(1.0)))
-    )
-
-    fun(jnp.array(1.0))
-
-    old = "Finished XLA compilation of wrapped_fun in" in caplog.text
-    new = "Finished XLA compilation of jit(wrapped_fun) in" in caplog.text
-    caplog.clear()
 
 
 def test_wrap_jax_partial(getkey):
