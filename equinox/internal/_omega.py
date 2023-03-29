@@ -33,7 +33,7 @@ class _ω(metaclass=_Metaω):
         This is entirely equivalent to the above.
 
 
-        If if a tuple `(a, b)` is passed then
+        If `structure` is passed then
         ```
         ω(a,structure=b).call(fn) = jax.tree_util.tree_map(lambda x,y: fn(y), b, a)
         ```
@@ -79,7 +79,7 @@ class _ω(metaclass=_Metaω):
     def call(self, fn):
         return ω(
             jtu.tree_map(
-                lambda _x, y: fn(y[...]), self.struct, self.ω, is_leaf=self.is_leaf
+                lambda _x, y: fn(y), self.struct, self.ω, is_leaf=self.is_leaf
             ),
             structure=self.struct,
             is_leaf=self.is_leaf,

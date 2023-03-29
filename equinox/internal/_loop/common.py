@@ -20,16 +20,6 @@ class _Buffer(Module):
     def __getitem__(self, item):
         return self._array[item]
 
-    # def _set(self, pred, item, x):
-    #     pred = pred & self._pred
-    #     if isinstance(self._array, _Buffer):
-    #         array = self._array._set(pred, item, x)
-    #     else:
-    #         old_x = self._array[item]
-    #         x = jnp.where(pred, x, old_x)
-    #         array = self._array.at[item].set(x)
-    #     return _Buffer(array, self._pred, self._tag)
-
     def _op(self, pred, item, x, op):
         pred = pred & self._pred
         if isinstance(self._array, _Buffer):
