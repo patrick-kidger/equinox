@@ -34,7 +34,7 @@ class _ω(metaclass=_Metaω):
 
         If `structure` is passed then
         ```
-        ω(a, structure=b).call(fn) = jax.tree_util.tree_map(lambda x, y: fn(y), b, a)
+        ω(a, structure=b).call(fn) = jax.tree_util.tree_map(lambda _, y: fn(y), b, a)
         ```
         where `b` is a prefix PyTree of `a`. This evaluates `a` at the nodes corresponding
         to the leaves of `b`.
