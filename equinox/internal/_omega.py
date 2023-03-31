@@ -32,23 +32,23 @@ class _ω(metaclass=_Metaω):
 
         This is entirely equivalent to the above.
 
-
         If `structure` is passed then
         ```
-        ω(a,structure=b).call(fn) = jax.tree_util.tree_map(lambda x,y: fn(y), b, a)
+        ω(a, structure=b).call(fn) = jax.tree_util.tree_map(lambda x, y: fn(y), b, a)
         ```
-        where b is a prefix PyTree of a. This evaluates a at the nodes corresponding
-        to the leaves of b.
+        where `b` is a prefix PyTree of `a`. This evaluates `a` at the nodes corresponding
+        to the leaves of `b`.
     """
 
     def __init__(self, value, *, structure=sentinel, is_leaf=None):
         """
         **Arguments:**
 
-        - `value`: The PyTree to wrap. If value is a two tuple then the first
-           PyTree must be a prefix of the second.
+        - `value`: The PyTree to wrap.
         - `is_leaf`: An optional value for the `is_leaf` argument to
           `jax.tree_util.tree_map`.
+        - `structure`: An optional prefixing pytree to `value` which specifies where
+          in the PyTree structure to evaluate `value`.
 
         !!! note
 
@@ -70,7 +70,7 @@ class _ω(metaclass=_Metaω):
     def __getitem__(self, item):
         return ω(
             jtu.tree_map(
-                lambda _x, y: y[item], self.struct, self.ω, is_leaf=self.is_leaf
+                lambda _, y: y[item], self.struct, self.ω, is_leaf=self.is_leaf
             ),
             structure=self.struct,
             is_leaf=self.is_leaf,
@@ -79,7 +79,7 @@ class _ω(metaclass=_Metaω):
     def call(self, fn):
         return ω(
             jtu.tree_map(
-                lambda _x, y: fn(y), self.struct, self.ω, is_leaf=self.is_leaf
+                lambda _, y: fn(y), self.struct, self.ω, is_leaf=self.is_leaf
             ),
             structure=self.struct,
             is_leaf=self.is_leaf,
@@ -120,7 +120,7 @@ def _set_binary(base, name: str, op: Callable[[Any, Any], Any]) -> None:
                 raise ValueError("`is_leaf` must match.")
             return ω(
                 jtu.tree_map(
-                    lambda _x, y, z: op(y[...], z[...]),
+                    lambda _, y, z: op(y, z),
                     self.struct,
                     self.ω,
                     other.ω,
@@ -132,7 +132,7 @@ def _set_binary(base, name: str, op: Callable[[Any, Any], Any]) -> None:
         elif isinstance(other, (bool, complex, float, int, jax.Array)):
             return ω(
                 jtu.tree_map(
-                    lambda _x, y: op(y[...], other),
+                    lambda _, y: op(y[...], other),
                     self.struct,
                     self.ω,
                     is_leaf=self.is_leaf,
@@ -151,7 +151,7 @@ def _set_binary(base, name: str, op: Callable[[Any, Any], Any]) -> None:
 def _set_unary(base, name: str, op: Callable[[Any], Any]) -> None:
     def fn(self):
         return ω(
-            jtu.tree_map(lambda _x, y: op(y), self.struct, self.ω, is_leaf=self.is_leaf),
+            jtu.tree_map(lambda _, y: op(y), self.struct, self.ω, is_leaf=self.is_leaf),
             structure=self.struct,
             is_leaf=self.is_leaf,
         )
@@ -241,7 +241,7 @@ def _set_binary_at(base, name: str, op: Callable[[Any, Any, Any], Any]) -> None:
                 raise ValueError("is_leaf specifications must match.")
             return ω(
                 jtu.tree_map(
-                    lambda _x, y, z: op(y, self.item, z[...]),
+                    lambda _, y, z: op(y, self.item, z[...]),
                     self.struct,
                     self.value,
                     other.ω,
@@ -253,7 +253,7 @@ def _set_binary_at(base, name: str, op: Callable[[Any, Any, Any], Any]) -> None:
         elif isinstance(other, (bool, complex, float, int, jax.Array)):
             return ω(
                 jtu.tree_map(
-                    lambda _x, y: op(y, self.item, other),
+                    lambda _, y: op(y, self.item, other),
                     self.struct,
                     self.value,
                     is_leaf=self.is_leaf,
