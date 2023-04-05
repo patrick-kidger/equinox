@@ -162,7 +162,9 @@ def finalise_make_jaxpr(fn, *, return_shape: bool = False):
     """As `jax.make_jaxpr`, but finalises the result."""
 
     def _finalise_make_jaxpr(*args):
-        jaxpr_struct = jax.make_jaxpr(fn, return_shape=return_shape)(*args)
+        jaxpr_struct = jax.make_jaxpr(fn, return_shape=return_shape)(  # pyright: ignore
+            *args
+        )
         if return_shape:
             jaxpr_struct = cast(Tuple[jax.core.ClosedJaxpr, Any], jaxpr_struct)
             jaxpr, struct = jaxpr_struct
