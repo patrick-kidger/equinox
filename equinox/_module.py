@@ -73,6 +73,7 @@ _has_dataclass_init = weakref.WeakKeyDictionary()
 
 # Inherits from ABCMeta as a convenience for a common use-case.
 # It's not a feature we use ourselves.
+@dataclass_transform(field_specifiers=(field, static_field))
 class _ModuleMeta(ABCMeta):
     def __new__(mcs, name, bases, dict_):  # pyright: ignore
         dict_ = {
@@ -113,7 +114,7 @@ class _ModuleMeta(ABCMeta):
         return cls
 
     def __call__(cls, *args, **kwargs):
-        self = cls.__new__(cls, *args, **kwargs)
+        self = cls.__new__(cls, *args, **kwargs)  # pyright: ignore
         # Defreeze it during __init__
         initable_cls = _make_initable(cls, wraps=False)
         object.__setattr__(self, "__class__", initable_cls)
@@ -124,7 +125,7 @@ class _ModuleMeta(ABCMeta):
 
         missing_names = {
             field.name
-            for field in fields(cls)
+            for field in fields(cls)  # pyright: ignore
             if field.init and field.name not in dir(self)
         }
         if len(missing_names):
@@ -150,7 +151,7 @@ def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
     if wraps:
         field_names = _wrapper_field_names
     else:
-        field_names = {field.name for field in fields(cls)}
+        field_names = {field.name for field in fields(cls)}  # pyright: ignore
 
     class _InitableModule(cls):  # pyright: ignore
         pass
@@ -168,7 +169,6 @@ def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
     return _InitableModule
 
 
-@dataclass_transform(field_specifiers=(field, static_field))
 class Module(metaclass=_ModuleMeta):
     """Base class. Create your model by inheriting from this.
 
@@ -336,7 +336,7 @@ def module_update_wrapper(
         # It's common/possible for wrapper and wrapped to both be classes
         # implementing __call__, in which case copying __dict__ over basically
         # just breaks the wrapper class.
-        ft.update_wrapper(wrapper, wrapped, updated=())
+        ft.update_wrapper(wrapper, wrapped, updated=())  # pyright: ignore
     finally:
         object.__setattr__(wrapper, "__class__", cls)
     return cast(Callable[_P, _T], wrapper)
