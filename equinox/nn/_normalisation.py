@@ -102,6 +102,7 @@ class LayerNorm(Module):
         """
         mean = jnp.mean(x, keepdims=True)
         variance = jnp.var(x, keepdims=True)
+        variance = jnp.maximum(0.0, variance)
         inv = jax.lax.rsqrt(variance + self.eps)
         out = (x - mean) * inv
         if self.use_weight:
@@ -193,6 +194,7 @@ class GroupNorm(Module):
         y = x.reshape(self.groups, channels // self.groups, *x.shape[1:])
         mean = jax.vmap(ft.partial(jnp.mean, keepdims=True))(y)
         variance = jax.vmap(ft.partial(jnp.var, keepdims=True))(y)
+        variance = jnp.maximum(0.0, variance)
         inv = jax.lax.rsqrt(variance + self.eps)
         out = (y - mean) * inv
         out = out.reshape(x.shape)

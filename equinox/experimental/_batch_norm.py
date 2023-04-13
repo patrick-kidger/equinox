@@ -145,6 +145,7 @@ class BatchNorm(Module):
             mean = lax.pmean(mean, self.axis_name)
             var = jnp.mean((y - mean) ** 2)
             var = lax.pmean(var, self.axis_name)
+            var = jnp.maximum(0.0, var)
             return mean, var
 
         batch_state = jax.vmap(_stats)(x)
