@@ -1,4 +1,5 @@
 import functools as ft
+import warnings
 from typing import Optional, Sequence, Union
 
 import jax
@@ -49,7 +50,8 @@ class LayerNorm(Module):
 
     shape: Union[None, int, Sequence[int]] = static_field()
     eps: float = static_field()
-    elementwise_affine: bool = static_field()
+    use_weight: bool = static_field()
+    use_bias: bool = static_field()
     weight: Optional[Array]
     bias: Optional[Array]
 
@@ -57,7 +59,10 @@ class LayerNorm(Module):
         self,
         shape: Union[None, int, Sequence[int]],
         eps: float = 1e-5,
-        elementwise_affine: bool = True,
+        use_weight: bool = True,
+        use_bias: bool = True,
+        *,
+        elementwise_affine: Optional[bool] = None,
         **kwargs,
     ):
         """**Arguments:**
@@ -65,14 +70,24 @@ class LayerNorm(Module):
         - `shape`: Input shape. May be left unspecified (e.g. just `None`) if
             `elementwise_affine=False`.
         - `eps`: Value added to denominator for numerical stability.
-        - `elementwise_affine`: Whether the module has learnable affine parameters.
+        - `use_weight`: Whether the module has learnable affine weights.
+        - `use_bias`: Whether the module has learnable affine biases.
+        - `elementwise_affine`: Deprecated alternative to `use_weight` and `use_bias`.
         """
         super().__init__(**kwargs)
         self.shape = shape
         self.eps = eps
-        self.elementwise_affine = elementwise_affine
-        self.weight = jnp.ones(shape) if elementwise_affine else None
-        self.bias = jnp.zeros(shape) if elementwise_affine else None
+        if elementwise_affine is not None:
+            use_weight = elementwise_affine
+            use_bias = elementwise_affine
+            warnings.warn(
+                "LayerNorm(elementwise_affine=...) is deprecated "
+                "in favour of LayerNorm(use_weight=...) and LayerNorm(use_bias=...)"
+            )
+        self.use_weight = use_weight
+        self.use_bias = use_bias
+        self.weight = jnp.ones(shape) if use_weight else None
+        self.bias = jnp.zeros(shape) if use_bias else None
 
     def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
         """**Arguments:**
@@ -89,8 +104,10 @@ class LayerNorm(Module):
         variance = jnp.var(x, keepdims=True)
         inv = jax.lax.rsqrt(variance + self.eps)
         out = (x - mean) * inv
-        if self.elementwise_affine:
-            out = self.weight * out + self.bias
+        if self.use_weight:
+            out = self.weight * out
+        if self.use_bias:
+            out = out + self.bias
         return out
 
 
