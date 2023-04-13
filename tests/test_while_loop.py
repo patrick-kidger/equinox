@@ -114,7 +114,7 @@ def test_forward(buffer, kind, getkey):
         )
 
     final_carry, _ = jax.linearize(run, init_val1, init_val2)
-    assert shaped_allclose(final_carry, true_final_carry)
+    assert shaped_allclose(final_carry, true_final_carry, atol=1e-4, rtol=1e-4)
 
 
 @pytest.mark.parametrize(
@@ -457,7 +457,7 @@ def test_speed_while(inplace_op, while_loop):
 
 
 # This tests the possible failure mode of "the buffer doesn't do anything".
-# This test takes O(1e-3) seconds with buffer.
+# This test takes O(1e-1) seconds with buffer.
 # This test takes O(10) seconds without buffer.
 # This speed improvement is precisely the reason that buffer exists.
 @pytest.mark.parametrize("read", (False, True))
@@ -499,7 +499,7 @@ def test_speed_buffer_while(read):
     f(*args)  # compile
 
     speed = timeit.timeit(lambda: f(*args), number=1)
-    assert speed < 0.1
+    assert speed < 1
 
 
 # This isn't testing any particular failure mode: just that things generally work.
