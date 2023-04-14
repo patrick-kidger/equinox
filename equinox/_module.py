@@ -2,7 +2,7 @@ import functools as ft
 import inspect
 import weakref
 from dataclasses import field, fields
-from typing import Any, Callable, cast, TypeVar
+from typing import Any, Callable, cast, Dict, Tuple, Type, TypeVar
 from typing_extensions import dataclass_transform, ParamSpec
 
 import jax.tree_util as jtu
@@ -109,7 +109,7 @@ class _ModuleMeta(ABCMeta):
             cls.__init__.__doc__ = init_doc  # pyright: ignore
             cls.__init__.__module__ = cls.__module__
         jtu.register_pytree_node(
-            cls, cls._tree_flatten, cls._tree_unflatten  # pyright: ignore
+            cls, _flatten_module, ft.partial(_unflatten_module, cls)  # pyright: ignore
         )
         return cls
 
@@ -168,6 +168,46 @@ def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
     _InitableModule.__init__ = cls.__init__  # pyright: ignore
 
     return _InitableModule
+
+
+def _flatten_module(module: "Module"):
+    dynamic_field_names = []
+    dynamic_field_values = []
+    static_field_names = []
+    static_field_values = []
+    for field_ in fields(module):
+        name = field_.name
+        try:
+            value = module.__dict__[name]
+        except KeyError:
+            continue
+        if field_.metadata.get("static", False):
+            static_field_names.append(name)
+            static_field_values.append(value)
+        else:
+            dynamic_field_names.append(name)
+            dynamic_field_values.append(value)
+    sentinel = object()
+    for name in _wrapper_field_names:
+        value = getattr(module, name, sentinel)
+        if value is not sentinel:
+            static_field_names.append(name)
+            static_field_values.append(value)
+    return tuple(dynamic_field_values), (
+        tuple(dynamic_field_names),
+        tuple(static_field_names),
+        tuple(static_field_values),
+    )
+
+
+def _unflatten_module(cls: Type["Module"], aux, dynamic_field_values):
+    module = object.__new__(cls)
+    dynamic_field_names, static_field_names, static_field_values = aux
+    for name, value in zip(dynamic_field_names, dynamic_field_values):
+        object.__setattr__(module, name, value)
+    for name, value in zip(static_field_names, static_field_values):
+        object.__setattr__(module, name, value)
+    return module
 
 
 class Module(metaclass=_ModuleMeta):
@@ -262,48 +302,6 @@ class Module(metaclass=_ModuleMeta):
     def __repr__(self):
         return tree_pformat(self)
 
-    # TODO: move this out of being a method at all.
-    # Need to first wait until stateful operations land in JAX itself, so that we can
-    # deprecate `eqx.experimental.stateful`.
-    def _tree_flatten(self):
-        dynamic_field_names = []
-        dynamic_field_values = []
-        static_field_names = []
-        static_field_values = []
-        for field_ in fields(self):
-            name = field_.name
-            try:
-                value = self.__dict__[name]
-            except KeyError:
-                continue
-            if field_.metadata.get("static", False):
-                static_field_names.append(name)
-                static_field_values.append(value)
-            else:
-                dynamic_field_names.append(name)
-                dynamic_field_values.append(value)
-        sentinel = object()
-        for name in _wrapper_field_names:
-            value = getattr(self, name, sentinel)
-            if value is not sentinel:
-                static_field_names.append(name)
-                static_field_values.append(value)
-        return tuple(dynamic_field_values), (
-            tuple(dynamic_field_names),
-            tuple(static_field_names),
-            tuple(static_field_values),
-        )
-
-    @classmethod
-    def _tree_unflatten(cls, aux, dynamic_field_values):
-        self = object.__new__(cls)
-        dynamic_field_names, static_field_names, static_field_values = aux
-        for name, value in zip(dynamic_field_names, dynamic_field_values):
-            object.__setattr__(self, name, value)
-        for name, value in zip(static_field_names, static_field_values):
-            object.__setattr__(self, name, value)
-        return self
-
 
 # Modifies in-place, just like functools.update_wrapper
 def module_update_wrapper(
@@ -345,3 +343,44 @@ def module_update_wrapper(
 
 class Static(Module):
     value: Any = static_field()
+
+
+class Partial(Module):
+    """Like `functools.partial`, but treats the wrapped function, and partially-applied
+    args and kwargs, as a PyTree.
+
+    This is very much like `jax.tree_util.Partial`. The difference is that the JAX
+    version requires that `func` be specifically a *function* -- and will silently
+    misbehave if given any non-function callable, e.g. [`equinox.nn.MLP`][]. In contrast
+    the Equinox version allows for arbitrary callables.
+    """
+
+    func: Callable
+    args: Tuple[Any, ...]
+    keywords: Dict[str, Any]
+
+    def __init__(self, func, /, *args, **kwargs):
+        """**Arguments:**
+
+        - `func`: the callable to partially apply.
+        - `*args`: any positional arguments to apply.
+        - `**kwargs`: any keyword arguments to apply.
+        """
+        self.func = func
+        self.args = args
+        self.keywords = kwargs
+
+    def __call__(self, *args, **kwargs):
+        """Call the wrapped `self.func`.
+
+        **Arguments:**
+
+        - `*args`: the arguments to apply. Passed after those arguments passed during
+            `__init__`.
+        - `**kwargs`: any keyword arguments to apply.
+
+        **Returns:**
+
+        The result of the wrapped function.
+        """
+        return self.func(*self.args, *args, **kwargs, **self.keywords)
