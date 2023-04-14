@@ -1,6 +1,7 @@
 import warnings
 from typing import Optional
 
+import jax.lax as lax
 import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array
@@ -84,6 +85,6 @@ class Dropout(Module):
                 "Dropout requires a key when running in non-deterministic mode."
             )
         else:
-            q = 1 - self.p
+            q = 1 - lax.stop_gradient(self.p)
             mask = jrandom.bernoulli(key, q, x.shape)
             return jnp.where(mask, x / q, 0)
