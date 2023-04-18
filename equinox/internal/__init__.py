@@ -1,4 +1,7 @@
-from .._better_abc import abstractattribute as abstractattribute
+from .._better_abstract import (
+    AbstractClassVar as AbstractClassVar,
+    AbstractVar as AbstractVar,
+)
 from .._compile_utils import (
     hashable_combine as hashable_combine,
     hashable_partition as hashable_partition,
