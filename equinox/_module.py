@@ -1,13 +1,13 @@
 import functools as ft
 import inspect
 import weakref
-from dataclasses import dataclass, field, fields
+from dataclasses import field, fields
 from typing import Any, Callable, cast, TypeVar
 from typing_extensions import dataclass_transform, ParamSpec
 
 import jax.tree_util as jtu
 
-from ._better_abc import ABCMeta
+from ._better_abstract import ABCMeta, dataclass
 from ._pretty_print import tree_pformat
 from ._tree import tree_equal
 
@@ -114,10 +114,9 @@ class _ModuleMeta(ABCMeta):
         return cls
 
     def __call__(cls, *args, **kwargs):
-        self = cls.__new__(cls, *args, **kwargs)  # pyright: ignore
         # Defreeze it during __init__
         initable_cls = _make_initable(cls, wraps=False)
-        object.__setattr__(self, "__class__", initable_cls)
+        self = super(_ModuleMeta, initable_cls).__call__(*args, **kwargs)
         try:
             cls.__init__(self, *args, **kwargs)
         finally:
@@ -165,6 +164,8 @@ def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
             raise AttributeError(f"Cannot set attribute {name}")
 
     _InitableModule.__setattr__ = __setattr__
+    # Make beartype happy
+    _InitableModule.__init__ = cls.__init__  # pyright: ignore
 
     return _InitableModule
 
