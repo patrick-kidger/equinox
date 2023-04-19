@@ -7,6 +7,7 @@ import jax.tree_util as jtu
 from jaxtyping import PyTree
 
 from .._module import Module
+from .._pretty_print import bracketed, named_objs, text, tree_pformat
 
 
 _Value = TypeVar("_Value")
@@ -72,6 +73,8 @@ class State:
         - `**kwargs`: all keyword arguments are forwarded to the `init` function of
             `equinox.nn.StateIndex(init=...)`  (used inside each stateful layer).
         """
+        # Note that de/serialisation depends on the ordered-ness of this dictionary,
+        # between serialisation and deserialisation.
         state = {}
         leaves = jtu.tree_leaves(model, is_leaf=_is_index)
         for leaf in leaves:
@@ -102,6 +105,28 @@ class State:
         new_self._state = self._state
         self._state = _sentinel
         return new_self
+
+    def __repr__(self):
+        return tree_pformat(self)
+
+    def __tree_pp__(self, **kwargs):
+        if self._state is _sentinel:
+            return text("State(~old~)")
+        else:
+            objs = named_objs(
+                [
+                    (hex(id(key)), value)
+                    for key, value in self._state.items()  # pyright: ignore
+                ],
+                **kwargs,
+            )
+            return bracketed(
+                name=text("State"),
+                indent=kwargs["indent"],
+                objs=objs,
+                lbracket="(",
+                rbracket=")",
+            )
 
     def tree_flatten(self):
         if self._state is _sentinel:

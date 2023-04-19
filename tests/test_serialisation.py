@@ -138,3 +138,25 @@ def test_custom_leaf_serialisation(getkey, tmp_path):
     assert tree_loaded_func is unlike_func
     assert tree_loaded_obj is like_obj
     assert tree_loaded_obj is not tree_ser_obj
+
+
+# Deserialisation and seralisation work despite both `model` and `model2` having
+# different objects as the markers in their `StateIndex`s.
+# This is because we iterate over `model` and `model2` in the same order when
+# creating `State(model)` and `State(model2)`. Thus the entries in `state` and `state2`
+# are stored in the same order (as Python dictionaries are ordered). So standard
+# de/serialisation just matches things up automatically.
+def test_stateful(tmp_path):
+    class Model(eqx.Module):
+        norm1: eqx.nn.BatchNorm
+        norm2: eqx.nn.BatchNorm
+
+    model = Model(eqx.nn.BatchNorm(3, "hi"), eqx.nn.BatchNorm(4, "bye"))
+    state = eqx.nn.State(model)
+
+    eqx.tree_serialise_leaves(tmp_path, (model, state))
+
+    model2 = Model(eqx.nn.BatchNorm(3, "hi"), eqx.nn.BatchNorm(4, "bye"))
+    state2 = eqx.nn.State(model2)
+
+    eqx.tree_deserialise_leaves(tmp_path, (model2, state2))

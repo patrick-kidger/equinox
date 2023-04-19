@@ -1,7 +1,7 @@
 import dataclasses
 import functools as ft
 import types
-from typing import Any, Callable, Dict, List, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 
 import jax
 import jax._src.pretty_printer as pp
@@ -14,119 +14,109 @@ Dataclass = Any
 NamedTuple = Any  # workaround typeguard bug
 PrettyPrintAble = PyTree
 
+# Re-export
+text = pp.text
+
 
 _comma_sep = pp.concat([pp.text(","), pp.brk()])
 
 
-def _nest(n: int, doc: pp.Doc) -> pp.Doc:
-    return pp.nest(n, pp.concat([pp.brk(""), doc]))
+def bracketed(
+    name: Optional[pp.Doc],
+    indent: int,
+    objs: Sequence[pp.Doc],
+    lbracket: str,
+    rbracket: str,
+) -> pp.Doc:
+    nested = pp.concat(
+        [
+            pp.nest(indent, pp.concat([pp.brk(""), pp.join(_comma_sep, objs)])),
+            pp.brk(""),
+        ]
+    )
+    concated = []
+    if name is not None:
+        concated.append(name)
+    concated.extend([pp.text(lbracket), nested, pp.text(rbracket)])
+    return pp.group(pp.concat(concated))
 
 
-def _pformat_list(obj: List, **kwargs) -> pp.Doc:
-    indent = kwargs["indent"]
-    return pp.group(
-        pp.concat(
-            [
-                pp.text("["),
-                _nest(indent, pp.join(_comma_sep, [tree_pp(x, **kwargs) for x in obj])),
-                pp.brk(""),
-                pp.text("]"),
-            ]
-        )
+def named_objs(pairs, **kwargs):
+    return [
+        pp.concat([pp.text(key + "="), tree_pp(value, **kwargs)])
+        for key, value in pairs
+    ]
+
+
+def _pformat_list(obj: list, **kwargs) -> pp.Doc:
+    return bracketed(
+        name=None,
+        indent=kwargs["indent"],
+        objs=[tree_pp(x, **kwargs) for x in obj],
+        lbracket="[",
+        rbracket="]",
     )
 
 
-def _pformat_tuple(obj: Tuple, **kwargs) -> pp.Doc:
-    indent = kwargs["indent"]
+def _pformat_tuple(obj: tuple, **kwargs) -> pp.Doc:
     if len(obj) == 1:
-        entries = pp.concat([tree_pp(obj[0], **kwargs), pp.text(",")])
+        objs = [pp.concat([tree_pp(obj[0], **kwargs), pp.text(",")])]
     else:
-        entries = pp.join(_comma_sep, [tree_pp(x, **kwargs) for x in obj])
-    return pp.group(
-        pp.concat([pp.text("("), _nest(indent, entries), pp.brk(""), pp.text(")")])
+        objs = [tree_pp(x, **kwargs) for x in obj]
+    return bracketed(
+        name=None, indent=kwargs["indent"], objs=objs, lbracket="(", rbracket=")"
     )
 
 
-def _dict_entry(key: PrettyPrintAble, value: PrettyPrintAble, **kwargs) -> pp.Doc:
+def _pformat_namedtuple(obj: NamedTuple, **kwargs) -> pp.Doc:
+    objs = named_objs([(name, getattr(obj, name)) for name in obj._fields], **kwargs)
+    return bracketed(
+        name=pp.text(obj.__class__.__name__),
+        indent=kwargs["indent"],
+        objs=objs,
+        lbracket="(",
+        rbracket=")",
+    )
+
+
+def _dict_entry(key: Any, value: Any, **kwargs) -> pp.Doc:
     return pp.concat(
         [tree_pp(key, **kwargs), pp.text(":"), pp.brk(), tree_pp(value, **kwargs)]
     )
 
 
-def _pformat_dict(obj: Dict, **kwargs) -> pp.Doc:
-    indent = kwargs["indent"]
-    entries = [_dict_entry(key, value, **kwargs) for key, value in obj.items()]
-    return pp.group(
-        pp.concat(
-            [
-                pp.text("{"),
-                _nest(indent, pp.join(_comma_sep, entries)),
-                pp.brk(""),
-                pp.text("}"),
-            ]
-        )
+def _pformat_dict(obj: dict, **kwargs) -> pp.Doc:
+    objs = [_dict_entry(key, value, **kwargs) for key, value in obj.items()]
+    return bracketed(
+        name=None,
+        indent=kwargs["indent"],
+        objs=objs,
+        lbracket="{",
+        rbracket="}",
     )
 
 
-def _named_entry(name: str, value: Any, **kwargs) -> pp.Doc:
-    return pp.concat([pp.text(name), pp.text("="), tree_pp(value, **kwargs)])
-
-
-def _pformat_namedtuple(obj: NamedTuple, **kwargs) -> pp.Doc:
-    indent = kwargs["indent"]
-    entries = [_named_entry(name, getattr(obj, name), **kwargs) for name in obj._fields]
-    return pp.group(
-        pp.concat(
-            [
-                pp.text(obj.__class__.__name__),
-                pp.text("("),
-                _nest(indent, pp.join(_comma_sep, entries)),
-                pp.brk(""),
-                pp.text(")"),
-            ]
-        )
+def _pformat_short_array(
+    shape: Tuple[int, ...], dtype: str, kind: Optional[str]
+) -> pp.Doc:
+    short_dtype = (
+        dtype.replace("float", "f")
+        .replace("uint", "u")
+        .replace("int", "i")
+        .replace("complex", "c")
     )
-
-
-def _pformat_dataclass(obj: Dataclass, **kwargs) -> pp.Doc:
-    indent = kwargs["indent"]
-    entries = []
-    for f in dataclasses.fields(obj):
-        if f.repr:
-            try:
-                val = getattr(obj, f.name)
-            except AttributeError:
-                # This can happen when typechecking an `eqx.Module`'s `__init__` method
-                # with beartype, and printing args using pytest. We haven't yet actually
-                # assigned values to the module so the repr fails.
-                pass
-            else:
-                entries.append(_named_entry(f.name, val, **kwargs))
-    return pp.group(
-        pp.concat(
-            [
-                pp.text(obj.__class__.__name__),
-                pp.text("("),
-                _nest(indent, pp.join(_comma_sep, entries)),
-                pp.brk(""),
-                pp.text(")"),
-            ]
-        )
-    )
+    short_shape = ",".join(map(str, shape))
+    out = f"{short_dtype}[{short_shape}]"
+    if kind is not None:
+        out = out + f"({kind})"
+    return pp.text(out)
 
 
 def _pformat_array(obj: Union[jax.Array, np.ndarray], **kwargs) -> pp.Doc:
-    short = kwargs["short_arrays"]
-    if short:
-        dtype_str = (
-            obj.dtype.name.replace("float", "f")
-            .replace("uint", "u")
-            .replace("int", "i")
-            .replace("complex", "c")
-        )
-        shape_str = ",".join(map(str, obj.shape))
-        backend = "(numpy)" if isinstance(obj, np.ndarray) else ""
-        return pp.text(f"{dtype_str}[{shape_str}]{backend}")
+    short_arrays = kwargs["short_arrays"]
+    if short_arrays:
+        kind = "(numpy)" if isinstance(obj, np.ndarray) else None
+        return _pformat_short_array(obj.shape, obj.dtype.name, kind)
     else:
         return pp.text(repr(obj))
 
@@ -137,6 +127,27 @@ def _pformat_function(obj: types.FunctionType, **kwargs) -> pp.Doc:
     else:
         fn = "function"
     return pp.text(f"<{fn} {obj.__name__}>")
+
+
+def _pformat_dataclass(obj, **kwargs) -> pp.Doc:
+    # <uninitialised> can happen when typechecking an `eqx.Module`'s `__init__` method
+    # with beartype, and printing args using pytest. We haven't yet actually assigned
+    # values to the module so the repr fails.
+    objs = named_objs(
+        [
+            (field.name, getattr(obj, field.name, "<uninitialised>"))
+            for field in dataclasses.fields(obj)
+            if field.repr
+        ],
+        **kwargs,
+    )
+    return bracketed(
+        name=pp.text(obj.__class__.__name__),
+        indent=kwargs["indent"],
+        objs=objs,
+        lbracket="(",
+        rbracket=")",
+    )
 
 
 @dataclasses.dataclass
@@ -156,9 +167,11 @@ def tree_pp(obj: PrettyPrintAble, **kwargs) -> pp.Doc:
     truncate_leaf = kwargs["truncate_leaf"]
     if truncate_leaf(obj):
         return pp.text(f"{type(obj).__name__}(...)")
-    elif hasattr(obj, "__tree_pp__"):
-        return pp.group(obj.__tree_pp__(**kwargs))
-    elif dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+    if hasattr(obj, "__tree_pp__"):
+        custom_pp = obj.__tree_pp__(**kwargs)
+        if custom_pp is not NotImplemented:
+            return pp.group(custom_pp)
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         return _pformat_dataclass(obj, **kwargs)
     elif isinstance(obj, list):
         return _pformat_list(obj, **kwargs)
