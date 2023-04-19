@@ -59,6 +59,7 @@ else:
 import abc
 import dataclasses
 from typing import ClassVar, Generic, get_args, get_origin, TYPE_CHECKING, TypeVar
+from typing_extensions import dataclass_transform
 
 
 _T = TypeVar("_T")
@@ -227,6 +228,7 @@ class ABCMeta(abc.ABCMeta):
         return self
 
 
+@dataclass_transform()
 def dataclass(**kwargs):
     def make_dataclass(cls):
         try:
