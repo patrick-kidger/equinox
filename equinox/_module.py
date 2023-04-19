@@ -170,11 +170,32 @@ def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
     return _InitableModule
 
 
+# This class exists primarily just to hide the wrapper fields from the PyTreeDef repr.
+# Stuff like the docstring can be pretty long and entirely unhelpful to print out.
+@dataclass()
+class _FlattenedData:
+    dynamic_field_names: tuple
+    static_field_names: tuple
+    static_field_values: tuple
+    wrapper_field_names: tuple
+    wrapper_field_values: tuple
+
+    def __repr__(self):
+        x = (
+            self.dynamic_field_names,
+            self.static_field_names,
+            self.static_field_values,
+        )
+        return repr(x)[1:-1]
+
+
 def _flatten_module(module: "Module"):
     dynamic_field_names = []
     dynamic_field_values = []
     static_field_names = []
     static_field_values = []
+    wrapper_field_names = []
+    wrapper_field_values = []
     for field_ in fields(module):
         name = field_.name
         try:
@@ -191,21 +212,25 @@ def _flatten_module(module: "Module"):
     for name in _wrapper_field_names:
         value = getattr(module, name, sentinel)
         if value is not sentinel:
-            static_field_names.append(name)
-            static_field_values.append(value)
-    return tuple(dynamic_field_values), (
+            wrapper_field_names.append(name)
+            wrapper_field_values.append(value)
+    aux = _FlattenedData(
         tuple(dynamic_field_names),
         tuple(static_field_names),
         tuple(static_field_values),
+        tuple(wrapper_field_names),
+        tuple(wrapper_field_values),
     )
+    return tuple(dynamic_field_values), aux
 
 
-def _unflatten_module(cls: Type["Module"], aux, dynamic_field_values):
+def _unflatten_module(cls: Type["Module"], aux: _FlattenedData, dynamic_field_values):
     module = object.__new__(cls)
-    dynamic_field_names, static_field_names, static_field_values = aux
-    for name, value in zip(dynamic_field_names, dynamic_field_values):
+    for name, value in zip(aux.dynamic_field_names, dynamic_field_values):
         object.__setattr__(module, name, value)
-    for name, value in zip(static_field_names, static_field_values):
+    for name, value in zip(aux.static_field_names, aux.static_field_values):
+        object.__setattr__(module, name, value)
+    for name, value in zip(aux.wrapper_field_names, aux.wrapper_field_values):
         object.__setattr__(module, name, value)
     return module
 
