@@ -8,9 +8,6 @@ import jax.tree_util as jtu
 import numpy as np
 from jaxtyping import PyTree
 
-from . import experimental
-from ._pretty_print import tree_pformat
-
 
 def _ordered_tree_map(
     f: Callable[..., Any],
@@ -65,37 +62,6 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
         np.save(f, x)
     elif isinstance(x, (bool, float, complex, int)):
         np.save(f, x)
-    elif isinstance(x, experimental.StateIndex):
-        try:
-            value, _, _ = x.unsafe_get()
-        except KeyError:
-            np.save(f, False)
-        else:
-            np.save(f, True)
-            # This is a bit of a hack. Serialising arbitrary PyTrees is of course
-            # possible, but it's a lot more work. In general it would additionally
-            # require the StateIndex to already have a value when passed in (so that
-            # we can grab its PyTree structure from it), which is kind of a faff.
-            if isinstance(value, np.ndarray):
-                np.save(f, True)
-                jnp.save(f, value)
-            elif isinstance(value, tuple):
-                if any(not isinstance(v, np.ndarray) for v in value):
-                    value_str = tree_pformat(value)
-                    raise NotImplementedError(
-                        "Can only serialise usages of StateIndex storing np.ndarray "
-                        f"or tuples of jax.Array, got {value_str}"
-                    )
-                np.save(f, False)
-                np.save(f, len(value))
-                for v in value:
-                    jnp.save(f, v)
-            else:
-                value_str = tree_pformat(value)
-                raise NotImplementedError(
-                    "Can only serialise usages of StateIndex storing np.ndarray "
-                    f"or tuples of jax.Array, got {value_str}"
-                )
     else:
         pass
 
@@ -138,23 +104,6 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
         return np.load(f)
     elif isinstance(x, (bool, float, complex, int)):
         return np.load(f).item()
-    elif isinstance(x, experimental.StateIndex):
-        # Make a new StateIndex. If we happen to load some state then we don't
-        # want to affect the `like` as a side-effect.
-        y = experimental.StateIndex(inference=x.inference)
-        saved_value = np.load(f).item()
-        assert isinstance(saved_value, bool)
-        if saved_value:
-            is_array = np.load(f).item()
-            assert isinstance(is_array, bool)
-            if is_array:
-                value = jnp.load(f)
-            else:
-                tuple_length = np.load(f).item()
-                assert isinstance(tuple_length, int)
-                value = tuple(jnp.load(f) for _ in range(tuple_length))
-            experimental.set_state(y, value)
-        return y
     else:
         return x
 
@@ -200,15 +149,11 @@ def _assert_same(new, old):
             )
 
 
-def _is_index(x):
-    return isinstance(x, experimental.StateIndex)
-
-
 def tree_serialise_leaves(
     path_or_file: Union[str, pathlib.Path, BinaryIO],
     pytree: PyTree,
     filter_spec=default_serialise_filter_spec,
-    is_leaf: Callable[[Any], bool] = _is_index,
+    is_leaf: Optional[Callable[[Any], bool]] = None,
 ) -> None:
     """Save the leaves of a PyTree to file.
 
@@ -218,8 +163,7 @@ def tree_serialise_leaves(
     - `pytree`: The PyTree whose leaves will be saved.
     - `filter_spec`: Specifies how to save each kind of leaf. By default all JAX
         arrays, NumPy arrays, Python bool/int/float/complexes are saved,
-        [`equinox.experimental.StateIndex`][] instances have their value looked up
-        and saved, and all other leaf types are ignored. (See
+        and all other leaf types are ignored. (See
         [`equinox.default_serialise_filter_spec`][].)
     - `is_leaf`: Called on every node of `pytree`; if `True` then this node will be
         treated as a leaf.
@@ -266,7 +210,7 @@ def tree_deserialise_leaves(
     path_or_file: Union[str, pathlib.Path, BinaryIO],
     like: PyTree,
     filter_spec=default_deserialise_filter_spec,
-    is_leaf: Callable[[Any], bool] = _is_index,
+    is_leaf: Optional[Callable[[Any], bool]] = None,
 ) -> PyTree:
     """Load the leaves of a PyTree from a file.
 
@@ -279,8 +223,7 @@ def tree_deserialise_leaves(
         corresponding leaves of `like`.
     - `filter_spec`: Specifies how to load each kind of leaf. By default all JAX
         arrays, NumPy arrays, Python bool/int/float/complexes are loaded, and
-        [`equinox.experimental.StateIndex`][] instances have their value looked up
-        and stored, and all other leaf types are not loaded, and will retain their
+        all other leaf types are not loaded, and will retain their
         value from `like`. (See [`equinox.default_deserialise_filter_spec`][].)
     - `is_leaf`: Called on every node of `like`; if `True` then this node will be
         treated as a leaf.

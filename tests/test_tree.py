@@ -159,11 +159,3 @@ def test_tree_inference(getkey):
     attention2 = eqx.tree_inference(attention, True)
     assert attention.dropout.inference is False
     assert attention2.dropout.inference is True
-
-    @jax.jit
-    def f():
-        dropout = eqx.nn.Dropout()
-        eqx.tree_inference(dropout, True)
-
-    with pytest.raises(RuntimeError):
-        f()

@@ -1,4 +1,3 @@
-import functools as ft
 import warnings
 from typing import List, Union
 
@@ -6,7 +5,6 @@ import jax
 import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
-import jax.tree_util as jtu
 import pytest
 
 import equinox as eqx
@@ -727,156 +725,134 @@ def test_batch_norm(getkey):
 
     # Test that it works with a single vmap'd axis_name
 
-    bn = eqx.experimental.BatchNorm(5, "batch")
+    bn = eqx.nn.BatchNorm(5, "batch")
+    state = eqx.nn.State(bn)
+    vbn = jax.vmap(bn, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
 
-    assert jax.vmap(bn, axis_name="batch")(x1).shape == x1.shape
-    running_mean, running_var = bn.state_index.unsafe_get()[0]
-    assert running_mean.shape == (5,)
-    assert running_var.shape == (5,)
-
-    assert jax.vmap(bn, axis_name="batch")(x2).shape == x2.shape
-    running_mean, running_var = bn.state_index.unsafe_get()[0]
-    assert running_mean.shape == (5,)
-    assert running_var.shape == (5,)
-
-    assert jax.vmap(bn, axis_name="batch")(x3).shape == x3.shape
-    running_mean, running_var = bn.state_index.unsafe_get()[0]
-    assert running_mean.shape == (5,)
-    assert running_var.shape == (5,)
+    for x in (x1, x2, x3):
+        out, state = vbn(x, state)
+        assert out.shape == x.shape
+        running_mean, running_var = state.get(bn.state_index)
+        assert running_mean.shape == (5,)
+        assert running_var.shape == (5,)
 
     # Test that it fails without any vmap'd axis_name
 
     with pytest.raises(NameError):
-        jax.vmap(bn)(x1)
+        jax.vmap(bn, in_axes=(0, None), out_axes=(0, None))(x1, state)
+    state = eqx.nn.State(bn)
 
     with pytest.raises(NameError):
-        bn(x0)
+        bn(x0, state)
+    state = eqx.nn.State(bn)
 
     # Test that it vmaps with other vmaps without axis_name
 
-    bn = eqx.experimental.BatchNorm(5, "batch")
-
-    assert (
-        jax.vmap(jax.vmap(bn, axis_name="batch", in_axes=1, out_axes=1))(x2).shape
-        == x2.shape
-    )
-    running_mean, running_var = bn.state_index.unsafe_get()[0]
+    out, state = jax.vmap(
+        jax.vmap(bn, axis_name="batch", in_axes=(1, None), out_axes=(1, None)),
+        in_axes=(0, None),
+    )(x2, state)
+    assert out.shape == x2.shape
+    running_mean, running_var = state.get(bn.state_index)
     assert running_mean.shape == (10, 5)
     assert running_var.shape == (10, 5)
-
-    assert (
-        jax.vmap(
-            jax.vmap(bn, axis_name="batch", in_axes=1, out_axes=1),
-            axis_name="not-batch",
-        )(x2).shape
-        == x2.shape
-    )
-    running_mean, running_var = bn.state_index.unsafe_get()[0]
-    assert running_mean.shape == (10, 5)
-    assert running_var.shape == (10, 5)
-
-    # Test that switching to a different amount of batching raises an error
-
-    with pytest.raises(RuntimeError):
-        jax.vmap(bn, axis_name="batch")(x1)
 
     # Test that it handles multiple axis_names
 
-    bn = eqx.experimental.BatchNorm(6, ("batch1", "batch2"))
-    assert (
-        jax.vmap(jax.vmap(bn, axis_name="batch1"), axis_name="batch2")(x2).shape
-        == x2.shape
-    )
+    vvbn = eqx.nn.BatchNorm(6, ("batch1", "batch2"))
+    vvstate = eqx.nn.State(vvbn)
+    for axis_name in ("batch1", "batch2"):
+        vvbn = jax.vmap(
+            vvbn, axis_name=axis_name, in_axes=(0, None), out_axes=(0, None)
+        )
+    out, out_vvstate = vvbn(x2, vvstate)
+    assert out.shape == x2.shape
+    running_mean, running_var = out_vvstate.get(vvbn.state_index)
+    assert running_mean.shape == (6,)
+    assert running_var.shape == (6,)
 
     # Test that it normalises
 
     x1alt = jrandom.normal(jrandom.PRNGKey(5678), (10, 5))  # avoid flakey test
-    bn = eqx.experimental.BatchNorm(5, "batch", channelwise_affine=False)
-    out = jax.vmap(bn, axis_name="batch")(x1alt)
+    bn = eqx.nn.BatchNorm(5, "batch", channelwise_affine=False)
+    state = eqx.nn.State(bn)
+    vbn = jax.vmap(bn, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
+    out, state = vbn(x1alt, state)
     true_out = (x1alt - jnp.mean(x1alt, axis=0)) / jnp.sqrt(
         jnp.var(x1alt, axis=0) + 1e-5
     )
     assert jnp.allclose(out, true_out)
 
     # Test that the statistics update during training
-
-    bn = eqx.experimental.BatchNorm(5, "batch")
-    with pytest.raises(KeyError):
-        bn.state_index.unsafe_get()
-    jax.vmap(bn, axis_name="batch")(x1)
-    running_mean, running_var = bn.state_index.unsafe_get()[0]
-    jax.vmap(bn, axis_name="batch")(3 * x1 + 10)
-    running_mean2, running_var2 = bn.state_index.unsafe_get()[0]
+    out, state = vbn(x1, state)
+    running_mean, running_var = state.get(bn.state_index)
+    out, state = vbn(3 * x1 + 10, state)
+    running_mean2, running_var2 = state.get(bn.state_index)
     assert not jnp.allclose(running_mean, running_mean2)
     assert not jnp.allclose(running_var, running_var2)
 
     # Test that the statistics don't update at inference
 
-    bn = eqx.experimental.BatchNorm(5, "batch")
-    jax.vmap(bn, axis_name="batch")(x1)
-    running_mean, running_var = bn.state_index.unsafe_get()[0]
-    jax.vmap(ft.partial(bn, inference=True), axis_name="batch")(3 * x1 + 10)
-    running_mean2, running_var2 = bn.state_index.unsafe_get()[0]
-    assert jnp.allclose(running_mean, running_mean2)
-    assert jnp.allclose(running_var, running_var2)
+    ibn = eqx.tree_inference(bn, value=True)
+    vibn = jax.vmap(ibn, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
+    out, state = vibn(4 * x1 + 20, state)
+    running_mean3, running_var3 = state.get(bn.state_index)
+    assert jnp.array_equal(running_mean2, running_mean3)
+    assert jnp.array_equal(running_var2, running_var3)
 
     # Test that we can differentiate through it
 
-    bn = eqx.experimental.BatchNorm(5, "batch")
-
+    @jax.grad
     def f(x):
-        return jnp.sum(jax.vmap(bn, axis_name="batch")(x))
+        out, _ = vbn(x, state)
+        return jnp.sum(out)
 
-    jax.grad(f)(jnp.array(jrandom.normal(getkey(), (1, 5))))
+    f(jrandom.normal(getkey(), (1, 5)))
 
 
 def test_spectral_norm(getkey):
-    weight = jrandom.normal(getkey(), (5, 6))
-    spectral = eqx.experimental.SpectralNorm(weight, key=getkey())
+    def λ1():
+        u, v = state.get(spectral.uv_index)
+        σ = jnp.einsum("i,ij,j->", u, spectral.layer.weight, v)
+        _, s, _ = jnp.linalg.svd(spectral.layer.weight / σ)
+        return s[0]
+
+    x = jrandom.normal(getkey(), (5,))
+    spectral = eqx.nn.SpectralNorm(
+        eqx.nn.Linear(5, 6, key=getkey()), "weight", key=getkey()
+    )
+    state = eqx.nn.State(spectral)
     for _ in range(100):
-        spectral.__jax_array__()
-    _, s, _ = jnp.linalg.svd(spectral.__jax_array__())
-    assert jnp.allclose(s[0], 1)
+        _, state = spectral(x, state)
+    assert jnp.allclose(λ1(), 1)
+
     # "gradient descent"
-    spectral = eqx.tree_at(lambda s: s.weight, spectral, spectral.weight + 1)
-    _, s, _ = jnp.linalg.svd(spectral.__jax_array__())
-    assert not jnp.allclose(s[0], 1)
+    spectral = eqx.tree_at(
+        lambda s: s.layer.weight, spectral, spectral.layer.weight + 1
+    )
+    assert not jnp.allclose(λ1(), 1)
     for _ in range(100):
-        spectral.__jax_array__()
-    _, s, _ = jnp.linalg.svd(spectral.__jax_array__())
-    assert jnp.allclose(s[0], 1)
+        _, state = spectral(x, state)
+    assert jnp.allclose(λ1(), 1)
 
     # Test not updated at inference time
     spectral = eqx.tree_at(
-        lambda s: (s.weight, s.inference), spectral, (spectral.weight + 1, True)
+        lambda s: s.layer.weight, spectral, spectral.layer.weight + 1
     )
-    _, s, _ = jnp.linalg.svd(spectral.__jax_array__())
-    assert not jnp.allclose(s[0], 1)
+    spectral = eqx.tree_inference(spectral, value=True)
+    assert not jnp.allclose(λ1(), 1)
     for _ in range(100):
-        spectral.__jax_array__()
-    _, s, _ = jnp.linalg.svd(spectral.__jax_array__())
-    assert not jnp.allclose(s[0], 1)
-
-    # Test withkey
-
-    mlp = eqx.nn.MLP(2, 2, 2, 2, key=getkey())
-    spectral = eqx.experimental.SpectralNorm.withkey(getkey())
-
-    def get_weights(m):
-        is_linear = lambda x: isinstance(x, eqx.nn.Linear)
-        return tuple(
-            k.weight for k in jtu.tree_leaves(m, is_leaf=is_linear) if is_linear(k)
-        )
-
-    spectral_mlp = eqx.tree_at(get_weights, mlp, replace_fn=spectral)
-    for layer in spectral_mlp.layers:
-        assert isinstance(layer.weight, eqx.experimental.SpectralNorm)
+        _, state = spectral(x, state)
+    assert not jnp.allclose(λ1(), 1)
 
     # Test >2 dimensional input
 
+    x = jrandom.normal(getkey(), (5, 8, 8, 8))
     conv = eqx.nn.Conv3d(5, 4, 3, key=getkey())
-    conv = eqx.tree_at(lambda c: c.weight, conv, replace_fn=spectral)
-    assert conv(jrandom.normal(getkey(), (5, 8, 8, 8))).shape == (4, 6, 6, 6)
+    spectral = eqx.nn.SpectralNorm(conv, "weight", key=getkey())
+    state = eqx.nn.State(spectral)
+    out, _ = spectral(x, state)
+    assert out.shape == (4, 6, 6, 6)
 
 
 def test_maxpool1d():

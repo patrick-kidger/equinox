@@ -1,8 +1,5 @@
 from typing import Any, Callable, Optional, Sequence, TYPE_CHECKING, Union
 
-import jax
-import jax.core
-import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
 from jaxtyping import Array, Bool, PyTree
@@ -263,6 +260,35 @@ def _inferences(pytree):
 def tree_inference(pytree: PyTree, value: bool) -> PyTree:
     """Convenience function for setting all `inference` attributes on a PyTree.
 
+    `inference` flags are used to toggle the behaviour of a number of the pre-built
+    neural network layers, such as [`equinox.nn.Dropout`][] or
+    [`equinox.nn.BatchNorm`][].
+
+    !!! Example
+
+        ```python
+        class Model(eqx.Module):
+            norm: eqx.nn.BatchNorm
+            dropout: eqx.nn.Dropout
+            linear: eqx.nn.Linear
+
+            def __init__(self, key):
+                key1, key2 = jax.random.split(key)
+                self.norm = eqx.nn.BatchNorm(3, "batch", key=key1)
+                self.dropout = eqx.nn.Dropout(0.4)
+                self.linear = eqx.nn.Linear(3, 1, key=key2)
+
+            def __call__(self, x, ctx, *, key):
+                x, ctx = self.norm(x, ctx)
+                x = self.dropout(x, key=key)
+                x = self.linear(x)
+                return x, ctx
+
+        training_model = Model(jax.random.PRNGKey(0))
+        inference_model = eqx.tree_inference(training_model, value=True)
+        training_model_again = eqx.tree_inference(inference_model, value=False)
+        ```
+
     Equivalent to:
     ```python
     has_inference = lambda leaf: hasattr(leaf, "inference")
@@ -275,10 +301,6 @@ def tree_inference(pytree: PyTree, value: bool) -> PyTree:
     equinox.tree_at(where, pytree, replace_fn=lambda _: value)
     ```
 
-    `inference` flags are used to toggle the behaviour of a number of the pre-built
-    neural network layers, such as [`equinox.nn.Dropout`][] or
-    [`equinox.experimental.BatchNorm`][].
-
     **Arguments:**
 
     - `pytree`: the PyTree to modify.
@@ -288,12 +310,4 @@ def tree_inference(pytree: PyTree, value: bool) -> PyTree:
 
     A copy of `pytree` with all `inference` flags set to `value`.
     """
-
-    # For the sake of equinox.experimental.StateIndex. This won't defend against anyone
-    # setting inference flags manually using tree_at etc., but it should help overall.
-    if isinstance(jnp.array(0) + 1, jax.core.Tracer):
-        raise RuntimeError(
-            "inference flags should not be set whilst jit'ing, vmap'ing etc."
-        )
-
     return tree_at(_inferences, pytree, replace_fn=lambda _: value)
