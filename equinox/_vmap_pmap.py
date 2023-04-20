@@ -17,6 +17,7 @@ from ._compile_utils import (
     get_fun_names,
     hashable_combine,
     hashable_partition,
+    Lowered,
 )
 from ._custom_types import sentinel
 from ._deprecate import deprecated_0_10
@@ -440,6 +441,33 @@ def _filter_pmap_cache(
     )
 
 
+def _common_preprocess(axis_size, kwargs):
+    if len(kwargs) != 0:
+        raise RuntimeError(
+            "keyword arguments cannot be used with functions wrapped with "
+            "`filter_pmap`"
+        )
+    if axis_size is None:
+        return 0  # hashable non-array object
+    else:
+        # Work around JAX issue #9252
+        return np.broadcast_to(0, axis_size)
+
+
+def _preprocess(info, args, kwargs):
+    fun, out_axes, axis_size = info
+    maybe_dummy = _common_preprocess(axis_size, kwargs)
+    del kwargs
+    dynamic = filter((fun, args, maybe_dummy, out_axes), is_array)
+    return dynamic
+
+
+def _postprocess(out):
+    (pmapd, dynamic_nonpmapd, static_nonpmapd) = out
+    nonpmapd = hashable_combine(dynamic_nonpmapd, static_nonpmapd.value)
+    return combine(*pmapd, nonpmapd)
+
+
 class _PmapWrapper(Module):
     _fun: Callable
     _in_axes: PyTree[AxisSpec]
@@ -450,18 +478,8 @@ class _PmapWrapper(Module):
     _pmapkwargs: Dict[str, Any]
 
     def _call(self, is_lower, args, kwargs):
-        if len(kwargs) != 0:
-            raise RuntimeError(
-                "keyword arguments cannot be used with functions wrapped with "
-                "`filter_pmap`"
-            )
+        maybe_dummy = _common_preprocess(self._axis_size, kwargs)
         del kwargs
-
-        if self._axis_size is None:
-            maybe_dummy = 0  # hashable non-array object
-        else:
-            # Work around JAX issue #9252
-            maybe_dummy = np.broadcast_to(0, self._axis_size)
 
         in_axes = _named_in_axes(self._fun, self._in_axes, args)
         in_axes = _resolve_axes(args, in_axes)
@@ -485,23 +503,27 @@ class _PmapWrapper(Module):
         )
 
         if is_lower:
-            return cached.lower(dynamic)
+            return Lowered(
+                cached.lower(dynamic),
+                (self._fun, self._out_axes, self._axis_size),
+                _preprocess,  # pyright: ignore
+                _postprocess,  # pyright: ignore
+            )
         else:
-            (pmapd, dynamic_nonpmapd, static_nonpmapd) = cached(dynamic)
-            nonpmapd = hashable_combine(dynamic_nonpmapd, static_nonpmapd.value)
-            return combine(*pmapd, nonpmapd)
+            if self._filter_warning is True:
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore", message="Some donated buffers were not usable*"
+                    )
+                    out = cached(dynamic)
+            else:
+                out = cached(dynamic)
+            return _postprocess(out)
 
     def __call__(self, /, *args, **kwargs):
-        if self._filter_warning is True:
-            with warnings.catch_warnings():
-                warnings.filterwarnings(
-                    "ignore", message="Some donated buffers were not usable*"
-                )
-                return self._call(False, args, kwargs)
-        else:
-            return self._call(False, args, kwargs)
+        return self._call(False, args, kwargs)
 
-    def lower(self, /, *args, **kwargs):
+    def lower(self, /, *args, **kwargs) -> Lowered:
         return self._call(True, args, kwargs)
 
     def __get__(self, instance, owner):

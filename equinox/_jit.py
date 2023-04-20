@@ -12,7 +12,9 @@ from ._compile_utils import (
     compile_cache,
     get_fun_names,
     hashable_combine,
+    hashable_filter,
     hashable_partition,
+    Lowered,
 )
 from ._custom_types import sentinel
 from ._deprecate import deprecated_0_10
@@ -42,6 +44,27 @@ def _filter_jit_cache(fun_names, jitkwargs):
     return jax.jit(fun_wrapped, static_argnums=1, **jitkwargs)
 
 
+def _bind(signature, args, kwargs):
+    bound = signature.bind(*args, **kwargs)
+    bound.apply_defaults()
+    args = bound.args
+    kwargs = bound.kwargs
+    return args, kwargs
+
+
+def _preprocess(info, args, kwargs):
+    signature, dynamic_fun, static_fun = info
+    args, kwargs = _bind(signature, args, kwargs)
+    dynamic_spec = hashable_filter((args, kwargs), is_array)
+    dynamic = (dynamic_fun, dynamic_spec)
+    return dynamic
+
+
+def _postprocess(out):
+    dynamic_out, static_out = out
+    return combine(dynamic_out, static_out.value)
+
+
 class _JitWrapper(Module):
     _signature: inspect.Signature
     _dynamic_fun: PyTree
@@ -49,33 +72,34 @@ class _JitWrapper(Module):
     _cached: Any
     _filter_warning: bool
 
-    def _fun_wrapper(self, is_lower, args, kwargs):
-        bound = self._signature.bind(*args, **kwargs)
-        bound.apply_defaults()
-        args = bound.args
-        kwargs = bound.kwargs
-
+    def _call(self, is_lower, args, kwargs):
+        args, kwargs = _bind(self._signature, args, kwargs)
         dynamic_spec, static_spec = hashable_partition((args, kwargs), is_array)
         dynamic = (self._dynamic_fun, dynamic_spec)
         static = (self._static_fun, static_spec)
         if is_lower:
-            return self._cached.lower(dynamic, static)
+            return Lowered(
+                self._cached.lower(dynamic, static),
+                (self._signature, self._dynamic_fun, self._static_fun),
+                _preprocess,  # pyright: ignore
+                _postprocess,  # pyright: ignore
+            )
         else:
-            dynamic_out, static_out = self._cached(dynamic, static)
-            return combine(dynamic_out, static_out.value)
+            if self._filter_warning is True:
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore", message="Some donated buffers were not usable*"
+                    )
+                    out = self._cached(dynamic, static)
+            else:
+                out = self._cached(dynamic, static)
+            return _postprocess(out)
 
     def __call__(self, /, *args, **kwargs):
-        if self._filter_warning is True:
-            with warnings.catch_warnings():
-                warnings.filterwarnings(
-                    "ignore", message="Some donated buffers were not usable*"
-                )
-                return self._fun_wrapper(False, args, kwargs)
-        else:
-            return self._fun_wrapper(False, args, kwargs)
+        return self._call(False, args, kwargs)
 
-    def lower(self, /, *args, **kwargs):
-        return self._fun_wrapper(True, args, kwargs)
+    def lower(self, /, *args, **kwargs) -> Lowered:
+        return self._call(True, args, kwargs)
 
     def __get__(self, instance, owner):
         if instance is None:

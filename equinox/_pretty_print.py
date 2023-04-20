@@ -115,7 +115,7 @@ def _pformat_short_array(
 def _pformat_array(obj: Union[jax.Array, np.ndarray], **kwargs) -> pp.Doc:
     short_arrays = kwargs["short_arrays"]
     if short_arrays:
-        kind = "(numpy)" if isinstance(obj, np.ndarray) else None
+        kind = "numpy" if isinstance(obj, np.ndarray) else None
         return _pformat_short_array(obj.shape, obj.dtype.name, kind)
     else:
         return pp.text(repr(obj))

@@ -371,3 +371,15 @@ def test_donation_warning():
         g(jnp.array(1.0), jnp.ones((10,)))
 
     assert len(record) == 1
+
+
+# Issue 325
+def test_aot_compilation():
+    def f(x, y):
+        return 2 * x + y
+
+    x, y = jnp.array(3), 4
+    lowered = eqx.filter_jit(f).lower(x, y)
+    lowered.as_text()
+    compiled = lowered.compile()
+    compiled(x, y)
