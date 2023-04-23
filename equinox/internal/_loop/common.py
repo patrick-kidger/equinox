@@ -140,9 +140,12 @@ def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers):
             new_buffers(None), (None, None, val), replace_fn=wrap_buffer
         )
         buffer_val2 = body_fun(buffer_val)
-        if not tree_equal(
-            jax.eval_shape(lambda: buffer_val), jax.eval_shape(lambda: buffer_val2)
-        ):
+        # Strip `.named_shape`; c.f. Diffrax issue #246
+        struct = jax.eval_shape(lambda: buffer_val)
+        struct2 = jax.eval_shape(lambda: buffer_val2)
+        struct = jtu.tree_map(lambda x: (x.shape, x.dtype), struct)
+        struct2 = jtu.tree_map(lambda x: (x.shape, x.dtype), struct2)
+        if not tree_equal(struct, struct2):
             raise ValueError("`body_fun` must have the same input and output structure")
         val2 = jtu.tree_map(
             unwrap_and_select, buffer_val, buffer_val2, is_leaf=is_our_buffer
