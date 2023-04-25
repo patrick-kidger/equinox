@@ -1,8 +1,18 @@
 import functools as ft
+import types
 from typing import Callable
 
+import jax
 import jax.tree_util as jtu
 from jaxtyping import PyTree
+
+from ._module import Module
+
+
+def hashable_filter(pytree: PyTree, filter_fn: Callable):
+    leaves = jtu.tree_leaves(pytree)
+    dynamic_leaves = tuple(x if filter_fn(x) else None for x in leaves)
+    return dynamic_leaves
 
 
 def hashable_partition(pytree: PyTree, filter_fn: Callable):
@@ -47,3 +57,33 @@ def compile_cache(fun):
         return _cache(leaves, treedef)
 
     return _fun
+
+
+class Lowered(Module):
+    lowered: jax.stages.Lowered
+    info: PyTree
+    preprocess: types.FunctionType
+    postprocess: types.FunctionType
+
+    def as_text(self):
+        return self.lowered.as_text()
+
+    def compile(self):
+        return Compiled(
+            self.lowered.compile(),
+            self.info,
+            self.preprocess,  # pyright: ignore
+            self.postprocess,  # pyright: ignore
+        )
+
+
+class Compiled(Module):
+    compiled: jax.stages.Compiled
+    info: PyTree
+    preprocess: types.FunctionType
+    postprocess: types.FunctionType
+
+    def __call__(self, *args, **kwargs):
+        dynamic = self.preprocess(self.info, args, kwargs)
+        out = self.compiled(dynamic)
+        return self.postprocess(out)

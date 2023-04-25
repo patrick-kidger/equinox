@@ -1,5 +1,6 @@
 from ._activations import PReLU as PReLU
 from ._attention import MultiheadAttention as MultiheadAttention
+from ._batch_norm import BatchNorm as BatchNorm
 from ._composed import Lambda as Lambda, MLP as MLP, Sequential as Sequential
 from ._conv import (
     Conv as Conv,
@@ -32,3 +33,5 @@ from ._pool import (
     Pool as Pool,
 )
 from ._rnn import GRUCell as GRUCell, LSTMCell as LSTMCell
+from ._spectral_norm import SpectralNorm as SpectralNorm
+from ._stateful import State as State, StateIndex as StateIndex

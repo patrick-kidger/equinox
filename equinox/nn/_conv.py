@@ -30,16 +30,6 @@ def _ntuple(n: int) -> Callable[[Union[_T, Sequence[_T]]], Tuple[_T, ...]]:
     return parse
 
 
-# TODO: remove this once JAX fixes the issue.
-# Working around JAX not always properly respecting __jax_array__, see JAX issue #10065
-# This comes up in particular when using SpectralNorm.
-def _to_jax_array(weight):
-    if hasattr(weight, "__jax_array__"):
-        return weight.__jax_array__()
-    else:
-        return weight
-
-
 class Conv(Module):
     """General N-dimensional convolution."""
 
@@ -182,7 +172,7 @@ class Conv(Module):
         x = jnp.expand_dims(x, axis=0)
         x = lax.conv_general_dilated(
             lhs=x,
-            rhs=_to_jax_array(self.weight),
+            rhs=self.weight,
             window_strides=self.stride,
             padding=self.padding,
             rhs_dilation=self.dilation,
@@ -460,7 +450,7 @@ class ConvTranspose(Module):
         )
         x = lax.conv_general_dilated(
             lhs=x,
-            rhs=_to_jax_array(self.weight),
+            rhs=self.weight,
             window_strides=(1,) * self.num_spatial_dims,
             padding=padding,
             lhs_dilation=self.stride,

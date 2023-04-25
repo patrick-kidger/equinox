@@ -104,6 +104,7 @@ nav:
         - U-Net implementation: 'examples/unet.ipynb'
         - Freezing parameters: 'examples/frozen_layer.ipynb'
         - Compatibility with init-apply libraries: 'examples/init_apply.ipynb'
+        - Stateful operations (e.g. BatchNorm): 'examples/stateful.ipynb'
     - Full API:
         - 'api/module.md'
         - Neural network layers:
@@ -117,6 +118,7 @@ nav:
             - 'api/nn/embedding.md'
             - 'api/nn/composed.md'
             - 'api/nn/activations.md'
+            - 'api/nn/stateful.md'
         - Filtering:
             - 'api/filtering/partition-combine.md'
             - 'api/filtering/transformations.md'
@@ -125,8 +127,6 @@ nav:
             - 'api/utilities/serialisation.md'
             - 'api/utilities/pretty-printing.md'
             - 'api/utilities/miscellaneous.md'
-        - Experimental:
-            - 'api/experimental/stateful.md'
     - Misc:
         - 'tricks.md'
         - 'citation.md'

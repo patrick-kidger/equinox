@@ -106,7 +106,7 @@ def test_methods(call, outer):
                 return x + self.increment
 
             if not outer:
-                __call__ = eqx.filter_pmap(__call__)
+                __call__ = filter_pmap(__call__)
         else:
 
             def method(self, x):
@@ -115,19 +115,19 @@ def test_methods(call, outer):
                 return x + self.increment
 
             if not outer:
-                method = eqx.filter_pmap(method)
+                method = filter_pmap(method)
 
     y = jnp.array([1])
 
     def run(_m):
         if call:
             if outer:
-                return eqx.filter_pmap(_m)(y)
+                return filter_pmap(_m)(y)
             else:
                 return _m(y)
         else:
             if outer:
-                return eqx.filter_pmap(_m.method)(y)
+                return filter_pmap(_m.method)(y)
             else:
                 return _m.method(y)
 
@@ -162,20 +162,20 @@ def test_pmap_grad():
         num_traces += 1
         return x + 1
 
-    grad = eqx.filter_pmap(eqx.filter_grad(f))(jnp.array([1.0]))
+    grad = filter_pmap(eqx.filter_grad(f))(jnp.array([1.0]))
     assert shaped_allclose(grad, jnp.array([1.0]))
     assert num_traces == 2  # eval_shape + pmap
 
-    grad = eqx.filter_pmap(eqx.filter_grad(f))(jnp.array([2.0]))
+    grad = filter_pmap(eqx.filter_grad(f))(jnp.array([2.0]))
     assert shaped_allclose(grad, jnp.array([1.0]))
     assert num_traces == 2  # (eval_shape cached, pmap cached)
 
-    value, grad = eqx.filter_pmap(eqx.filter_value_and_grad(f))(jnp.array([1.0]))
+    value, grad = filter_pmap(eqx.filter_value_and_grad(f))(jnp.array([1.0]))
     assert shaped_allclose(value, jnp.array([2.0]))
     assert shaped_allclose(grad, jnp.array([1.0]))
     assert num_traces == 4  # eval_shape + pmap
 
-    value, grad = eqx.filter_pmap(eqx.filter_value_and_grad(f))(jnp.array([2.0]))
+    value, grad = filter_pmap(eqx.filter_value_and_grad(f))(jnp.array([2.0]))
     assert shaped_allclose(value, jnp.array([3.0]))
     assert shaped_allclose(grad, jnp.array([1.0]))
     assert num_traces == 4  # (eval_shape cached, pmap cached)
@@ -189,11 +189,11 @@ def test_pmap_vmap():
         num_traces += 1
         return x + 1
 
-    out = eqx.filter_pmap(eqx.filter_vmap(f))(jnp.array([[1, 2]]))
+    out = filter_pmap(eqx.filter_vmap(f))(jnp.array([[1, 2]]))
     assert shaped_allclose(out, jnp.array([[2, 3]]))
     assert num_traces == 2  # eval_shape, pmap
 
-    out = eqx.filter_pmap(eqx.filter_vmap(f))(jnp.array([[2, 3]]))
+    out = filter_pmap(eqx.filter_vmap(f))(jnp.array([[2, 3]]))
     assert shaped_allclose(out, jnp.array([[3, 4]]))
     assert num_traces == 2  # both cached
 
@@ -204,7 +204,7 @@ def test_named_reduction():
         return jax.lax.psum(y, axis_name="device")
 
     n = jax.local_device_count()
-    output = eqx.filter_pmap(f, axis_name="device")(jnp.zeros(n))
+    output = filter_pmap(f, axis_name="device")(jnp.zeros(n))
 
     assert shaped_allclose(output, n * jnp.ones(n))
 
@@ -236,22 +236,34 @@ def test_map_non_jax():
         """will return a pytree with non-jax fields, which could break filter_pmap"""
         return x
 
-    _ = eqx.filter_pmap(identity)(pytree_sharded)
+    filter_pmap(identity)(pytree_sharded)
 
 
 def test_keyword_in_axes(getkey):
     x = jr.normal(getkey(), (1, 4))
     y = jr.normal(getkey(), (1, 1))
-    out = eqx.filter_pmap(lambda x, y: x + y, in_axes=dict(y=1))(x, y)
+    out = filter_pmap(lambda x, y: x + y, in_axes=dict(y=1))(x, y)
     true_out = x + y.T
     assert shaped_allclose(out, true_out)
 
 
 def test_keyword_default(getkey):
     x = jr.normal(getkey(), (1, 4))
-    out = eqx.filter_pmap(lambda x, y=1: x + y, in_axes=dict(x=0))(x)
+    out = filter_pmap(lambda x, y=1: x + y, in_axes=dict(x=0))(x)
     true_out = x + 1
     assert shaped_allclose(out, true_out)
 
     with pytest.raises(ValueError):
-        eqx.filter_pmap(lambda x, y=1: x, in_axes=dict(y=0))(x)
+        filter_pmap(lambda x, y=1: x, in_axes=dict(y=0))(x)
+
+
+# Issue 325
+def test_aot_compilation():
+    def f(x, y):
+        return 2 * x + y
+
+    x, y = jnp.array([3]), 4
+    lowered = filter_pmap(f).lower(x, y)
+    lowered.as_text()
+    compiled = lowered.compile()
+    compiled(x, y)

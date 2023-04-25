@@ -16,7 +16,7 @@
 
 ---
 
-::: equinox.experimental.BatchNorm
+::: equinox.nn.BatchNorm
     selection:
         members:
             - __init__
@@ -24,7 +24,8 @@
 
 ---
 
-::: equinox.experimental.SpectralNorm
+::: equinox.nn.SpectralNorm
     selection:
         members:
             - __init__
+            - __call__

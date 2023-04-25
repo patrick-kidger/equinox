@@ -1,4 +1,4 @@
-from . import experimental as experimental, internal as internal, nn as nn
+from . import internal as internal, nn as nn
 from ._ad import (
     filter_closure_convert as filter_closure_convert,
     filter_custom_jvp as filter_custom_jvp,
@@ -24,6 +24,7 @@ from ._make_jaxpr import filter_make_jaxpr as filter_make_jaxpr
 from ._module import (
     Module as Module,
     module_update_wrapper as module_update_wrapper,
+    Partial as Partial,
     static_field as static_field,
 )
 from ._pretty_print import tree_pformat as tree_pformat, tree_pprint as tree_pprint
@@ -46,4 +47,4 @@ from ._vmap_pmap import (
 )
 
 
-__version__ = "0.10.2"
+__version__ = "0.10.3"

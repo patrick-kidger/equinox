@@ -11,7 +11,13 @@ from .._module import Module
 
 
 class Dropout(Module):
-    """Applies dropout."""
+    """Applies dropout.
+
+    Note that this layer behaves differently during training and inference. During
+    training then dropout is randomly applied; during inference this layer does nothing.
+    Whether the model is in training or inference mode should be toggled using
+    [`equinox.tree_inference`][].
+    """
 
     # Not static_fields as it makes sense to want to modify them via equinox.tree_at.
     p: float
