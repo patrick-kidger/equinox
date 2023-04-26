@@ -27,10 +27,10 @@ class ConcreteX(AbstractX):
 ConcreteX(attr1=True)
 ```
 
-An `AbstractVar[T]` can be overriden by an attribute annotated with `AbstractVar[T]`,
+An `AbstractVar[T]` can be overridden by an attribute annotated with `AbstractVar[T]`,
 `AbstractClassVar[T]`, `ClassVar[T]`, `T`, or a property returning `T`.
 
-An `AbstractClassVar[T]` can be overriden by an attribute annotated with
+An `AbstractClassVar[T]` can be overridden by an attribute annotated with
 `AbstractClassVar[T]`, or `ClassVar[T]`.
 
 Note that `AbstractVar` and `AbstractClassVar` do not create dataclass fields. This
