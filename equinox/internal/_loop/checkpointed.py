@@ -265,6 +265,9 @@ def _scalar_index(i, x):
 
 def _unique_index(i, x):
     """As `x[i]`, but states that `i` has unique indices."""
+    if jnp.size(x) == 0:
+        # This case doesn't actually produce a gather.
+        return x[i]
     # lax.gather's API is impenetrable. This is way easier...
     jaxpr = jax.make_jaxpr(lambda _x, _i: _x[_i])(x, i)
     jaxpr = cast(jax.core.ClosedJaxpr, jaxpr)
