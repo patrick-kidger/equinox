@@ -16,5 +16,7 @@ repos:
     rev: 1.6.3
     hooks:
     - id: nbqa-black
+      additional_dependencies: [ipython==8.12, black]
     - id: nbqa-ruff 
       args: ["--ignore=I001"]
+      additional_dependencies: [ipython==8.12, ruff]

@@ -643,3 +643,24 @@ def test_nested_loops(read, getkey):
 
     assert shaped_allclose(value, true_value)
     assert shaped_allclose(grads, true_grads, rtol=1e-4, atol=1e-5)
+
+
+def test_zero_buffer():
+    def cond_fun(carry):
+        step, val = carry
+        return step < 5
+
+    def body_fun(carry):
+        step, val = carry
+        return step + 1, val
+
+    init_step = 0
+    init_val = jnp.zeros((5, 0))
+    init_carry = (init_step, init_val)
+
+    def run(init_carry):
+        return eqxi.while_loop(
+            cond_fun, body_fun, init_carry, kind="checkpointed", max_steps=5
+        )
+
+    jax.linearize(run, init_carry)
