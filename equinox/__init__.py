@@ -1,3 +1,5 @@
+import importlib.metadata
+
 from . import internal as internal, nn as nn
 from ._ad import (
     filter_closure_convert as filter_closure_convert,
@@ -47,4 +49,4 @@ from ._vmap_pmap import (
 )
 
 
-__version__ = "0.10.3"
+__version__ = importlib.metadata.version("equinox")
