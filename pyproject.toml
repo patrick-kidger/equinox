@@ -25,8 +25,12 @@ classifiers = [
 urls = {repository = "https://github.com/patrick-kidger/equinox" }
 dependencies = ["jax>=0.4.4", "jaxtyping>=0.2.15", "typing_extensions>=4.5.0"]
 
-[tool.setuptools]
-packages = ["equinox"]
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["equinox/*"]
 
 [tool.pytest.ini_options]
 addopts = "--jaxtyping-packages=equinox,beartype.beartype(conf=beartype.BeartypeConf(strategy=beartype.BeartypeStrategy.On))"
