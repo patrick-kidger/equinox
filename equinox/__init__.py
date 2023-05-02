@@ -21,7 +21,7 @@ from ._filters import (
     is_inexact_array_like as is_inexact_array_like,
     partition as partition,
 )
-from ._jit import filter_jit as filter_jit
+from ._jit import filter_jit as filter_jit, filter_pjit as filter_pjit
 from ._make_jaxpr import filter_make_jaxpr as filter_make_jaxpr
 from ._module import (
     Module as Module,

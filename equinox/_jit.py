@@ -6,6 +6,7 @@ from typing_extensions import ParamSpec
 
 import jax
 import jax.tree_util as jtu
+from jax.experimental.pjit import pjit
 from jaxtyping import PyTree
 
 from ._compile_utils import (
@@ -28,7 +29,7 @@ _T = TypeVar("_T")
 
 
 @compile_cache
-def _filter_jit_cache(fun_names, jitkwargs):
+def _filter_jit_cache(fun_names, jitkwargs, use_pjit):
     def fun_wrapped(dynamic, static):
         dynamic_fun, dynamic_spec = dynamic
         static_fun, static_spec = static
@@ -41,7 +42,10 @@ def _filter_jit_cache(fun_names, jitkwargs):
     fun_name, fun_qualname = fun_names
     fun_wrapped.__name__ = fun_name
     fun_wrapped.__qualname__ = fun_qualname
-    return jax.jit(fun_wrapped, static_argnums=1, **jitkwargs)
+    if use_pjit:
+        return pjit(fun_wrapped, static_argnums=1, **jitkwargs)
+    else:
+        return jax.jit(fun_wrapped, static_argnums=1, **jitkwargs)
 
 
 def _bind(signature, args, kwargs):
@@ -109,18 +113,22 @@ class _JitWrapper(Module):
 
 @overload
 def filter_jit(
-    *, donate: str = "none"
+    *, donate: str = "none", use_pjit: bool = False
 ) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]:
     ...
 
 
 @overload
-def filter_jit(fun: Callable[_P, _T], *, donate: str = "none") -> Callable[_P, _T]:
+def filter_jit(
+    fun: Callable[_P, _T], *, donate: str = "none", use_pjit: bool = False
+) -> Callable[_P, _T]:
     ...
 
 
 @doc_remove_args("jitkwargs")
-def filter_jit(fun=sentinel, *, donate: str = "none", **jitkwargs):
+def filter_jit(
+    fun=sentinel, *, donate: str = "none", use_pjit: bool = False, **jitkwargs
+):
     """An easier-to-use version of `jax.jit`. All JAX and NumPy arrays are traced, and
     all other types are held static.
 
@@ -168,7 +176,7 @@ def filter_jit(fun=sentinel, *, donate: str = "none", **jitkwargs):
     """
 
     if fun is sentinel:
-        return ft.partial(filter_jit, donate=donate, **jitkwargs)
+        return ft.partial(filter_jit, donate=donate, use_pjit=use_pjit, **jitkwargs)
 
     deprecated_0_10(jitkwargs, "default")
     deprecated_0_10(jitkwargs, "fn")
@@ -193,7 +201,7 @@ def filter_jit(fun=sentinel, *, donate: str = "none", **jitkwargs):
         jitkwargs["donate_argnums"] = (0,)
 
     dynamic_fun, static_fun = hashable_partition(fun, is_array)
-    cached = _filter_jit_cache(get_fun_names(fun), jitkwargs)
+    cached = _filter_jit_cache(get_fun_names(fun), jitkwargs, use_pjit)
 
     jit_wrapper = _JitWrapper(
         _signature=signature,
@@ -203,3 +211,19 @@ def filter_jit(fun=sentinel, *, donate: str = "none", **jitkwargs):
         _filter_warning=filter_warning,
     )
     return module_update_wrapper(jit_wrapper, fun)
+
+
+@overload
+def filter_pjit(
+    *, donate: str = "none"
+) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]:
+    ...
+
+
+@overload
+def filter_pjit(fun: Callable[_P, _T], *, donate: str = "none") -> Callable[_P, _T]:
+    ...
+
+
+def filter_pjit(fun=sentinel, *, donate: str = "none", **jitkwargs):
+    return filter_jit(fun, donate=donate, use_pjit=True, **jitkwargs)
