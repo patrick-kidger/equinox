@@ -457,9 +457,9 @@ class ConvTranspose(Module):
             rhs_dilation=self.dilation,
             feature_group_count=self.groups,
         )
+        x = jnp.squeeze(x, axis=0)
         if self.use_bias:
             x = x + self.bias
-        x = jnp.squeeze(x, axis=0)
         return x
 
 
