@@ -190,3 +190,15 @@ def test_wrapper_attributes():
         k.__name__
 
     g(fjit)
+
+
+# https://github.com/patrick-kidger/equinox/issues/337
+def test_subclass_static():
+    class A(eqx.Module):
+        foo: int = eqx.static_field()
+
+    class B(A):
+        pass
+
+    b = B(1)
+    assert len(jtu.tree_leaves(b)) == 0

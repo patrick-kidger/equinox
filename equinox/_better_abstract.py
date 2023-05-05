@@ -232,8 +232,8 @@ class ABCMeta(abc.ABCMeta):
 def dataclass(**kwargs):
     def make_dataclass(cls):
         try:
-            annotations = cls.__annotations__
-        except AttributeError:
+            annotations = cls.__dict__["__annotations__"]
+        except KeyError:
             cls = dataclasses.dataclass(**kwargs)(cls)
         else:
             new_annotations = dict(annotations)
