@@ -72,7 +72,7 @@ def tree_at(
         Mutually exclusive with `replace`.
     - `is_leaf`: As `jtu.tree_flatten`. For example pass `is_leaf=lambda x: x is None`
         to be able to replace `None` values using `tree_at`.
-        
+
     Note that `where` should not depend on the type of any of the leaves of the
     pytree, e.g. given `pytree = [1, 2, object(), 3]`, then
     `where = lambda x: tuple(xi for xi in x if type(xi) is int)` is not allowed. If you
@@ -82,9 +82,9 @@ def tree_at(
     **Returns:**
 
     A copy of the input PyTree, with the appropriate modifications.
-    
+
     !!! Example
-    
+
         ```python
         # Here is a pytree
         tree = [1, [2, {"a": 3, "b": 4}]]
