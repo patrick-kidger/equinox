@@ -55,11 +55,11 @@ def tree_at(
     replace_fn: Callable[[_Node], Any] = sentinel,
     is_leaf: Optional[Callable[[Any], bool]] = None,
 ):
-    """Updates a PyTree out-of-place; a bit like using `.at[].set()` on a JAX array.
+    """Modifies a PyTree out-of-place. (A bit like using `.at[].set()` on a JAX array.)
 
     **Arguments:**
 
-    - `where`: A callable `PyTree -> Node` or `PyTree -> Sequence[Node]`. It should
+    - `where`: A callable `PyTree -> Node` or `PyTree -> tuple[Node, ...]`. It should
         consume a PyTree with the same structure as `pytree`, and return the node or
         nodes that should be replaced. For example
         `where = lambda mlp: mlp.layers[-1].linear.weight`.
@@ -73,14 +73,38 @@ def tree_at(
     - `is_leaf`: As `jtu.tree_flatten`. For example pass `is_leaf=lambda x: x is None`
         to be able to replace `None` values using `tree_at`.
 
+    Note that `where` should not depend on the type of any of the leaves of the
+    pytree, e.g. given `pytree = [1, 2, object(), 3]`, then
+    `where = lambda x: tuple(xi for xi in x if type(xi) is int)` is not allowed. If you
+    really need this behaviour then this example could instead be expressed as
+    `where = lambda x: tuple(xi for xi, yi in zip(x, pytree) if type(yi) is int)`.
+
     **Returns:**
 
     A copy of the input PyTree, with the appropriate modifications.
 
-    !!! example
+    !!! Example
 
-        This is useful for performing model surgery. See the [Tricks](../../../tricks)
-        page.
+        ```python
+        # Here is a pytree
+        tree = [1, [2, {"a": 3, "b": 4}]]
+        new_leaf = 5
+        get_leaf = lambda t: t[1]["a"]
+        new_tree = eqx.tree_at(get_leaf, tree, 5)
+        # new_tree is [1, [2, {"a": 5, "b": 4}]]
+        # The original tree is unchanged.
+        ```
+
+    !!! Example
+
+        This is useful for performing model surgery. For example:
+        ```python
+        mlp = eqx.nn.MLP(...)
+        new_linear = eqx.nn.Linear(...)
+        get_last_layer = lambda m: m.layers[-1]
+        new_mlp = eqx.tree_at(get_last_layer, mlp, new_linear)
+        ```
+        See also the [Tricks](../../../tricks) page.
     """  # noqa: E501
 
     # We need to specify a particular node in a PyTree.
