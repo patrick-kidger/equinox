@@ -1,14 +1,15 @@
 import functools as ft
 import warnings
-from typing import Optional, Sequence, Union
+from typing import Optional, overload, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array
 
-from .._custom_types import PRNGKey
+from .._custom_types import PRNGKey, sentinel
 from .._misc import left_broadcast_to
 from .._module import Module, static_field
+from ._stateful import State
 
 
 class LayerNorm(Module):
@@ -89,16 +90,34 @@ class LayerNorm(Module):
         self.weight = jnp.ones(shape) if use_weight else None
         self.bias = jnp.zeros(shape) if use_bias else None
 
+    @overload
     def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+        ...
+
+    @overload
+    def __call__(
+        self, x: Array, state: State, *, key: Optional[PRNGKey] = None
+    ) -> Tuple[Array, State]:
+        ...
+
+    def __call__(
+        self, x: Array, state: State = sentinel, *, key: Optional[PRNGKey] = None
+    ) -> Union[Array, Tuple[Array, State]]:
         """**Arguments:**
 
-        - `x`: A JAX array whose shape is given by `shape`.
+        - `x`: A JAX array.
+        - `state`: Ignored; provided for interchangability with the
+            [`equinox.nn.BatchNorm`][] API.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
 
         **Returns:**
 
-        A JAX array of shape `shape`.
+        The output is a JAX array of the same shape as `x`.
+
+        If `state` is passed, then a 2-tuple of `(output, state)` is returned. The state
+        is passed through unchanged. If `state` is not passed, then just the output is
+        returned.
         """
         mean = jnp.mean(x, keepdims=True)
         variance = jnp.var(x, keepdims=True)
@@ -109,7 +128,10 @@ class LayerNorm(Module):
             out = self.weight * out
         if self.use_bias:
             out = out + self.bias
-        return out
+        if state is sentinel:
+            return out
+        else:
+            return out, state
 
 
 class GroupNorm(Module):
@@ -179,16 +201,34 @@ class GroupNorm(Module):
         self.weight = jnp.ones(channels) if channelwise_affine else None
         self.bias = jnp.zeros(channels) if channelwise_affine else None
 
+    @overload
     def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+        ...
+
+    @overload
+    def __call__(
+        self, x: Array, state: State, *, key: Optional[PRNGKey] = None
+    ) -> Tuple[Array, State]:
+        ...
+
+    def __call__(
+        self, x: Array, state: State = sentinel, *, key: Optional[PRNGKey] = None
+    ) -> Union[Array, Tuple[Array, State]]:
         """**Arguments:**
 
         - `x`: A JAX array of shape `(channels, ...)`.
+        - `state`: Ignored; provided for interchangability with the
+            [`equinox.nn.BatchNorm`][] API.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
 
         **Returns:**
 
-        A JAX array of shape `(channels, ...)`.
+        The output is a JAX array of shape `(channels, ...)`.
+
+        If `state` is passed, then a 2-tuple of `(output, state)` is returned. The state
+        is passed through unchanged. If `state` is not passed, then just the output is
+        returned.
         """
         channels = x.shape[0]
         y = x.reshape(self.groups, channels // self.groups, *x.shape[1:])
@@ -202,4 +242,7 @@ class GroupNorm(Module):
             weight = left_broadcast_to(self.weight, out.shape)  # pyright: ignore
             bias = left_broadcast_to(self.bias, out.shape)  # pyright: ignore
             out = weight * out + bias
-        return out
+        if state is sentinel:
+            return out
+        else:
+            return out, state
