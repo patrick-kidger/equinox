@@ -1,5 +1,8 @@
 from ._activations import PReLU as PReLU
-from ._attention import MultiheadAttention as MultiheadAttention
+from ._attention import (
+    MultiheadAttention as MultiheadAttention,
+    self_attention as self_attention,
+)
 from ._batch_norm import BatchNorm as BatchNorm
 from ._composed import Lambda as Lambda, MLP as MLP, Sequential as Sequential
 from ._conv import (
