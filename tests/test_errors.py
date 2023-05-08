@@ -1,5 +1,7 @@
 import jax
+import jax.experimental.mesh_utils as mesh_utils
 import jax.numpy as jnp
+import jax.sharding as sharding
 import pytest
 
 import equinox.internal as eqxi
@@ -77,3 +79,17 @@ def test_grad2():
         return y
 
     f(1.0, 1.0, True)
+
+
+def test_sharding():
+    x = jnp.array([0, 1])
+    mesh = sharding.Mesh(mesh_utils.create_device_mesh((2,)), ["i"])
+    spec = sharding.PartitionSpec("i")
+    named_sharding = sharding.NamedSharding(mesh, spec)
+    x = jax.device_put(x, named_sharding)
+
+    @jax.jit
+    def f(x):
+        return eqxi.error_if(x, x > 5, "oh no")
+
+    f(x)
