@@ -2,6 +2,7 @@ from typing import Sequence, Union
 
 import jax
 import jax.core
+import jax.experimental.custom_partitioning as custom_partitioning
 import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
@@ -13,12 +14,40 @@ from .._filters import combine, is_array_like, partition
 from ._unvmap import unvmap_any, unvmap_max
 
 
-def _error_impl(pred, index, *x, msgs):
+def _raises_impl(msgs, index, x):
     def raises(_index):
         raise RuntimeError(msgs[_index.item()])
 
     struct = jax.eval_shape(lambda: x)
-    return lax.cond(pred, lambda: jax.pure_callback(raises, struct, index), lambda: x)
+    return jax.pure_callback(raises, struct, index)
+
+
+def _partition_raises(msgs, arg_shapes, arg_shardings, result_shape, result_sharding):
+    return _raises_impl, result_sharding, arg_shardings
+
+
+def _infer_sharding_from_operands_raises(msgs, arg_shapes, arg_shardings, shape):
+    del msgs, arg_shapes, shape
+    _, output_sharding = arg_shardings
+    return output_sharding
+
+
+_raises = custom_partitioning.custom_partitioning(_raises_impl, static_argnums=(0,))
+_raises.def_partition(_partition_raises, _infer_sharding_from_operands_raises)
+
+
+def _error_impl(pred, index, *x, msgs):
+    def _raises_wrapper(x):
+        # Iterate to avoid a JAX bug that means `custom_partitioning` has to return a
+        # single output.
+        # TODO: just use ft.partial(_raises, msgs, index) once this is no logner
+        # necessary.
+        new_x = []
+        for xi in x:
+            new_x.append(_raises(msgs, index, xi))
+        return tuple(new_x)
+
+    return lax.cond(pred, _raises_wrapper, lambda x: x, x)
 
 
 def _error_abstract(pred, index, *x, msgs):
