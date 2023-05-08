@@ -89,7 +89,7 @@ def tree_at(
         # Here is a pytree
         tree = [1, [2, {"a": 3, "b": 4}]]
         new_leaf = 5
-        get_leaf = lambda t: t[1]["a"]
+        get_leaf = lambda t: t[1][1]["a"]
         new_tree = eqx.tree_at(get_leaf, tree, 5)
         # new_tree is [1, [2, {"a": 5, "b": 4}]]
         # The original tree is unchanged.
