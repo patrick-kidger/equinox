@@ -605,6 +605,12 @@ def test_multihead_attention(getkey):
         jnp.broadcast_to(jnp.array([[680.0, 1960.0, 3240.0, 4520.0]]), (3, 4)),
     )
 
+    mask = jnp.broadcast_to(jnp.array([True, False, False]), (3, 3))
+    assert jnp.allclose(
+        attn(x, x, x, mask),
+        jnp.broadcast_to(jnp.array([[680.0, 1960.0, 3240.0, 4520.0]]), (3, 4)),
+    )
+
 
 def test_multihead_attention_inference(getkey):
     attn = eqx.nn.MultiheadAttention(

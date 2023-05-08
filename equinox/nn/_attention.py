@@ -1,7 +1,8 @@
+import functools as ft
 import math
 import warnings
 from functools import partial
-from typing import Optional
+from typing import Optional, Union
 
 import jax
 import jax.numpy as jnp
@@ -19,7 +20,6 @@ def dot_product_attention_weights(
     key: Float[Array, "kv_seq qk_size"],
     mask: Optional[Bool[Array, "q_seq kv_seq"]] = None,
 ) -> Float[Array, "q_seq kv_seq"]:
-
     query = query / math.sqrt(query.shape[-1])
     logits = jnp.einsum("sd,Sd->sS", query, key)
     if mask is not None:
@@ -44,7 +44,6 @@ def dot_product_attention(
     key: Optional[PRNGKey] = None,
     inference: Optional[bool] = None,
 ) -> Float[Array, "q_seq v_size"]:
-
     weights = dot_product_attention_weights(query, key_, mask)
     if dropout is not None:
         weights = dropout(weights, key=key, inference=inference)
@@ -220,7 +219,9 @@ class MultiheadAttention(Module):
         query: Float[Array, "q_seq q_size"],
         key_: Float[Array, "kv_seq k_size"],
         value: Float[Array, "kv_seq v_size"],
-        mask: Optional[Bool[Array, "num_heads q_seq kv_seq"]] = None,
+        mask: Union[
+            None, Bool[Array, "q_seq kv_seq"], Bool[Array, "num_heads q_seq kv_seq"]
+        ] = None,
         *,
         key: Optional[PRNGKey] = None,
         inference: Optional[bool] = None,
@@ -234,8 +235,9 @@ class MultiheadAttention(Module):
             `(kv_seq_length, key_size)`.
         - `value`: Value embedding. Should be a JAX array of shape
             `(kv_seq_length, value_size)`.
-        - `mask`: Optional mask preventing attention to certain positions. Should be a
-            JAX array of shape `(num_heads, query_seq_length, kv_seq_length)`.
+        - `mask`: Optional mask preventing attention to certain positions. Should either
+            be a JAX array of shape `(query_seq_length, kv_seq_length)`, or (for custom
+            per-head masking) `(num_heads, query_seq_length, kv_seq_length)`.
         - `key`: A `jax.random.PRNGKey` used for dropout. Unused if `dropout = 0`.
             (Keyword only argument.)
         - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
@@ -269,9 +271,16 @@ class MultiheadAttention(Module):
             dot_product_attention, dropout=self.dropout, inference=inference
         )
         keys = None if key is None else jax.random.split(key, query_heads.shape[1])
-        attn = jax.vmap(attn_fn, in_axes=1, out_axes=1)(
-            query_heads, key_heads, value_heads, mask=mask, key=keys
-        )
+        if mask is not None and mask.ndim == 3:
+            # Batch `mask` and `keys` down their 0-th dimension.
+            attn = jax.vmap(attn_fn, in_axes=1, out_axes=1)(
+                query_heads, key_heads, value_heads, mask=mask, key=keys
+            )
+        else:
+            # Batch `keys` down its 0-th dimension.
+            attn = jax.vmap(ft.partial(attn_fn, mask=mask), in_axes=1, out_axes=1)(
+                query_heads, key_heads, value_heads, key=keys
+            )
         attn = attn.reshape(query_seq_length, -1)
 
         return jax.vmap(self.output_proj)(attn)
