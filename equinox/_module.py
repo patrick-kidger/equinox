@@ -2,10 +2,12 @@ import functools as ft
 import inspect
 import weakref
 from dataclasses import field, fields
-from typing import Any, Callable, cast, Dict, Tuple, Type, TypeVar
+from typing import Any, Callable, cast, Dict, Tuple, Type, TypeVar, Union
 from typing_extensions import dataclass_transform, ParamSpec
 
 import jax.tree_util as jtu
+import numpy as np
+from jaxtyping import Array, Bool
 
 from ._better_abstract import ABCMeta, dataclass
 from ._pretty_print import tree_pformat
@@ -321,7 +323,9 @@ class Module(metaclass=_ModuleMeta):
     def __hash__(self):
         return hash(tuple(jtu.tree_leaves(self)))
 
-    def __eq__(self, other):
+    def __eq__(  # pyright: ignore
+        self, other
+    ) -> Union[bool, np.bool_, Bool[Array, ""]]:
         return tree_equal(self, other)
 
     def __repr__(self):
