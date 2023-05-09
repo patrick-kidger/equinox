@@ -145,8 +145,8 @@ def test_grad_jit():
     assert eqx.filter_grad(jitf)(x) == 3
     assert eqx.filter_grad(jitf)(x) == 3
     assert num_traces == 1
-    assert eqx.filter_grad(eqx.filter_jit(f))(x) == 3
-    assert eqx.filter_grad(eqx.filter_jit(f))(x) == 3
+    assert eqx.filter_grad(eqx.filter_jit(f))(x) == 3  # pyright: ignore
+    assert eqx.filter_grad(eqx.filter_jit(f))(x) == 3  # pyright: ignore
     assert num_traces == 2
 
 
