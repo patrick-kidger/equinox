@@ -12,7 +12,7 @@ def nextafter(x: Array) -> Array:
     # there will be an "if x > cond" condition somewhere. However JAX uses DAZ
     # (denormals-are-zero), which will cause this check to fail near zero:
     # `jnp.nextafter(0, jnp.inf) > 0` gives `False`.
-    return jnp.where(x == 0, jnp.finfo(x.dtype).tiny, y)
+    return jnp.where(x == 0, jnp.finfo(x.dtype).tiny, y)  # pyright: ignore
 
 
 @nextafter.defjvp
@@ -26,7 +26,7 @@ def nextafter_jvp(primals, tangents):
 def prevbefore(x: Array) -> Array:
     """Returns the floating point number before `x`."""
     y = jnp.nextafter(x, jnp.NINF)
-    return jnp.where(x == 0, -jnp.finfo(x.dtype).tiny, y)
+    return jnp.where(x == 0, -jnp.finfo(x.dtype).tiny, y)  # pyright: ignore
 
 
 @prevbefore.defjvp
