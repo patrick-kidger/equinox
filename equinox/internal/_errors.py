@@ -18,7 +18,8 @@ def _error_impl(pred, index, *x, msgs):
         raise RuntimeError(msgs[_index.item()])
 
     struct = jax.eval_shape(lambda: x)
-    return lax.cond(pred, lambda: jax.pure_callback(raises, struct, index), lambda: x)
+    callback = lambda: jax.pure_callback(raises, struct, index)  # pyright: ignore
+    return lax.cond(pred, callback, lambda: x)
 
 
 def _error_abstract(pred, index, *x, msgs):

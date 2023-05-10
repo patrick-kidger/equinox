@@ -74,6 +74,6 @@ def _while_loop(cond_fun, body_fun, val, max_steps, base):
 
         # Don't put checkpointing on the lowest level
         if max_steps != base:
-            scan_fn = jax.checkpoint(scan_fn, prevent_cse=False)
+            scan_fn = jax.checkpoint(scan_fn, prevent_cse=False)  # pyright: ignore
 
         return lax.scan(scan_fn, val, xs=None, length=base)[0]

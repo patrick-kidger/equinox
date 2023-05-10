@@ -179,7 +179,7 @@ def test_custom_vjp():
 
 
 def test_checkpoint():
-    @jax.checkpoint
+    @jax.checkpoint  # pyright: ignore
     def f(pred, x):
         pred = eqxi.unvmap_any(pred)
         return lax.cond(pred, lambda y: y, lambda y: y + 1, x)

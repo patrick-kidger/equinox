@@ -44,7 +44,7 @@ def filter_pure_callback(
             raise ValueError("Callback did not return matching static elements")
         return _dynamic_out
 
-    dynamic_out = jax.pure_callback(
+    dynamic_out = jax.pure_callback(  # pyright: ignore
         _callback, dynamic_struct, dynamic, vectorized=vectorized
     )
     return combine(dynamic_out, static_struct)
