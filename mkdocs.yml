@@ -2,6 +2,7 @@ theme:
     name: material
     features:
         - navigation.sections  # Sections are included in the navigation on the left.
+        - navigation.expand  # Expand sections in left navbar by default
         - toc.integrate  # Table of contents is integrated on the left; does not appear separately on the right.
         - header.autohide  # header disappears as you scroll
     palette:
@@ -97,14 +98,18 @@ nav:
     - 'index.md'
     - 'all-of-equinox.md'
     - Examples:
-        - CNN on MNIST: 'examples/mnist.ipynb'
-        - Train RNN: 'examples/train_rnn.ipynb'
-        - Generative score-based diffusion: 'examples/score_based_diffusion.ipynb'
-        - BERT language model: 'examples/bert.ipynb'
-        - U-Net implementation: 'examples/unet.ipynb'
-        - Freezing parameters: 'examples/frozen_layer.ipynb'
-        - Compatibility with init-apply libraries: 'examples/init_apply.ipynb'
-        - Stateful operations (e.g. BatchNorm): 'examples/stateful.ipynb'
+        - Introductory:
+            - CNN on MNIST: 'examples/mnist.ipynb'
+            - Train RNN: 'examples/train_rnn.ipynb'
+        - Advanced:
+            - Generative score-based diffusion: 'examples/score_based_diffusion.ipynb'
+            - BERT language model: 'examples/bert.ipynb'
+            - U-Net implementation: 'examples/unet.ipynb'
+        - Features:
+            - Freezing parameters: 'examples/frozen_layer.ipynb'
+            - Compatibility with init-apply libraries: 'examples/init_apply.ipynb'
+            - Stateful operations (e.g. BatchNorm): 'examples/stateful.ipynb'
+            - Autoparallelism (e.g. multi-GPU): 'examples/parallelism.ipynb'
     - Full API:
         - 'api/module.md'
         - Neural network layers:
