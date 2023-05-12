@@ -8,7 +8,7 @@ A few of the highlights available here are:
 
 **loop/** A while loop which may be backpropagated through, using an online checkpointing scheme. Also implements a recursive checkpointed ("treeverse") scan.
 
-**errors.py:** Runtime errors. For verifying arguments or for checking that a computation succeeded. Only tested on CPU.
+**errors.py:** Runtime errors. For verifying arguments or for checking that a computation succeeded. Should work on CPUs or GPUs; will probably not work on TPUs.
 
 **noinline.py:** MLIR sub-graphs. Can reduce compile times by removing the inlining of a function called repeatedly. Also makes it possible to iteratively recompile: change and recompile just the sub/super-computation, without needing to recompile the whole computation graph. Only tested on CPU.
 
