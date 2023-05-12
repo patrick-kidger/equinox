@@ -1,16 +1,17 @@
 # Getting started
 
-Equinox is a JAX library based around a simple idea: **represent parameterised functions (such as neural networks) as PyTrees.**
+Equinox is a JAX library for parameterised functions (e.g. neural networks) offering:
 
-In doing so:
-
-- We get a PyTorch-like API...
+- a PyTorch-like API...
 - ...that's fully compatible with *native* JAX transformations...
-- ...with no new concepts you have to learn. (It's all just PyTrees.)
+- ...with no new concepts you have to learn.
+
+If you're completely new to JAX, then start with this [CNN on MNIST example](https://docs.kidger.site/equinox/examples/mnist/).  
+If you're already familiar with JAX, then the main idea is to represent parameterised functions (such as neural networks) as PyTrees, so that they can pass across JIT/grad/etc. boundaries smoothly.
 
 The elegance of Equinox is its selling point in a world that already has [Haiku](https://github.com/deepmind/dm-haiku), [Flax](https://github.com/google/flax) and so on.
 
-_(In other words, why should you care? Because Equinox is really simple to learn, and really simple to use.)_
+_In other words, why should you care? Because Equinox is really simple to learn, and really simple to use._
 
 ## Installation
 

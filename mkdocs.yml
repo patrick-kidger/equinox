@@ -2,7 +2,6 @@ theme:
     name: material
     features:
         - navigation.sections  # Sections are included in the navigation on the left.
-        - navigation.expand  # Expand sections in left navbar by default
         - toc.integrate  # Table of contents is integrated on the left; does not appear separately on the right.
         - header.autohide  # header disappears as you scroll
     palette:
