@@ -90,6 +90,13 @@ def test_abstract_attribute():
         class L(eqx.Module):
             x: AbstractVar[bool] = True
 
+    class M1(A):
+        x = True
+        y: bool = False
+
+    class M2(A):
+        x = True
+
 
 def test_abstract_class_attribute():
     class A(eqx.Module):
@@ -152,3 +159,10 @@ def test_abstract_class_attribute():
 
         class L(eqx.Module):
             x: AbstractClassVar[bool] = True
+
+    class M1(A):
+        x = True
+        y: bool = False
+
+    class M2(A):
+        x = True
