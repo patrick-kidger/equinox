@@ -173,7 +173,7 @@ class ABCMeta(abc.ABCMeta):
                                 "Base classes have mismatched type annotations for "
                                 f"{name}"
                             )
-                    if hasattr(cls, "__annotations__"):
+                    if "__annotations__" in cls.__dict__:
                         try:
                             new_annotation = cls.__annotations__[name]
                         except KeyError:
@@ -186,17 +186,19 @@ class ABCMeta(abc.ABCMeta):
                                 )
                     if name not in namespace:
                         group[name] = annotation
-        if hasattr(cls, "__annotations__"):
+        if "__annotations__" in cls.__dict__:
             for name, annotation in cls.__annotations__.items():
                 is_abstract, is_class = _process_annotation(annotation)
                 if is_abstract:
                     if name in namespace:
                         if is_class:
                             raise TypeError(
-                                "Abstract class attribute cannot have value"
+                                f"Abstract class attribute {name} cannot have value"
                             )
                         else:
-                            raise TypeError("Abstract attribute cannot have value")
+                            raise TypeError(
+                                f"Abstract attribute {name} cannot have value"
+                            )
                     if is_class:
                         abstract_class_vars[name] = annotation
                     else:
