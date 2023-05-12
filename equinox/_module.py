@@ -75,7 +75,7 @@ _has_dataclass_init = weakref.WeakKeyDictionary()
 
 # Inherits from ABCMeta as a convenience for a common use-case.
 # It's not a feature we use ourselves.
-@dataclass_transform(field_specifiers=(field, static_field))
+@dataclass_transform(frozen_default=True, field_specifiers=(field, static_field))
 class _ModuleMeta(ABCMeta):
     def __new__(mcs, name, bases, dict_):  # pyright: ignore
         dict_ = {
