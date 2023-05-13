@@ -168,6 +168,9 @@ def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
     _InitableModule.__setattr__ = __setattr__
     # Make beartype happy
     _InitableModule.__init__ = cls.__init__  # pyright: ignore
+    # Appears in AbstractVar error messages
+    _InitableModule.__name__ = cls.__name__
+    _InitableModule.__qualname__ = cls.__qualname__
 
     return _InitableModule
 
