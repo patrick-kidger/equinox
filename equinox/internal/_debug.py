@@ -5,13 +5,14 @@ import jax.core
 import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
+import jax.numpy as jnp
 import jax.tree_util as jtu
-import numpy as np
 
 from .._ad import filter_custom_vjp
-from .._callback import filter_pure_callback
-from .._filters import combine, filter, is_array, partition
+from .._filters import combine, filter, is_array, is_array_like, partition
+from .._module import Module
 from .._pretty_print import tree_pformat
+from ._errors import error_if
 
 
 def announce_transform(
@@ -127,23 +128,25 @@ def _debug_backward_nan_fwd(x, name, terminate):
     return debug_backward_nan(x, name, terminate), None
 
 
-def _debug_backward_nan_bwd(_, grad_x, x, name, terminate):
-    def _callback(_x, _grad_x):
-        primals = tree_pformat(_x, short_arrays=False)
-        cotangents = tree_pformat(_grad_x, short_arrays=False)
-        msg = f"   primals={primals}\ncotangents={cotangents}"
-        if name is not None:
-            msg = f"{name}:\n" + msg
-        print(msg)
-        if terminate:
-            arrays = jtu.tree_leaves(filter(_grad_x, is_array))
-            if any(np.isnan(a).any() for a in arrays):
-                raise RuntimeError("Encountered NaN")
-        return _grad_x
+class _LongRepr(Module):
+    obj: Any
 
-    grad_x = filter_pure_callback(
-        _callback, x, grad_x, result_shape_dtypes=grad_x, vectorized=True
+    def __repr__(self):
+        return tree_pformat(self.obj, short_arrays=False)
+
+
+def _debug_backward_nan_bwd(_, grad_x, x, name, terminate):
+    msg = "   primals={x}\ncotangents={grad_x}"
+    if name is not None:
+        msg = f"{name}:\n" + msg
+    jax.debug.print(  # pyright: ignore
+        msg, x=_LongRepr(x), grad_x=_LongRepr(grad_x), ordered=True
     )
+    if terminate:
+        nans = [
+            jnp.isnan(a).any() for a in jtu.tree_leaves(filter(grad_x, is_array_like))
+        ]
+        grad_x = error_if(grad_x, jnp.any(jnp.stack(nans)), "Encountered NaN")
     return grad_x
 
 
