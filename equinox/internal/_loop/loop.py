@@ -127,8 +127,9 @@ def scan(
     xs: _X,
     length: Optional[int] = None,
     *,
+    buffers: Optional[Callable[[_Carry], Union[_Node, Sequence[_Node]]]] = None,
     kind: Literal["lax", "checkpointed"],
-    checkpoints: Optional[int] = None,
+    checkpoints: Union[None, int, Literal["all"]] = None,
 ) -> Tuple[_Carry, _Y]:
     """As `jax.lax.scan`, but with optional checkpointing to reduce memory usage.
 
@@ -139,6 +140,12 @@ def scan(
     - `xs`: As `jax.lax.scan`.
     - `length`: As `jax.lax.scan`.
 
+    - `buffers`: If passed, then every leaf of `tree_leaves(buffers(init))` must
+        be an array; all such arrays become buffers supporting only `[]` and
+        `.at[].set()`. However they will act efficiently, without spurious copies.
+        You should avoid performing in-place updates to any quantity that is not a
+        buffer.
+
     - `kind`: The type of scan that is lowered to underneath. This may either be
         `"lax"` or `"checkpointed"`.
 
@@ -148,13 +155,15 @@ def scan(
         usage. It will not be forward-mode autodifferentiable.
 
     - `checkpoints`: Only used if `kind="checkpointed"`. Specifies the number of
-        checkpoints to use; if `None` then this is automatically derived from
-        `max_steps`.
+        checkpoints to use; if `None` then this is set proportional to `sqrt(length)`.
+        Can also be a string `"all"`, representing checkpointing every step.
 
     Returns:
 
     As `jax.lax.scan`.
     """
+
+    init, xs = jtu.tree_map(jnp.asarray, (init, xs))
 
     if kind == "lax":
         return lax.scan(f, init, xs, length)
@@ -167,6 +176,9 @@ def scan(
     else:
         raise ValueError(f"Got inconsistent lengths in scan: {lengths}.")
     del lengths
+
+    if checkpoints == "all":
+        checkpoints = length
 
     def cond_fun(val):
         return True
@@ -182,13 +194,30 @@ def scan(
     _, y0_shape = jax.eval_shape(f, init, x0)
     ys = jtu.tree_map(lambda z: jnp.empty((length,) + z.shape, z.dtype), y0_shape)
     init_val = (0, init, ys)
-    buffers = lambda val: val[2]
+
+    if buffers is None:
+        _buffers = lambda val: val[2]
+    else:
+        node_or_nodes = buffers(init)
+        is_tuple = True
+        is_leaf = lambda node: node is node_or_nodes
+
+        def _find(node):
+            nonlocal is_tuple
+            if is_leaf(node):
+                is_tuple = False
+
+        jtu.tree_map(_find, init, is_leaf=is_leaf)
+        if is_tuple:
+            _buffers = lambda val: tuple(buffers(val[1])) + (val[2],)
+        else:
+            _buffers = lambda val: (buffers(val[1]), val[2])
 
     _, carry, ys = checkpointed_while_loop(
         cond_fun,
         body_fun,
         init_val,
-        buffers=buffers,
+        buffers=_buffers,
         max_steps=length,
         checkpoints=checkpoints,
     )
