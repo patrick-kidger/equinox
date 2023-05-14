@@ -7,18 +7,60 @@ import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
 import jax.lax as lax
 import jax.tree_util as jtu
+import numpy as np
 from jaxtyping import Array, Bool, Int, PyTree
 
 from .._filters import combine, is_array_like, partition
 from ._unvmap import unvmap_any, unvmap_max
 
 
+def _nan_like(x: np.ndarray) -> np.ndarray:
+    dtype = np.result_type(x)
+    if np.issubdtype(dtype, np.inexact):
+        return np.full(x.shape, np.nan, dtype)
+    elif np.issubdtype(dtype, np.integer):
+        return np.full(x.shape, np.iinfo(dtype).max, dtype)
+    elif np.issubdtype(dtype, np.bool_):
+        return np.full(x.shape, True, dtype)
+    else:
+        return x
+
+
+_tpu_msg = """
+
+Computation halted with the above error message. No Python exception is being raised as
+it looks like you're on the TPU, and the TPU runtime doesn't support raising errors.
+
+If you are running this program interactively (e.g. in a Colab notebook), then you may
+now press enter to attempt to finish running the program, using dummy values (e.g. NaN).
+
+Otherwise, to avoid downstream errors the program will now stay in an infinite loop.
+You will need to manually kill this job and/or restart the runtime.
+"""
+
+
 def _error_impl(pred, index, *x, msgs):
     def raises(_index):
         raise RuntimeError(msgs[_index.item()])
 
+    def tpu_msg(_out, _index):
+        msg = msgs[_index.item()]
+        # `print` doesn't work; nor does `jax.debug.print`.
+        # But both `input` and `jax.debug.breakpoint` do. The former allows us to
+        # actually display something to the user.
+        input(msg + _tpu_msg)
+        # We do the tree_map inside the pure_callback, not outside, so that `out` has a
+        # data dependency and doesn't get optimised out.
+        return jtu.tree_map(_nan_like, _out)
+
+    def callback():
+        out = jax.pure_callback(raises, struct, index)  # pyright: ignore
+        # If we make it this far then we're on the TPU, which squelches runtime errors
+        # and returns dummy values instead.
+        # Fortunately, we're able to outsmart it!
+        return jax.pure_callback(tpu_msg, struct, out, index)  # pyright: ignore
+
     struct = jax.eval_shape(lambda: x)
-    callback = lambda: jax.pure_callback(raises, struct, index)  # pyright: ignore
     return lax.cond(pred, callback, lambda: x)
 
 
