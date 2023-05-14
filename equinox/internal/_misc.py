@@ -1,6 +1,13 @@
+from typing import Callable, Sequence, TypeVar
+
+import jax
+import jax.lax as lax
 import jax.numpy as jnp
+import jax.tree_util as jtu
+from jaxtyping import Array, ArrayLike, PyTree
 
 from .._filters import is_array
+from ._nontraceable import nonbatchable
 
 
 class ContainerMeta(type):
@@ -32,3 +39,23 @@ class ContainerMeta(type):
 
     def __len__(cls):
         return len(cls.reverse_lookup)
+
+
+_X = TypeVar("_X")
+
+
+def scan_trick(fn: Callable, intermediates: Sequence[Callable], init: _X) -> _X:
+    def body(carry, step):
+        out = fn(carry)
+        step = nonbatchable(step)
+        out = lax.switch(step, intermediates, out)
+        return out, None
+
+    intermediates = list(intermediates) + [lambda x: x]
+    out, _ = lax.scan(body, init, xs=jnp.arange(len(intermediates)))
+    return out
+
+
+def eval_empty(fn: Callable, *inputs: PyTree[ArrayLike]) -> PyTree[Array]:
+    out = jax.eval_shape(fn, *inputs)
+    return jtu.tree_map(lambda x: jnp.empty(x.shape, x.dtype), out)

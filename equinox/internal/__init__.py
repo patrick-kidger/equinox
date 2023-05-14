@@ -31,7 +31,11 @@ from ._finalise_jaxpr import (
     register_impl_finalisation as register_impl_finalisation,
 )
 from ._loop import scan as scan, while_loop as while_loop
-from ._misc import ContainerMeta as ContainerMeta
+from ._misc import (
+    ContainerMeta as ContainerMeta,
+    eval_empty as eval_empty,
+    scan_trick as scan_trick,
+)
 from ._nextafter import nextafter as nextafter, prevbefore as prevbefore
 from ._noinline import noinline as noinline, noinline_p as noinline_p
 from ._nontraceable import (
