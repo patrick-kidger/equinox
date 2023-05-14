@@ -21,6 +21,7 @@ from typing_extensions import ParamSpec
 import jax
 import jax.core
 import jax.interpreters.ad as ad
+import jax.numpy as jnp
 import jax.tree_util as jtu
 from jaxtyping import Array, ArrayLike, Complex, Float, PyTree
 
@@ -31,7 +32,6 @@ from ._filters import (
     combine,
     is_array,
     is_inexact_array,
-    is_inexact_array_like,
     partition,
 )
 from ._make_jaxpr import filter_make_jaxpr
@@ -498,6 +498,14 @@ def filter_closure_convert(fn: Callable[_P, _T], *args, **kwargs) -> Callable[_P
     return closure_converted
 
 
+# Work around JAX issue #16000
+def _drop_ints(tangent, primal):
+    if jnp.issubdtype(jnp.result_type(primal), jnp.inexact):
+        return tangent
+    else:
+        return None
+
+
 class filter_custom_jvp:
     """Filtered version of `jax.custom_jvp`.
 
@@ -539,10 +547,12 @@ class filter_custom_jvp:
         def fn_jvp_wrapper(static, dynamic, tangents):
             (dynamic,) = dynamic
             (tangents,) = tangents
-            args, kwargs = combine(dynamic, static)
+            d_args, _ = dynamic
             t_args, t_kwargs = tangents
             if any(x is not None for x in jtu.tree_leaves(t_kwargs)):
                 raise ValueError("Received keyword tangent")
+            t_args = jtu.tree_map(_drop_ints, t_args, d_args)
+            args, kwargs = combine(dynamic, static)
             return fn_jvp(args, t_args, **kwargs)
 
         self.fn.defjvp(fn_jvp_wrapper)
@@ -551,7 +561,7 @@ class filter_custom_jvp:
         raise NotImplementedError("filter_custom_jvp().defjvps is not implemented")
 
     def __call__(self, *args, **kwargs):
-        dynamic, static = partition((args, kwargs), is_inexact_array_like)
+        dynamic, static = partition((args, kwargs), is_array)
         return self.fn(static, dynamic)
 
 

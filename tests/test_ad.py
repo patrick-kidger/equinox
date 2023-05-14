@@ -399,3 +399,23 @@ def test_filter_custom_jvp_kwargs():
     assert was_called
     assert shaped_allclose(primal_out, 5.5)
     assert shaped_allclose(tangent_out, 13.0)
+
+
+# Checks that we don't get a leaked tracer error from passing an array through
+# nondiff_argnums.
+def test_filter_custom_jvp_exact():
+    @eqx.filter_custom_jvp
+    def f(x, y):
+        return y
+
+    @f.defjvp
+    def f_jvp(primals, tangents):
+        x, y = primals
+        tang_x, tang_y = tangents
+        assert tang_x is None
+        return x + y, tang_y
+
+    def g(y, x):
+        return jax.lax.cond(x < y, f, lambda _x, _y: _y, x, y)
+
+    jax.grad(g)(1.0, 1)
