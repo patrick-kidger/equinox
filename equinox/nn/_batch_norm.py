@@ -122,7 +122,7 @@ class BatchNorm(Module):
         A 2-tuple of:
 
         - A JAX array of shape `(input_size, dim_1, ..., dim_N)`.
-        - An updated context object (storing the updated running statistics).
+        - An updated state object (storing the updated running statistics).
 
         **Raises:**
 
