@@ -38,7 +38,9 @@ from ._serialisation import (
 )
 from ._tree import (
     tree_at as tree_at,
+    tree_check as tree_check,
     tree_equal as tree_equal,
+    tree_flatten_one_level as tree_flatten_one_level,
     tree_inference as tree_inference,
 )
 from ._update import apply_updates as apply_updates

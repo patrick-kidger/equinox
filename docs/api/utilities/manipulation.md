@@ -13,3 +13,11 @@
 ---
 
 ::: equinox.tree_inference
+
+---
+
+::: equinox.tree_flatten_one_level
+
+---
+
+::: equinox.tree_check

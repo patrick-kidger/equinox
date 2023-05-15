@@ -1,3 +1,5 @@
+from typing import Callable
+
 import jax
 import jax.nn as jnn
 import jax.numpy as jnp
@@ -159,3 +161,68 @@ def test_tree_inference(getkey):
     attention2 = eqx.tree_inference(attention, True)
     assert attention.dropout.inference is False
     assert attention2.dropout.inference is True
+
+
+def test_tree_flatten_one_level():
+    x = {"a": 3, "b": (1, 2)}
+    leaves, treedef = eqx.tree_flatten_one_level(x)
+    assert leaves == ([3, (1, 2)])
+    assert treedef == jtu.tree_structure({"a": 0, "b": 0})
+
+    y = 4
+    leaves, treedef = eqx.tree_flatten_one_level(y)
+    assert leaves == [4]
+    assert treedef == jtu.tree_structure(0)
+
+    x = []
+    y = []
+    x.append(y)
+    y.append(x)
+    leaves, treedef = eqx.tree_flatten_one_level(x)
+    assert leaves == [y]
+    assert treedef == jtu.tree_structure([0])
+
+    x = []
+    x.append(x)
+    with pytest.raises(ValueError):
+        eqx.tree_flatten_one_level(x)
+
+
+def test_tree_check():
+    x = []
+    y = []
+    x.append(y)
+    y.append(x)
+    with pytest.raises(ValueError):
+        eqx.tree_check(x)
+
+    x = []
+    x.append(x)
+    with pytest.raises(ValueError):
+        eqx.tree_check(x)
+
+    # From https://github.com/patrick-kidger/equinox/issues/327
+    class Component(eqx.Module):
+        transform: Callable[[float], float]
+        validator: Callable[[Callable], Callable]
+
+        def __init__(self, transform=lambda x: x, validator=lambda f: f) -> None:
+            self.transform = transform
+            self.validator = validator
+
+        def __call__(self, x):
+            return self.validator(self.transform)(x)
+
+    class SubComponent(Component):
+        test: Callable[[float], float]
+
+        def __init__(self, test=lambda x: 2 * x) -> None:
+            self.test = test
+            super().__init__(self._transform)
+
+        def _transform(self, x):
+            return self.test(x)
+
+    a = SubComponent()
+    with pytest.raises(ValueError):
+        eqx.tree_check(a)
