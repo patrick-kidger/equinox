@@ -58,7 +58,7 @@ import jax.tree_util as jtu
 from jaxtyping import Array, ArrayLike, Bool
 
 from ..._ad import filter_closure_convert, filter_custom_vjp, filter_vjp
-from ..._filters import combine, is_array, is_inexact_array, partition
+from ..._filters import is_array, is_inexact_array
 from ..._tree import tree_at
 from .._errors import error_if
 from .._nontraceable import nonbatchable, nondifferentiable
@@ -616,65 +616,43 @@ def _is_none(x):
     return x is None
 
 
-def _make_fwd(static_body_fun, buffers):
-    def _fwd(
-        dynamic_body_fun,
-        step_val,
+def _fwd(
+    step_val,
+    step_grad_val,
+    step_next_checkpoint,
+    index,
+    val_candidate,
+    grad_val,
+    grad_body_fun,
+):
+    """Propagates the primal forward one step."""
+    step_val2 = nonbatchable(step_val + 1)
+    return (
+        step_val2,
         step_grad_val,
         step_next_checkpoint,
         index,
-        val,
+        val_candidate,
         grad_val,
         grad_body_fun,
-        filled_buffers,
-    ):
-        """Propagates the primal forward one step."""
-        step_val = nonbatchable(step_val)
-        step_val2 = step_val + 1
-        body_fun = combine(dynamic_body_fun, static_body_fun)
-        val = tree_at(buffers(_is_none), val, filled_buffers, is_leaf=_is_none)
-        val2 = body_fun(val)
-        val2 = tree_at(buffers(None), val2, replace_fn=lambda _: None)
-        step_val2 = nonbatchable(step_val2)
-        return (
-            step_val2,
-            step_grad_val,
-            step_next_checkpoint,
-            index,
-            val2,
-            grad_val,
-            grad_body_fun,
-        )
-
-    return _fwd
+    )
 
 
-def _make_u_turn(static_body_fun, buffers, residual_steps, residuals, checkpoints):
+def _make_u_turn(vjp_fn, residual_steps, residuals, checkpoints):
     """Propagates the cotangent backward one step."""
     residual_steps = nonbatchable(residual_steps)
 
     def _u_turn(
-        dynamic_body_fun,
         step_val,
         step_grad_val,
         step_next_checkpoint,
         index,
-        val,
+        val_candidate,
         grad_val,
         grad_body_fun,
-        filled_buffers,
     ):
         del step_val, step_next_checkpoint
         step_grad_val, index = nonbatchable((step_grad_val, index))
-
-        # Use `filter_vjp` to neatly handle floating-point arrays.
-        #
-        # We pass in `body_fun` as an argument as it contains its closed-over values
-        # in its PyTree structure, and we do want to compute cotangents wrt these.
-        body_fun = combine(dynamic_body_fun, static_body_fun)
-        val = tree_at(buffers(_is_none), val, filled_buffers, is_leaf=_is_none)
-        _, vjp_fn = filter_vjp(lambda b, v: b(v), body_fun, val)
-
         grad_body_fun_update, grad_val2 = vjp_fn(grad_val)
         grad_body_fun2 = jtu.tree_map(operator.add, grad_body_fun, grad_body_fun_update)
         step_grad_val2 = step_grad_val - 1
@@ -756,9 +734,16 @@ def _checkpointed_while_loop_bwd(
         # primal state has caught up to the cotangent state.
         #
 
+        # Use `filter_vjp` to neatly handle floating-point arrays.
+        #
+        # We pass in `body_fun` as an argument as it contains its closed-over values
+        # in its PyTree structure, and we do want to compute cotangents wrt these.
+        val_buffers = tree_at(buffers(_is_none), val, filled_buffers, is_leaf=_is_none)
+        val_candidate, vjp_fn = filter_vjp(lambda b, v: b(v), body_fun, val_buffers)
+        val_candidate = tree_at(buffers(None), val_candidate, replace_fn=lambda _: None)
+
         perform_u_turn = step_val + 1 == step_grad_val
         perform_u_turn = nonbatchable(perform_u_turn)
-        dynamic_body_fun, static_body_fun = partition(body_fun, is_array)
         (
             step_val2,
             step_grad_val2,
@@ -769,19 +754,15 @@ def _checkpointed_while_loop_bwd(
             grad_body_fun2,
         ) = lax.cond(
             perform_u_turn,
-            _make_u_turn(
-                static_body_fun, buffers, residual_steps, residuals, checkpoints
-            ),  # noqa: E501
-            _make_fwd(static_body_fun, buffers),
-            dynamic_body_fun,
+            _make_u_turn(vjp_fn, residual_steps, residuals, checkpoints),
+            _fwd,
             step_val,
             step_grad_val,
             step_next_checkpoint,
             index,
-            val,
+            val_candidate,
             grad_val,
             grad_body_fun,
-            filled_buffers,
         )
 
         #
