@@ -18,9 +18,13 @@ from ._errors import error_if
 def announce_transform(
     x, name=None, intermediates=False, announce: Callable[[str], Any] = print
 ):
-    """Identity function on an arbitrary PyTree. Announces each time it is parsed as "
-    "part of a jaxpr.
+    """Identity function on an arbitrary PyTree. Announces each time it is parsed as
+    part of a jaxpr.
     """
+    if name is None:
+        name = ""
+    else:
+        name = f"({name}) "
     array, nonarray = partition(x, is_array)
     flat, treedef = jtu.tree_flatten(array)
     flat = announce_jaxpr_p.bind(
@@ -32,33 +36,24 @@ def announce_transform(
 
 def _impl(*x, stack, name, intermediates, announce):
     del intermediates
-    if name is None:
-        stack = ("impl",) + stack
-    else:
-        stack = (name, "impl") + stack
-    announce(":".join(stack))
+    stack = stack + ("impl,")
+    announce(name + ":".join(stack))
     return x
 
 
 def _abstract(*x, stack, name, intermediates, announce):
     del intermediates
-    if name is None:
-        stack = ("abstract",) + stack
-    else:
-        stack = (name, "abstract") + stack
-    announce(":".join(stack))
+    stack = stack + ("abstract",)
+    announce(name + ":".join(stack))
     return x
 
 
 def _jvp(p, t, *, stack, name, intermediates, announce):
     if intermediates:
-        if name is None:
-            _stack = ("jvp",) + stack
-        else:
-            _stack = (name, "jvp") + stack
-        announce(":".join(_stack))
-    p_stack = ("jvp_p",) + stack
-    t_stack = ("jvp_t",) + stack
+        _stack = stack + ("jvp",)
+        announce(name + ":".join(_stack))
+    p_stack = stack + ("jvp_p",)
+    t_stack = stack + ("jvp_t",)
     p_out = announce_jaxpr_p.bind(
         *p, stack=p_stack, name=name, intermediates=intermediates, announce=announce
     )
@@ -69,26 +64,18 @@ def _jvp(p, t, *, stack, name, intermediates, announce):
 
 
 def _transpose(ct, p, *, stack, name, intermediates, announce):
+    stack = stack + ("transpose",)
     if intermediates:
-        if name is None:
-            _stack = ("transpose",) + stack
-        else:
-            _stack = (name, "transpose") + stack
-        announce(":".join(_stack))
-    stack = ("transpose",) + stack
+        announce(name + ":".join(stack))
     return announce_jaxpr_p.bind(
         *ct, stack=stack, name=name, intermediates=intermediates, announce=announce
     )
 
 
 def _batching(p, b, *, stack, name, intermediates, announce):
+    stack = stack + ("vmap",)
     if intermediates:
-        if name is None:
-            _stack = ("vmap",) + stack
-        else:
-            _stack = (name, "vmap") + stack
-        announce(":".join(_stack))
-    stack = ("vmap",) + stack
+        announce(name + ":".join(stack))
     out = announce_jaxpr_p.bind(
         *p, stack=stack, name=name, intermediates=intermediates, announce=announce
     )
@@ -97,11 +84,8 @@ def _batching(p, b, *, stack, name, intermediates, announce):
 
 def _mlir(*x, stack, name, intermediates, announce):
     del intermediates
-    if name is None:
-        stack = ("mlir",) + stack
-    else:
-        stack = (name, "mlir") + stack
-    announce(":".join(stack))
+    stack = stack + ("mlir",)
+    announce(name + ":".join(stack))
     return x
 
 

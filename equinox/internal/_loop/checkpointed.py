@@ -249,7 +249,7 @@ def _checkpointed_while_loop(vjp_arg, cond_fun, checkpoints, buffers):
     del checkpoints, buffers
     init_val, body_fun = vjp_arg
     _body_fun = lambda x: body_fun(x)  # hashable wrapper; JAX issue #13554
-    while_loop = jax.named_call(lax.while_loop, name="checkpointed-fwd-no-vjp")
+    while_loop = jax.named_call(lax.while_loop, name="checkpointed-no-vjp")
     return while_loop(cond_fun, _body_fun, init_val)
 
 

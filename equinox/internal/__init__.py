@@ -34,6 +34,7 @@ from ._loop import scan as scan, while_loop as while_loop
 from ._misc import (
     ContainerMeta as ContainerMeta,
     eval_empty as eval_empty,
+    eval_zero as eval_zero,
     scan_trick as scan_trick,
 )
 from ._nextafter import nextafter as nextafter, prevbefore as prevbefore

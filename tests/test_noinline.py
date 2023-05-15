@@ -152,7 +152,7 @@ def test_complicated(getkey):
 
     def increment(stack):
         nonlocal num_lowerings
-        if stack.startswith("mlir"):
+        if stack.endswith("mlir"):
             num_lowerings += 1
 
     def call(f, x):

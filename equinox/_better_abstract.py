@@ -152,7 +152,7 @@ class ABCMeta(abc.ABCMeta):
             ("__abstractclassvars__", abstract_class_vars),
         ]:
             for base in bases:
-                for name, annotation in getattr(base, attr, dict()).items():
+                for name, annotation in base.__dict__.get(attr, dict()).items():
                     try:
                         existing_annotation = group[name]
                     except KeyError:
@@ -184,7 +184,9 @@ class ABCMeta(abc.ABCMeta):
                                     "Base class and derived class have mismatched type "
                                     f"annotations for {name}"
                                 )
-                    if name not in namespace:
+                    # Not just `if name not in namespace`, as `cls.__dict__` may be
+                    # slightly bigger from `__init_subclass__`.
+                    if name not in cls.__dict__:
                         group[name] = annotation
         if "__annotations__" in cls.__dict__:
             for name, annotation in cls.__annotations__.items():
