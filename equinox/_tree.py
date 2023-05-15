@@ -1,4 +1,4 @@
-from typing import Any, Callable, Optional, Sequence, TYPE_CHECKING, Union
+from typing import Any, Callable, List, Optional, Sequence, Tuple, TYPE_CHECKING, Union
 
 import jax.tree_util as jtu
 import numpy as np
@@ -335,3 +335,126 @@ def tree_inference(pytree: PyTree, value: bool) -> PyTree:
     A copy of `pytree` with all `inference` flags set to `value`.
     """
     return tree_at(_inferences, pytree, replace_fn=lambda _: value)
+
+
+def tree_flatten_one_level(pytree: PyTree) -> Tuple[List[PyTree], jtu.PyTreeDef]:
+    """Returns the immediate subnodes of a PyTree node. If called on a leaf node then it
+    will return just that leaf.
+
+    **Arguments:**
+
+    - `pytree`: the PyTree node to flatten by one level.
+
+    **Returns:**
+
+    As `jax.tree_util.tree_flatten`: a list of leaves and a `PyTreeDef`.
+
+    !!! Example
+
+        ```python
+        x = {"a": 3, "b": (1, 2)}
+        eqx.tree_flatten_one_level(x)
+        # ([3, (1, 2)], PyTreeDef({'a': *, 'b': *}))
+
+        y = 4
+        eqx.tree_flatten_one_level(y)
+        # ([4], PyTreeDef(*))
+        ```
+    """
+    seen_pytree = False
+
+    def is_leaf(node):
+        nonlocal seen_pytree
+        if node is pytree:
+            if seen_pytree:
+                # We expect to only see it once as the root.
+                # This catches for example
+                # ```python
+                # x = []
+                # x.append(x)
+                # tree_subnodes(x)
+                # ```
+                # Note that it intentionally does *not* catch
+                # ```python
+                # x = []
+                # y = []
+                # x.append(y)
+                # y.append(x)
+                # tree_subnodes(x)
+                # ```
+                # as `x` is not an immediate subnode of itself.
+                # If you want to check for that then use `tree_check_acyclic`.
+                try:
+                    type_string = type(pytree).__name__
+                except AttributeError:
+                    type_string = "<unknown>"
+                raise ValueError(
+                    f"PyTree node of type `{type_string}` is immediately "
+                    "self-referential; that is to say it appears within its own PyTree "
+                    "structure as an immediate subnode. (For example "
+                    "`x = []; x.append(x)`.) This is not allowed."
+                )
+            else:
+                seen_pytree = True
+            return False
+        else:
+            return True
+
+    return jtu.tree_flatten(pytree, is_leaf=is_leaf)
+
+
+def tree_check(pytree: Any) -> None:
+    """Checks if the PyTree is well-formed: does it have no repeated nodes, and does it
+    have no self-references.
+
+    **Arguments:**
+
+    - `pytree`: the PyTree to check.
+
+    **Returns:**
+
+    Nothing.
+
+    **Raises:**
+
+    A `ValueError` if the PyTree is not well-formed.
+    """
+    all_nodes = {}
+    _tree_check(pytree, all_nodes)
+
+
+_trivial_treedef = jtu.tree_structure(0)
+
+
+def _tree_check(node, all_nodes):
+    try:
+        self_referential, type_string = all_nodes[id(node)]
+    except KeyError:
+        pass
+    else:
+        if self_referential:
+            raise ValueError(
+                f"PyTree node of type `{type_string}` is self-referential; that is to "
+                "say it appears somewhere within its own PyTree structure. This is "
+                "not allowed."
+            )
+        else:
+            raise ValueError(
+                f"PyTree node of type `{type_string}` appears in the PyTree multiple "
+                "times. This is almost always an error, as these nodes will turn into "
+                "two duplicate copies after flattening/unflattening, e.g. when "
+                "crossing a JIT boundary."
+            )
+    try:
+        type_string = type(node).__name__
+    except AttributeError:
+        # AttributeError: in case we cannot get __name__ for some weird reason.
+        type_string = "<unknown type>"
+    all_nodes[id(node)] = (True, type_string)
+    subnodes, treedef = tree_flatten_one_level(node)
+    if treedef != _trivial_treedef:
+        # This does mean that leaves can appear multiple times. This is valid, e.g.
+        # [4, 4].
+        for subnode in subnodes:
+            _tree_check(subnode, all_nodes)
+    all_nodes[id(node)] = (False, type_string)

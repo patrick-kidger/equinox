@@ -41,6 +41,8 @@ Recall that in Equinox, models are PyTrees. Meanwhile, JAX treats all PyTrees as
 
 The resolution is simple: just don't store the same object in multiple places in the PyTree.
 
+You can check for whether you have duplicate nodes by using the [`equinox.tree_check`][] function.
+
 ## How do I input higher-order tensors (e.g. with batch dimensions) into my model?
 
 Use [`jax.vmap`](https://jax.readthedocs.io/en/latest/_autosummary/jax.vmap.html#jax.vmap). This maps arbitrary JAX operations -- including any Equinox module -- over additional dimensions (such as batch dimensions).
