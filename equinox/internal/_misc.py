@@ -1,11 +1,11 @@
-from typing import Callable, Sequence, TypeVar
+from typing import Any, Callable, Sequence, TypeVar
 
-import jax
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.tree_util as jtu
-from jaxtyping import Array, ArrayLike, PyTree
+from jaxtyping import Array, PyTree
 
+from .._eval_shape import filter_eval_shape
 from .._filters import is_array
 from ._nontraceable import nonbatchable
 
@@ -56,6 +56,11 @@ def scan_trick(fn: Callable, intermediates: Sequence[Callable], init: _X) -> _X:
     return out
 
 
-def eval_empty(fn: Callable, *inputs: PyTree[ArrayLike]) -> PyTree[Array]:
-    out = jax.eval_shape(fn, *inputs)
+def eval_empty(fn: Callable, *inputs: PyTree[Any]) -> PyTree[Array]:
+    out = filter_eval_shape(fn, *inputs)
     return jtu.tree_map(lambda x: jnp.empty(x.shape, x.dtype), out)
+
+
+def eval_zero(fn: Callable, *inputs: PyTree[Any]) -> PyTree[Array]:
+    out = filter_eval_shape(fn, *inputs)
+    return jtu.tree_map(lambda x: jnp.zeros(x.shape, x.dtype), out)
