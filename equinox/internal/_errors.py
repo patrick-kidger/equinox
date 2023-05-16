@@ -1,4 +1,4 @@
-from typing import Sequence, Union
+from typing import cast, Sequence, Union
 
 import jax
 import jax.core
@@ -139,8 +139,16 @@ def branched_error_if(
 
     with jax.ensure_compile_time_eval():
         pred = unvmap_any(pred)
-        if not isinstance(pred, jax.core.Tracer) and pred.item() is False:
-            return x
+        if not isinstance(pred, jax.core.Tracer):
+            if pred.item():
+                if not isinstance(index, jax.core.Tracer):
+                    if isinstance(index, Array):
+                        index = index.item()
+                    index = cast(int, index)
+                    raise RuntimeError(msgs[index])
+                # else defer rerror to runtime, when the index is known.
+            else:
+                return x
 
     index = unvmap_max(index)
     dynamic_x, static_x = partition(x, is_array_like)
