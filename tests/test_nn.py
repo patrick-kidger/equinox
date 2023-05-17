@@ -143,6 +143,8 @@ def test_mlp(getkey):
     mlp = eqx.nn.MLP(2, 3, 8, 2, key=getkey())
     x = jrandom.normal(getkey(), (2,))
     assert mlp(x).shape == (3,)
+    assert [mlp.layers[i].use_bias for i in range(0,3)] == [True, True, True]
+
 
     mlp = eqx.nn.MLP(in_size=2, out_size=3, width_size=8, depth=2, key=getkey())
     x = jrandom.normal(getkey(), (2,))
@@ -155,6 +157,17 @@ def test_mlp(getkey):
     mlp = eqx.nn.MLP(2, "scalar", 2, 2, key=getkey())
     x = jrandom.normal(getkey(), (2,))
     assert mlp(x).shape == ()
+    assert [mlp.layers[i].use_bias for i in range(0,3)] == [True, True, True]
+
+    mlp = eqx.nn.MLP(2, 3, 8, 2, use_bias=False, use_final_bias = True, key=getkey())
+    x = jrandom.normal(getkey(), (2,))
+    assert mlp(x).shape == (3,)
+    assert [mlp.layers[i].use_bias for i in range(0,3)] == [False, False, True]
+
+    mlp = eqx.nn.MLP(2, 3, 8, 2, use_bias=True, use_final_bias = False, key=getkey())
+    x = jrandom.normal(getkey(), (2,))
+    assert mlp(x).shape == (3,)
+    assert [mlp.layers[i].use_bias for i in range(0,3)] == [True, True, False]
 
 
 def test_conv1d(getkey):
