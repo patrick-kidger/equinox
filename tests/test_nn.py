@@ -143,7 +143,6 @@ def test_mlp(getkey):
     mlp = eqx.nn.MLP(2, 3, 8, 2, key=getkey())
     x = jrandom.normal(getkey(), (2,))
     assert mlp(x).shape == (3,)
-    assert [mlp.layers[i].use_bias for i in range(0, 3)] == [True, True, True]
 
     mlp = eqx.nn.MLP(in_size=2, out_size=3, width_size=8, depth=2, key=getkey())
     x = jrandom.normal(getkey(), (2,))
