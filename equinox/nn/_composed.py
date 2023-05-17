@@ -60,7 +60,7 @@ class MLP(Module):
         activation: Callable = jnn.relu,
         final_activation: Callable = _identity,
         use_bias: bool = True,
-        use_final_bias: bool = True,        
+        use_final_bias: bool = True,
         *,
         key: PRNGKey,
         **kwargs,
@@ -81,9 +81,9 @@ class MLP(Module):
         - `final_activation`: The activation function after the output layer. Defaults
             to the identity.
         - `use_bias`: Whether to add on a bias to internal layers. Defaults
-            to the True.            
+            to the True.
         - `use_last_bias`: Whether to add on a bias to to the final layer. Defaults
-            to the True.            
+            to the True.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
 
