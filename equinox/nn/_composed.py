@@ -44,8 +44,8 @@ class MLP(Module):
     layers: Tuple[Linear, ...]
     activation: Callable
     final_activation: Callable
-    use_bias: bool = static_field(),
-    use_final_bias: bool = static_field(),
+    use_bias: bool
+    use_final_bias: bool
     in_size: Union[int, Literal["scalar"]] = static_field()
     out_size: Union[int, Literal["scalar"]] = static_field()
     width_size: int = static_field()
