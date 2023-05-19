@@ -101,12 +101,7 @@ def error_if(
     pred: Union[bool, Bool[Array, "..."]],
     msg: str,
 ) -> PyTree:
-    """Throws an error based on runtime values.
-    Works even under JIT.
-
-    Note that this probably won't work on TPU (a dummy value
-    is propagated through the computation instead of an error
-    being thrown).
+    """Throws an error based on runtime values. Works even under JIT.
 
     The first argument `x` is returned unchanged, and used to determine
     where the error check happens in the overall computation. If the
