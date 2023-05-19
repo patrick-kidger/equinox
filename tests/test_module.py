@@ -202,3 +202,19 @@ def test_subclass_static():
 
     b = B(1)
     assert len(jtu.tree_leaves(b)) == 0
+
+
+def test_flatten_with_keys():
+    class A(eqx.Module):
+        foo: int
+        bar: int = eqx.static_field()
+        qux: list
+
+    a = A(1, 2, [3.0])
+    leaves, metadata = jtu.tree_flatten_with_path(a)
+    ((path1,), value1), ((path2a, path2b), value2) = leaves
+    assert value1 == 1
+    assert value2 == 3.0
+    assert isinstance(path1, jtu.GetAttrKey) and path1.name == "foo"
+    assert isinstance(path2a, jtu.GetAttrKey) and path2a.name == "qux"
+    assert isinstance(path2b, jtu.SequenceKey) and path2b.idx == 0
