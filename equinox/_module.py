@@ -110,8 +110,15 @@ class _ModuleMeta(ABCMeta):
         if _init:
             cls.__init__.__doc__ = init_doc  # pyright: ignore
             cls.__init__.__module__ = cls.__module__
-        jtu.register_pytree_node(
-            cls, _flatten_module, ft.partial(_unflatten_module, cls)  # pyright: ignore
+        jtu.register_pytree_with_keys(
+            cls,
+            flatten_with_keys=ft.partial(
+                _flatten_module, with_keys=True
+            ),  # pyright: ignore
+            flatten_func=ft.partial(
+                _flatten_module, with_keys=False
+            ),  # pyright: ignore
+            unflatten_func=ft.partial(_unflatten_module, cls),  # pyright: ignore
         )
         return cls
 
@@ -194,7 +201,7 @@ class _FlattenedData:
         return repr(x)[1:-1]
 
 
-def _flatten_module(module: "Module"):
+def _flatten_module(module: "Module", with_keys: bool):
     dynamic_field_names = []
     dynamic_field_values = []
     static_field_names = []
@@ -212,7 +219,10 @@ def _flatten_module(module: "Module"):
             static_field_values.append(value)
         else:
             dynamic_field_names.append(name)
-            dynamic_field_values.append(value)
+            if with_keys:
+                dynamic_field_values.append((jtu.GetAttrKey(name), value))
+            else:
+                dynamic_field_values.append(value)
     sentinel = object()
     for name in _wrapper_field_names:
         value = getattr(module, name, sentinel)
