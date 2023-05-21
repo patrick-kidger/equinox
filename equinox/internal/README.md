@@ -8,13 +8,11 @@ A few of the highlights available here are:
 
 **loop/** A while loop which may be backpropagated through, using an online checkpointing scheme. Also implements a recursive checkpointed ("treeverse") scan.
 
-**errors.py:** Runtime errors. For verifying arguments or for checking that a computation succeeded. Should work on CPUs or GPUs; will probably not work on TPUs.
+**errors.py:** Runtime errors. For verifying arguments or for checking that a computation succeeded. Now working on CPUs+GPUs+TPUs!
 
 **noinline.py:** MLIR sub-graphs. Can reduce compile times by removing the inlining of a function called repeatedly. Also makes it possible to iteratively recompile: change and recompile just the sub/super-computation, without needing to recompile the whole computation graph. Only tested on CPU.
 
 **omega.py**: Neat syntax for tree-mapping arithmetic. E.g. `(x**ω + y**ω).ω == jtu.tree_map(operator.add, x, y)`. See also [tree-math](https://github.com/google/tree-math), for a similar idea but without the neat syntax.
-
-**primitive.py:** Provides a filter-like syntax for defining new primitives, whose rules accept PyTrees of arbitrary objects. Also provides a helper for automatically defining batch rules such that `transform(vmap(prim))` is lowered to `vmap(transform(prim))`. (Useful for higher-order primitives.)
 
 ---
 
