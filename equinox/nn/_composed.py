@@ -44,6 +44,8 @@ class MLP(Module):
     layers: Tuple[Linear, ...]
     activation: Callable
     final_activation: Callable
+    use_bias: bool = static_field()
+    use_final_bias: bool = static_field()
     in_size: Union[int, Literal["scalar"]] = static_field()
     out_size: Union[int, Literal["scalar"]] = static_field()
     width_size: int = static_field()
@@ -57,6 +59,8 @@ class MLP(Module):
         depth: int,
         activation: Callable = jnn.relu,
         final_activation: Callable = _identity,
+        use_bias: bool = True,
+        use_final_bias: bool = True,
         *,
         key: PRNGKey,
         **kwargs,
@@ -76,6 +80,10 @@ class MLP(Module):
             ReLU.
         - `final_activation`: The activation function after the output layer. Defaults
             to the identity.
+        - `use_bias`: Whether to add on a bias to internal layers. Defaults
+            to the True.
+        - `use_last_bias`: Whether to add on a bias to to the final layer. Defaults
+            to the True.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
 
@@ -90,12 +98,12 @@ class MLP(Module):
         keys = jrandom.split(key, depth + 1)
         layers = []
         if depth == 0:
-            layers.append(Linear(in_size, out_size, key=keys[0]))
+            layers.append(Linear(in_size, out_size, use_final_bias, key=keys[0]))
         else:
-            layers.append(Linear(in_size, width_size, key=keys[0]))
+            layers.append(Linear(in_size, width_size, use_bias, key=keys[0]))
             for i in range(depth - 1):
-                layers.append(Linear(width_size, width_size, key=keys[i + 1]))
-            layers.append(Linear(width_size, out_size, key=keys[-1]))
+                layers.append(Linear(width_size, width_size, use_bias, key=keys[i + 1]))
+            layers.append(Linear(width_size, out_size, use_final_bias, key=keys[-1]))
         self.layers = tuple(layers)
         self.in_size = in_size
         self.out_size = out_size
@@ -103,6 +111,8 @@ class MLP(Module):
         self.depth = depth
         self.activation = activation
         self.final_activation = final_activation
+        self.use_bias = use_bias
+        self.use_final_bias = use_final_bias
 
     def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
         """**Arguments:**

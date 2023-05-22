@@ -155,6 +155,17 @@ def test_mlp(getkey):
     mlp = eqx.nn.MLP(2, "scalar", 2, 2, key=getkey())
     x = jrandom.normal(getkey(), (2,))
     assert mlp(x).shape == ()
+    assert [mlp.layers[i].use_bias for i in range(0, 3)] == [True, True, True]
+
+    mlp = eqx.nn.MLP(2, 3, 8, 2, use_bias=False, use_final_bias=True, key=getkey())
+    x = jrandom.normal(getkey(), (2,))
+    assert mlp(x).shape == (3,)
+    assert [mlp.layers[i].use_bias for i in range(0, 3)] == [False, False, True]
+
+    mlp = eqx.nn.MLP(2, 3, 8, 2, use_bias=True, use_final_bias=False, key=getkey())
+    x = jrandom.normal(getkey(), (2,))
+    assert mlp(x).shape == (3,)
+    assert [mlp.layers[i].use_bias for i in range(0, 3)] == [True, True, False]
 
 
 def test_conv1d(getkey):
@@ -862,7 +873,6 @@ def test_spectral_norm(getkey):
 
 
 def test_maxpool1d():
-
     x = jnp.arange(14).reshape(1, 14)
     max_pool = eqx.nn.MaxPool1d(2, 3)
     output = max_pool(x)
@@ -877,7 +887,6 @@ def test_maxpool1d():
 
 
 def test_avgpool1d():
-
     x = jnp.arange(14).reshape(1, 14)
     avg_pool = eqx.nn.AvgPool1d(2, 3)
     output = avg_pool(x)
@@ -911,7 +920,6 @@ def test_adaptive_maxpool1d():
 
 
 def test_maxpool2d():
-
     x = jnp.arange(36).reshape(1, 6, 6)
     max_pool = eqx.nn.MaxPool2d(2, (3, 2))
     output = max_pool(x)
@@ -929,7 +937,6 @@ def test_maxpool2d():
 
 
 def test_avgpool2d():
-
     x = jnp.arange(36).reshape(1, 6, 6)
     avg_pool = eqx.nn.AvgPool2d((1, 3), 2)
     output = avg_pool(x)
@@ -963,7 +970,6 @@ def test_adaptive_maxpool2d():
 
 
 def test_maxpool3d():
-
     x = jnp.arange(64).reshape(1, 4, 4, 4)
     max_pool = eqx.nn.MaxPool3d(2, (3, 2, 1))
     output = max_pool(x)
@@ -985,7 +991,6 @@ def test_maxpool3d():
 
 
 def test_avgpool3d():
-
     x = jnp.arange(64).reshape(1, 4, 4, 4)
     avg_pool = eqx.nn.AvgPool3d((1, 3, 1), 2)
     output = avg_pool(x)
