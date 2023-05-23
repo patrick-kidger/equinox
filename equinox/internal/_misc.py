@@ -3,7 +3,7 @@ from typing import Any, Callable, Sequence, TypeVar
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.tree_util as jtu
-from jaxtyping import Array, PyTree
+from jaxtyping import Array, PyTree, Scalar
 
 from .._eval_shape import filter_eval_shape
 from .._filters import is_array
@@ -64,3 +64,7 @@ def eval_empty(fn: Callable, *inputs: PyTree[Any]) -> PyTree[Array]:
 def eval_zero(fn: Callable, *inputs: PyTree[Any]) -> PyTree[Array]:
     out = filter_eval_shape(fn, *inputs)
     return jtu.tree_map(lambda x: jnp.zeros(x.shape, x.dtype), out)
+
+def eval_full(fn: Callable, *inputs: PyTree[Any], fill_value: Scalar) -> PyTree[Any]:
+    out = filter_eval_shape(fn, *inputs)
+    return jtu.tree_map(lambda x: jnp.full(x.shape, fill_value, x.dtype), out)
