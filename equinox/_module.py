@@ -126,11 +126,7 @@ class _ModuleMeta(ABCMeta):
         # Defreeze it during __init__
         initable_cls = _make_initable(cls, wraps=False)
         self = super(_ModuleMeta, initable_cls).__call__(*args, **kwargs)
-        try:
-            cls.__init__(self, *args, **kwargs)
-        finally:
-            object.__setattr__(self, "__class__", cls)
-
+        object.__setattr__(self, "__class__", cls)
         missing_names = {
             field.name
             for field in fields(cls)  # pyright: ignore
