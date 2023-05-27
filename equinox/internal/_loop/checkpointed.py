@@ -61,7 +61,7 @@ from ..._ad import filter_closure_convert, filter_custom_vjp, filter_vjp
 from ..._filters import is_array, is_inexact_array
 from ..._tree import tree_at
 from .._errors import error_if
-from .._nontraceable import nonbatchable, nondifferentiable
+from .._nontraceable import nonbatchable
 from .common import common_rewrite
 
 
@@ -858,15 +858,12 @@ def _checkpointed_while_loop_bwd(
     # `residual_steps` is the memory holding the `step` for each checkpoint
     # `residuals` is the memory holding the `val` for each checkpoint
 
+    # Not reverse mode autodifferentiable, but it is forward-mode autodifferentiable!
+    # That means we can do Hessians, at least.
     while_loop = jax.named_call(lax.while_loop, name="checkpointed-bwd")
     final_carry = while_loop(_cond_fun, _body_fun, init_carry)
     *_, grad_init_val, grad_body_fun, _, _ = final_carry
     out = grad_init_val, grad_body_fun
-    # I think combining higher-order autodifferentiation with treeverse is an open
-    # problem? Probably JAX can differentiate through this but it'll be really
-    # inefficient, so to be safe we disable it for now.
-    msg = "`checkpointed_while_loop` is only first-order autodifferentiable"
-    out = nondifferentiable(out, msg=msg)
     return out
 
 
