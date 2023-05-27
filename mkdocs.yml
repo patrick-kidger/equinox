@@ -109,6 +109,7 @@ nav:
             - Compatibility with init-apply libraries: 'examples/init_apply.ipynb'
             - Stateful operations (e.g. BatchNorm): 'examples/stateful.ipynb'
             - Autoparallelism (e.g. multi-GPU): 'examples/parallelism.ipynb'
+            - Serialisation (with hyperparameters): 'examples/serialisation.ipynb'
     - Full API:
         - 'api/module.md'
         - Neural network layers:
