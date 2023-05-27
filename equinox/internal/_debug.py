@@ -100,6 +100,21 @@ mlir.register_lowering(announce_jaxpr_p, mlir.lower_fun(_mlir, multiple_results=
 
 
 def debug_backward_nan(x, name=None, terminate=True):
+    """Debug NaNs that only occur on the backward pass.
+
+    **Arguments:**
+
+    - `x`: a variable to intercept.
+    - `name`: an optional name to appear in printed debug statements.
+    - `terminate`: whether to halt the computation if a NaN cotangent is found.
+
+    **Returns:**
+
+    The `x` argument is returned unchanged.
+
+    As a side-effect, both the primal and the cotangent for `x` will be printed out
+    during the backward pass.
+    """
     return _debug_backward_nan(x, name, terminate)
 
 

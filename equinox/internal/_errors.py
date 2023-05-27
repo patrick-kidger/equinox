@@ -103,9 +103,19 @@ def error_if(
 ) -> PyTree:
     """Throws an error based on runtime values. Works even under JIT.
 
-    The first argument `x` is returned unchanged, and used to determine
-    where the error check happens in the overall computation. If the
-    return value is ever unused then the error check may be DCE'd.
+    **Arguments:**
+
+    - `x`: will be returned unchanged; used to determine where the error check happens
+        in the overall computation. Can be any PyTree; must contain at least one array.
+    - `pred`: a boolean for whether to raise an error. Can be an array of bools; an
+        error will be raised if any of them are `True`. If vmap'd then an error will be
+        raised if any batch element has `True`.
+    - `msg`: the string to display as an error message.
+
+    **Returns:**
+
+    The original argument `x` unchanged. If this return value is unused then the error
+    check will not be performed.
 
     !!! Example
 
@@ -129,7 +139,7 @@ def branched_error_if(
     msgs: Sequence[str],
 ) -> PyTree:
     """As [`equinox.internal.error_if`][], but will raise one of
-    several messages depending on the value of `index`.
+    several `msgs` depending on the value of `index`.
     """
 
     with jax.ensure_compile_time_eval():
@@ -141,7 +151,7 @@ def branched_error_if(
                         index = index.item()
                     index = cast(int, index)
                     raise RuntimeError(msgs[index])
-                # else defer rerror to runtime, when the index is known.
+                # else defer error to runtime, when the index is known.
             else:
                 return x
 
