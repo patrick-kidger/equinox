@@ -419,3 +419,21 @@ def test_filter_custom_jvp_exact():
         return jax.lax.cond(x < y, f, lambda _x, _y: _y, x, y)
 
     jax.grad(g)(1.0, 1)
+
+
+def test_filter_hessian_and_dce_and_jacfwd_and_jacrev():
+    # filter_hessian is implemented in terms of the other 3, so this tests all 4.
+
+    def f(x, y):
+        return jnp.sin(x) * y
+
+    def f_fwd(x, y):
+        return f(x, y), (jnp.cos(x), jnp.sin(x), y)
+
+    def f_bwd(res, g):
+        cos_x, sin_x, y = res
+        return (cos_x * g * y, sin_x * g)
+
+    f_custom = jax.custom_vjp(f)
+    f_custom.defvjp(f_fwd, f_bwd)
+    jax.hessian(f)(1.0, 2.0)

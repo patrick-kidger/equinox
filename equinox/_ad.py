@@ -21,6 +21,7 @@ from typing_extensions import ParamSpec
 import jax
 import jax.core
 import jax.interpreters.ad as ad
+import jax.interpreters.partial_eval as pe
 import jax.numpy as jnp
 import jax.tree_util as jtu
 from jaxtyping import Array, ArrayLike, Complex, Float, PyTree
@@ -335,7 +336,7 @@ def filter_vjp(
 
 
 def filter_vjp(fun, *primals, has_aux: bool = False):
-    """Filtered version of `jax.vjp`.
+    """Like `jax.vjp`, but accepts arbitrary PyTrees. (Not just JAXable types.)
 
     **Arguments:**
 
@@ -380,6 +381,82 @@ def filter_vjp(fun, *primals, has_aux: bool = False):
         return out, vjp_fn, aux
     else:
         return out, vjp_fn
+
+
+class _Jac(Module):
+    fun: Callable
+    has_aux: bool
+    rev: bool
+
+    def __call__(self, x, /, *args, **kwargs):
+        diff_x, static_x = partition(x, is_inexact_array)
+
+        def _fun(_diff_x):
+            _x = combine(_diff_x, static_x)
+            _out = self.fun(_x, *args, **kwargs)
+            if self.has_aux:
+                _out, _aux = _out
+            else:
+                _aux = None
+            _dynamic_out, _static_out = partition(_out, _is_jvp_tracer)
+            return _dynamic_out, (_static_out, _aux)
+
+        if self.rev:
+            jacobian = jax.jacrev
+        else:
+            jacobian = jax.jacfwd
+        dynamic_out, (static_out, aux) = jacobian(_fun, has_aux=True)(diff_x)
+        out = combine(dynamic_out, static_out)
+        if self.has_aux:
+            return out, aux
+        else:
+            return out
+
+
+def filter_jacfwd(fun, has_aux: bool = False):
+    """Computes the Jacobian of `fun`, evaluated using forward-mode AD. The inputs and
+    outputs may be arbitrary PyTrees.
+
+    **Arguments:**
+
+    - `fun`: The function to be differentiated.
+    - `has_aux`: Indicates whether `fun` returns a pair, with the first element the
+        output to be differentiated, and the latter auxiliary data. Defaults to `False`.
+
+    **Returns:**
+
+    A function with the same arguments as `fun`.
+
+    If `has_aux is False` then this function returns just the Jacobian of `fun` with
+    respect to its first argument.
+
+    If `has_aux is True` then it returns a pair `(jacobian, aux)`, where `aux` is the
+    auxiliary data returned from `fun`.
+    """
+    return _Jac(fun, has_aux, rev=False)
+
+
+def filter_jacrev(fun, has_aux: bool = False):
+    """Computes the Jacobian of `fun`, evaluated using reverse-mode AD. The inputs and
+    outputs may be arbitrary PyTrees.
+
+    **Arguments:**
+
+    - `fun`: The function to be differentiated.
+    - `has_aux`: Indicates whether `fun` returns a pair, with the first element the
+        output to be differentiated, and the latter auxiliary data. Defaults to `False`.
+
+    **Returns:**
+
+    A function with the same arguments as `fun`.
+
+    If `has_aux is False` then this function returns just the Jacobian of `fun` with
+    respect to its first argument.
+
+    If `has_aux is True` then it returns a pair `(jacobian, aux)`, where `aux` is the
+    auxiliary data returned from `fun`.
+    """
+    return _Jac(fun, has_aux, rev=True)
 
 
 def _is_struct(x):
@@ -440,6 +517,25 @@ class _ClosureConvert(Module):
         return out
 
 
+def _fn_to_jaxpr(fn, args, kwargs, dce: bool) -> _ClosureConvert:
+    closed_jaxpr, out_dynamic_struct, out_static = filter_make_jaxpr(fn)(
+        *args, **kwargs
+    )  # pyright: ignore
+    in_dynamic, in_static = partition((args, kwargs), _is_struct)
+    in_dynamic_struct = jax.eval_shape(lambda: in_dynamic)
+    jaxpr = closed_jaxpr.jaxpr
+    consts = closed_jaxpr.consts
+    if dce:
+        jaxpr, _ = pe.dce_jaxpr(jaxpr, [True] * len(jaxpr.outvars), instantiate=True)
+    in_dynamic_struct = jtu.tree_flatten(in_dynamic_struct)
+    out_dynamic_struct = jtu.tree_flatten(out_dynamic_struct)
+    in_static = jtu.tree_flatten(in_static)
+    out_static = jtu.tree_flatten(out_static)
+    return _ClosureConvert(
+        jaxpr, consts, in_dynamic_struct, out_dynamic_struct, in_static, out_static
+    )
+
+
 def filter_closure_convert(fn: Callable[_P, _T], *args, **kwargs) -> Callable[_P, _T]:
     """As `jax.closure_convert`, but works on functions accepting and returning
     arbitrary PyTree objects. In addition, all JAX arrays are hoisted into constants
@@ -480,22 +576,60 @@ def filter_closure_convert(fn: Callable[_P, _T], *args, **kwargs) -> Callable[_P
         # In this case, it's not possible to have any closed-over tracers.
         # Skip jaxpr tracing for efficiency.
         return fn
-    closed_jaxpr, out_dynamic_struct, out_static = filter_make_jaxpr(fn)(
-        *args, **kwargs
-    )  # pyright: ignore
-    in_dynamic, in_static = partition((args, kwargs), _is_struct)
-    in_dynamic_struct = jax.eval_shape(lambda: in_dynamic)
-    jaxpr = closed_jaxpr.jaxpr
-    consts = closed_jaxpr.consts
-    in_dynamic_struct = jtu.tree_flatten(in_dynamic_struct)
-    out_dynamic_struct = jtu.tree_flatten(out_dynamic_struct)
-    in_static = jtu.tree_flatten(in_static)
-    out_static = jtu.tree_flatten(out_static)
-    closure_converted = _ClosureConvert(
-        jaxpr, consts, in_dynamic_struct, out_dynamic_struct, in_static, out_static
+    return module_update_wrapper(_fn_to_jaxpr(fn, args, kwargs, dce=False), fn)
+
+
+class _Dce(Module):
+    fn: Callable
+
+    def __call__(self, *args, **kwargs):
+        return _fn_to_jaxpr(self.fn, args, kwargs, dce=True)(*args, **kwargs)
+
+
+def filter_dce(fn: Callable[_P, _T]) -> Callable[_P, _T]:
+    """Applies dead code elimination (DCE) to `fn`.
+
+    This is occasionally useful prior to performing autodifferentiation. In particular,
+    it may remove any unused `jax.custom_vjp`s (or [`equinox.filter_custom_vjp`][]s)
+    which might prohibit forward-mode autodifferentiation, or it may remove
+    `lax.while_loop`s which might prohibit reverse-mode autodifferentiation.
+
+    **Arguments:**
+
+    - `fn`: The function to DCE.
+
+    **Returns:**
+
+    A function with the same arguments and return value as `fn`, but with any
+    unused intermediate computations removed.
+    """
+    return module_update_wrapper(_Dce(fn), fn)
+
+
+def filter_hessian(fun, has_aux: bool = False):
+    """Computes the Hessian of `fun`. The inputs and outputs may be arbitrary PyTrees.
+
+    **Arguments:**
+
+    - `fun`: The function to be differentiated.
+
+    **Returns:**
+
+    A function with the same arguments as `fun`.
+
+    If `has_aux is False` then this function returns just the Hessian of `fun` with
+    respect to its first argument.
+
+    If `has_aux is True` then it returns a pair `(hessian, aux)`, where `aux` is the
+    auxiliary data returned from `fun`.
+    """
+    # Unlike JAX, we insert a DCE call in between the jacrev and the jacfwd.
+    # This sacrifices the ability to handle non-jaxpr'able eager on the jacfwd pass,
+    # in return for being able to handle some DCE'able exmaples -- in particular
+    # anything using `equinox.internal.while_loop`. See JAX issue #16049.
+    return filter_jacfwd(
+        filter_dce(filter_jacrev(fun, has_aux=has_aux)), has_aux=has_aux
     )
-    closure_converted = cast(Callable[_P, _T], closure_converted)
-    return closure_converted
 
 
 # Work around JAX issue #16000
