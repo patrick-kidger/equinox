@@ -1,4 +1,4 @@
-from typing import cast, Sequence, Union
+from typing import cast, Sequence
 
 import jax
 import jax.core
@@ -8,7 +8,7 @@ import jax.interpreters.mlir as mlir
 import jax.lax as lax
 import jax.tree_util as jtu
 import numpy as np
-from jaxtyping import Array, Bool, Int, PyTree
+from jaxtyping import Array, ArrayLike, Bool, Int, PyTree
 
 from .._filters import combine, is_array_like, partition
 from ._unvmap import unvmap_any, unvmap_max
@@ -98,7 +98,7 @@ mlir.register_lowering(
 
 def error_if(
     x: PyTree,
-    pred: Union[bool, Bool[Array, "..."]],
+    pred: Bool[ArrayLike, "..."],
     msg: str,
 ) -> PyTree:
     """Throws an error based on runtime values. Works even under JIT.
@@ -124,8 +124,8 @@ def error_if(
 
 def branched_error_if(
     x: PyTree,
-    pred: Union[bool, Bool[Array, "..."]],
-    index: Union[int, Int[Array, "..."]],
+    pred: Bool[ArrayLike, "..."],
+    index: Int[ArrayLike, "..."],
     msgs: Sequence[str],
 ) -> PyTree:
     """As [`equinox.internal.error_if`][], but will raise one of
@@ -134,6 +134,7 @@ def branched_error_if(
 
     with jax.ensure_compile_time_eval():
         pred = unvmap_any(pred)
+        index = unvmap_max(index)
         if not isinstance(pred, jax.core.Tracer):
             if pred.item():
                 if not isinstance(index, jax.core.Tracer):
@@ -145,7 +146,6 @@ def branched_error_if(
             else:
                 return x
 
-    index = unvmap_max(index)
     dynamic_x, static_x = partition(x, is_array_like)
     flat, treedef = jtu.tree_flatten(dynamic_x)
     if len(flat) == 0:

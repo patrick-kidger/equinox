@@ -10,6 +10,7 @@ from .._filters import is_array
 from ._nontraceable import nonbatchable
 
 
+# Old; deprecated
 class ContainerMeta(type):
     reverse_lookup: dict
 
