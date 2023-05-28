@@ -16,6 +16,7 @@ from ._debug import (
     announce_transform as announce_transform,
     debug_backward_nan as debug_backward_nan,
 )
+from ._enum import Enumeration as Enumeration
 from ._errors import (
     branched_error_if as branched_error_if,
     branched_error_p as branched_error_p,
