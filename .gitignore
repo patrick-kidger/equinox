@@ -9,3 +9,4 @@ examples/data
 .pymon
 .idea
 examples/MNIST
+examples/multipart_serialised.eqx
