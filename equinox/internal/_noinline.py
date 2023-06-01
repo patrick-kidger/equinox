@@ -15,6 +15,7 @@ import numpy as np
 from jaxtyping import Array, Int, PyTree
 
 from .._ad import filter_jvp
+from .._caches import internal_lru_caches
 from .._compile_utils import hashable_combine, hashable_partition
 from .._eval_shape import filter_eval_shape
 from .._filters import combine, is_array, partition
@@ -71,6 +72,9 @@ def _cache_filter_eval_shape(key):
     return filter_eval_shape(abstract_fn, args)
 
 
+internal_lru_caches.append(_cache_filter_eval_shape)
+
+
 def _is_undefined(x):
     return type(x) is ad.UndefinedPrimal
 
@@ -121,6 +125,9 @@ def _get_callback(treedef, static, is_float0):
         return callback(static_fn, dynamic)
 
     return callback_lookup
+
+
+internal_lru_caches.append(_get_callback)
 
 
 def _impl_transform(static_fn):

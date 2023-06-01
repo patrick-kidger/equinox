@@ -11,7 +11,6 @@ from jaxtyping import PyTree
 
 from ._compile_utils import (
     compile_cache,
-    get_fun_names,
     hashable_combine,
     hashable_filter,
     hashable_partition,
@@ -198,7 +197,7 @@ def filter_jit(fun=sentinel, *, donate: str = "none", **jitkwargs):
         jitkwargs["donate_argnums"] = (0,)
 
     dynamic_fun, static_fun = hashable_partition(fun, is_array)
-    cached = _filter_jit_cache(get_fun_names(fun), jitkwargs)
+    cached = _filter_jit_cache(fun, jitkwargs)
 
     jit_wrapper = _JitWrapper(
         _signature=signature,

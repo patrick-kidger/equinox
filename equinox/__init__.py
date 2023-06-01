@@ -14,6 +14,7 @@ from ._better_abstract import (
     AbstractClassVar as AbstractClassVar,
     AbstractVar as AbstractVar,
 )
+from ._caches import clear_caches as clear_caches
 from ._callback import filter_pure_callback as filter_pure_callback
 from ._enum import Enumeration as Enumeration
 from ._eval_shape import filter_eval_shape as filter_eval_shape

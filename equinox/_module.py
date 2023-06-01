@@ -11,6 +11,7 @@ import numpy as np
 from jaxtyping import Array, Bool
 
 from ._better_abstract import ABCMeta, dataclass
+from ._caches import internal_lru_caches
 from ._doc_utils import doc_repr
 from ._pretty_print import tree_pformat
 from ._tree import tree_equal
@@ -240,6 +241,9 @@ def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
     _InitableModule.__qualname__ = cls.__qualname__
 
     return _InitableModule
+
+
+internal_lru_caches.append(_make_initable)
 
 
 # This class exists primarily just to hide the wrapper fields from the PyTreeDef repr.

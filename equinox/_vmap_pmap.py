@@ -15,7 +15,6 @@ from jaxtyping import PyTree
 
 from ._compile_utils import (
     compile_cache,
-    get_fun_names,
     hashable_combine,
     hashable_partition,
     Lowered,
@@ -388,10 +387,8 @@ def filter_vmap(
 
 @compile_cache
 def _filter_pmap_cache(
-    fun_names, leaves, treedef, in_axes, axis_name, axis_size, pmapkwargs
+    fun_names, static, struct, in_axes, axis_name, axis_size, pmapkwargs
 ):
-    static, struct = jtu.tree_unflatten(treedef, leaves)
-
     def fun_abstract(_dynamic):
         fun, args, _, _ = combine(_dynamic, static)
         out = fun(*args)
@@ -498,13 +495,11 @@ class _PmapWrapper(Module):
             (self._fun, args, maybe_dummy, self._out_axes), is_array
         )
         struct = jtu.tree_map(lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype), dynamic)
-        leaves, treedef = jtu.tree_flatten((static, struct))
-        leaves = tuple(leaves)
 
         cached = _filter_pmap_cache(
-            get_fun_names(self._fun),
-            leaves,
-            treedef,
+            self._fun,
+            static,
+            struct,
             in_axes,
             self._axis_name,
             self._axis_size,
