@@ -9,3 +9,7 @@
 ---
 
 ::: equinox.module_update_wrapper
+
+---
+
+::: equinox.clear_caches
