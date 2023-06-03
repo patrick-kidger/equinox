@@ -49,6 +49,10 @@ class _ValueAndGradWrapper(Module):
     _has_aux: bool
     _gradkwargs: Dict[str, Any]
 
+    @property
+    def __wrapped__(self):
+        return self._fun
+
     def __call__(self, x, /, *args, **kwargs):
         @ft.partial(jax.value_and_grad, has_aux=self._has_aux, **self._gradkwargs)
         def fun_value_and_grad(_diff_x, _nondiff_x, *_args, **_kwargs):
@@ -67,6 +71,10 @@ class _ValueAndGradWrapper(Module):
 class _GradWrapper(Module):
     _fun_value_and_grad: _ValueAndGradWrapper
     _has_aux: bool
+
+    @property
+    def __wrapped__(self):
+        return self._fun_value_and_grad
 
     def __call__(self, /, *args, **kwargs):
         value, grad = self._fun_value_and_grad(*args, **kwargs)

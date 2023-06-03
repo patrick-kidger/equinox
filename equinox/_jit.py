@@ -72,6 +72,10 @@ class _JitWrapper(Module):
     _cached: Any
     _filter_warning: bool
 
+    @property
+    def __wrapped__(self):
+        return hashable_combine(self._dynamic_fun, self._static_fun)
+
     def _call(self, is_lower, args, kwargs):
         args, kwargs = _bind(self._signature, args, kwargs)
         dynamic_spec, static_spec = hashable_partition((args, kwargs), is_array)
