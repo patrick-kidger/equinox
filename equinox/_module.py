@@ -36,8 +36,13 @@ def static_field(**kwargs):
         assert "static" in str(treedef)
         ```
 
-    In practice this should rarely be used; it is usually preferred to just filter
-    out each field with `eqx.partition` whenever you need to select only some fields.
+    This means that it does not interact with any JAX transforms, like JIT or grad.
+    Moreover, all static fields should be hashable and support `__eq__`. In
+    particular you should not use JAX or NumPy arrays, as these are not hashable.
+
+    This is an advanced feature that should almost never be used. It is preferred to
+    just filter out each field with `eqx.partition` whenever you need to select only
+    some fields.
 
     **Arguments:**
 
