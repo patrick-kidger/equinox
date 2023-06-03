@@ -381,6 +381,10 @@ class _NoInlineWrapper(Module):
     abstract_fn: Callable = static_field()
     dynamic_fn: Any
 
+    @property
+    def __wrapped__(self):
+        return self.abstract_fn
+
     def __call__(self, *args, **kwargs):
         return filter_primitive_bind(
             noinline_p,

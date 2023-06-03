@@ -218,3 +218,11 @@ def test_flatten_with_keys():
     assert isinstance(path1, jtu.GetAttrKey) and path1.name == "foo"
     assert isinstance(path2a, jtu.GetAttrKey) and path2a.name == "qux"
     assert isinstance(path2b, jtu.SequenceKey) and path2b.idx == 0
+
+
+def test_wrapped(getkey):
+    # https://github.com/patrick-kidger/equinox/issues/377
+    x = eqx.filter_vmap(eqx.nn.Linear(2, 2, key=getkey()))
+    y = eqx.filter_vmap(eqx.nn.Linear(2, 2, key=getkey()))
+    x, y = eqx.filter((x, y), eqx.is_array)
+    jtu.tree_map(lambda x, y: x + y, x, y)

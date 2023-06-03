@@ -148,6 +148,10 @@ class _VmapWrapper(Module):
     _axis_size: Optional[int]
     _vmapkwargs: Dict[str, Any]
 
+    @property
+    def __wrapped__(self):
+        return self._fun
+
     def __call__(self, /, *args, **kwargs):
         if len(kwargs) != 0:
             raise RuntimeError(
@@ -476,6 +480,10 @@ class _PmapWrapper(Module):
     _axis_size: Optional[int]
     _filter_warning: bool
     _pmapkwargs: Dict[str, Any]
+
+    @property
+    def __wrapped__(self):
+        return self._fun
 
     def _call(self, is_lower, args, kwargs):
         maybe_dummy = _common_preprocess(self._axis_size, kwargs)

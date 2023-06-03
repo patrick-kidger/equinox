@@ -20,6 +20,10 @@ def _is_struct(x):
 class _MakeJaxpr(Module):
     fn: Callable
 
+    @property
+    def __wrapped__(self):
+        return self.fn
+
     def __call__(self, *args, **kwargs):
         dynamic, static = partition((args, kwargs), _is_struct)
         dynamic_flat, dynamic_treedef = jtu.tree_flatten(dynamic)

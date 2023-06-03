@@ -101,12 +101,19 @@ class _ModuleMeta(ABCMeta):
             else:
                 assert name == "Module"
                 _init = True  # eqx.Module itself
-        _has_dataclass_init[cls] = _init
         if _init:
             init_doc = cls.__init__.__doc__
         cls = dataclass(eq=False, repr=False, frozen=True, init=_init)(
             cls  # pyright: ignore
         )
+        # must happen after `dataclass(...)` we use this in `__getattribute__` to avoid
+        # making any property(def __wrapped__) visible until then. We want to be able to
+        # support property(def __wrapped__) for the sake of classes whose instances are
+        # wrappers (i.e. via `module_update_wrapper`), but this means that a
+        # `__wrapped__` object is also visible on the class object itself, despite not
+        # pointing to a callable. `dataclass(...)` spots this and tries to use it form
+        # a signature.
+        _has_dataclass_init[cls] = _init
         if _init:
             cls.__init__.__doc__ = init_doc  # pyright: ignore
             cls.__init__.__module__ = cls.__module__
@@ -121,6 +128,18 @@ class _ModuleMeta(ABCMeta):
             unflatten_func=ft.partial(_unflatten_module, cls),  # pyright: ignore
         )
         return cls
+
+    # See note above for `_has_dataclass_init`.
+    def __getattribute__(cls, item):
+        value = super().__getattribute__(item)
+        if (
+            item == "__wrapped__"
+            and isinstance(value, property)
+            and cls not in _has_dataclass_init
+        ):
+            raise AttributeError
+        else:
+            return value
 
     def __call__(cls, *args, **kwargs):
         # Defreeze it during __init__
@@ -146,7 +165,6 @@ _wrapper_field_names = {
     "__qualname__",
     "__doc__",
     "__annotations__",
-    "__wrapped__",
 }
 
 
@@ -357,6 +375,10 @@ def module_update_wrapper(
             def __call__(self, *args, **kwargs):
                 return self.fn(*args, **kwargs)
 
+            @property
+            def __wrapped__(self):
+                return self.fn
+
         def make_wrapper(fn):
             return eqx.module_update_wrapper(Wrapper(fn), fn)
         ```
@@ -364,16 +386,30 @@ def module_update_wrapper(
     For example, [`equinox.filter_jit`][] returns a module representing the JIT'd
     computation. `module_update_wrapper` is used on this module to indicate that this
     JIT'd computation wraps the original one. (Just like how `functools.wraps` is used.)
+
+    Note that as in the above example, the wrapper class must supply a `__wrapped__`
+    property, which redirects to the wrapped object.
     """
     cls = wrapper.__class__
+    if not isinstance(getattr(cls, "__wrapped__", None), property):
+        raise ValueError("Wrapper module must supply `__wrapped__` as a property.")
     initable_cls = _make_initable(cls, wraps=True)
     object.__setattr__(wrapper, "__class__", initable_cls)
     try:
-        # updated = ("__dict__",) is the default, but that's a bit much.
-        # It's common/possible for wrapper and wrapped to both be classes
-        # implementing __call__, in which case copying __dict__ over basically
-        # just breaks the wrapper class.
-        ft.update_wrapper(wrapper, wrapped, updated=())  # pyright: ignore
+        # Like `ft.update_wrapper(wrapper, wrapped, updated=())`.
+        # We don't update __dict__ as it's common/possible for wrapper and wrapped to
+        # both be classes implementing __call__, in which case copying __dict__ over
+        # basically just breaks the wrapper class.
+        # We don't set __wrapped__, and instead demand that the wrapper class tell us
+        # how to redirect to the wrapped object. This is avoid duplicating part of the
+        # PyTree.
+        for attr in _wrapper_field_names:
+            try:
+                value = getattr(wrapped, attr)
+            except AttributeError:
+                pass
+            else:
+                setattr(wrapper, attr, value)
     finally:
         object.__setattr__(wrapper, "__class__", cls)
     return cast(Callable[_P, _T], wrapper)
