@@ -3,7 +3,7 @@ from typing import Hashable, Optional, Sequence, Tuple, Union
 import jax
 import jax.lax as lax
 import jax.numpy as jnp
-from jaxtyping import Array, Bool, Float
+from jaxtyping import Array, Bool, Float, Num
 
 from .._module import Module, static_field
 from ._stateful import State, StateIndex
@@ -60,7 +60,7 @@ class BatchNorm(Module):
         channelwise_affine: bool = True,
         momentum: float = 0.99,
         inference: bool = False,
-        dtype: jnp.dtype = jnp.float64,
+        dtype: Num = jnp.float64,
         **kwargs,
     ):
         """**Arguments:**
@@ -79,6 +79,7 @@ class BatchNorm(Module):
             statistics are directly used for normalisation. This may be toggled with
             [`equinox.tree_inference`][] or overridden during
             [`equinox.nn.BatchNorm.__call__`][].
+        - `dtype`: The dtype of the input array.
         """
 
         super().__init__(**kwargs)
@@ -90,7 +91,10 @@ class BatchNorm(Module):
             self.weight = None
             self.bias = None
         self.first_time_index = StateIndex(lambda **_: jnp.array(True))
-        make_buffers = lambda **_: (jnp.empty((input_size,), dtype=dtype), jnp.empty((input_size,), dtype=dtype))
+        make_buffers = lambda **_: (
+            jnp.empty((input_size,), dtype=dtype),
+            jnp.empty((input_size,), dtype=dtype),
+        )
         self.state_index = StateIndex(make_buffers)
         self.inference = inference
         self.axis_name = axis_name
