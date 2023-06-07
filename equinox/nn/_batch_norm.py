@@ -60,6 +60,7 @@ class BatchNorm(Module):
         channelwise_affine: bool = True,
         momentum: float = 0.99,
         inference: bool = False,
+        dtype: jnp.dtype = jnp.float32,
         **kwargs,
     ):
         """**Arguments:**
@@ -89,7 +90,7 @@ class BatchNorm(Module):
             self.weight = None
             self.bias = None
         self.first_time_index = StateIndex(lambda **_: jnp.array(True))
-        make_buffers = lambda **_: (jnp.empty((input_size,)), jnp.empty((input_size,)))
+        make_buffers = lambda **_: (jnp.empty((input_size,), dtype=dtype), jnp.empty((input_size,), dtype=dtype))
         self.state_index = StateIndex(make_buffers)
         self.inference = inference
         self.axis_name = axis_name
