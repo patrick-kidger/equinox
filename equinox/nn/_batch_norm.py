@@ -60,7 +60,7 @@ class BatchNorm(Module):
         channelwise_affine: bool = True,
         momentum: float = 0.99,
         inference: bool = False,
-        dtype: Num = jnp.float64,
+        dtype: Num = jnp.float32,
         **kwargs,
     ):
         """**Arguments:**
