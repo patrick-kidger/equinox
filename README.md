@@ -80,12 +80,16 @@ If you found this library to be useful in academic work, then please cite: ([arX
 (Also consider starring the project on GitHub.)
 
 
-## See also
+## See also: other libraries in the JAX ecosystem
 
-Numerical differential equation solvers: [Diffrax](https://github.com/patrick-kidger/diffrax).
+[Optax](https://github.com/deepmind/optax): first-order gradient (SGD, Adam, ...) optimisers.
 
-Type annotations and runtime checking for PyTrees and shape/dtype of JAX arrays: [jaxtyping](https://github.com/google/jaxtyping).
+[Diffrax](https://github.com/patrick-kidger/diffrax): numerical differential equation solvers.
 
-Computer vision models: [Eqxvision](https://github.com/paganpasta/eqxvision).
+[Lineax](https://github.com/google/lineax): linear solvers and linear least squares.
 
-SymPy<->JAX conversion; train symbolic expressions via gradient descent: [sympy2jax](https://github.com/google/sympy2jax).
+[jaxtyping](https://github.com/google/jaxtyping): type annotations for shape/dtype of arrays.
+
+[Eqxvision](https://github.com/paganpasta/eqxvision): computer vision models.
+
+[sympy2jax](https://github.com/google/sympy2jax): SymPy<->JAX conversion; train symbolic expressions via gradient descent.
