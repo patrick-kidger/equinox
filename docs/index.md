@@ -67,3 +67,17 @@ If this quick start has got you interested, then have a read of [All of Equinox]
 ## Citation
 
 --8<-- ".citation.md"
+
+## See also: other libraries in the JAX ecosystem
+
+[Optax](https://github.com/deepmind/optax): first-order gradient (SGD, Adam, ...) optimisers.
+
+[Diffrax](https://github.com/patrick-kidger/diffrax): numerical differential equation solvers.
+
+[Lineax](https://github.com/google/lineax): linear solvers and linear least squares.
+
+[jaxtyping](https://github.com/google/jaxtyping): type annotations for shape/dtype of arrays.
+
+[Eqxvision](https://github.com/paganpasta/eqxvision): computer vision models.
+
+[sympy2jax](https://github.com/google/sympy2jax): SymPy<->JAX conversion; train symbolic expressions via gradient descent.
