@@ -144,7 +144,7 @@ class BatchNorm(Module):
             def _stats(y):
                 mean = jnp.mean(y)
                 mean = lax.pmean(mean, self.axis_name)
-                var = jnp.mean((y - mean) ** 2)
+                var = jnp.mean(abs(y - mean) ** 2)
                 var = lax.pmean(var, self.axis_name)
                 var = jnp.maximum(0.0, var)
                 return mean, var
