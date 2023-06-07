@@ -60,6 +60,7 @@ class BatchNorm(Module):
         channelwise_affine: bool = True,
         momentum: float = 0.99,
         inference: bool = False,
+        dtype=jnp.float32,
         **kwargs,
     ):
         """**Arguments:**
@@ -78,6 +79,7 @@ class BatchNorm(Module):
             statistics are directly used for normalisation. This may be toggled with
             [`equinox.tree_inference`][] or overridden during
             [`equinox.nn.BatchNorm.__call__`][].
+        - `dtype`: The dtype of the input array.
         """
 
         super().__init__(**kwargs)
@@ -89,7 +91,10 @@ class BatchNorm(Module):
             self.weight = None
             self.bias = None
         self.first_time_index = StateIndex(lambda **_: jnp.array(True))
-        make_buffers = lambda **_: (jnp.empty((input_size,)), jnp.empty((input_size,)))
+        make_buffers = lambda **_: (
+            jnp.empty((input_size,), dtype=dtype),
+            jnp.empty((input_size,), dtype=dtype),
+        )
         self.state_index = StateIndex(make_buffers)
         self.inference = inference
         self.axis_name = axis_name
@@ -139,7 +144,7 @@ class BatchNorm(Module):
             def _stats(y):
                 mean = jnp.mean(y)
                 mean = lax.pmean(mean, self.axis_name)
-                var = jnp.mean((y - mean) ** 2)
+                var = jnp.mean((y - mean) * jnp.conj(y - mean))
                 var = lax.pmean(var, self.axis_name)
                 var = jnp.maximum(0.0, var)
                 return mean, var
