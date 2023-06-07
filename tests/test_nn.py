@@ -579,13 +579,32 @@ def test_dot_product_attention(getkey):
     assert attn == jnp.array([[1.0]])
 
 
-def test_multihead_attention(getkey):
+@pytest.mark.parametrize("multiquery", (False, True))
+def test_self_attention(multiquery, getkey):
+    attn = eqx.nn.self_attention(
+        num_heads=2, size=3, multiquery=multiquery, key=getkey()
+    )
+    q = jrandom.uniform(getkey(), (19, 3))
+    k = jrandom.uniform(getkey(), (23, 3))
+    v = jrandom.uniform(getkey(), (23, 3))
+    assert attn(q, k, v).shape == (19, 3)
+
+
+@pytest.mark.parametrize("query_multihead", (True, False))
+@pytest.mark.parametrize("key_multihead", (True, False))
+@pytest.mark.parametrize("value_multihead", (True, False))
+def test_multihead_attention_mixed(
+    query_multihead, key_multihead, value_multihead, getkey
+):
     attn = eqx.nn.MultiheadAttention(
         num_heads=2,
         query_size=3,
         key_size=5,
         value_size=7,
         output_size=11,
+        query_multihead=query_multihead,
+        key_multihead=key_multihead,
+        value_multihead=value_multihead,
         qk_size=13,
         vo_size=17,
         key=getkey(),
@@ -595,6 +614,8 @@ def test_multihead_attention(getkey):
     v = jrandom.uniform(getkey(), (23, 7))
     assert attn(q, k, v).shape == (19, 11)
 
+
+def test_multihead_attention_self(getkey):
     attn = eqx.nn.MultiheadAttention(num_heads=2, query_size=4, key=getkey())
     attn = eqx.tree_at(
         lambda x: (
@@ -654,6 +675,53 @@ def test_multihead_attention_deterministic(getkey):
         z1 = attn(x, x, x, key=getkey(), deterministic=True)
         z2 = attn(x, x, x, deterministic=True)
         assert jnp.all(z1 == z2)
+
+
+@pytest.mark.parametrize("query_multihead", (True, False))
+@pytest.mark.parametrize("key_multihead", (True, False))
+@pytest.mark.parametrize("value_multihead", (True, False))
+def test_autoregressive_attention(
+    query_multihead, key_multihead, value_multihead, getkey
+):
+    attn = eqx.nn.MultiheadAttention(
+        num_heads=2,
+        query_size=3,
+        key_size=5,
+        value_size=7,
+        output_size=11,
+        query_multihead=query_multihead,
+        key_multihead=key_multihead,
+        value_multihead=value_multihead,
+        qk_size=13,
+        vo_size=17,
+        state_length=100,
+        key=getkey(),
+    )
+    k1 = jrandom.uniform(getkey(), (23, 5))
+    v1 = jrandom.uniform(getkey(), (23, 7))
+    k2 = jrandom.uniform(getkey(), (27, 5))
+    v2 = jrandom.uniform(getkey(), (27, 7))
+    k = jnp.concatenate([k1, k2])
+    v = jnp.concatenate([v1, v2])
+
+    nonzero_q = jrandom.uniform(getkey(), (19, 3))
+    # A zero-length query is used with the prompt at the beginning of an LLM
+    zero_q = jrandom.uniform(getkey(), (0, 3))
+    for q in (nonzero_q, zero_q):
+        state = eqx.nn.State(attn)
+        _, state = attn(q, k1, v1, state=state)
+        out1, state = attn(q, k2, v2, state=state)
+        out2 = attn(q, k, v)
+        assert jnp.allclose(out1, out2, rtol=1e-4, atol=1e-4)
+
+        state = eqx.nn.State(attn)
+        _, state = attn(q, k1, v1, mask="causal", state=state)
+        causal_out1, state = attn(q, k2, v2, mask="causal", state=state)
+        causal_out2 = attn(
+            jnp.concatenate([jnp.zeros((23, 3)), q]), k, v, mask="causal"
+        )
+        causal_out2 = causal_out2[23:]
+        assert jnp.allclose(causal_out1, causal_out2, rtol=1e-4, atol=1e-4)
 
 
 def test_embedding(getkey):

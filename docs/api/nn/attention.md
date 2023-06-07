@@ -1,5 +1,9 @@
 # Attention
 
+::: equinox.nn.self_attention
+
+---
+
 ::: equinox.nn.MultiheadAttention
     selection:
         members:
