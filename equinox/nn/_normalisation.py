@@ -1,12 +1,13 @@
 import functools as ft
 import warnings
-from typing import Optional, overload, Sequence, Tuple, Union
+from collections.abc import Sequence
+from typing import Optional, overload, Union
 
 import jax
 import jax.numpy as jnp
-from jaxtyping import Array
+from jaxtyping import Array, PRNGKeyArray
 
-from .._custom_types import PRNGKey, sentinel
+from .._custom_types import sentinel
 from .._misc import left_broadcast_to
 from .._module import Module, static_field
 from ._stateful import State
@@ -91,18 +92,18 @@ class LayerNorm(Module):
         self.bias = jnp.zeros(shape) if use_bias else None
 
     @overload
-    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         ...
 
     @overload
     def __call__(
-        self, x: Array, state: State, *, key: Optional[PRNGKey] = None
-    ) -> Tuple[Array, State]:
+        self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
+    ) -> tuple[Array, State]:
         ...
 
     def __call__(
-        self, x: Array, state: State = sentinel, *, key: Optional[PRNGKey] = None
-    ) -> Union[Array, Tuple[Array, State]]:
+        self, x: Array, state: State = sentinel, *, key: Optional[PRNGKeyArray] = None
+    ) -> Union[Array, tuple[Array, State]]:
         """**Arguments:**
 
         - `x`: A JAX array.
@@ -202,18 +203,18 @@ class GroupNorm(Module):
         self.bias = jnp.zeros(channels) if channelwise_affine else None
 
     @overload
-    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         ...
 
     @overload
     def __call__(
-        self, x: Array, state: State, *, key: Optional[PRNGKey] = None
-    ) -> Tuple[Array, State]:
+        self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
+    ) -> tuple[Array, State]:
         ...
 
     def __call__(
-        self, x: Array, state: State = sentinel, *, key: Optional[PRNGKey] = None
-    ) -> Union[Array, Tuple[Array, State]]:
+        self, x: Array, state: State = sentinel, *, key: Optional[PRNGKeyArray] = None
+    ) -> Union[Array, tuple[Array, State]]:
         """**Arguments:**
 
         - `x`: A JAX array of shape `(channels, ...)`.

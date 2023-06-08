@@ -1,5 +1,6 @@
 import types
-from typing import Any, Callable, Generic, TypeVar
+from collections.abc import Callable
+from typing import Any, Generic, TypeVar
 
 import jax
 import jax.numpy as jnp

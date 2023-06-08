@@ -16,7 +16,8 @@ Library authors may wish to register their primitives with `primitive_finalisati
 """
 
 import functools as ft
-from typing import Any, Callable, cast, Dict, Literal, overload, Tuple, Union
+from collections.abc import Callable
+from typing import Any, cast, Literal, overload, Union
 
 import jax
 import jax.core
@@ -85,7 +86,7 @@ def finalise_eval_jaxpr(jaxpr: jax.core.Jaxpr, consts, *args):
     def write(v: jax.core.Var, val: Any) -> None:
         env[v] = val
 
-    env: Dict[jax.core.Var, Any] = {}
+    env: dict[jax.core.Var, Any] = {}
     _safe_map(write, jaxpr.constvars, consts)
     _safe_map(write, jaxpr.invars, args)
     for eqn in jaxpr.eqns:
@@ -142,7 +143,7 @@ def finalise_make_jaxpr(
 @overload
 def finalise_make_jaxpr(
     fn, *, return_shape: Literal[True] = True
-) -> Callable[..., Tuple[jax.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct]]]:
+) -> Callable[..., tuple[jax.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct]]]:
     ...
 
 
@@ -152,7 +153,7 @@ def finalise_make_jaxpr(
 ) -> Callable[
     ...,
     Union[
-        jax.core.ClosedJaxpr, Tuple[jax.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct]]
+        jax.core.ClosedJaxpr, tuple[jax.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct]]
     ],
 ]:
     ...
@@ -166,7 +167,7 @@ def finalise_make_jaxpr(fn, *, return_shape: bool = False):
             *args
         )
         if return_shape:
-            jaxpr_struct = cast(Tuple[jax.core.ClosedJaxpr, Any], jaxpr_struct)
+            jaxpr_struct = cast(tuple[jax.core.ClosedJaxpr, Any], jaxpr_struct)
             jaxpr, struct = jaxpr_struct
             jaxpr = finalise_jaxpr(jaxpr)
             return jaxpr, struct

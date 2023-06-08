@@ -1,9 +1,8 @@
 from typing import Optional
 
 import jax.random as jrandom
-from jaxtyping import Array, Float
+from jaxtyping import Array, Float, PRNGKeyArray
 
-from .._custom_types import PRNGKey
 from .._module import Module, static_field
 
 
@@ -20,7 +19,7 @@ class Embedding(Module):
         embedding_size: int,
         weight: Optional[Float[Array, "num_embeddings embedding_size"]] = None,
         *,
-        key: PRNGKey,
+        key: PRNGKeyArray,
         **kwargs,
     ):
         """**Arguments:**
@@ -44,7 +43,7 @@ class Embedding(Module):
         self.num_embeddings = num_embeddings
         self.embedding_size = embedding_size
 
-    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
         - `x`: The table index.

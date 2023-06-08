@@ -1,5 +1,6 @@
 import functools as ft
-from typing import Any, Callable, Union
+from collections.abc import Callable
+from typing import Any, Union
 
 import jax
 from jaxtyping import PyTree

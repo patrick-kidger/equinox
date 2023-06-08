@@ -1,21 +1,18 @@
 import typing
+from collections.abc import Callable, Sequence
 from typing import (
     Any,
-    Callable,
     Literal,
     Optional,
     Protocol,
     runtime_checkable,
-    Sequence,
-    Tuple,
     Union,
 )
 
 import jax.nn as jnn
 import jax.random as jrandom
-from jaxtyping import Array
+from jaxtyping import Array, PRNGKeyArray
 
-from .._custom_types import PRNGKey
 from .._module import Module, static_field
 from ._linear import Linear
 
@@ -41,7 +38,7 @@ class MLP(Module):
         If you get a TypeError saying an object is not a valid JAX type, see the
             [FAQ](https://docs.kidger.site/equinox/faq/)."""
 
-    layers: Tuple[Linear, ...]
+    layers: tuple[Linear, ...]
     activation: Callable
     final_activation: Callable
     use_bias: bool = static_field()
@@ -62,7 +59,7 @@ class MLP(Module):
         use_bias: bool = True,
         use_final_bias: bool = True,
         *,
-        key: PRNGKey,
+        key: PRNGKeyArray,
         **kwargs,
     ):
         """**Arguments**:
@@ -114,7 +111,7 @@ class MLP(Module):
         self.use_bias = use_bias
         self.use_final_bias = use_final_bias
 
-    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
         - `x`: A JAX array with shape `(in_size,)`. (Or shape `()` if
@@ -136,7 +133,7 @@ class MLP(Module):
 
 @runtime_checkable
 class _SequentialLayer(Protocol):
-    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         ...
 
 
@@ -148,12 +145,12 @@ class Sequential(Module):
         Activation functions can be added by wrapping them in [`equinox.nn.Lambda`][].
     """
 
-    layers: Tuple[_SequentialLayer, ...]
+    layers: tuple[_SequentialLayer, ...]
 
     def __init__(self, layers: Sequence[_SequentialLayer]):
         self.layers = tuple(layers)
 
-    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
         - `x`: Argument passed to the first member of the sequence.
@@ -221,7 +218,7 @@ class Lambda(Module):
 
     fn: Callable[[Any], Any]
 
-    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input JAX array.

@@ -1,4 +1,5 @@
-from typing import cast, Sequence
+from collections.abc import Sequence
+from typing import cast
 
 import jax
 import jax.core

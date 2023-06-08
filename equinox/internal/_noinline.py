@@ -1,5 +1,6 @@
 import functools as ft
-from typing import Any, Callable, Optional, Union
+from collections.abc import Callable
+from typing import Any, Optional, Union
 
 import jax
 import jax._src.pretty_printer as pp

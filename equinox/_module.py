@@ -1,8 +1,9 @@
 import functools as ft
 import inspect
 import weakref
+from collections.abc import Callable
 from dataclasses import field, fields
-from typing import Any, Callable, cast, Dict, Tuple, Type, TypeVar, Union
+from typing import Any, cast, TypeVar, Union
 from typing_extensions import dataclass_transform, ParamSpec
 
 import jax.tree_util as jtu
@@ -258,7 +259,7 @@ def _flatten_module(module: "Module", with_keys: bool):
     return tuple(dynamic_field_values), aux
 
 
-def _unflatten_module(cls: Type["Module"], aux: _FlattenedData, dynamic_field_values):
+def _unflatten_module(cls: type["Module"], aux: _FlattenedData, dynamic_field_values):
     module = object.__new__(cls)
     for name, value in zip(aux.dynamic_field_names, dynamic_field_values):
         object.__setattr__(module, name, value)
@@ -435,8 +436,8 @@ class Partial(Module):
     """
 
     func: Callable
-    args: Tuple[Any, ...]
-    keywords: Dict[str, Any]
+    args: tuple[Any, ...]
+    keywords: dict[str, Any]
 
     def __init__(self, func, /, *args, **kwargs):
         """**Arguments:**

@@ -1,5 +1,6 @@
 import typing_extensions as te
-from typing import Any, Sequence, TYPE_CHECKING, TypeVar, Union
+from collections.abc import Sequence
+from typing import Any, TYPE_CHECKING, TypeVar, Union
 
 
 _T = TypeVar("_T", bound=Sequence)

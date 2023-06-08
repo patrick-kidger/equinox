@@ -1,4 +1,5 @@
-from typing import Any, Callable, Tuple
+from collections.abc import Callable
+from typing import Any
 from typing_extensions import ParamSpec
 
 import jax
@@ -46,7 +47,7 @@ class _MakeJaxpr(Module):
 def filter_make_jaxpr(
     fun: Callable[_P, Any]
 ) -> Callable[
-    _P, Tuple[jax.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct], PyTree[Any]]
+    _P, tuple[jax.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct], PyTree[Any]]
 ]:
     """As `jax.make_jaxpr`, but accepts arbitrary PyTrees as input and output.
 

@@ -1,5 +1,6 @@
 import math
-from typing import Any, Callable, Optional, Sequence, TypeVar, Union
+from collections.abc import Callable, Sequence
+from typing import Any, Optional, TypeVar, Union
 
 import jax
 import jax.lax as lax

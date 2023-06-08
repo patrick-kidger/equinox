@@ -1,7 +1,8 @@
 import dataclasses
 import functools as ft
 import types
-from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
+from collections.abc import Callable, Sequence
+from typing import Any, Optional, Union
 
 import jax
 import jax._src.pretty_printer as pp
@@ -97,7 +98,7 @@ def _pformat_dict(obj: dict, **kwargs) -> pp.Doc:
 
 
 def _pformat_short_array(
-    shape: Tuple[int, ...], dtype: str, kind: Optional[str]
+    shape: tuple[int, ...], dtype: str, kind: Optional[str]
 ) -> pp.Doc:
     short_dtype = (
         dtype.replace("float", "f")
@@ -153,8 +154,8 @@ def _pformat_dataclass(obj, **kwargs) -> pp.Doc:
 @dataclasses.dataclass
 class _Partial:
     func: Callable
-    args: Tuple[Any, ...]
-    keywords: Dict[str, Any]
+    args: tuple[Any, ...]
+    keywords: dict[str, Any]
 
 
 _Partial.__name__ = jtu.Partial.__name__
