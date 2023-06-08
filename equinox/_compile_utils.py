@@ -1,6 +1,6 @@
 import functools as ft
 import types
-from typing import Callable
+from collections.abc import Callable
 
 import jax
 import jax.tree_util as jtu

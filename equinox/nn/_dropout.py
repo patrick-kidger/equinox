@@ -4,9 +4,8 @@ from typing import Optional
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.random as jrandom
-from jaxtyping import Array
+from jaxtyping import Array, PRNGKeyArray
 
-from .._custom_types import PRNGKey
 from .._module import Module
 
 
@@ -58,7 +57,7 @@ class Dropout(Module):
         self,
         x: Array,
         *,
-        key: Optional[PRNGKey] = None,
+        key: Optional[PRNGKeyArray] = None,
         inference: Optional[bool] = None,
         deterministic: Optional[bool] = None
     ) -> Array:

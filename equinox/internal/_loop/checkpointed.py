@@ -48,7 +48,8 @@ and
 import functools as ft
 import math
 import operator
-from typing import Any, Callable, cast, Optional, Sequence, TypeVar, Union
+from collections.abc import Callable, Sequence
+from typing import Any, cast, Optional, TypeVar, Union
 
 import jax
 import jax.core

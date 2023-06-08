@@ -1,5 +1,5 @@
 import warnings
-from typing import List, Union
+from typing import Union
 
 import jax
 import jax.nn as jnn
@@ -1044,8 +1044,8 @@ def test_poolbackprop():
 
 def test_poolnetworkbackprop(getkey):
     class CNN(eqx.Module):
-        conv_layer: List[Union[eqx.nn.Conv2d, eqx.nn.MaxPool2d]]
-        linear_layers: List[eqx.nn.Linear]
+        conv_layer: list[Union[eqx.nn.Conv2d, eqx.nn.MaxPool2d]]
+        linear_layers: list[eqx.nn.Linear]
 
         def __init__(self, key):
             key1, key2, key3 = jax.random.split(key, 3)

@@ -1,4 +1,5 @@
-from typing import Hashable, Optional, Sequence, Tuple, Union
+from collections.abc import Hashable, Sequence
+from typing import Optional, Union
 
 import jax
 import jax.lax as lax
@@ -43,7 +44,7 @@ class BatchNorm(Module):
     bias: Optional[Float[Array, "input_size"]]
     first_time_index: StateIndex[Bool[Array, ""]]
     state_index: StateIndex[
-        Tuple[Float[Array, "input_size"], Float[Array, "input_size"]]
+        tuple[Float[Array, "input_size"], Float[Array, "input_size"]]
     ]
     axis_name: Union[Hashable, Sequence[Hashable]]
     inference: bool
@@ -110,7 +111,7 @@ class BatchNorm(Module):
         *,
         key: Optional["jax.random.PRNGKey"] = None,  # pyright: ignore
         inference: Optional[bool] = None,
-    ) -> Tuple[Array, State]:
+    ) -> tuple[Array, State]:
         """**Arguments:**
 
         - `x`: A JAX array of shape `(input_size, dim_1, ..., dim_N)`.

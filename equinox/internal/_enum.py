@@ -35,7 +35,7 @@ result == MORE_RESULTS.success  # now this works
 ```
 """
 
-from typing import cast, Dict, List, Type, TYPE_CHECKING, Union
+from typing import cast, TYPE_CHECKING, Union
 from typing_extensions import Self
 
 import jax.core
@@ -55,8 +55,8 @@ def _store(
     cls,
     name: str,
     message: str,
-    name_to_item: Dict[str, "EnumerationItem"],
-    index_to_message: List[str],
+    name_to_item: dict[str, "EnumerationItem"],
+    index_to_message: list[str],
 ) -> int:
     try:
         our_item = name_to_item[name]
@@ -153,7 +153,7 @@ class _EnumerationMeta(type):
         if isinstance(a, EnumerationItem) and isinstance(b, EnumerationItem):
             if a._enumeration is cls and b._enumeration is cls:
                 value = jnp.where(pred, a._value, b._value)
-                cls = cast(Type[Enumeration], cls)
+                cls = cast(type[Enumeration], cls)
                 return EnumerationItem(value, cls)
         name = f"{cls.__module__}.{cls.__qualname__}"
         raise ValueError(f"Arguments to {name}.where(...) must be members of {name}.")
@@ -161,7 +161,7 @@ class _EnumerationMeta(type):
 
 class EnumerationItem(Module):
     _value: Int[Union[Array, np.ndarray], ""]
-    _enumeration: Type["Enumeration"] = static_field()
+    _enumeration: type["Enumeration"] = static_field()
 
     def __eq__(self, other) -> Bool[ArrayLike, ""]:  # pyright: ignore
         if isinstance(other, EnumerationItem):
@@ -204,9 +204,9 @@ if TYPE_CHECKING:
     class Enumeration(  # pyright: ignore
         enum.Enum, EnumerationItem, metaclass=_Sequence
     ):
-        _name_to_item: ClassVar[Dict[str, EnumerationItem]]
-        _index_to_message: ClassVar[List[str]]
-        _base_offsets: ClassVar[Dict["Enumeration", int]]
+        _name_to_item: ClassVar[dict[str, EnumerationItem]]
+        _index_to_message: ClassVar[list[str]]
+        _base_offsets: ClassVar[dict["Enumeration", int]]
 
         @classmethod
         def promote(cls, item: "Enumeration") -> Self:

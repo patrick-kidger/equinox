@@ -1,6 +1,7 @@
 import pathlib
+from collections.abc import Callable
 from contextlib import contextmanager
-from typing import Any, BinaryIO, Callable, Optional, Union
+from typing import Any, BinaryIO, Optional, Union
 
 import jax
 import jax.numpy as jnp

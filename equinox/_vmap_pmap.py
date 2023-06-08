@@ -2,7 +2,8 @@ import dataclasses
 import functools as ft
 import inspect
 import warnings
-from typing import Any, Callable, Dict, Hashable, Optional, overload, Union
+from collections.abc import Callable, Hashable
+from typing import Any, Optional, overload, Union
 
 import jax
 import jax.interpreters.batching as batching
@@ -146,7 +147,7 @@ class _VmapWrapper(Module):
     _out_axes: PyTree[AxisSpec]
     _axis_name: Optional[Hashable]
     _axis_size: Optional[int]
-    _vmapkwargs: Dict[str, Any]
+    _vmapkwargs: dict[str, Any]
 
     @property
     def __wrapped__(self):
@@ -479,7 +480,7 @@ class _PmapWrapper(Module):
     _axis_name: Optional[Hashable]
     _axis_size: Optional[int]
     _filter_warning: bool
-    _pmapkwargs: Dict[str, Any]
+    _pmapkwargs: dict[str, Any]
 
     @property
     def __wrapped__(self):

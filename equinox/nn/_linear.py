@@ -3,9 +3,8 @@ from typing import Any, Literal, Optional, TypeVar, Union
 
 import jax.numpy as jnp
 import jax.random as jrandom
-from jaxtyping import Array
+from jaxtyping import Array, PRNGKeyArray
 
-from .._custom_types import PRNGKey
 from .._module import Module, static_field
 
 
@@ -24,7 +23,7 @@ class Linear(Module):
         out_features: Union[int, Literal["scalar"]],
         use_bias: bool = True,
         *,
-        key: PRNGKey
+        key: PRNGKeyArray
     ):
         """**Arguments:**
 
@@ -59,7 +58,7 @@ class Linear(Module):
         self.out_features = out_features
         self.use_bias = use_bias
 
-    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape `(in_features,)`. (Or shape
@@ -110,7 +109,7 @@ class Identity(Module):
         # Ignores args and kwargs
         super().__init__()
 
-    def __call__(self, x: _T, *, key: Optional[PRNGKey] = None) -> _T:
+    def __call__(self, x: _T, *, key: Optional[PRNGKeyArray] = None) -> _T:
         """**Arguments:**
 
         - `x`: The input, of any type.

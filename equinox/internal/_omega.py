@@ -1,5 +1,6 @@
 import operator
-from typing import Any, Callable, Optional, TYPE_CHECKING
+from collections.abc import Callable
+from typing import Any, Optional, TYPE_CHECKING
 
 import jax
 import jax.tree_util as jtu

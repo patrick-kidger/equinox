@@ -1,13 +1,13 @@
 import itertools as it
-from typing import Callable, Optional, Sequence, Tuple, TypeVar, Union
+from collections.abc import Callable, Sequence
+from typing import Optional, TypeVar, Union
 
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.random as jrandom
 import numpy as np
-from jaxtyping import Array
+from jaxtyping import Array, PRNGKeyArray
 
-from .._custom_types import PRNGKey
 from .._module import Module, static_field
 from ._misc import all_sequences
 
@@ -15,8 +15,8 @@ from ._misc import all_sequences
 _T = TypeVar("_T")
 
 
-def _ntuple(n: int) -> Callable[[Union[_T, Sequence[_T]]], Tuple[_T, ...]]:
-    def parse(x: Union[_T, Sequence[_T]]) -> Tuple[_T, ...]:
+def _ntuple(n: int) -> Callable[[Union[_T, Sequence[_T]]], tuple[_T, ...]]:
+    def parse(x: Union[_T, Sequence[_T]]) -> tuple[_T, ...]:
         if isinstance(x, Sequence):
             if len(x) == n:
                 return tuple(x)
@@ -38,10 +38,10 @@ class Conv(Module):
     bias: Optional[Array]
     in_channels: int = static_field()
     out_channels: int = static_field()
-    kernel_size: Tuple[int, ...] = static_field()
-    stride: Tuple[int, ...] = static_field()
-    padding: Tuple[Tuple[int, int], ...] = static_field()
-    dilation: Tuple[int, ...] = static_field()
+    kernel_size: tuple[int, ...] = static_field()
+    stride: tuple[int, ...] = static_field()
+    padding: tuple[tuple[int, int], ...] = static_field()
+    dilation: tuple[int, ...] = static_field()
     groups: int = static_field()
     use_bias: bool = static_field()
 
@@ -52,12 +52,12 @@ class Conv(Module):
         out_channels: int,
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
+        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         dilation: Union[int, Sequence[int]] = 1,
         groups: int = 1,
         use_bias: bool = True,
         *,
-        key: PRNGKey,
+        key: PRNGKeyArray,
         **kwargs,
     ):
         """**Arguments:**
@@ -150,7 +150,7 @@ class Conv(Module):
         self.groups = groups
         self.use_bias = use_bias
 
-    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape
@@ -193,12 +193,12 @@ class Conv1d(Conv):
         out_channels: int,
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
+        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         dilation: Union[int, Sequence[int]] = 1,
         groups: int = 1,
         use_bias: bool = True,
         *,
-        key: PRNGKey,
+        key: PRNGKeyArray,
         **kwargs,
     ):
         super().__init__(
@@ -225,12 +225,12 @@ class Conv2d(Conv):
         out_channels: int,
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = (1, 1),
-        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = (0, 0),
+        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = (0, 0),
         dilation: Union[int, Sequence[int]] = (1, 1),
         groups: int = 1,
         use_bias: bool = True,
         *,
-        key: PRNGKey,
+        key: PRNGKeyArray,
         **kwargs,
     ):
         super().__init__(
@@ -257,12 +257,12 @@ class Conv3d(Conv):
         out_channels: int,
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = (1, 1, 1),
-        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = (0, 0, 0),
+        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = (0, 0, 0),
         dilation: Union[int, Sequence[int]] = (1, 1, 1),
         groups: int = 1,
         use_bias: bool = True,
         *,
-        key: PRNGKey,
+        key: PRNGKeyArray,
         **kwargs,
     ):
         super().__init__(
@@ -288,11 +288,11 @@ class ConvTranspose(Module):
     bias: Optional[Array]
     in_channels: int = static_field()
     out_channels: int = static_field()
-    kernel_size: Tuple[int, ...] = static_field()
-    stride: Tuple[int, ...] = static_field()
-    padding: Tuple[Tuple[int, int], ...] = static_field()
-    output_padding: Tuple[int, ...] = static_field()
-    dilation: Tuple[int, ...] = static_field()
+    kernel_size: tuple[int, ...] = static_field()
+    stride: tuple[int, ...] = static_field()
+    padding: tuple[tuple[int, int], ...] = static_field()
+    output_padding: tuple[int, ...] = static_field()
+    dilation: tuple[int, ...] = static_field()
     groups: int = static_field()
     use_bias: bool = static_field()
 
@@ -303,13 +303,13 @@ class ConvTranspose(Module):
         out_channels: int,
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
+        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         output_padding: Union[int, Sequence[int]] = 0,
         dilation: Union[int, Sequence[int]] = 1,
         groups: int = 1,
         use_bias: bool = True,
         *,
-        key: PRNGKey,
+        key: PRNGKeyArray,
         **kwargs,
     ):
         """**Arguments:**
@@ -422,7 +422,7 @@ class ConvTranspose(Module):
         self.groups = groups
         self.use_bias = use_bias
 
-    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape
@@ -473,12 +473,12 @@ class ConvTranspose1d(ConvTranspose):
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = 1,
         output_padding: Union[int, Sequence[int]] = 0,
-        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
+        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         dilation: Union[int, Sequence[int]] = 1,
         groups: int = 1,
         use_bias: bool = True,
         *,
-        key: PRNGKey,
+        key: PRNGKeyArray,
         **kwargs,
     ):
         super().__init__(
@@ -507,12 +507,12 @@ class ConvTranspose2d(ConvTranspose):
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = (1, 1),
         output_padding: Union[int, Sequence[int]] = (0, 0),
-        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = (0, 0),
+        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = (0, 0),
         dilation: Union[int, Sequence[int]] = (1, 1),
         groups: int = 1,
         use_bias: bool = True,
         *,
-        key: PRNGKey,
+        key: PRNGKeyArray,
         **kwargs,
     ):
         super().__init__(
@@ -541,12 +541,12 @@ class ConvTranspose3d(ConvTranspose):
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = (1, 1, 1),
         output_padding: Union[int, Sequence[int]] = (0, 0, 0),
-        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = (0, 0, 0),
+        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = (0, 0, 0),
         dilation: Union[int, Sequence[int]] = (1, 1, 1),
         groups: int = 1,
         use_bias: bool = True,
         *,
-        key: PRNGKey,
+        key: PRNGKeyArray,
         **kwargs,
     ):
         super().__init__(

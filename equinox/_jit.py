@@ -1,7 +1,8 @@
 import functools as ft
 import inspect
 import warnings
-from typing import Any, Callable, overload, TypeVar
+from collections.abc import Callable
+from typing import Any, overload, TypeVar
 from typing_extensions import ParamSpec
 
 import jax

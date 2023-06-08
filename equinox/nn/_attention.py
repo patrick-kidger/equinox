@@ -7,9 +7,8 @@ from typing import Optional, Union
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
-from jaxtyping import Array, Bool, Float
+from jaxtyping import Array, Bool, Float, PRNGKeyArray
 
-from .._custom_types import PRNGKey
 from .._module import Module, static_field
 from ._dropout import Dropout
 from ._linear import Linear
@@ -41,7 +40,7 @@ def dot_product_attention(
     mask: Optional[Bool[Array, "q_seq kv_seq"]] = None,
     dropout: Optional[Dropout] = None,
     *,
-    key: Optional[PRNGKey] = None,
+    key: Optional[PRNGKeyArray] = None,
     inference: Optional[bool] = None,
 ) -> Float[Array, "q_seq v_size"]:
     weights = dot_product_attention_weights(query, key_, mask)
@@ -147,7 +146,7 @@ class MultiheadAttention(Module):
         dropout_p: float = 0.0,
         inference: bool = False,
         *,
-        key: PRNGKey,
+        key: PRNGKeyArray,
         **kwargs,
     ):
         r"""**Arguments:**
@@ -223,7 +222,7 @@ class MultiheadAttention(Module):
             None, Bool[Array, "q_seq kv_seq"], Bool[Array, "num_heads q_seq kv_seq"]
         ] = None,
         *,
-        key: Optional[PRNGKey] = None,
+        key: Optional[PRNGKeyArray] = None,
         inference: Optional[bool] = None,
         deterministic: Optional[bool] = None,
     ) -> Float[Array, "q_seq o_size"]:

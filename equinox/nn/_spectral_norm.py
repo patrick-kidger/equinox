@@ -1,12 +1,11 @@
-from typing import Generic, Optional, Tuple, TypeVar
+from typing import Generic, Optional, TypeVar
 
 import jax
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.random as jr
-from jaxtyping import Array, Float
+from jaxtyping import Array, Float, PRNGKeyArray
 
-from .._custom_types import PRNGKey
 from .._module import Module, static_field
 from .._tree import tree_at
 from ._stateful import State, StateIndex
@@ -54,7 +53,7 @@ class SpectralNorm(Module, Generic[_Layer]):
 
     layer: _Layer
     weight_name: str = static_field()
-    uv_index: StateIndex[Tuple[Float[Array, " u_size"], Float[Array, " v_size"]]]
+    uv_index: StateIndex[tuple[Float[Array, " u_size"], Float[Array, " v_size"]]]
     num_power_iterations: int = static_field()
     eps: float = static_field()
     inference: bool
@@ -67,7 +66,7 @@ class SpectralNorm(Module, Generic[_Layer]):
         eps: float = 1e-12,
         inference: bool = False,
         *,
-        key: PRNGKey,
+        key: PRNGKeyArray,
         **kwargs
     ):
         """**Arguments:**
@@ -112,7 +111,7 @@ class SpectralNorm(Module, Generic[_Layer]):
         *,
         key: Optional["jax.random.PRNGKey"] = None,  # pyright: ignore
         inference: Optional[bool] = None
-    ) -> Tuple[Array, State]:
+    ) -> tuple[Array, State]:
         """**Arguments:**
 
         - `x`: A JAX array.

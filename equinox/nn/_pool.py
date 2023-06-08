@@ -1,13 +1,13 @@
-from typing import Callable, Optional, Sequence, Tuple, Union
+from collections.abc import Callable, Sequence
+from typing import Optional, Union
 
 import jax
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.random
 import numpy as np
-from jaxtyping import Array
+from jaxtyping import Array, PRNGKeyArray
 
-from .._custom_types import PRNGKey
 from .._module import Module, static_field
 from ._misc import all_sequences
 
@@ -18,9 +18,9 @@ class Pool(Module):
     init: Union[int, float, Array]
     operation: Callable[[Array, Array], Array]
     num_spatial_dims: int = static_field()
-    kernel_size: Tuple[int, ...] = static_field()
-    stride: Tuple[int, ...] = static_field()
-    padding: Tuple[Tuple[int, int], ...] = static_field()
+    kernel_size: tuple[int, ...] = static_field()
+    stride: tuple[int, ...] = static_field()
+    padding: tuple[tuple[int, int], ...] = static_field()
     use_ceil: bool = static_field()
 
     def __init__(
@@ -30,7 +30,7 @@ class Pool(Module):
         num_spatial_dims: int,
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
+        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         use_ceil: bool = False,
         **kwargs,
     ):
@@ -116,7 +116,7 @@ class Pool(Module):
                     f"{kernel_size}."
                 )
 
-    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape
@@ -163,7 +163,7 @@ class AvgPool1d(Pool):
         self,
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
+        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         use_ceil: bool = False,
         **kwargs,
     ):
@@ -189,7 +189,7 @@ class AvgPool1d(Pool):
             **kwargs,
         )
 
-    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape `(channels, dim)`.
@@ -211,7 +211,7 @@ class MaxPool1d(Pool):
         self,
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
+        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         use_ceil: bool = False,
         **kwargs,
     ):
@@ -238,7 +238,7 @@ class MaxPool1d(Pool):
         )
 
     # Redefined to get them in the right order in docs
-    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape `(channels, dim)`.
@@ -260,7 +260,7 @@ class AvgPool2d(Pool):
         self,
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
+        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         use_ceil: bool = False,
         **kwargs,
     ):
@@ -286,7 +286,7 @@ class AvgPool2d(Pool):
             **kwargs,
         )
 
-    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape `(channels, dim_1, dim_2)`.
@@ -308,7 +308,7 @@ class MaxPool2d(Pool):
         self,
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
+        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         use_ceil: bool = False,
         **kwargs,
     ):
@@ -335,7 +335,7 @@ class MaxPool2d(Pool):
         )
 
     # Redefined to get them in the right order in docs
-    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape `(channels, dim_1, dim_2)`.
@@ -357,7 +357,7 @@ class AvgPool3d(Pool):
         self,
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
+        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         use_ceil: bool = False,
         **kwargs,
     ):
@@ -383,7 +383,7 @@ class AvgPool3d(Pool):
             **kwargs,
         )
 
-    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape
@@ -406,7 +406,7 @@ class MaxPool3d(Pool):
         self,
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[Tuple[int, int]]] = 0,
+        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         use_ceil: bool = False,
         **kwargs,
     ):
@@ -432,7 +432,7 @@ class MaxPool3d(Pool):
             **kwargs,
         )
 
-    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape
@@ -511,7 +511,7 @@ class AdaptivePool(Module):
                 f"{num_spatial_dims} containing ints."
             )
 
-    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape
