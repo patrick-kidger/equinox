@@ -111,7 +111,9 @@ nav:
             - Autoparallelism (e.g. multi-GPU): 'examples/parallelism.ipynb'
             - Serialisation (with hyperparameters): 'examples/serialisation.ipynb'
     - Full API:
-        - 'api/module.md'
+        - Modules:
+            - 'api/module.md'
+            - 'api/advanced_fields.md'
         - Neural network layers:
             - 'api/nn/linear.md'
             - 'api/nn/conv.md'

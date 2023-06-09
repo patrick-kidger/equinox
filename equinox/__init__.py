@@ -10,6 +10,10 @@ from ._ad import (
     filter_value_and_grad as filter_value_and_grad,
     filter_vjp as filter_vjp,
 )
+from ._better_abstract import (
+    AbstractClassVar as AbstractClassVar,
+    AbstractVar as AbstractVar,
+)
 from ._callback import filter_pure_callback as filter_pure_callback
 from ._eval_shape import filter_eval_shape as filter_eval_shape
 from ._filters import (
@@ -24,6 +28,7 @@ from ._filters import (
 from ._jit import filter_jit as filter_jit
 from ._make_jaxpr import filter_make_jaxpr as filter_make_jaxpr
 from ._module import (
+    field as field,
     Module as Module,
     module_update_wrapper as module_update_wrapper,
     Partial as Partial,

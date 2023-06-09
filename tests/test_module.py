@@ -1,9 +1,14 @@
+import functools as ft
 from typing import Any
 
+import jax
+import jax.numpy as jnp
 import jax.tree_util as jtu
 import pytest
 
 import equinox as eqx
+
+from .helpers import shaped_allclose
 
 
 def test_module_not_enough_attributes():
@@ -133,11 +138,17 @@ def test_inheritance():
     assert m.weight7 == 2
 
 
-def test_static_field():
+@pytest.mark.parametrize("new", (False, True))
+def test_static_field(new):
+    if new:
+        static_field = ft.partial(eqx.field, static=True)
+    else:
+        static_field = eqx.static_field
+
     class MyModule(eqx.Module):
         field1: int
-        field2: int = eqx.static_field()
-        field3: int = eqx.static_field(default=3)
+        field2: int = static_field()
+        field3: int = static_field(default=3)
 
     m = MyModule(1, 2)
     flat, treedef = jtu.tree_flatten(m)
@@ -147,6 +158,21 @@ def test_static_field():
     assert rm.field1 == 1
     assert rm.field2 == 2
     assert rm.field3 == 3
+
+
+def test_converter():
+    class MyModule(eqx.Module):
+        field: jax.Array = eqx.field(converter=jnp.asarray)
+
+    assert shaped_allclose(MyModule(1.0).field, jnp.array(1.0))  # pyright: ignore
+
+    class MyModuleWithInit(eqx.Module):
+        field: jax.Array = eqx.field(converter=jnp.asarray)
+
+        def __init__(self, a):
+            self.field = a
+
+    assert shaped_allclose(MyModule(1.0).field, jnp.array(1.0))  # pyright: ignore
 
 
 def test_wrap_method():

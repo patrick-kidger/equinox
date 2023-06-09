@@ -1,60 +1,9 @@
-"""
-Introduces `AbstractVar` and `AbstractClassVar` type annotations, which can be used to
-mark abstract instance attributes and abstract class attributes.
+"""Introduces `AbstractVar` and `AbstractClassVar` type annotations, which can be used
+to mark abstract instance attributes and abstract class attributes.
 
 Provides enhanced versions of `abc.ABCMeta` and `dataclasses.dataclass` that respect
 this type annotation. (In practice the sole consumer of these is `equinox.Module`, which
 is the public API. But the two pieces aren't directly related under-the-hood.)
-
-## Usage
-
-```
-from typing import ClassVar
-from equinox import Module
-from equinox.internal import AbstractVar, AbstractClassVar
-
-class AbstractX(Module):
-    attr1: AbstractVar[bool]
-    attr2: AbstractClassVar[bool]
-```
-
-Subsequently, these can be implemented in downstream classes, e.g.:
-```
-class ConcreteX(AbstractX):
-    attr1: bool
-    attr2: ClassVar[bool] = False
-
-ConcreteX(attr1=True)
-```
-
-An `AbstractVar[T]` can be overridden by an attribute annotated with `AbstractVar[T]`,
-`AbstractClassVar[T]`, `ClassVar[T]`, `T`, or a property returning `T`.
-
-An `AbstractClassVar[T]` can be overridden by an attribute annotated with
-`AbstractClassVar[T]`, or `ClassVar[T]`.
-
-Note that `AbstractVar` and `AbstractClassVar` do not create dataclass fields. This
-affects the order of `__init__` argments. E.g.
-```
-class AbstractX(Module):
-    attr1: AbstractVar[bool]
-
-class ConcreteX(AbstractX):
-    attr2: str
-    attr1: bool
-```
-should be called as `ConcreteX(attr2, attr1)`.
-
-## Known issues
-
-Due to a Pyright bug (#4965), these must be imported as:
-```
-if TYPE_CHECKING:
-    from typing import ClassVar as AbstractVar
-    from typing import ClassVar as AbstractClassVar
-else:
-    from equinox.internal import AbstractVar, AbstractClassVar
-```
 """
 import abc
 import dataclasses
@@ -70,14 +19,126 @@ if TYPE_CHECKING:
 else:
 
     class AbstractVar(Generic[_T]):
-        pass
+        """Used to mark an abstract instance attribute, along with its type. Used as:
+        ```python
+        class Foo(eqx.Module):
+            attr: AbstractVar[bool]
+        ```
+
+        An `AbstractVar[T]` must be overridden by an attribute annotated with
+        `AbstractVar[T]`, `AbstractClassVar[T]`, `ClassVar[T]`, `T`, or a property
+        returning `T`.
+
+        This makes `AbstractVar` useful when you just want to assert that you can access
+        `self.attr` on a subclass, regardless of whether it's an instance attribute,
+        class attribute, property, etc.
+
+        Attempting to instantiate a module with an unoveridden `AbstractVar` will raise
+        an error.
+
+        !!! Example
+
+            ```python
+            import equinox as eqx
+
+            class AbstractX(eqx.Module):
+                attr1: int
+                attr2: AbstractVar[bool]
+
+            class ConcreteX(AbstractX):
+                attr2: bool
+
+            ConcreteX(attr1=1, attr2=True)
+            ```
+
+        !!! Info
+
+            `AbstractVar` does not create a dataclass field. This affects the order of
+            `__init__` argments. E.g.
+            ```python
+            class AbstractX(Module):
+                attr1: AbstractVar[bool]
+
+            class ConcreteX(AbstractX):
+                attr2: str
+                attr1: bool
+            ```
+            should be called as `ConcreteX(attr2, attr1)`.
+
+        ## Known issues
+
+        Due to a Pyright bug
+        ([#4965](https://github.com/microsoft/pyright/issues/4965)), this must be
+        imported as:
+        ```python
+        if TYPE_CHECKING:
+            from typing import ClassVar as AbstractVar
+        else:
+            from equinox.internal import AbstractVar
+        ```
+        """
 
     # We can't just combine `ClassVar[AbstractVar[...]]`. At static checking time we
     # fake `AbstractVar` as `ClassVar` to prevent it from appearing in __init__
     # signatures. This means that static type checkers think they see
     # `ClassVar[ClassVar[...]]` which is not allowed.
     class AbstractClassVar(Generic[_T]):
-        pass
+        """Used to mark an abstract class attribute, along with its type. Used as:
+        ```python
+        class Foo(eqx.Module):
+            attr: AbstractClassVar[bool]
+        ```
+
+        An `AbstractClassVar[T]` can be overridden by an attribute annotated with
+        `AbstractClassVar[T]`, or `ClassVar[T]`. This makes `AbstractClassVar` useful
+        when you want to assert that you can access `cls.attr` on a subclass.
+
+        Attempting to instantiate a module with an unoveridden `AbstractClassVar` will
+        raise an error.
+
+        !!! Example
+
+            ```python
+            import equinox as eqx
+            from typing import ClassVar
+
+            class AbstractX(eqx.Module):
+                attr1: int
+                attr2: AbstractClassVar[bool]
+
+            class ConcreteX(AbstractX):
+                attr2: ClassVar[bool] = True
+
+            ConcreteX(attr1=1)
+            ```
+
+        !!! Info
+
+            `AbstractClassVar` does not create a dataclass field. This affects the order
+            of `__init__` argments. E.g.
+            ```python
+            class AbstractX(Module):
+                attr1: AbstractClassVar[bool]
+
+            class ConcreteX(AbstractX):
+                attr2: str
+                attr1: ClassVar[bool] = True
+            ```
+            should be called as `ConcreteX(attr2)`.
+
+        ## Known issues
+
+
+        Due to a Pyright bug
+        ([#4965](https://github.com/microsoft/pyright/issues/4965)), this must be
+        imported as:
+        ```python
+        if TYPE_CHECKING:
+            from typing import ClassVar as AbstractClassVar
+        else:
+            from equinox.internal import AbstractClassVar
+        ```
+        """
 
 
 def _process_annotation(annotation):

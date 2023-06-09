@@ -1,8 +1,8 @@
+import dataclasses
 import functools as ft
 import inspect
 import weakref
 from collections.abc import Callable
-from dataclasses import field, fields
 from typing import Any, cast, TypeVar, Union
 from typing_extensions import dataclass_transform, ParamSpec
 
@@ -11,6 +11,7 @@ import numpy as np
 from jaxtyping import Array, Bool
 
 from ._better_abstract import ABCMeta, dataclass
+from ._doc_utils import doc_repr
 from ._pretty_print import tree_pformat
 from ._tree import tree_equal
 
@@ -20,19 +21,50 @@ _T = TypeVar("_T")
 
 
 def static_field(**kwargs):
-    """Used for marking that a field should _not_ be treated as a leaf of the PyTree
-    of a [`equinox.Module`][]. (And is instead treated as part of the structure, i.e.
-    as extra metadata.)
+    """Deprecated in favour of [`equinox.field`][], i.e. `eqx.field(static=True)`."""
+    return field(**kwargs, static=True)
+
+
+_identity = doc_repr(lambda x: x, "lambda x: x")
+
+
+def field(
+    *, converter: Callable[[Any], Any] = _identity, static: bool = False, **kwargs
+):
+    """Equinox supports extra functionality on top of the default dataclasses.
+
+    **Arguments:**
+
+    - `converter`: a function to call on this field when the model is initialised. For
+        example, `field(converter=jax.numpy.asarray)` to convert
+        `bool`/`int`/`float`/`complex` values to JAX arrays.
+    - `static`: whether the field should not interact with any JAX transform at all (by
+        making it part of the PyTree structure rather than a leaf).
+    - `**kwargs`: All other keyword arguments are passed on to `dataclass.field`.
+
+    **Converter**
 
     !!! example
 
         ```python
-        class MyModule(equinox.Module):
+        class MyModule(eqx.Module):
+            foo: Array = eqx.field(converter=jax.numpy.asarray)
+
+        mymodule = MyModule(1.0)
+        assert isinstance(mymodule.foo, jax.Array)
+        ```
+
+    **Static**
+
+    !!! example
+
+        ```python
+        class MyModule(eqx.Module):
             normal_field: int
-            static_field: int = equinox.static_field()
+            static_field: int = eqx.field(static=True)
 
         mymodule = MyModule("normal", "static")
-        leaves, treedef = jtu.tree_flatten(mymodule)
+        leaves, treedef = jax.tree_util.tree_flatten(mymodule)
         assert leaves == ["normal"]
         assert "static" in str(treedef)
         ```
@@ -41,23 +73,22 @@ def static_field(**kwargs):
     Moreover, all static fields should be hashable and support `__eq__`. In
     particular you should not use JAX or NumPy arrays, as these are not hashable.
 
-    This is an advanced feature that should almost never be used. It is preferred to
+    This is an advanced feature that should very rarely be used. It is preferred to
     just filter out each field with `eqx.partition` whenever you need to select only
     some fields.
-
-    **Arguments:**
-
-    - `**kwargs`: If any are passed then they are passed on to `dataclass.field`.
-        (Recall that Equinox uses dataclasses for its modules.)
     """
     try:
         metadata = dict(kwargs["metadata"])
     except KeyError:
         metadata = kwargs["metadata"] = {}
+    if "converter" in metadata:
+        raise ValueError("Cannot use metadata with `static` already set.")
     if "static" in metadata:
         raise ValueError("Cannot use metadata with `static` already set.")
-    metadata["static"] = True
-    return field(**kwargs)
+    metadata["converter"] = converter
+    if static:
+        metadata["static"] = True
+    return dataclasses.field(**kwargs)
 
 
 class _wrap_method:
@@ -81,7 +112,7 @@ _has_dataclass_init = weakref.WeakKeyDictionary()
 
 # Inherits from ABCMeta as a convenience for a common use-case.
 # It's not a feature we use ourselves.
-@dataclass_transform(field_specifiers=(field, static_field))
+@dataclass_transform(field_specifiers=(dataclasses.field, field, static_field))
 class _ModuleMeta(ABCMeta):
     def __new__(mcs, name, bases, dict_):  # pyright: ignore
         dict_ = {
@@ -151,10 +182,9 @@ class _ModuleMeta(ABCMeta):
         # Defreeze it during __init__
         initable_cls = _make_initable(cls, wraps=False)
         self = super(_ModuleMeta, initable_cls).__call__(*args, **kwargs)
-        object.__setattr__(self, "__class__", cls)
         missing_names = {
             field.name
-            for field in fields(cls)  # pyright: ignore
+            for field in dataclasses.fields(cls)  # pyright: ignore
             if field.init and field.name not in dir(self)
         }
         if len(missing_names):
@@ -162,6 +192,14 @@ class _ModuleMeta(ABCMeta):
                 f"The following fields were not initialised during __init__: "
                 f"{missing_names}"
             )
+        for field in dataclasses.fields(self):
+            try:
+                converter = field.metadata["converter"]
+            except KeyError:
+                pass
+            else:
+                setattr(self, field.name, converter(getattr(self, field.name)))
+        object.__setattr__(self, "__class__", cls)
         return self
 
 
@@ -179,7 +217,9 @@ def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
     if wraps:
         field_names = _wrapper_field_names
     else:
-        field_names = {field.name for field in fields(cls)}  # pyright: ignore
+        field_names = {
+            field.name for field in dataclasses.fields(cls)  # pyright: ignore
+        }
 
     class _InitableModule(cls):  # pyright: ignore
         pass
@@ -228,7 +268,7 @@ def _flatten_module(module: "Module", with_keys: bool):
     static_field_values = []
     wrapper_field_names = []
     wrapper_field_values = []
-    for field_ in fields(module):
+    for field_ in dataclasses.fields(module):
         name = field_.name
         try:
             value = module.__dict__[name]
@@ -272,6 +312,10 @@ def _unflatten_module(cls: type["Module"], aux: _FlattenedData, dynamic_field_va
 
 class Module(metaclass=_ModuleMeta):
     """Base class. Create your model by inheriting from this.
+
+    This will make your model a
+    [dataclass](https://docs.python.org/3/library/dataclasses.html) and a
+    [pytree](https://jax.readthedocs.io/en/latest/pytrees.html).
 
     **Fields**
 
@@ -351,7 +395,14 @@ class Module(metaclass=_ModuleMeta):
 
         because `self` is just a PyTree. Unlike most other neural network libaries, you
         can mix Equinox and native JAX without any difficulties at all.
-    """
+
+    !!! tip
+
+        Equinox modules are all [ABCs](https://docs.python.org/3/library/abc.html) by
+        default. This means you can use [`abc.abstractmethod`](https://docs.python.org/3/library/abc.html#abc.abstractmethod).
+        You can also create abstract instance attributes or abstract class attributes,
+        see [`equinox.AbstractVar`][] and [`equinox.AbstractClassVar`][].
+    """  # noqa: E501
 
     def __hash__(self):
         return hash(tuple(jtu.tree_leaves(self)))
@@ -422,7 +473,7 @@ def module_update_wrapper(
 
 
 class Static(Module):
-    value: Any = static_field()
+    value: Any = field(static=True)
 
 
 class Partial(Module):
