@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array, Bool, Float, PRNGKeyArray
 
-from .._module import Module, static_field
+from .._module import field, Module
 from ._dropout import Dropout
 from ._linear import Linear
 
@@ -118,17 +118,17 @@ class MultiheadAttention(Module):
     output_proj: Linear
     dropout: Dropout
 
-    num_heads: int = static_field()
-    query_size: int = static_field()
-    key_size: int = static_field()
-    value_size: int = static_field()
-    output_size: int = static_field()
-    qk_size: int = static_field()
-    vo_size: int = static_field()
-    use_query_bias: bool = static_field()
-    use_key_bias: bool = static_field()
-    use_value_bias: bool = static_field()
-    use_output_bias: bool = static_field()
+    num_heads: int = field(static=True)
+    query_size: int = field(static=True)
+    key_size: int = field(static=True)
+    value_size: int = field(static=True)
+    output_size: int = field(static=True)
+    qk_size: int = field(static=True)
+    vo_size: int = field(static=True)
+    use_query_bias: bool = field(static=True)
+    use_key_bias: bool = field(static=True)
+    use_value_bias: bool = field(static=True)
+    use_output_bias: bool = field(static=True)
 
     def __init__(
         self,

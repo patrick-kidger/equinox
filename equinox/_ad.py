@@ -31,7 +31,7 @@ from ._filters import (
     partition,
 )
 from ._make_jaxpr import filter_make_jaxpr
-from ._module import Module, module_update_wrapper, Static, static_field
+from ._module import field, Module, module_update_wrapper, Static
 from ._tree import tree_equal
 
 
@@ -405,10 +405,10 @@ class _ClosureConvert(Module):
     # `jax.core.subjaxprs`
     jaxpr: jax.core.Jaxpr
     consts: PyTree[Array]  # Captured in the PyTree structure of _ClosureConvert
-    in_dynamic_struct: _FlatPyTree[jax.ShapeDtypeStruct] = static_field()
-    out_dynamic_struct: _FlatPyTree[jax.ShapeDtypeStruct] = static_field()
-    in_static: _FlatPyTree[Any] = static_field()
-    out_static: _FlatPyTree[Any] = static_field()
+    in_dynamic_struct: _FlatPyTree[jax.ShapeDtypeStruct] = field(static=True)
+    out_dynamic_struct: _FlatPyTree[jax.ShapeDtypeStruct] = field(static=True)
+    in_static: _FlatPyTree[Any] = field(static=True)
+    out_static: _FlatPyTree[Any] = field(static=True)
 
     def __call__(self, *args, **kwargs):
         self_in_dynamic_struct = _unflatten(self.in_dynamic_struct)

@@ -221,7 +221,7 @@ def test_wrapper_attributes():
 # https://github.com/patrick-kidger/equinox/issues/337
 def test_subclass_static():
     class A(eqx.Module):
-        foo: int = eqx.static_field()
+        foo: int = eqx.field(static=True)
 
     class B(A):
         pass
@@ -233,7 +233,7 @@ def test_subclass_static():
 def test_flatten_with_keys():
     class A(eqx.Module):
         foo: int
-        bar: int = eqx.static_field()
+        bar: int = eqx.field(static=True)
         qux: list
 
     a = A(1, 2, [3.0])

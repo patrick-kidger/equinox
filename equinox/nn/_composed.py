@@ -13,7 +13,7 @@ import jax.random as jrandom
 from jaxtyping import Array, PRNGKeyArray
 
 from .._doc_utils import doc_repr
-from .._module import Module, static_field
+from .._module import field, Module
 from ._linear import Linear
 
 
@@ -32,12 +32,12 @@ class MLP(Module):
     layers: tuple[Linear, ...]
     activation: Callable
     final_activation: Callable
-    use_bias: bool = static_field()
-    use_final_bias: bool = static_field()
-    in_size: Union[int, Literal["scalar"]] = static_field()
-    out_size: Union[int, Literal["scalar"]] = static_field()
-    width_size: int = static_field()
-    depth: int = static_field()
+    use_bias: bool = field(static=True)
+    use_final_bias: bool = field(static=True)
+    in_size: Union[int, Literal["scalar"]] = field(static=True)
+    out_size: Union[int, Literal["scalar"]] = field(static=True)
+    width_size: int = field(static=True)
+    depth: int = field(static=True)
 
     def __init__(
         self,

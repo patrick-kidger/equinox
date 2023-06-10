@@ -8,7 +8,7 @@ import jax.random
 import numpy as np
 from jaxtyping import Array, PRNGKeyArray
 
-from .._module import Module, static_field
+from .._module import field, Module
 from ._misc import all_sequences
 
 
@@ -17,11 +17,11 @@ class Pool(Module):
 
     init: Union[int, float, Array]
     operation: Callable[[Array, Array], Array]
-    num_spatial_dims: int = static_field()
-    kernel_size: tuple[int, ...] = static_field()
-    stride: tuple[int, ...] = static_field()
-    padding: tuple[tuple[int, int], ...] = static_field()
-    use_ceil: bool = static_field()
+    num_spatial_dims: int = field(static=True)
+    kernel_size: tuple[int, ...] = field(static=True)
+    stride: tuple[int, ...] = field(static=True)
+    padding: tuple[tuple[int, int], ...] = field(static=True)
+    use_ceil: bool = field(static=True)
 
     def __init__(
         self,
@@ -481,7 +481,7 @@ def _adaptive_pool1d(
 class AdaptivePool(Module):
     """General N dimensional adaptive downsampling to a target shape."""
 
-    target_shape: Sequence[int] = static_field()
+    target_shape: Sequence[int] = field(static=True)
     operation: Callable[[Array], Array]
 
     def __init__(

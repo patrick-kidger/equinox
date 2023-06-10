@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import jax.random as jr
 from jaxtyping import Array, Float, PRNGKeyArray
 
-from .._module import Module, static_field
+from .._module import field, Module
 from .._tree import tree_at
 from ._stateful import State, StateIndex
 
@@ -52,10 +52,10 @@ class SpectralNorm(Module, Generic[_Layer]):
     """  # noqa: E501
 
     layer: _Layer
-    weight_name: str = static_field()
+    weight_name: str = field(static=True)
     uv_index: StateIndex[tuple[Float[Array, " u_size"], Float[Array, " v_size"]]]
-    num_power_iterations: int = static_field()
-    eps: float = static_field()
+    num_power_iterations: int = field(static=True)
+    eps: float = field(static=True)
     inference: bool
 
     def __init__(

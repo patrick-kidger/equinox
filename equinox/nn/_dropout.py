@@ -18,7 +18,7 @@ class Dropout(Module):
     [`equinox.tree_inference`][].
     """
 
-    # Not static_fields as it makes sense to want to modify them via equinox.tree_at.
+    # Not static fields as it makes sense to want to modify them via equinox.tree_at.
     p: float
     inference: bool
 
