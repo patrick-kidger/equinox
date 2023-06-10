@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array, PRNGKeyArray
 
-from .._module import Module, static_field
+from .._module import field, Module
 
 
 class Linear(Module):
@@ -13,9 +13,9 @@ class Linear(Module):
 
     weight: Array
     bias: Optional[Array]
-    in_features: Union[int, Literal["scalar"]] = static_field()
-    out_features: Union[int, Literal["scalar"]] = static_field()
-    use_bias: bool = static_field()
+    in_features: Union[int, Literal["scalar"]] = field(static=True)
+    out_features: Union[int, Literal["scalar"]] = field(static=True)
+    use_bias: bool = field(static=True)
 
     def __init__(
         self,

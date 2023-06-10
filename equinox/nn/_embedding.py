@@ -3,14 +3,14 @@ from typing import Optional
 import jax.random as jrandom
 from jaxtyping import Array, Float, PRNGKeyArray
 
-from .._module import Module, static_field
+from .._module import field, Module
 
 
 class Embedding(Module):
     """A simple lookup table that stores embeddings of a fixed size."""
 
-    num_embeddings: int = static_field()
-    embedding_size: int = static_field()
+    num_embeddings: int = field(static=True)
+    embedding_size: int = field(static=True)
     weight: Array
 
     def __init__(

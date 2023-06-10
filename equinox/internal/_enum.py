@@ -43,7 +43,7 @@ import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, ArrayLike, Bool, Int
 
-from .._module import Module, static_field
+from .._module import field, Module
 from ._errors import branched_error_if
 
 
@@ -161,7 +161,7 @@ class _EnumerationMeta(type):
 
 class EnumerationItem(Module):
     _value: Int[Union[Array, np.ndarray], ""]
-    _enumeration: type["Enumeration"] = static_field()
+    _enumeration: type["Enumeration"] = field(static=True)
 
     def __eq__(self, other) -> Bool[ArrayLike, ""]:  # pyright: ignore
         if isinstance(other, EnumerationItem):

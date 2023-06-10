@@ -18,7 +18,7 @@ from .._ad import filter_jvp
 from .._compile_utils import hashable_combine, hashable_partition
 from .._eval_shape import filter_eval_shape
 from .._filters import combine, is_array, partition
-from .._module import Module, module_update_wrapper, static_field
+from .._module import field, Module, module_update_wrapper
 from .._vmap_pmap import filter_vmap
 from . import _primitive
 from ._primitive import (
@@ -379,7 +379,7 @@ _index_to_fn = []
 
 class _NoInlineWrapper(Module):
     dynamic_index: Int[Array, ""]
-    abstract_fn: Callable = static_field()
+    abstract_fn: Callable = field(static=True)
     dynamic_fn: Any
 
     @property

@@ -8,7 +8,7 @@ import jax.random as jrandom
 import numpy as np
 from jaxtyping import Array, PRNGKeyArray
 
-from .._module import Module, static_field
+from .._module import field, Module
 from ._misc import all_sequences
 
 
@@ -33,17 +33,17 @@ def _ntuple(n: int) -> Callable[[Union[_T, Sequence[_T]]], tuple[_T, ...]]:
 class Conv(Module):
     """General N-dimensional convolution."""
 
-    num_spatial_dims: int = static_field()
+    num_spatial_dims: int = field(static=True)
     weight: Array
     bias: Optional[Array]
-    in_channels: int = static_field()
-    out_channels: int = static_field()
-    kernel_size: tuple[int, ...] = static_field()
-    stride: tuple[int, ...] = static_field()
-    padding: tuple[tuple[int, int], ...] = static_field()
-    dilation: tuple[int, ...] = static_field()
-    groups: int = static_field()
-    use_bias: bool = static_field()
+    in_channels: int = field(static=True)
+    out_channels: int = field(static=True)
+    kernel_size: tuple[int, ...] = field(static=True)
+    stride: tuple[int, ...] = field(static=True)
+    padding: tuple[tuple[int, int], ...] = field(static=True)
+    dilation: tuple[int, ...] = field(static=True)
+    groups: int = field(static=True)
+    use_bias: bool = field(static=True)
 
     def __init__(
         self,
@@ -283,18 +283,18 @@ class Conv3d(Conv):
 class ConvTranspose(Module):
     """General N-dimensional transposed convolution."""
 
-    num_spatial_dims: int = static_field()
+    num_spatial_dims: int = field(static=True)
     weight: Array
     bias: Optional[Array]
-    in_channels: int = static_field()
-    out_channels: int = static_field()
-    kernel_size: tuple[int, ...] = static_field()
-    stride: tuple[int, ...] = static_field()
-    padding: tuple[tuple[int, int], ...] = static_field()
-    output_padding: tuple[int, ...] = static_field()
-    dilation: tuple[int, ...] = static_field()
-    groups: int = static_field()
-    use_bias: bool = static_field()
+    in_channels: int = field(static=True)
+    out_channels: int = field(static=True)
+    kernel_size: tuple[int, ...] = field(static=True)
+    stride: tuple[int, ...] = field(static=True)
+    padding: tuple[tuple[int, int], ...] = field(static=True)
+    output_padding: tuple[int, ...] = field(static=True)
+    dilation: tuple[int, ...] = field(static=True)
+    groups: int = field(static=True)
+    use_bias: bool = field(static=True)
 
     def __init__(
         self,
