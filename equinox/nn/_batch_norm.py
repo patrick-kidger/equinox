@@ -6,7 +6,7 @@ import jax.lax as lax
 import jax.numpy as jnp
 from jaxtyping import Array, Bool, Float
 
-from .._module import Module, static_field
+from .._module import field, Module
 from ._stateful import State, StateIndex
 
 
@@ -48,10 +48,10 @@ class BatchNorm(Module):
     ]
     axis_name: Union[Hashable, Sequence[Hashable]]
     inference: bool
-    input_size: int = static_field()
-    eps: float = static_field()
-    channelwise_affine: bool = static_field()
-    momentum: float = static_field()
+    input_size: int = field(static=True)
+    eps: float = field(static=True)
+    channelwise_affine: bool = field(static=True)
+    momentum: float = field(static=True)
 
     def __init__(
         self,

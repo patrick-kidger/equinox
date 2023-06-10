@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array, PRNGKeyArray
 
-from .._module import Module, static_field
+from .._module import field, Module
 
 
 class GRUCell(Module):
@@ -35,9 +35,9 @@ class GRUCell(Module):
     weight_hh: Array
     bias: Optional[Array]
     bias_n: Optional[Array]
-    input_size: int = static_field()
-    hidden_size: int = static_field()
-    use_bias: bool = static_field()
+    input_size: int = field(static=True)
+    hidden_size: int = field(static=True)
+    use_bias: bool = field(static=True)
 
     def __init__(
         self,
@@ -138,9 +138,9 @@ class LSTMCell(Module):
     weight_ih: Array
     weight_hh: Array
     bias: Optional[Array]
-    input_size: int = static_field()
-    hidden_size: int = static_field()
-    use_bias: bool = static_field()
+    input_size: int = field(static=True)
+    hidden_size: int = field(static=True)
+    use_bias: bool = field(static=True)
 
     def __init__(
         self,

@@ -9,7 +9,7 @@ from jaxtyping import Array, PRNGKeyArray
 
 from .._custom_types import sentinel
 from .._misc import left_broadcast_to
-from .._module import Module, static_field
+from .._module import field, Module
 from ._stateful import State
 
 
@@ -50,10 +50,10 @@ class LayerNorm(Module):
 
     """
 
-    shape: Union[None, int, Sequence[int]] = static_field()
-    eps: float = static_field()
-    use_weight: bool = static_field()
-    use_bias: bool = static_field()
+    shape: Union[None, int, Sequence[int]] = field(static=True)
+    eps: float = field(static=True)
+    use_weight: bool = field(static=True)
+    use_bias: bool = field(static=True)
     weight: Optional[Array]
     bias: Optional[Array]
 
@@ -164,10 +164,10 @@ class GroupNorm(Module):
         ```
     """  # noqa: E501
 
-    groups: int = static_field()
-    channels: Optional[int] = static_field()
-    eps: float = static_field()
-    channelwise_affine: bool = static_field()
+    groups: int = field(static=True)
+    channels: Optional[int] = field(static=True)
+    eps: float = field(static=True)
+    channelwise_affine: bool = field(static=True)
     weight: Optional[Array]
     bias: Optional[Array]
 

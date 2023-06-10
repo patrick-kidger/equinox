@@ -7,7 +7,7 @@ import jax.tree_util as jtu
 from jaxtyping import Array, Bool, Shaped
 
 from ..._filters import is_array
-from ..._module import Module, static_field
+from ..._module import field, Module
 from ..._tree import tree_at, tree_equal
 from .._unvmap import unvmap_any
 
@@ -15,7 +15,7 @@ from .._unvmap import unvmap_any
 class _Buffer(Module):
     _array: Union[Shaped[Array, "..."], "_Buffer"]
     _pred: Bool[Array, ""]
-    _tag: object = static_field()
+    _tag: object = field(static=True)
 
     def __getitem__(self, item):
         return self._array[item]
