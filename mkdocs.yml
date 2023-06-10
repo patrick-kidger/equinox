@@ -112,8 +112,8 @@ nav:
             - Serialisation (with hyperparameters): 'examples/serialisation.ipynb'
     - Full API:
         - Modules:
-            - 'api/module.md'
-            - 'api/advanced_fields.md'
+            - 'api/module/module.md'
+            - 'api/module/advanced_fields.md'
         - Neural network layers:
             - 'api/nn/linear.md'
             - 'api/nn/conv.md'
@@ -132,6 +132,7 @@ nav:
         - Utilities:
             - 'api/utilities/manipulation.md'
             - 'api/utilities/serialisation.md'
+            - 'api/utilities/enumerations.md'
             - 'api/utilities/pretty-printing.md'
             - 'api/utilities/miscellaneous.md'
     - Misc:
