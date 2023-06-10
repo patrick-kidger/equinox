@@ -59,9 +59,9 @@ import jax.tree_util as jtu
 from jaxtyping import Array, ArrayLike, Bool
 
 from ..._ad import filter_closure_convert, filter_custom_vjp, filter_vjp
+from ..._errors import error_if
 from ..._filters import is_array, is_inexact_array
 from ..._tree import tree_at
-from .._errors import error_if
 from .._nontraceable import nonbatchable
 from .common import common_rewrite
 

@@ -11,7 +11,7 @@ import jax.tree_util as jtu
 import numpy as np
 from jaxtyping import Array, ArrayLike, Bool, Int, PyTree
 
-from .._filters import combine, is_array_like, partition
+from ._filters import combine, is_array_like, partition
 from ._unvmap import unvmap_any, unvmap_max
 
 
