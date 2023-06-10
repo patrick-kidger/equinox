@@ -180,11 +180,11 @@ def finalise_make_jaxpr(fn, *, return_shape: bool = False):
 
 
 # Register finalisation rules for Equinox's custom primitives.
+from .._errors import branched_error_p
+from .._unvmap import unvmap_all_p, unvmap_any_p, unvmap_max_p
 from ._debug import announce_jaxpr_p
-from ._errors import branched_error_p
 from ._noinline import noinline_p
 from ._nontraceable import nonbatchable_p, nondifferentiable_backward_p, nontraceable_p
-from ._unvmap import unvmap_all_p, unvmap_any_p, unvmap_max_p
 
 
 for prim in (

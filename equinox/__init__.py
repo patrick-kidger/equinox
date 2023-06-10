@@ -15,6 +15,7 @@ from ._better_abstract import (
     AbstractVar as AbstractVar,
 )
 from ._callback import filter_pure_callback as filter_pure_callback
+from ._enum import Enumeration as Enumeration
 from ._eval_shape import filter_eval_shape as filter_eval_shape
 from ._filters import (
     combine as combine,

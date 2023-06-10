@@ -6,17 +6,21 @@ from typing import TYPE_CHECKING, TypeVar
 # Inherits from type so that _WithRepr instances are types and can be used as
 # e.g. Sequence[_WithRepr(...)]
 class _WithRepr(type):
-    def __new__(cls, string):
-        out = super().__new__(cls, string, (), {})
+    def __new__(mcs, obj, string):
+        out = super().__new__(mcs, string, (), {})
         # prevent the custom typing repr from doing the wrong thing
         out.__module__ = "builtins"
         return out
 
-    def __init__(self, string):
-        self.string = string
+    def __init__(cls, obj, string):
+        cls.obj = obj
+        cls.string = string
 
-    def __repr__(self):
-        return self.string
+    def __repr__(cls):
+        return cls.string
+
+    def __call__(cls, *args, **kwargs):
+        return cls.obj(*args, **kwargs)
 
 
 _T = TypeVar("_T")
@@ -27,7 +31,7 @@ def doc_repr(obj: _T, string: str) -> _T:
         return obj
     else:
         if getattr(typing, "GENERATING_DOCUMENTATION", False):
-            return _WithRepr(string)
+            return _WithRepr(obj, string)
         else:
             return obj
 

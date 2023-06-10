@@ -7,20 +7,28 @@ from .._compile_utils import (
     hashable_partition as hashable_partition,
 )
 from .._doc_utils import doc_remove_args as doc_remove_args, doc_repr as doc_repr
+from .._enum import Enumeration as Enumeration
+from .._errors import (
+    branched_error_if as branched_error_if,
+    branched_error_p as branched_error_p,
+    error_if as error_if,
+)
 from .._misc import left_broadcast_to as left_broadcast_to
 from .._module import Static as Static
 from .._pretty_print import tree_pp as tree_pp
+from .._unvmap import (
+    unvmap_all as unvmap_all,
+    unvmap_all_p as unvmap_all_p,
+    unvmap_any as unvmap_any,
+    unvmap_any_p as unvmap_any_p,
+    unvmap_max as unvmap_max,
+    unvmap_max_p as unvmap_max_p,
+)
 from .._vmap_pmap import if_mapped as if_mapped
 from ._debug import (
     announce_jaxpr_p as announce_jaxpr_p,
     announce_transform as announce_transform,
     debug_backward_nan as debug_backward_nan,
-)
-from ._enum import Enumeration as Enumeration
-from ._errors import (
-    branched_error_if as branched_error_if,
-    branched_error_p as branched_error_p,
-    error_if as error_if,
 )
 from ._finalise_jaxpr import (
     finalise_eval_jaxpr as finalise_eval_jaxpr,
@@ -61,11 +69,3 @@ from ._primitive import (
     materialise_zeros as materialise_zeros,
 )
 from ._str2jax import str2jax as str2jax
-from ._unvmap import (
-    unvmap_all as unvmap_all,
-    unvmap_all_p as unvmap_all_p,
-    unvmap_any as unvmap_any,
-    unvmap_any_p as unvmap_any_p,
-    unvmap_max as unvmap_max,
-    unvmap_max_p as unvmap_max_p,
-)

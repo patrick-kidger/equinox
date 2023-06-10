@@ -10,10 +10,10 @@ import jax.numpy as jnp
 import jax.tree_util as jtu
 
 from .._ad import filter_custom_vjp
+from .._errors import error_if
 from .._filters import combine, filter, is_array, is_array_like, partition
 from .._module import Module
 from .._pretty_print import tree_pformat
-from ._errors import error_if
 
 
 def announce_transform(
