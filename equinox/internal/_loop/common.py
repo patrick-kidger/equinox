@@ -20,14 +20,14 @@ class _Buffer(Module):
     def __getitem__(self, item):
         return self._array[item]
 
-    def _set(self, pred, item, x):
+    def _op(self, pred, item, x, op):
         pred = pred & self._pred
         if isinstance(self._array, _Buffer):
-            array = self._array._set(pred, item, x)
+            array = self._array._op(pred, item, x, op)
         else:
             old_x = self._array[item]
             x = jnp.where(pred, x, old_x)
-            array = self._array.at[item].set(x)
+            array = getattr(self._array.at[item], op)(x)
         return _Buffer(array, self._pred, self._tag)
 
     @property
@@ -59,7 +59,19 @@ class _BufferItem(Module):
     _item: Any
 
     def set(self, x, *, pred=True):
-        return self._buffer._set(pred, self._item, x)
+        return self._buffer._op(pred, self._item, x, "set")
+
+    def add(self, x, *, pred=True):
+        return self._buffer._op(pred, self._item, x, "add")
+
+    def multiply(self, x, *, pred=True):
+        return self._buffer._op(pred, self._item, x, "multiply")
+
+    def divide(self, x, *, pred=True):
+        return self._buffer._op(pred, self._item, x, "divide")
+
+    def power(self, x, *, pred=True):
+        return self._buffer._op(pred, self._item, x, "power")
 
 
 def _is_buffer(x):
