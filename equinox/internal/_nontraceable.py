@@ -123,8 +123,10 @@ def nondifferentiable_backward(
 
 
 def _cannot_batch(x, b, *, msg):
+    (x,) = x
+    (b,) = b
     if b is batching.not_mapped:
-        return x
+        return x, b
     else:
         raise ValueError(msg)
 
