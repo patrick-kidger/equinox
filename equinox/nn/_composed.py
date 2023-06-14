@@ -1,4 +1,3 @@
-import typing
 from collections.abc import Callable, Sequence
 from typing import (
     Any,
@@ -13,21 +12,13 @@ import jax.nn as jnn
 import jax.random as jrandom
 from jaxtyping import Array, PRNGKeyArray
 
+from .._doc_utils import doc_repr
 from .._module import Module, static_field
 from ._linear import Linear
 
 
-def _identity(x):
-    return x
-
-
-if getattr(typing, "GENERATING_DOCUMENTATION", False):
-
-    def relu(_):
-        pass
-
-    jnn.relu = relu
-    _identity.__qualname__ = "identity"  # Renamed for nicer documentation.
+_identity = doc_repr(lambda x: x, "lambda x: x")
+_relu = doc_repr(jnn.relu, "<function relu>")
 
 
 class MLP(Module):
@@ -54,7 +45,7 @@ class MLP(Module):
         out_size: Union[int, Literal["scalar"]],
         width_size: int,
         depth: int,
-        activation: Callable = jnn.relu,
+        activation: Callable = _relu,
         final_activation: Callable = _identity,
         use_bias: bool = True,
         use_final_bias: bool = True,
