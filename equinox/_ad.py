@@ -19,7 +19,7 @@ import jax.core
 import jax.interpreters.ad as ad
 import jax.numpy as jnp
 import jax.tree_util as jtu
-from jaxtyping import Array, ArrayLike, Complex, Float, PyTree
+from jaxtyping import Array, ArrayLike, Complex, Float, PyTree, PyTreeDef
 
 from ._custom_types import sentinel
 from ._deprecate import deprecated_0_10
@@ -396,7 +396,7 @@ def _unflatten(flat_pytree):
 
 
 _T = TypeVar("_T")
-_FlatPyTree = tuple[list[_T], jtu.PyTreeDef]
+_FlatPyTree = tuple[list[_T], PyTreeDef]
 
 
 class _ClosureConvert(Module):

@@ -3,7 +3,7 @@ from typing import Any, Optional, TYPE_CHECKING, Union
 
 import jax.tree_util as jtu
 import numpy as np
-from jaxtyping import Array, Bool, PyTree
+from jaxtyping import Array, Bool, PyTree, PyTreeDef
 
 from ._custom_types import sentinel
 from ._doc_utils import doc_repr
@@ -338,7 +338,9 @@ def tree_inference(pytree: PyTree, value: bool) -> PyTree:
     return tree_at(_inferences, pytree, replace_fn=lambda _: value)
 
 
-def tree_flatten_one_level(pytree: PyTree) -> tuple[list[PyTree], jtu.PyTreeDef]:
+def tree_flatten_one_level(
+    pytree: PyTree,
+) -> tuple[list[PyTree], PyTreeDef]:  # pyright: ignore
     """Returns the immediate subnodes of a PyTree node. If called on a leaf node then it
     will return just that leaf.
 

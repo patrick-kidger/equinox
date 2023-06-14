@@ -9,7 +9,7 @@ repos:
       - id: ruff
         args: ["--fix"]
   - repo: https://github.com/RobertCraigie/pyright-python
-    rev: v1.1.302
+    rev: v1.1.314
     hooks:
     - id: pyright
       additional_dependencies: [beartype, einops, jax, jaxtyping, pytest, tensorflow, tf2onnx, typing_extensions]
