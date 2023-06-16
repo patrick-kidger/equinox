@@ -85,7 +85,7 @@ class _EnumerationMeta(type):
                             cls, name, message, name_to_item, index_to_message
                         )
                         offsets[base_index] = our_index
-                    base_offsets[base] = jnp.asarray(offsets)
+                    base_offsets[base] = np.asarray(offsets)
         for name, message in namespace.items():
             if not _magic(name):
                 _store(cls, name, message, name_to_item, index_to_message)
@@ -289,7 +289,7 @@ else:
                 raise ValueError("Can only promote enumerations.")
             if (not issubclass(cls, item._enumeration)) or item._enumeration is cls:
                 raise ValueError("Can only promote from inherited enumerations.")
-            value = cls._base_offsets[item._enumeration][item._value]
+            value = jnp.asarray(cls._base_offsets[item._enumeration])[item._value]
             return EnumerationItem(value, cls)
 
         @classmethod
