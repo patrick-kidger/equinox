@@ -31,7 +31,7 @@ from ._filters import (
     partition,
 )
 from ._make_jaxpr import filter_make_jaxpr
-from ._module import field, Module, module_update_wrapper, Static
+from ._module import field, Module, module_update_wrapper, Partial, Static
 from ._tree import tree_equal
 
 
@@ -61,7 +61,7 @@ class _ValueAndGradWrapper(Module):
     def __get__(self, instance, owner):
         if instance is None:
             return self
-        return jtu.Partial(self, instance)
+        return Partial(self, instance)
 
 
 class _GradWrapper(Module):
@@ -83,7 +83,7 @@ class _GradWrapper(Module):
     def __get__(self, instance, owner):
         if instance is None:
             return self
-        return jtu.Partial(self, instance)
+        return Partial(self, instance)
 
 
 _Scalar = Union[float, complex, Float[ArrayLike, ""], Complex[ArrayLike, ""]]

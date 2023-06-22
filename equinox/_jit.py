@@ -6,7 +6,6 @@ from typing import Any, overload, TypeVar
 from typing_extensions import ParamSpec
 
 import jax
-import jax.tree_util as jtu
 from jaxtyping import PyTree
 
 from ._compile_utils import (
@@ -20,7 +19,7 @@ from ._custom_types import sentinel
 from ._deprecate import deprecated_0_10
 from ._doc_utils import doc_remove_args
 from ._filters import combine, is_array, partition
-from ._module import Module, module_update_wrapper, Static
+from ._module import Module, module_update_wrapper, Partial, Static
 
 
 _P = ParamSpec("_P")
@@ -108,7 +107,7 @@ class _JitWrapper(Module):
     def __get__(self, instance, owner):
         if instance is None:
             return self
-        return jtu.Partial(self, instance)
+        return Partial(self, instance)
 
 
 @overload

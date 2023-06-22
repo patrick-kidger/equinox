@@ -23,7 +23,7 @@ from ._custom_types import sentinel
 from ._deprecate import deprecated_0_10
 from ._doc_utils import doc_remove_args
 from ._filters import combine, filter, is_array, is_array_like, partition
-from ._module import Module, module_update_wrapper, Static
+from ._module import Module, module_update_wrapper, Partial, Static
 
 
 ResolvedAxisSpec = Optional[int]
@@ -210,7 +210,7 @@ class _VmapWrapper(Module):
     def __get__(self, instance, owner):
         if instance is None:
             return self
-        return jtu.Partial(self, instance)
+        return Partial(self, instance)
 
 
 @overload
@@ -533,7 +533,7 @@ class _PmapWrapper(Module):
     def __get__(self, instance, owner):
         if instance is None:
             return self
-        return jtu.Partial(self, instance)
+        return Partial(self, instance)
 
 
 # Deliberately using `Callable[..., Any]` as `filter_pmap` does change the input and
