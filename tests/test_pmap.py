@@ -13,7 +13,7 @@ from .helpers import shaped_allclose as _shaped_allclose
 
 
 (cpu,) = jax.devices("cpu")
-filter_pmap: Any = ft.partial(eqx.filter_pmap, devices=[cpu])
+filter_pmap: Any = ft.partial(eqx.filter_pmap, devices=[cpu])  # pyright: ignore
 
 
 def shaped_allclose(x, y, **kwargs):
