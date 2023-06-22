@@ -3,7 +3,7 @@ import functools as ft
 import inspect
 import weakref
 from collections.abc import Callable
-from typing import Any, cast, TypeVar, Union
+from typing import Any, cast, Protocol, TypeVar, Union
 from typing_extensions import dataclass_transform, ParamSpec
 
 import jax.tree_util as jtu
@@ -114,7 +114,7 @@ _has_dataclass_init = weakref.WeakKeyDictionary()
 # Inherits from ABCMeta as a convenience for a common use-case.
 # It's not a feature we use ourselves.
 @dataclass_transform(field_specifiers=(dataclasses.field, field, static_field))
-class _ModuleMeta(ABCMeta):
+class _ModuleMeta(type(Protocol), ABCMeta):
     def __new__(mcs, name, bases, dict_):  # pyright: ignore
         dict_ = {
             k: _wrap_method(v) if _not_magic(k) and inspect.isfunction(v) else v
