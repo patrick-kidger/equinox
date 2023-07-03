@@ -4,11 +4,10 @@ from typing import Any, Optional, TypeVar, Union
 
 import jax
 import jax.lax as lax
-import jax.numpy as jnp
 import jax.tree_util as jtu
 from jaxtyping import Array, Bool
 
-from .common import common_rewrite
+from .common import common_rewrite, fixed_asarray
 
 
 _T = TypeVar("_T")
@@ -49,7 +48,7 @@ def bounded_while_loop(
 
     if not isinstance(max_steps, int) or max_steps < 0:
         raise ValueError("max_steps must be a non-negative integer")
-    init_val = jtu.tree_map(jnp.asarray, init_val)
+    init_val = jtu.tree_map(fixed_asarray, init_val)
     if max_steps == 0:
         return init_val
 

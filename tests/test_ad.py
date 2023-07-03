@@ -1,3 +1,4 @@
+import warnings
 from typing import Union
 
 import jax
@@ -123,7 +124,37 @@ def test_methods(call, outer):
             assert m.method(y) == grad_m
 
 
-def test_grad_jit():
+def test_grad_jit_new():
+    num_traces = 0
+
+    @eqx.filter_custom_vjp
+    def f(x):
+        return x
+
+    @f.def_fwd
+    def f_fwd(perturbed, x):
+        del perturbed
+        return x, None
+
+    @f.def_bwd
+    def f_bwd(residual, g, perturbed, x):
+        del residual, perturbed, x
+        nonlocal num_traces
+        num_traces += 1
+        return g + 2
+
+    x = jnp.array(1.0)
+
+    jitf = jax.jit(f)
+    assert eqx.filter_grad(jitf)(x) == 3
+    assert eqx.filter_grad(jitf)(x) == 3
+    assert num_traces == 1
+    assert eqx.filter_grad(eqx.filter_jit(f))(x) == 3  # pyright: ignore
+    assert eqx.filter_grad(eqx.filter_jit(f))(x) == 3  # pyright: ignore
+    assert num_traces == 2
+
+
+def test_grad_jit_old():
     num_traces = 0
 
     @eqx.filter_custom_vjp
@@ -138,7 +169,10 @@ def test_grad_jit():
         num_traces += 1
         return g + 2
 
-    f.defvjp(f_fwd, f_bwd)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        f.defvjp(f_fwd, f_bwd)
+
     x = jnp.array(1.0)
 
     jitf = jax.jit(f)
@@ -311,7 +345,7 @@ def test_closure_convert_custom_jvp():
     def call(f, x):
         return f(x)
 
-    @call.defjvp
+    @call.def_jvp
     def call_jvp(primals, tangents):
         f, x = primals
         tf, tx = tangents
@@ -337,7 +371,7 @@ def test_filter_custom_jvp_no_kwargs():
 
     was_called = False
 
-    @call.defjvp
+    @call.def_jvp
     def call_jvp(primals, tangents):
         nonlocal was_called
         was_called = True
@@ -373,7 +407,7 @@ def test_filter_custom_jvp_kwargs():
 
     was_called = False
 
-    @call.defjvp
+    @call.def_jvp
     def call_jvp(primals, tangents, *, fn):
         nonlocal was_called
         was_called = True
@@ -408,7 +442,7 @@ def test_filter_custom_jvp_exact():
     def f(x, y):
         return y
 
-    @f.defjvp
+    @f.def_jvp
     def f_jvp(primals, tangents):
         x, y = primals
         tang_x, tang_y = tangents
@@ -419,3 +453,76 @@ def test_filter_custom_jvp_exact():
         return jax.lax.cond(x < y, f, lambda _x, _y: _y, x, y)
 
     jax.grad(g)(1.0, 1)
+
+
+def test_filter_custom_jvp_symbolic_zero():
+    @eqx.filter_custom_jvp
+    def f(x, y):
+        return x + y
+
+    @f.def_jvp
+    def f_jvp(primals, tangents):
+        x, y = primals
+        tx, ty = tangents
+        assert ty is None
+        return x + y, tx
+
+    one = jnp.array(1.0)
+    jax.jvp(lambda x: f(x, one), (one,), (one,))
+
+
+def test_filter_custom_vjp_nondiff_args():
+    @eqx.filter_custom_vjp
+    def f(x, y):
+        return x + y
+
+    @f.def_fwd
+    def f_fwd(perturbed, x, y):
+        return x + y, None
+
+    @f.def_bwd
+    def f_bwd(res, ct, perturbed, x, y):
+        return ct
+
+    with pytest.raises(RuntimeError):
+        jax.grad(lambda x: f(x, x))(1.0)
+
+
+def test_filter_custom_vjp_symbolic_zero():
+    called = False
+
+    @eqx.filter_custom_vjp
+    def f(x__y, *, foo):
+        x, y = x__y
+        return x + y + foo, x, y, foo
+
+    @f.def_fwd
+    def f_fwd(perturbed, x__y, *, foo):
+        p_x, p_y = perturbed
+        assert p_x is True
+        assert p_y is False
+        x, y = x__y
+        return f((x, y), foo=foo), None
+
+    @f.def_bwd
+    def f_bwd(res, ct, perturbed, x__y, *, foo):
+        nonlocal called
+        called = True
+        p_x, p_y = perturbed
+        assert p_x is True
+        assert p_y is False
+        ct1, ct2, ct3, ct4 = ct
+        assert ct1 is not None
+        assert ct2 is None
+        assert ct3 is not None
+        assert ct4 is None
+        return ct1, ct3
+
+    @jax.grad
+    def run(x, y):
+        out1, out2, out3, out4 = f((x, jnp.array(1.0)), foo=y)
+        del out2, out4
+        return out1 + out3
+
+    run(1.0, 2.0)
+    assert called

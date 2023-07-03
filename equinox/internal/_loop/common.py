@@ -84,6 +84,19 @@ def _unwrap_buffers(x):
     return x
 
 
+# Work around JAX issue #15676
+@jax.custom_jvp
+def fixed_asarray(x):
+    return jnp.asarray(x)
+
+
+@fixed_asarray.defjvp
+def _fixed_asarray_jvp(x, tx):
+    (x,) = x
+    (tx,) = tx
+    return fixed_asarray(x), fixed_asarray(tx)
+
+
 def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers):
     """Handles:
 
@@ -170,6 +183,7 @@ def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers):
             pred2 = pred2 & (step2 < max_steps)
         return step2, pred2, val2
 
+    init_val = jtu.tree_map(fixed_asarray, init_val)
     new_init_val = (jnp.asarray(0), jnp.asarray(cond_fun(init_val)), init_val)
 
     return new_cond_fun, new_body_fun, new_init_val, new_buffers

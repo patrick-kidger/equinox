@@ -11,13 +11,15 @@ def test_backward_nan(capfd):
     def backward_nan(x):
         return x
 
-    def backward_nan_fwd(x):
+    @backward_nan.def_fwd
+    def backward_nan_fwd(perturbed, x):
+        del perturbed
         return backward_nan(x), None
 
-    def backward_nan_bwd(_, x, grad_x):
+    @backward_nan.def_bwd
+    def backward_nan_bwd(residual, grad_x, perturbed, x):
+        del residual, grad_x, perturbed, x
         return jnp.nan
-
-    backward_nan.defvjp(backward_nan_fwd, backward_nan_bwd)
 
     @eqx.filter_jit
     @jax.grad
