@@ -36,7 +36,7 @@ and
     adjoint mode of computational differentiation
     https://dl.acm.org/doi/pdf/10.1145/347837.347846
 """
-# I think this code is not quite maximally efficient. A few things that could be
+# I think this code is not *quite* maximally efficient. A few things that could be
 # improved:
 # - The initial value is available on the backward pass twice: once as an argument,
 #   once as a saved checkpoint. We should be able to get away without this repetition.
@@ -48,6 +48,7 @@ and
 import functools as ft
 import math
 import operator
+import typing
 from collections.abc import Callable, Sequence
 from typing import Any, cast, Optional, TypeVar, Union
 
@@ -58,12 +59,13 @@ import jax.numpy as jnp
 import jax.tree_util as jtu
 from jaxtyping import Array, ArrayLike, Bool
 
-from ..._ad import filter_closure_convert, filter_custom_vjp, filter_vjp
+from ..._ad import filter_closure_convert, filter_custom_vjp
 from ..._errors import error_if
-from ..._filters import is_array, is_inexact_array
-from ..._tree import tree_at
+from ..._filters import combine, filter, is_array, is_inexact_array, partition
+from ..._module import Static
+from ..._tree import tree_at, tree_equal
 from .._nontraceable import nonbatchable
-from .common import common_rewrite
+from .common import common_rewrite, fixed_asarray
 
 
 _T = TypeVar("_T")
@@ -229,7 +231,7 @@ def checkpointed_while_loop(
             checkpoints = math.ceil(-1.5 + 0.5 * math.sqrt(8 * max_steps + 1))
     if checkpoints < 1:
         raise ValueError("Must have at least one checkpoint")
-    init_val = jtu.tree_map(jnp.asarray, init_val)
+    init_val = jtu.tree_map(fixed_asarray, init_val)
     if max_steps == 0:
         return init_val
     cond_fun_, body_fun_, init_val_, buffers_ = common_rewrite(
@@ -392,10 +394,12 @@ def _array_to_none(x):
     return None
 
 
-def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, checkpoints, buffers):
+@_checkpointed_while_loop.def_fwd
+def _checkpointed_while_loop_fwd(perturbed, vjp_arg, cond_fun, checkpoints, buffers):
     """Run the while loop, saving checkpoints whenever the controller
     (`_should_save_residual`) requires.
     """
+    del perturbed
     init_val, body_fun = vjp_arg
     # Equation (2.2) of Stumm and Walther
     u2_minus_2 = ((checkpoints + 1) * (checkpoints + 2)) // 2 - 2
@@ -603,6 +607,31 @@ def _is_none(x):
     return x is None
 
 
+def _get_value(x):
+    assert type(x) is jax.custom_derivatives.CustomVJPPrimal
+    return x.value
+
+
+def _is_symbolic_zero_or_none(x):
+    return isinstance(x, jax.custom_derivatives.SymbolicZero) or x is None
+
+
+def _materialise_symbolic_zero(is_zero, ct_x, x):
+    if is_zero:
+        assert ct_x is None
+        return None
+    else:
+        if ct_x is None:
+            assert is_inexact_array(x)
+            return jnp.zeros_like(x)
+        else:
+            return ct_x
+
+
+def _assert_bool(x):
+    assert type(x) is bool
+
+
 def _fwd(
     step_val,
     step_grad_val,
@@ -665,18 +694,20 @@ def _make_u_turn(vjp_fn, residual_steps, residuals, checkpoints):
     return _u_turn
 
 
+@_checkpointed_while_loop.def_bwd
 def _checkpointed_while_loop_bwd(
-    remainders, grad_final_val, vjp_arg, cond_fun, checkpoints, buffers
+    remainders, grad_final_val, perturbed, vjp_arg, cond_fun, checkpoints, buffers
 ):
     """Time for the complicated bit: iterate backward through a checkpointed while loop,
     loading values from checkpoints and using treeverse to toggle between forward and
     backward steps.
     """
+    _, perturb_body_fun = perturbed
     _, body_fun = vjp_arg
     grad_final_body_fun = jtu.tree_map(
-        lambda x: jnp.zeros_like(x) if is_inexact_array(x) else None, body_fun
+        lambda x, p: jnp.zeros_like(x) if p else None, body_fun, perturb_body_fun
     )
-    del cond_fun
+    del cond_fun, perturbed
     num_steps, init_residual_steps, init_residuals, filled_buffers = remainders
     num_steps, init_residual_steps = nonbatchable((num_steps, init_residual_steps))
 
@@ -726,7 +757,21 @@ def _checkpointed_while_loop_bwd(
         # We pass in `body_fun` as an argument as it contains its closed-over values
         # in its PyTree structure, and we do want to compute cotangents wrt these.
         val_buffers = tree_at(buffers(_is_none), val, filled_buffers, is_leaf=_is_none)
-        val_candidate, vjp_fn = filter_vjp(lambda b, v: b(v), body_fun, val_buffers)
+        grad_val_has_ct = jtu.tree_map(is_array, grad_val, is_leaf=_is_none)
+        body_fun_has_ct = jtu.tree_map(is_array, grad_body_fun, is_leaf=_is_none)
+        diff_val, nondiff_val = partition(val_buffers, grad_val_has_ct)
+        diff_body, nondiff_body = partition(body_fun, body_fun_has_ct)
+
+        def _to_vjp(_diff_body, _diff_val):
+            _val_buffers = combine(_diff_val, nondiff_val)
+            _body_fun = combine(_diff_body, nondiff_body)
+            _out = _body_fun(_val_buffers)
+            return partition(_out, grad_val_has_ct)
+
+        dynamic_val_candidate, vjp_fn, static_val_candidate = jax.vjp(
+            _to_vjp, diff_body, diff_val, has_aux=True
+        )
+        val_candidate = combine(dynamic_val_candidate, static_val_candidate)
         val_candidate = tree_at(buffers(None), val_candidate, replace_fn=lambda _: None)
 
         perform_u_turn = step_val + 1 == step_grad_val
@@ -802,6 +847,76 @@ def _checkpointed_while_loop_bwd(
     init_step_next_checkpoint = _calc_next_checkpoint(
         init_step_val, init_step_grad_val, init_index, checkpoints
     )
+
+    # Fixed-point iteration: promote symbolic zeros to materialised zeros if necessary.
+    # Do it inside the dynamic context of a `jax.eval_shape` so that it's as cheap as
+    # possible, without extra tracing.
+    def _resolve_symbolic_zeros(grad_val):
+        symbolic_zero_gradient = jtu.tree_map(_is_none, grad_val, is_leaf=_is_none)
+        new_symbolic_zero_gradient = None
+        init_val_buffers = tree_at(
+            buffers(_is_none), init_val, filled_buffers, is_leaf=_is_none
+        )
+        dynamic_init_val, static_init_val = partition(
+            init_val_buffers, is_inexact_array
+        )
+
+        # Some hackery to extract which inputs still have symbolic zero cotangents.
+        @jax.custom_vjp
+        def _record_symbolic_zero(_dynamic_val):
+            return _dynamic_val
+
+        def _record_symbolic_zero_fwd(_dynamic_val):
+            return jtu.tree_map(_get_value, _dynamic_val), None
+
+        def _record_symbolic_zero_bwd(_, grad_dynamic_val):
+            nonlocal new_symbolic_zero_gradient
+            new_symbolic_zero_gradient = jtu.tree_map(
+                _is_symbolic_zero_or_none, grad_dynamic_val, is_leaf=_is_none
+            )
+            return (grad_dynamic_val,)
+
+        _record_symbolic_zero.defvjp(
+            _record_symbolic_zero_fwd, _record_symbolic_zero_bwd, symbolic_zeros=True
+        )
+
+        def _to_vjp(_dynamic_val):
+            _dynamic_val = _record_symbolic_zero(_dynamic_val)
+            val = combine(_dynamic_val, static_init_val)
+            return filter(body_fun(val), symbolic_zero_gradient, inverse=True)
+
+        while True:
+            _, vjp_fn = jax.vjp(_to_vjp, dynamic_init_val)
+            vjp_fn(grad_val)  # get new_symbolic_zero_gradient via nonlocal
+            if tree_equal(symbolic_zero_gradient, new_symbolic_zero_gradient):
+                jtu.tree_map(_assert_bool, symbolic_zero_gradient)
+                if getattr(typing, "TESTING", False):
+                    print("symbolic_zero_gradient", symbolic_zero_gradient)
+                return Static(symbolic_zero_gradient)
+            else:
+                symbolic_zero_gradient = jtu.tree_map(
+                    operator.and_, symbolic_zero_gradient, new_symbolic_zero_gradient
+                )
+                grad_val = jtu.tree_map(
+                    _materialise_symbolic_zero,
+                    symbolic_zero_gradient,
+                    grad_val,
+                    init_val_buffers,
+                )
+
+    symbolic_zero_gradient = jax.eval_shape(
+        _resolve_symbolic_zeros, grad_final_val
+    ).value
+    init_val_buffers = tree_at(
+        buffers(_is_none), init_val, filled_buffers, is_leaf=_is_none
+    )
+    grad_final_val = jtu.tree_map(
+        _materialise_symbolic_zero,
+        symbolic_zero_gradient,
+        grad_final_val,
+        init_val_buffers,
+    )
+
     init_carry = (
         init_step_val,
         init_step_grad_val,
@@ -852,8 +967,3 @@ def _checkpointed_while_loop_bwd(
     *_, grad_init_val, grad_body_fun, _, _ = final_carry
     out = grad_init_val, grad_body_fun
     return out
-
-
-_checkpointed_while_loop.defvjp(
-    _checkpointed_while_loop_fwd, _checkpointed_while_loop_bwd
-)

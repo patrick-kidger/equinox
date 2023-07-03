@@ -1,6 +1,6 @@
 [project]
 name = "equinox"
-version = "0.10.6"
+version = "0.10.7"
 description = "Elegant easy-to-use neural networks in JAX."
 readme = "README.md"
 requires-python ="~=3.9"
@@ -23,7 +23,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Mathematics",
 ]
 urls = {repository = "https://github.com/patrick-kidger/equinox" }
-dependencies = ["jax>=0.4.11", "jaxtyping>=0.2.20", "typing_extensions>=4.5.0"]
+dependencies = ["jax>=0.4.13", "jaxtyping>=0.2.20", "typing_extensions>=4.5.0"]
 
 [build-system]
 requires = ["hatchling"]

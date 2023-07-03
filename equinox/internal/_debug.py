@@ -124,7 +124,9 @@ def _debug_backward_nan(x, name, terminate):
     return x
 
 
-def _debug_backward_nan_fwd(x, name, terminate):
+@_debug_backward_nan.def_fwd
+def _debug_backward_nan_fwd(perturbed, x, name, terminate):
+    del perturbed
     return debug_backward_nan(x, name, terminate), None
 
 
@@ -135,7 +137,9 @@ class _LongRepr(Module):
         return tree_pformat(self.obj, short_arrays=False)
 
 
-def _debug_backward_nan_bwd(_, grad_x, x, name, terminate):
+@_debug_backward_nan.def_bwd
+def _debug_backward_nan_bwd(residuals, grad_x, perturbed, x, name, terminate):
+    del residuals, perturbed
     msg = "   primals={x}\ncotangents={grad_x}"
     if name is not None:
         msg = f"{name}:\n" + msg
@@ -148,6 +152,3 @@ def _debug_backward_nan_bwd(_, grad_x, x, name, terminate):
         ]
         grad_x = error_if(grad_x, jnp.any(jnp.stack(nans)), "Encountered NaN")
     return grad_x
-
-
-_debug_backward_nan.defvjp(_debug_backward_nan_fwd, _debug_backward_nan_bwd)

@@ -664,3 +664,28 @@ def test_zero_buffer():
         )
 
     jax.linearize(run, init_carry)
+
+
+def test_symbolic_zero(capfd):
+    def cond_fun(carry):
+        return True
+
+    def body_fun(carry):
+        carry0, carry1, carry2, carry3, carry4, carry5 = carry
+        return carry2, carry3, lax.stop_gradient(carry1), carry3, carry5, carry4
+
+    @jax.grad
+    def run(init_carry):
+        init_carry = init_carry + (5, jnp.array(6))
+        outs = eqxi.while_loop(
+            cond_fun, body_fun, init_carry, kind="checkpointed", max_steps=5
+        )
+        return outs[0]
+
+    capfd.readouterr()
+    run((1.0, 2.0, jnp.array(3.0), jnp.array(4.0)))
+    text, _ = capfd.readouterr()
+    assert (
+        "symbolic_zero_gradient (True, True, (False, True, False, True, True, True))"
+        in text
+    )
