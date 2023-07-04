@@ -183,7 +183,7 @@ def finalise_make_jaxpr(fn, *, return_shape: bool = False):
 from .._errors import branched_error_p
 from .._unvmap import unvmap_all_p, unvmap_any_p, unvmap_max_p
 from ._debug import announce_jaxpr_p
-from ._loop.common import select_if_vmap_p
+from ._loop import maybe_set_p, select_if_vmap_p
 from ._noinline import noinline_p
 from ._nontraceable import nonbatchable_p, nondifferentiable_backward_p, nontraceable_p
 
@@ -195,6 +195,7 @@ for prim in (
     nondifferentiable_backward_p,
     announce_jaxpr_p,
     select_if_vmap_p,
+    maybe_set_p,
     noinline_p,
     nontraceable_p,
     nonbatchable_p,

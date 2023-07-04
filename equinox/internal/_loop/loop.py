@@ -76,9 +76,15 @@ def while_loop(
 
         Note that `buffers` is subject to the following restrictions:
 
-        - You should never write to the same location twice.
+        - You should never write to the same location twice. (Even before it is passed
+            into the loop: e.g.
+            ```python
+            xs = xs.at[0].set(x).at[0].set(y)
+            while_loop(cond, body, xs, buffers=lambda xs: xs)
+            ```
+            is not allowed.)
         - You should only read from it (`buf[i]`) at locations (`i`) that you have
-          written to previously.
+          written to previously (`buf.at[i].set(...)`).
 
         These assumptions are *completely unchecked* and you will get incorrect
         gradients if you violate these assumptions.
@@ -158,6 +164,11 @@ def scan(
     - `checkpoints`: Only used if `kind="checkpointed"`. Specifies the number of
         checkpoints to use; if `None` then this is set proportional to `sqrt(length)`.
         Can also be a string `"all"`, representing checkpointing every step.
+
+    !!! Danger
+
+        Note that `buffers` is subject to the same restrictions as
+        `equinox.internal.while_loop`.
 
     Returns:
 
