@@ -74,7 +74,7 @@ else:
         if TYPE_CHECKING:
             from typing import ClassVar as AbstractVar
         else:
-            from equinox.internal import AbstractVar
+            from equinox import AbstractVar
         ```
         """
 
@@ -136,7 +136,7 @@ else:
         if TYPE_CHECKING:
             from typing import ClassVar as AbstractClassVar
         else:
-            from equinox.internal import AbstractClassVar
+            from equinox import AbstractClassVar
         ```
         """
 
