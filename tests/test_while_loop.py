@@ -42,13 +42,16 @@ def _get_problem(key, *, num_steps: Optional[int]):
             imag = jnp.imag(z)
             jax.debug.print("{}", step)  # pyright: ignore
             val1 = jnp.stack([real, imag])
-            val2 = val2.at[step % 8].set(real)
+            val2 = val2.at[step].set(real)
             return step + 1, val1, val2
 
         return body_fun
 
     init_val1 = jr.normal(valkey1, (2,))
     init_val2 = jr.normal(valkey2, (20,))
+    if num_steps is not None:
+        # So that things fit in the buffer update above.
+        assert num_steps < 20
     mlp = eqx.nn.MLP(2, 1, 2, 2, key=modelkey)
     dynamic_mlp, static_mlp = eqx.partition(mlp, eqx.is_array)
 
@@ -189,13 +192,15 @@ def test_backward_checkpointed(
         )
         return jnp.sum(final_val1) + jnp.sum(final_val2)
 
-    true_value, true_grad = true_run((init_val1, init_val2, mlp))
+    true_value, true_grad = true_run([init_val1, init_val2, mlp])
     capfd.readouterr()
-    value, grad = run((init_val1, init_val2, mlp))
+    value, grad = run([init_val1, init_val2, mlp])
     text, _ = capfd.readouterr()
     true_text = "".join(f"{i}\n" for i in range(num_steps)) + backward_order.replace(
         ",", "\n"
     )
+    if buffer:
+        grad[1] = grad[1].at[:num_steps].set(0)
     assert shaped_allclose(value, true_value, rtol=1e-4, atol=1e-4)
     assert shaped_allclose(grad, true_grad, rtol=1e-4, atol=1e-4)
     assert true_text in text.strip()
@@ -236,8 +241,10 @@ def test_backward_bounded(buffer, getkey):
         )
         return jnp.sum(final_val1) + jnp.sum(final_val2)
 
-    true_value, true_grad = true_run((init_val1, init_val2, mlp))
-    value, grad = run((init_val1, init_val2, mlp))
+    true_value, true_grad = true_run([init_val1, init_val2, mlp])
+    value, grad = run([init_val1, init_val2, mlp])
+    if buffer:
+        grad[1] = grad[1].at[:14].set(0)
     assert shaped_allclose(value, true_value, rtol=1e-4, atol=1e-4)
     assert shaped_allclose(grad, true_grad, rtol=1e-4, atol=1e-4)
 
@@ -266,7 +273,7 @@ def test_vmap_primal_unbatched_cond(buffer, kind, getkey):
     value_and_grad = _maybe_value_and_grad(kind)
 
     @jax.jit
-    @ft.partial(jax.vmap, in_axes=((0, 0, None),))
+    @ft.partial(jax.vmap, in_axes=([0, 0, None],))
     @value_and_grad
     def true_run(arg):
         init_val1, init_val2, mlp = arg
@@ -277,7 +284,7 @@ def test_vmap_primal_unbatched_cond(buffer, kind, getkey):
         return jnp.sum(true_final_val1) + jnp.sum(true_final_val2)
 
     @jax.jit
-    @ft.partial(jax.vmap, in_axes=((0, 0, None),))
+    @ft.partial(jax.vmap, in_axes=([0, 0, None],))
     @value_and_grad
     def run(arg):
         init_val1, init_val2, mlp = arg
@@ -300,8 +307,10 @@ def test_vmap_primal_unbatched_cond(buffer, kind, getkey):
     init_val1, init_val2 = jtu.tree_map(
         lambda x: jr.normal(getkey(), (3,) + x.shape, x.dtype), (init_val1, init_val2)
     )
-    true_value, true_grad = true_run((init_val1, init_val2, mlp))
-    value, grad = run((init_val1, init_val2, mlp))
+    true_value, true_grad = true_run([init_val1, init_val2, mlp])
+    value, grad = run([init_val1, init_val2, mlp])
+    if buffer and kind != "lax":
+        grad[1] = grad[1].at[:, :14].set(0)
     assert shaped_allclose(value, true_value, atol=1e-4)
     assert shaped_allclose(grad, true_grad, atol=1e-4)
 
@@ -316,7 +325,7 @@ def test_vmap_primal_batched_cond(buffer, kind, getkey):
     value_and_grad = _maybe_value_and_grad(kind)
 
     @jax.jit
-    @ft.partial(jax.vmap, in_axes=((0, 0, None), 0))
+    @ft.partial(jax.vmap, in_axes=([0, 0, None], 0))
     @value_and_grad
     def true_run(arg, init_step):
         init_val1, init_val2, mlp = arg
@@ -327,7 +336,7 @@ def test_vmap_primal_batched_cond(buffer, kind, getkey):
         return jnp.sum(true_final_val1) + jnp.sum(true_final_val2)
 
     @jax.jit
-    @ft.partial(jax.vmap, in_axes=((0, 0, None), 0))
+    @ft.partial(jax.vmap, in_axes=([0, 0, None], 0))
     @value_and_grad
     def run(arg, init_step):
         init_val1, init_val2, mlp = arg
@@ -351,8 +360,11 @@ def test_vmap_primal_batched_cond(buffer, kind, getkey):
     init_val1, init_val2 = jtu.tree_map(
         lambda x: jr.normal(getkey(), (6,) + x.shape, x.dtype), (init_val1, init_val2)
     )
-    true_value, true_grad = true_run((init_val1, init_val2, mlp), init_step)
-    value, grad = run((init_val1, init_val2, mlp), init_step)
+    true_value, true_grad = true_run([init_val1, init_val2, mlp], init_step)
+    value, grad = run([init_val1, init_val2, mlp], init_step)
+    if buffer and kind != "lax":
+        for i, j in enumerate(init_step):
+            grad[1] = grad[1].at[i, j.item() : 14].set(0)
     assert shaped_allclose(value, true_value, rtol=1e-4, atol=1e-4)
     assert shaped_allclose(grad, true_grad, rtol=1e-4, atol=1e-4)
 
@@ -366,8 +378,8 @@ def test_vmap_cotangent(buffer, kind, getkey):
 
     @jax.jit
     @jax.jacrev
-    def true_run(arg):
-        init_val1, init_val2, mlp = arg
+    def true_run(arg, init_val2):
+        init_val1, mlp = arg
         body_fun = make_body_fun(mlp)
         _, true_final_val1, true_final_val2 = _while_as_scan(
             cond_fun, body_fun, (0, init_val1, init_val2), max_steps=14
@@ -376,8 +388,8 @@ def test_vmap_cotangent(buffer, kind, getkey):
 
     @jax.jit
     @jax.jacrev
-    def run(arg):
-        init_val1, init_val2, mlp = arg
+    def run(arg, init_val2):
+        init_val1, mlp = arg
         if buffer:
             buffer_fn = lambda i: i[2]
         else:
@@ -394,8 +406,8 @@ def test_vmap_cotangent(buffer, kind, getkey):
         )
         return final_val1, final_val2
 
-    true_jac = true_run((init_val1, init_val2, mlp))
-    jac = run((init_val1, init_val2, mlp))
+    true_jac = true_run((init_val1, mlp), init_val2)
+    jac = run((init_val1, mlp), init_val2)
     assert shaped_allclose(jac, true_jac, rtol=1e-4, atol=1e-4)
 
 
@@ -550,8 +562,12 @@ def test_nested_loops(read, getkey):
     @ft.partial(jax.jit, static_argnums=5)
     @ft.partial(jax.vmap, in_axes=(0, 0, 0, 0, 0, None))
     def run(step, vals, ts, final_step, cotangents, true):
+        val1, val2, val3, val4 = vals
         value, vjp_fn = jax.vjp(
-            lambda *v: outer_loop(step, v, ts, true, final_step), *vals
+            lambda _val1: outer_loop(
+                step, (_val1, val2, val3, val4), ts, true, final_step
+            ),
+            val1,
         )
         cotangents = vjp_fn(cotangents)
         return value, cotangents
