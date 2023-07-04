@@ -1,6 +1,10 @@
 from typing import Any, Union
 
 import jax
+import jax.core
+import jax.interpreters.ad as ad
+import jax.interpreters.batching as batching
+import jax.interpreters.mlir as mlir
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.tree_util as jtu
@@ -10,6 +14,96 @@ from ..._filters import is_array
 from ..._module import field, Module
 from ..._tree import tree_at, tree_equal
 from ..._unvmap import unvmap_any
+
+
+def _select_if_vmap_impl(pred, x, y):
+    return x
+
+
+def _select_if_vmap_batch(axis_size, axis_name, trace, inputs, batch_axes):
+    del axis_name, trace
+    pred, x, y = inputs
+    bp, bx, by = batch_axes
+    if bp is batching.not_mapped:
+        if bx is batching.not_mapped:
+            x = jnp.broadcast_to(x, (axis_size,) + x.shape)
+        else:
+            x = jnp.moveaxis(x, bx, 0)
+        if by is batching.not_mapped:
+            y = jnp.broadcast_to(y, (axis_size,) + y.shape)
+        else:
+            y = jnp.moveaxis(y, by, 0)
+        out = _select_if_vmap(pred, x, y)
+    else:
+        out = jax.vmap(lax.select, in_axes=(bp, bx, by))(pred, x, y)
+    return out, 0
+
+
+def _select_if_vmap_jvp(primals, tangents):
+    pred, x, y = primals
+    _, tx, ty = tangents
+    assert x.shape == tx.aval.shape
+    assert x.dtype == tx.aval.dtype
+    assert y.shape == ty.aval.shape
+    assert y.dtype == ty.aval.dtype
+    out = _select_if_vmap(pred, x, y)
+    if type(tx) is ad.Zero and type(ty) is ad.Zero:
+        t_out = tx
+    else:
+        if type(tx) is ad.Zero:
+            tx = jnp.zeros(tx.aval.shape, tx.aval.dtype)  # pyright: ignore
+        if type(ty) is ad.Zero:
+            ty = jnp.zeros(ty.aval.shape, ty.aval.dtype)  # pyright: ignore
+        t_out = _select_if_vmap(pred, tx, ty)
+    return out, t_out
+
+
+def _select_if_vmap_transpose(ct, pred, x, y):
+    assert not ad.is_undefined_primal(pred)
+    assert ct.shape == x.aval.shape
+    assert ct.dtype == x.aval.dtype
+    assert ct.shape == y.aval.shape
+    assert ct.dtype == y.aval.dtype
+    if type(ct) is ad.Zero:
+        out = [None]
+        if ad.is_undefined_primal(x):
+            out.append(ct)  # pyright: ignore
+        else:
+            out.append(None)
+        if ad.is_undefined_primal(y):
+            out.append(ct)  # pyright: ignore
+        else:
+            out.append(None)
+        return out
+    else:
+        zero = jnp.zeros(ct.shape, ct.dtype)
+        ct_x = _select_if_vmap(pred, ct, zero)
+        ct_y = _select_if_vmap(pred, zero, ct)
+        return [None, ct_x, ct_y]
+
+
+# We want to insert `lax.select`s to avoid updating any batch elements in the loop that
+# have a False predicate. (But the loop is still going whilst other batch elements have
+# a True predicate). However, if we have no vmap at all, then we can be slightly more
+# efficient: don't introduce a select at all.
+def _select_if_vmap(pred, x, y):
+    pred = fixed_asarray(pred)
+    x = fixed_asarray(x)
+    y = fixed_asarray(y)
+    assert x.shape == y.shape
+    assert x.dtype == y.dtype
+    return select_if_vmap_p.bind(pred, x, y)
+
+
+select_if_vmap_p = jax.core.Primitive("select_if_vmap")
+select_if_vmap_p.def_impl(_select_if_vmap_impl)
+select_if_vmap_p.def_abstract_eval(_select_if_vmap_impl)
+ad.primitive_jvps[select_if_vmap_p] = _select_if_vmap_jvp
+ad.primitive_transposes[select_if_vmap_p] = _select_if_vmap_transpose
+batching.axis_primitive_batchers[select_if_vmap_p] = _select_if_vmap_batch
+mlir.register_lowering(
+    select_if_vmap_p, mlir.lower_fun(_select_if_vmap_impl, multiple_results=False)
+)
 
 
 class _Buffer(Module):
@@ -26,7 +120,9 @@ class _Buffer(Module):
             array = self._array._op(pred, item, x, op)
         else:
             old_x = self._array[item]
-            x = jnp.where(pred, x, old_x)
+            dtype = jnp.result_type(x, old_x)
+            x = jnp.broadcast_to(x, old_x.shape).astype(dtype)
+            x = _select_if_vmap(pred, x, old_x)
             array = getattr(self._array.at[item], op)(x)
         return _Buffer(array, self._pred, self._tag)
 
@@ -158,7 +254,7 @@ def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers):
                 assert is_array(leaf2._array)
                 return leaf2._array
             else:
-                return lax.select(pred, leaf2, leaf)
+                return _select_if_vmap(pred, leaf2, leaf)
 
         step, pred, val = val
         _, _, buffer_val = tree_at(

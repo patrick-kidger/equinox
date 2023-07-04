@@ -39,7 +39,11 @@ from ._finalise_jaxpr import (
     primitive_finalisations as primitive_finalisations,
     register_impl_finalisation as register_impl_finalisation,
 )
-from ._loop import scan as scan, while_loop as while_loop
+from ._loop import (
+    scan as scan,
+    select_if_vmap_p as select_if_vmap_p,
+    while_loop as while_loop,
+)
 from ._misc import (
     ContainerMeta as ContainerMeta,
     eval_empty as eval_empty,
