@@ -235,7 +235,7 @@ def checkpointed_while_loop(
     if max_steps == 0:
         return init_val
     cond_fun_, body_fun_, init_val_, buffers_ = common_rewrite(
-        cond_fun, body_fun, init_val, max_steps, buffers
+        cond_fun, body_fun, init_val, max_steps, buffers, makes_false_steps=False
     )
     del cond_fun, body_fun, init_val, buffers
     body_fun_ = filter_closure_convert(body_fun_, init_val_)

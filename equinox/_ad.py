@@ -438,8 +438,8 @@ class _ClosureConvert(Module):
         )
         assert len(out_dynamic_flat) == len(out_dynamic_struct_flat)
         for o1, o2 in zip(out_dynamic_flat, out_dynamic_struct_flat):
-            assert o1.shape == o2.shape
-            assert o1.dtype == o2.dtype
+            assert jnp.shape(o1) == jnp.shape(o2)
+            assert jnp.result_type(o1) == jnp.result_type(o2)
         out = jtu.tree_unflatten(out_dynamic_treedef, out_dynamic_flat)
         out = combine(out, self_out_static)
         return out
