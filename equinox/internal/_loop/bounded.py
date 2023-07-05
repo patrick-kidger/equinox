@@ -53,7 +53,7 @@ def bounded_while_loop(
         return init_val
 
     cond_fun_, body_fun_, init_val_, _ = common_rewrite(
-        cond_fun, body_fun, init_val, max_steps, buffers
+        cond_fun, body_fun, init_val, max_steps, buffers, makes_false_steps=True
     )
     del cond_fun, body_fun, init_val
     rounded_max_steps = base ** int(math.ceil(math.log(max_steps, base)))

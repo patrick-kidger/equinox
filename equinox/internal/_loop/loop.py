@@ -97,7 +97,7 @@ def while_loop(
     if kind == "lax":
         del kind, checkpoints, base
         cond_fun_, body_fun_, init_val_, _ = common_rewrite(
-            cond_fun, body_fun, init_val, max_steps, buffers
+            cond_fun, body_fun, init_val, max_steps, buffers, makes_false_steps=False
         )
         del cond_fun, body_fun, init_val
         _, _, final_val = lax.while_loop(cond_fun_, body_fun_, init_val_)
