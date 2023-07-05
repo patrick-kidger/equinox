@@ -11,7 +11,7 @@ import jax.tree_util as jtu
 from jaxtyping import Array, Bool, Shaped
 
 from ..._errors import error_if
-from ..._filters import is_array
+from ..._filters import combine, is_array, partition
 from ..._module import field, Module
 from ..._tree import tree_at, tree_equal
 from ..._unvmap import unvmap_any
@@ -123,19 +123,27 @@ def _select_if_vmap(pred, x, y, makes_false_steps):
         return select_if_vmap_p.bind(pred, x, y)
 
 
-def _maybe_set_impl(pred, xs, i, x, *, kwargs, makes_false_steps):
+def _maybe_set_impl(
+    pred, xs, x, *i_dynamic_leaves, i_static, i_treedef, kwargs, makes_false_steps
+):
+    i = combine(i_static, jtu.tree_unflatten(i_treedef, i_dynamic_leaves))
     x = _select_if_vmap(pred, x, xs.at[i].get(**kwargs), makes_false_steps)
     return [xs.at[i].set(x, **kwargs)]
 
 
-def _maybe_set_abstract(pred, xs, i, x, *, kwargs, makes_false_steps):
+def _maybe_set_abstract(
+    pred, xs, x, *i_dynamic_leaves, i_static, i_treedef, kwargs, makes_false_steps
+):
     return [xs]
 
 
-def _maybe_set_jvp(primals, tangents, *, kwargs, makes_false_steps):
-    pred, xs, i, x = primals
-    _, t_xs, _, t_x = tangents
-    out = _maybe_set(pred, xs, i, x, kwargs, makes_false_steps)
+def _maybe_set_jvp(
+    primals, tangents, *, i_static, i_treedef, kwargs, makes_false_steps
+):
+    pred, xs, x, *i_dynamic_leaves = primals
+    _, t_xs, t_x, *_ = tangents
+    i = combine(i_static, jtu.tree_unflatten(i_treedef, i_dynamic_leaves))
+    out = _maybe_set(pred, xs, x, i, kwargs=kwargs, makes_false_steps=makes_false_steps)
     if type(t_x) is ad.Zero and type(t_xs) is ad.Zero:
         t_out = t_xs
     else:
@@ -143,13 +151,27 @@ def _maybe_set_jvp(primals, tangents, *, kwargs, makes_false_steps):
             t_x = jnp.zeros(t_x.aval.shape, t_x.aval.dtype)  # pyright: ignore
         if type(t_xs) is ad.Zero:
             t_xs = jnp.zeros(t_xs.aval.shape, t_xs.aval.dtype)  # pyright: ignore
-        t_out = _maybe_set(pred, t_xs, i, t_x, kwargs, makes_false_steps)
+        t_out = _maybe_set(
+            pred, t_xs, t_x, i, kwargs=kwargs, makes_false_steps=makes_false_steps
+        )
     return [out], [t_out]
 
 
-def _maybe_set_transpose(ct_out, pred, xs, i, x, *, kwargs, makes_false_steps):
+def _maybe_set_transpose(
+    ct_out,
+    pred,
+    xs,
+    x,
+    *i_dynamic_leaves,
+    i_static,
+    i_treedef,
+    kwargs,
+    makes_false_steps
+):
     assert not ad.is_undefined_primal(pred)
-    assert not ad.is_undefined_primal(i)
+    for z in i_dynamic_leaves:
+        assert not ad.is_undefined_primal(z)
+    i = combine(i_static, jtu.tree_unflatten(i_treedef, i_dynamic_leaves))
     [ct_out] = ct_out
     if ad.is_undefined_primal(xs):
         # Not updating a zero! `_Buffer`s are write-once to each location, so when
@@ -170,7 +192,7 @@ def _maybe_set_transpose(ct_out, pred, xs, i, x, *, kwargs, makes_false_steps):
             ct_x = _select_if_vmap(pred, ct_x, jnp.zeros_like(ct_x), makes_false_steps)
     else:
         ct_x = None
-    return [None, ct_xs, None, ct_x]
+    return [None, ct_xs, ct_x, None]
 
 
 maybe_set_p = create_vprim(
@@ -192,7 +214,7 @@ maybe_set_p = create_vprim(
 # Second, the fact that unbatched `pred` are necessarily always True (due to being
 # used inside a while loop) means that we use `_select_if_vmap` over simply
 # `lax.select`.
-def _maybe_set(pred, xs, i, x, kwargs, makes_false_steps):
+def _maybe_set(pred, xs, x, i, *, kwargs, makes_false_steps):
     """As `lax.select(pred, xs.at[i].set(x, **kwargs), xs)`, under the assumption that
     every location `i` is written to at most once. (So that we can have a more efficient
     transpose rule. Also assumes that non-vmap'd `pred` is always `True`.)
@@ -206,13 +228,18 @@ def _maybe_set(pred, xs, i, x, kwargs, makes_false_steps):
             "can be promoted to the same dtype as `buffer`."
         )
     x = fixed_asarray(x).astype(dtype)
-    if jax.eval_shape(lambda: xs[i]) != jax.eval_shape(lambda: x):
-        raise ValueError(
-            "When doing `buffer.at[i].set(value)`, then `value` must have the same "
-            "shape as `buffer[i]`."
-        )
+    x = jnp.broadcast_to(x, jax.eval_shape(lambda: xs[i]).shape)
+    i_dynamic, i_static = partition(i, is_array)
+    i_dynamic_leaves, i_treedef = jtu.tree_flatten(i_dynamic)
     [out] = maybe_set_p.bind(
-        pred, xs, i, x, kwargs=kwargs, makes_false_steps=makes_false_steps
+        pred,
+        xs,
+        x,
+        *i_dynamic_leaves,
+        i_static=i_static,
+        i_treedef=i_treedef,
+        kwargs=kwargs,
+        makes_false_steps=makes_false_steps
     )
     return out
 
@@ -231,7 +258,14 @@ class _Buffer(Module):
         if isinstance(self._array, _Buffer):
             array = self._array._op(pred, item, x, op, kwargs, makes_false_steps)
         else:
-            array = op(pred, self._array, item, x, kwargs, makes_false_steps)
+            array = op(
+                pred,
+                self._array,
+                x,
+                item,
+                kwargs=kwargs,
+                makes_false_steps=makes_false_steps,
+            )
         return _Buffer(array, self._pred, self._tag, self._makes_false_steps)
 
     @property

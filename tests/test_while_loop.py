@@ -705,3 +705,19 @@ def test_symbolic_zero(capfd):
         "symbolic_zero_gradient (True, True, (False, True, False, True, True, True))"
         in text
     )
+
+
+def test_buffer_index():
+    def cond_fun(carry):
+        return True
+
+    def body_fun(carry):
+        return carry.at[..., 1:].set(0)
+
+    def buffers(carry):
+        return carry
+
+    init = jnp.zeros((3, 5))
+    eqxi.while_loop(
+        cond_fun, body_fun, init, kind="checkpointed", buffers=buffers, max_steps=2
+    )
