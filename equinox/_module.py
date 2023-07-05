@@ -101,7 +101,9 @@ class _wrap_method:
     def __get__(self, instance, owner):
         if instance is None:
             return self.method
-        return jtu.Partial(self.method, instance)
+        _method = ft.wraps(self.method)(jtu.Partial(self.method, instance))
+        delattr(_method, "__wrapped__")
+        return _method
 
 
 def _not_magic(k: str) -> bool:
