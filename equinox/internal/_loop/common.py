@@ -10,7 +10,6 @@ import jax.numpy as jnp
 import jax.tree_util as jtu
 from jaxtyping import Array, Bool, Shaped
 
-from ..._errors import error_if
 from ..._filters import combine, is_array, partition
 from ..._module import field, Module
 from ..._tree import tree_at, tree_equal
@@ -19,11 +18,14 @@ from .._primitive import create_vprim
 
 
 def _select_if_vmap_impl(pred, x, y):
-    msg = (
-        "Internal error in Equinox. Please report a bug at "
-        "https://github.com/patrick-kidger/equinox."
-    )
-    x = error_if(x, jnp.invert(pred), msg)
+    # Not including the following, as it destroys performance on the GPU: it seems like
+    # a copy of `x` is being made.
+    #
+    # msg = (
+    #     "Internal error in Equinox. Please report a bug at "
+    #     "https://github.com/patrick-kidger/equinox."
+    # )
+    # x = error_if(x, jnp.invert(pred), msg)
     return x
 
 
