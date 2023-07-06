@@ -526,3 +526,20 @@ def test_filter_custom_vjp_symbolic_zero():
 
     run(1.0, 2.0)
     assert called
+
+
+def test_filter_custom_vjp_defvjp():
+    @eqx.filter_custom_vjp
+    def f(x):
+        a, b = x
+        return (a + 1, b + 2, b + 3)
+
+    def f_fwd(x):
+        return f(x), None
+
+    def f_bwd(res, g, x):
+        g0, g1, g2 = g
+        return g0 + g1, g2
+
+    f.defvjp(f_fwd, f_bwd)
+    jax.grad(lambda x: sum(f(x)))((jnp.array(1.0), jnp.array(1.0)))
