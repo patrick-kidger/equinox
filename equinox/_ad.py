@@ -747,14 +747,16 @@ class filter_custom_vjp:
 
         def _fn_fwd(perturbed, vjp_arg, *args, **kwargs):
             del perturbed
-            return fn_fwd(vjp_arg, *args, **kwargs)
+            out, residuals = fn_fwd(vjp_arg, *args, **kwargs)
+            return out, (out, residuals)
 
         def _fn_bwd(
             residuals, grad_diff_array_out, perturbed, vjp_arg, *args, **kwargs
         ):
             del perturbed
+            out, residuals = residuals
             grad_diff_array_out = jtu.tree_map(
-                _materialise_symbolic_zero, vjp_arg, grad_diff_array_out
+                _materialise_symbolic_zero, out, grad_diff_array_out
             )
             return fn_bwd(residuals, grad_diff_array_out, vjp_arg, *args, **kwargs)
 
