@@ -29,6 +29,8 @@ from ._debug import (
     announce_jaxpr_p as announce_jaxpr_p,
     announce_transform as announce_transform,
     debug_backward_nan as debug_backward_nan,
+    inspect_dce as inspect_dce,
+    store_dce as store_dce,
 )
 from ._finalise_jaxpr import (
     finalise_eval_jaxpr as finalise_eval_jaxpr,

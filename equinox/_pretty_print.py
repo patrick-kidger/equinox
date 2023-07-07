@@ -97,9 +97,7 @@ def _pformat_dict(obj: dict, **kwargs) -> pp.Doc:
     )
 
 
-def _pformat_short_array(
-    shape: tuple[int, ...], dtype: str, kind: Optional[str]
-) -> pp.Doc:
+def pformat_short_array_text(shape: tuple[int, ...], dtype: str) -> str:
     short_dtype = (
         dtype.replace("float", "f")
         .replace("uint", "u")
@@ -107,7 +105,13 @@ def _pformat_short_array(
         .replace("complex", "c")
     )
     short_shape = ",".join(map(str, shape))
-    out = f"{short_dtype}[{short_shape}]"
+    return f"{short_dtype}[{short_shape}]"
+
+
+def _pformat_short_array(
+    shape: tuple[int, ...], dtype: str, kind: Optional[str]
+) -> pp.Doc:
+    out = pformat_short_array_text(shape, dtype)
     if kind is not None:
         out = out + f"({kind})"
     return pp.text(out)
