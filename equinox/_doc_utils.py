@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 # Inherits from type so that _WithRepr instances are types and can be used as
 # e.g. Sequence[_WithRepr(...)]
-class _WithRepr(type):
+class WithRepr(type):
     def __new__(mcs, obj, string):
         out = super().__new__(mcs, string, (), {})
         # prevent the custom typing repr from doing the wrong thing
@@ -31,7 +31,7 @@ def doc_repr(obj: _T, string: str) -> _T:
         return obj
     else:
         if getattr(typing, "GENERATING_DOCUMENTATION", False):
-            return _WithRepr(obj, string)
+            return WithRepr(obj, string)
         else:
             return obj
 

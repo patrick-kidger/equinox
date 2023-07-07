@@ -38,3 +38,16 @@ def test_backward_nan(capfd):
 
     with pytest.raises(Exception):
         f(jnp.array(1.0), terminate=True)
+
+
+def test_check_dce(capfd):
+    @jax.jit
+    def f(x):
+        a, _ = eqxi.store_dce((x**2, x + 1))
+        return a
+
+    f(1)
+    capfd.readouterr()
+    eqxi.inspect_dce()
+    text, _ = capfd.readouterr()
+    assert "(i32[], <DCE'd>)" in text
