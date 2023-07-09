@@ -1,5 +1,3 @@
 jaxlib
 pytest
 beartype
-tensorflow
-tf2onnx
