@@ -242,9 +242,10 @@ def checkpointed_while_loop(
         cond_fun, body_fun, init_val, max_steps, buffers, makes_false_steps=False
     )
     del cond_fun, body_fun, init_val, buffers
+    cond_fun_ = filter_closure_convert(cond_fun_, init_val_)
     body_fun_ = filter_closure_convert(body_fun_, init_val_)
     vjp_arg = (init_val_, body_fun_)
-    _, _, final_val = _checkpointed_while_loop(
+    _, _, _, final_val = _checkpointed_while_loop(
         vjp_arg, cond_fun_, checkpoints, buffers_, max_steps
     )
     return final_val
