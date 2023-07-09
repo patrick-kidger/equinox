@@ -217,10 +217,11 @@ def checkpointed_while_loop(
         # Binomial logarithmic growth is what is needed in classical treeverse.
         #
         # If
-        # `max_steps <= (checkpoints + 1)(checkpoints + 2)/2`
+        # `max_steps < (checkpoints + 1)(checkpoints + 2)/2`
         # then the time spend recomputing will be optimised; see equation (2.2) of
         # "New Algorithms for Optimal Online Checkpointing", Stumm and Walther 2010.
         # https://tu-dresden.de/mn/math/wir/ressourcen/dateien/forschung/publikationen/pdf2010/new_algorithms_for_optimal_online_checkpointing.pdf
+        # and also the `_should_save_residuals` function below.
         #
         # So by default we use `checkpoints = O(sqrt(max_steps))`.
         # (Classical treeverse uses only `O(log(max_steps))`, of course, but doesn't
@@ -228,12 +229,15 @@ def checkpointed_while_loop(
         if max_steps == 1:
             checkpoints = 1
         else:
-            checkpoints = math.ceil(-1.5 + 0.5 * math.sqrt(8 * max_steps + 1))
+            checkpoints = math.floor(-1.5 + math.sqrt(2 * max_steps + 0.25)) + 1
+            assert 2 * max_steps < ((checkpoints + 1) * (checkpoints + 2))
     if checkpoints < 1:
         raise ValueError("Must have at least one checkpoint")
     init_val = jtu.tree_map(fixed_asarray, init_val)
     if max_steps == 0:
         return init_val
+    if max_steps is not None:
+        checkpoints = min(checkpoints, max_steps)
     cond_fun_, body_fun_, init_val_, buffers_ = common_rewrite(
         cond_fun, body_fun, init_val, max_steps, buffers, makes_false_steps=False
     )
@@ -241,15 +245,15 @@ def checkpointed_while_loop(
     body_fun_ = filter_closure_convert(body_fun_, init_val_)
     vjp_arg = (init_val_, body_fun_)
     _, _, final_val = _checkpointed_while_loop(
-        vjp_arg, cond_fun_, checkpoints, buffers_
+        vjp_arg, cond_fun_, checkpoints, buffers_, max_steps
     )
     return final_val
 
 
 @filter_custom_vjp
-def _checkpointed_while_loop(vjp_arg, cond_fun, checkpoints, buffers):
+def _checkpointed_while_loop(vjp_arg, cond_fun, checkpoints, buffers, max_steps):
     """Uncheckpointed forward used when not differentiating."""
-    del checkpoints, buffers
+    del checkpoints, buffers, max_steps
     init_val, body_fun = vjp_arg
     _body_fun = lambda x: body_fun(x)  # hashable wrapper; JAX issue #13554
     while_loop = jax.named_call(lax.while_loop, name="checkpointed-no-vjp")
@@ -366,21 +370,41 @@ def _wang_moin_wrapper(step, save_state, residual_steps):
     return save_residual, index, (save_state_sw_i, save_state_wm_2)
 
 
-def _should_save_residual(step, save_state, residual_steps, u2_minus_2):
+def _should_save_residual(
+    step, save_state, residual_steps, u2_minus_1, checkpoints, max_steps
+):
     """This is the controller for whether we should save the current value at each step,
     and if so which memory location to save it in.
     """
     # TODO: also implement Algorithm 2 of Stumm and Walther, which gives improved
     # results for u2 < step < u3.
-    step, u2_minus_2 = nonbatchable((step, u2_minus_2))
-    return lax.cond(
-        step > u2_minus_2,
-        _wang_moin_wrapper,
-        _stumm_walther_i_wrapper,
-        step,
-        save_state,
-        residual_steps,
-    )
+
+    if checkpoints == max_steps:
+        # Important special case! We don't need to do any computations in this case.
+        # This is a measurable performance optimisation.
+        save_residual = True
+        index = step
+        save_state2 = save_state
+    else:
+        if max_steps is not None and max_steps <= u2_minus_1:
+            # `step < max_steps` implies `step + 1 <= max_steps`. If it is also the case
+            # that `max_steps <= u2 - 1` then overall we know that `step <= u2 - 2`,
+            # which is the condition for using Stumm--Walther.
+            #
+            # Skipping this cond offers a measurable performance optimisation.
+            pred = False
+        else:
+            step, u2_minus_1 = nonbatchable((step, u2_minus_1))
+            pred = step >= u2_minus_1
+        save_residual, index, save_state2 = lax.cond(
+            pred,
+            _wang_moin_wrapper,
+            _stumm_walther_i_wrapper,
+            step,
+            save_state,
+            residual_steps,
+        )
+    return save_residual, index, save_state2
 
 
 def _unreachable_checkpoint_step(x):
@@ -395,14 +419,16 @@ def _array_to_none(x):
 
 
 @_checkpointed_while_loop.def_fwd
-def _checkpointed_while_loop_fwd(perturbed, vjp_arg, cond_fun, checkpoints, buffers):
+def _checkpointed_while_loop_fwd(
+    perturbed, vjp_arg, cond_fun, checkpoints, buffers, max_steps
+):
     """Run the while loop, saving checkpoints whenever the controller
     (`_should_save_residual`) requires.
     """
     del perturbed
     init_val, body_fun = vjp_arg
     # Equation (2.2) of Stumm and Walther
-    u2_minus_2 = ((checkpoints + 1) * (checkpoints + 2)) // 2 - 2
+    u2_minus_1 = ((checkpoints + 1) * (checkpoints + 2)) // 2 - 1
 
     def _cond_fun(carry):
         _, _, val, _, _ = carry
@@ -414,7 +440,7 @@ def _checkpointed_while_loop_fwd(perturbed, vjp_arg, cond_fun, checkpoints, buff
 
         step2 = step + 1
         save_residual, index, save_state2 = _should_save_residual(
-            step, save_state, residual_steps, u2_minus_2
+            step, save_state, residual_steps, u2_minus_1, checkpoints, max_steps
         )
         val2 = body_fun(val)
 
@@ -476,17 +502,20 @@ def _checkpointed_while_loop_fwd(perturbed, vjp_arg, cond_fun, checkpoints, buff
     # reading and writing the most recent residual to and from the end. So sort the
     # residuals we've produced here to obtain the desired invariant, i.e. that the
     # residuals are in order.
-    # TODO: does this introduce a 2x memory overhead?  It may be that we can do better
-    # here.
-    sort_indices = jnp.argsort(final_residual_steps)
-    final_residual_steps, final_residuals = jtu.tree_map(
-        ft.partial(_unique_index, sort_indices), (final_residual_steps, final_residuals)
-    )
+    if checkpoints != max_steps:
+        # If `checkpoints == max_steps` then residuals are already sorted.
+        sort_indices = jnp.argsort(final_residual_steps)
+        final_residual_steps, final_residuals = jtu.tree_map(
+            ft.partial(_unique_index, sort_indices),
+            (final_residual_steps, final_residuals),
+        )
     num_steps, final_residual_steps = nonbatchable((num_steps, final_residual_steps))
     return final_val, (num_steps, final_residual_steps, final_residuals, filled_buffers)
 
 
-def _load_from_checkpoint(step_grad_val, index, residual_steps, residuals):
+def _load_from_checkpoint(
+    step_grad_val, index, residual_steps, residuals, checkpoints, max_steps
+):
     """Loads a residual from the store of checkpoints."""
     # step_grad_val is the current location of grad_val.
     # index is the next currently empty slot for saving a residual.
@@ -509,7 +538,13 @@ def _load_from_checkpoint(step_grad_val, index, residual_steps, residuals):
     # step, so we won't need to load from this checkpoint. (And as
     # `_load_from_checkpoint` is itself used within a U-turn, then in practice this
     # triggers whenever we get >1 U-turns back-to-back.)
-    index2 = jnp.where(step_val2 + 1 == step_grad_val, read_index, index)
+    if checkpoints == max_steps:
+        # Known to be symbolically true in this case; this is a slight performance
+        # optimisation.
+        pred = True
+    else:
+        pred = step_val2 + 1 == step_grad_val
+    index2 = jnp.where(pred, read_index, index)
     step_val2, index2 = nonbatchable((step_val2, index2))
     return step_val2, val2, index2
 
@@ -654,7 +689,7 @@ def _fwd(
     )
 
 
-def _make_u_turn(vjp_fn, residual_steps, residuals, checkpoints):
+def _make_u_turn(vjp_fn, residual_steps, residuals, checkpoints, max_steps):
     """Propagates the cotangent backward one step."""
     residual_steps = nonbatchable(residual_steps)
 
@@ -673,7 +708,7 @@ def _make_u_turn(vjp_fn, residual_steps, residuals, checkpoints):
         grad_body_fun2 = jtu.tree_map(operator.add, grad_body_fun, grad_body_fun_update)
         step_grad_val2 = step_grad_val - 1
         step_val2, val2, index2 = _load_from_checkpoint(
-            step_grad_val2, index, residual_steps, residuals
+            step_grad_val2, index, residual_steps, residuals, checkpoints, max_steps
         )
         step_next_checkpoint2 = _calc_next_checkpoint(
             step_val2, step_grad_val2, index2, checkpoints
@@ -696,7 +731,14 @@ def _make_u_turn(vjp_fn, residual_steps, residuals, checkpoints):
 
 @_checkpointed_while_loop.def_bwd
 def _checkpointed_while_loop_bwd(
-    remainders, grad_final_val, perturbed, vjp_arg, cond_fun, checkpoints, buffers
+    remainders,
+    grad_final_val,
+    perturbed,
+    vjp_arg,
+    cond_fun,
+    checkpoints,
+    buffers,
+    max_steps,
 ):
     """Time for the complicated bit: iterate backward through a checkpointed while loop,
     loading values from checkpoints and using treeverse to toggle between forward and
@@ -774,8 +816,13 @@ def _checkpointed_while_loop_bwd(
         val_candidate = combine(dynamic_val_candidate, static_val_candidate)
         val_candidate = tree_at(buffers(None), val_candidate, replace_fn=lambda _: None)
 
-        perform_u_turn = step_val + 1 == step_grad_val
-        perform_u_turn = nonbatchable(perform_u_turn)
+        if checkpoints == max_steps:
+            # Skip calculating this at runtime; we know it must be true.
+            # This means we can inline the U-turn branch of the `cond`.
+            perform_u_turn = True
+        else:
+            perform_u_turn = step_val + 1 == step_grad_val
+            perform_u_turn = nonbatchable(perform_u_turn)
         (
             step_val2,
             step_grad_val2,
@@ -786,7 +833,7 @@ def _checkpointed_while_loop_bwd(
             grad_body_fun2,
         ) = lax.cond(
             perform_u_turn,
-            _make_u_turn(vjp_fn, residual_steps, residuals, checkpoints),
+            _make_u_turn(vjp_fn, residual_steps, residuals, checkpoints, max_steps),
             _fwd,
             step_val,
             step_grad_val,
@@ -806,21 +853,27 @@ def _checkpointed_while_loop_bwd(
         # efficiency reasons that I don't think apply any more.)
         #
 
-        (
-            index2,
-            step_next_checkpoint2,
-            residual_steps2,
-            residuals2,
-        ) = _maybe_save_to_checkpoint(
-            step_val2,
-            step_grad_val2,
-            step_next_checkpoint2,
-            index2,
-            val2,
-            residual_steps,
-            residuals,
-            checkpoints,
-        )
+        if checkpoints == max_steps:
+            # In this case we never need to save any extra checkpoints on the backward
+            # pass, so skip this.
+            residual_steps2 = residual_steps
+            residuals2 = residuals
+        else:
+            (
+                index2,
+                step_next_checkpoint2,
+                residual_steps2,
+                residuals2,
+            ) = _maybe_save_to_checkpoint(
+                step_val2,
+                step_grad_val2,
+                step_next_checkpoint2,
+                index2,
+                val2,
+                residual_steps,
+                residuals,
+                checkpoints,
+            )
 
         return (
             step_val2,
@@ -842,7 +895,12 @@ def _checkpointed_while_loop_bwd(
     init_index = jnp.minimum(num_steps, checkpoints)
     init_step_grad_val = num_steps
     init_step_val, init_val, init_index = _load_from_checkpoint(
-        init_step_grad_val, init_index, init_residual_steps, init_residuals
+        init_step_grad_val,
+        init_index,
+        init_residual_steps,
+        init_residuals,
+        checkpoints,
+        max_steps,
     )
     init_step_next_checkpoint = _calc_next_checkpoint(
         init_step_val, init_step_grad_val, init_index, checkpoints
