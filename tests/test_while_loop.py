@@ -702,9 +702,9 @@ def test_symbolic_zero(capfd):
     run((1.0, 2.0, jnp.array(3.0), jnp.array(4.0)))
     text, _ = capfd.readouterr()
     assert (
-        "symbolic_zero_gradient (True, True, (False, True, False, True, True, True))"
-        in text
-    )
+        "symbolic_zero_gradient "
+        "(True, True, True, (False, True, False, True, True, True))"
+    ) in text
 
 
 def test_buffer_index():
