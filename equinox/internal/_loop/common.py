@@ -14,6 +14,7 @@ from ..._filters import combine, is_array, partition
 from ..._module import field, Module
 from ..._tree import tree_at, tree_equal
 from ..._unvmap import unvmap_any
+from .._nontraceable import nonbatchable
 from .._primitive import create_vprim
 
 
@@ -359,7 +360,7 @@ def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers, makes_false
 
         def new_buffers(is_leaf):
             def new_buffers2(val):
-                _, _, val = val  # ignore step and pred
+                _, _, _, val = val  # ignore step and pred
                 bufs = buffers(val)
                 # Ignore the ._pred attribute of nested buffers.
                 # This is kind of a hack: we're special-casing support for nested
@@ -371,8 +372,26 @@ def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers, makes_false
             return new_buffers2
 
     def new_cond_fun(val):
-        _, pred, _ = val
-        return unvmap_any(pred)
+        step, pred, prev_pred, val = val
+        del pred
+
+        def wrap_buffer(leaf):
+            if not is_array(leaf):
+                raise ValueError("Only arrays can be treated as buffers.")
+            return _Buffer(leaf, prev_pred, None, makes_false_steps)
+
+        _, _, _, buffer_val = tree_at(
+            new_buffers(None), (None, None, None, val), replace_fn=wrap_buffer
+        )
+        # Note that this is actually recomputing `pred`!
+        # For some reason this is actually a minor performance optimisation.
+        # See https://github.com/patrick-kidger/diffrax/issues/274
+        out = unvmap_any(cond_fun(buffer_val))
+        if max_steps is not None:
+            if type(max_steps) is not int:
+                raise ValueError("`max_steps` must be a Python integer")
+            out = out & (step < max_steps)
+        return nonbatchable(out)
 
     def new_body_fun(val):
         tag = object()
@@ -396,9 +415,9 @@ def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers, makes_false
             else:
                 return _select_if_vmap(pred, leaf2, leaf, makes_false_steps)
 
-        step, pred, val = val
-        _, _, buffer_val = tree_at(
-            new_buffers(None), (None, None, val), replace_fn=wrap_buffer
+        step, pred, _, val = val
+        _, _, _, buffer_val = tree_at(
+            new_buffers(None), (None, None, None, val), replace_fn=wrap_buffer
         )
         buffer_val2 = body_fun(buffer_val)
         # Strip `.named_shape`; c.f. Diffrax issue #246
@@ -413,13 +432,9 @@ def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers, makes_false
         )
         step2 = step + 1
         pred2 = pred & cond_fun(buffer_val2)
-        if max_steps is not None:
-            if type(max_steps) is not int:
-                raise ValueError("`max_steps` must be a Python integer")
-            pred2 = pred2 & (step2 < max_steps)
-        return step2, pred2, val2
+        return step2, pred2, pred, val2
 
     init_val = jtu.tree_map(fixed_asarray, init_val)
-    new_init_val = (jnp.asarray(0), jnp.asarray(cond_fun(init_val)), init_val)
+    new_init_val = (jnp.array(0), jnp.array(True), jnp.array(True), init_val)
 
     return new_cond_fun, new_body_fun, new_init_val, new_buffers

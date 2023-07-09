@@ -100,7 +100,7 @@ def while_loop(
             cond_fun, body_fun, init_val, max_steps, buffers, makes_false_steps=False
         )
         del cond_fun, body_fun, init_val
-        _, _, final_val = lax.while_loop(cond_fun_, body_fun_, init_val_)
+        _, _, _, final_val = lax.while_loop(cond_fun_, body_fun_, init_val_)
         return final_val
     elif kind == "checkpointed":
         del kind, base
