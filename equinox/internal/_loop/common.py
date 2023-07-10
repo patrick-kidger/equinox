@@ -371,21 +371,24 @@ def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers, makes_false
 
             return new_buffers2
 
-    def new_cond_fun(val):
-        step, pred, prev_pred, val = val
-        del pred
-
+    def _wrap_buffers(val, pred, tag):
         def wrap_buffer(leaf):
             if not is_array(leaf):
                 raise ValueError("Only arrays can be treated as buffers.")
-            return _Buffer(leaf, prev_pred, None, makes_false_steps)
+            return _Buffer(leaf, pred, tag, makes_false_steps)
 
         _, _, _, buffer_val = tree_at(
             new_buffers(None), (None, None, None, val), replace_fn=wrap_buffer
         )
+        return buffer_val
+
+    def new_cond_fun(val):
+        step, pred, prev_pred, val = val
+        del pred
         # Note that this is actually recomputing `pred`!
         # For some reason this is actually a minor performance optimisation.
         # See https://github.com/patrick-kidger/diffrax/issues/274
+        buffer_val = _wrap_buffers(val, prev_pred, None)
         out = unvmap_any(cond_fun(buffer_val))
         if max_steps is not None:
             if type(max_steps) is not int:
@@ -399,11 +402,6 @@ def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers, makes_false
         def is_our_buffer(node):
             return isinstance(node, _Buffer) and node._tag is tag
 
-        def wrap_buffer(leaf):
-            if not is_array(leaf):
-                raise ValueError("Only arrays can be treated as buffers.")
-            return _Buffer(leaf, pred, tag, makes_false_steps)
-
         def unwrap_and_select(leaf, leaf2):
             if is_our_buffer(leaf):
                 assert is_our_buffer(leaf2)
@@ -416,9 +414,7 @@ def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers, makes_false
                 return _select_if_vmap(pred, leaf2, leaf, makes_false_steps)
 
         step, pred, _, val = val
-        _, _, _, buffer_val = tree_at(
-            new_buffers(None), (None, None, None, val), replace_fn=wrap_buffer
-        )
+        buffer_val = _wrap_buffers(val, pred, tag)
         buffer_val2 = body_fun(buffer_val)
         # Strip `.named_shape`; c.f. Diffrax issue #246
         struct = jax.eval_shape(lambda: buffer_val)
@@ -435,6 +431,8 @@ def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers, makes_false
         return step2, pred2, pred, val2
 
     init_val = jtu.tree_map(fixed_asarray, init_val)
-    new_init_val = (jnp.array(0), jnp.array(True), jnp.array(True), init_val)
+    init_buffer_val = _wrap_buffers(init_val, jnp.array(True), None)
+    init_pred = jnp.array(cond_fun(init_buffer_val))
+    new_init_val = (jnp.array(0), init_pred, jnp.array(True), init_val)
 
     return new_cond_fun, new_body_fun, new_init_val, new_buffers
