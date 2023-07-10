@@ -139,7 +139,8 @@ class EnumerationItem(Module):
     def __eq__(self, other) -> Bool[ArrayLike, ""]:  # pyright: ignore
         if isinstance(other, EnumerationItem):
             if self._enumeration is other._enumeration:
-                return self._value == other._value
+                with jax.ensure_compile_time_eval():
+                    return self._value == other._value
         raise ValueError(
             "Can only compare equality between enumerations of the same type."
         )
@@ -147,7 +148,8 @@ class EnumerationItem(Module):
     def __ne__(self, other) -> Bool[ArrayLike, ""]:  # pyright: ignore
         if isinstance(other, EnumerationItem):
             if self._enumeration is other._enumeration:
-                return self._value != other._value
+                with jax.ensure_compile_time_eval():
+                    return self._value != other._value
         raise ValueError(
             "Can only compare equality between enumerations of the same type."
         )
@@ -289,7 +291,8 @@ else:
                 raise ValueError("Can only promote enumerations.")
             if (not issubclass(cls, item._enumeration)) or item._enumeration is cls:
                 raise ValueError("Can only promote from inherited enumerations.")
-            value = jnp.asarray(cls._base_offsets[item._enumeration])[item._value]
+            with jax.ensure_compile_time_eval():
+                value = jnp.asarray(cls._base_offsets[item._enumeration])[item._value]
             return EnumerationItem(value, cls)
 
         @classmethod
@@ -321,7 +324,8 @@ else:
                 raise ValueError("`where` requires a scalar boolean predicate")
             if isinstance(a, EnumerationItem) and isinstance(b, EnumerationItem):
                 if a._enumeration is cls and b._enumeration is cls:
-                    value = jnp.where(pred, a._value, b._value)
+                    with jax.ensure_compile_time_eval():
+                        value = jnp.where(pred, a._value, b._value)
                     cls = cast(type[Enumeration], cls)
                     return EnumerationItem(value, cls)
             name = f"{cls.__module__}.{cls.__qualname__}"

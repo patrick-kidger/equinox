@@ -250,3 +250,17 @@ def test_error_if():
         A.a.error_if(token, True)
     with pytest.raises(Exception):
         jax.jit(A.a.error_if)(token, True)
+
+
+def test_compile_time_eval():
+    class A(eqxi.Enumeration):
+        a = "hi"
+        b = "bye"
+
+    @jax.jit
+    def f():
+        x = A.where(True, A.a, A.b)
+        y = x == A.a
+        assert y
+
+    f()
