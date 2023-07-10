@@ -71,8 +71,7 @@ def field(
         ```
 
     This means that it does not interact with any JAX transforms, like JIT or grad.
-    Moreover, all static fields should be hashable and support `__eq__`. In
-    particular you should not use JAX or NumPy arrays, as these are not hashable.
+    This means that it's usually a bug to make JAX arrays be static fields.
 
     This is an advanced feature that should very rarely be used. It is preferred to
     just filter out each field with `eqx.partition` whenever you need to select only
