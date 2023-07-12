@@ -81,3 +81,5 @@ If this quick start has got you interested, then have a read of [All of Equinox]
 [Eqxvision](https://github.com/paganpasta/eqxvision): computer vision models.
 
 [sympy2jax](https://github.com/google/sympy2jax): SymPy<->JAX conversion; train symbolic expressions via gradient descent.
+
+[Levanter](https://github.com/stanford-crfm/levanter): scalable+reliable training of foundation models (e.g. LLMs).
