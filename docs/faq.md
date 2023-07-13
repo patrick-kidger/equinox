@@ -66,6 +66,57 @@ linear = eqx.nn.Linear(input_size, output_size, key=key)
 y = jax.vmap(linear)(x)
 ```
 
+## My model is slow to train!
+
+Most autodifferentiable programs will have a "numerical bit" (e.g. a training step for your model) and a "normal programming bit" (e.g. saving models to disk).
+
+JAX makes this difference explicit. All the numerical work should go inside a single big JIT region, within which all numerical operations are compiled. For example:
+
+```python    
+@eqx.filter_jit
+def make_step(model, x, y):
+    # Inside JIT region
+    grads = compute_loss(model, x, y)
+    model = stochastic_gradient_descent(model, grads)
+    return model
+
+@eqx.filter_grad
+def compute_loss(model, x, y):
+    # Still inside JIT region
+    ...
+    
+def stochastic_gradient_descent(model, grads):
+    # Also inside JIT region
+    ...
+
+for step, (x, y) in zip(range(number_of_steps), dataloader):
+    model = make_step(model, x, y)
+    # Outside JIT region
+```
+
+A common mistake would be to put `jax.jit`/`eqx.filter_jit` on the `compute_loss` function instead of the overall `make_step` function. This would mean doing numerical work (`stochastic_gradient_descent`) outside of JIT. That would run, but would be unnecessarily slow.
+
+See [the RNN example](https://docs.kidger.site/equinox/examples/train_rnn/) as an example of good practice. The whole `make_step` function is JIT compiled in one go.
+
+## My model is slow to compile!
+
+95% of the time, it's because you've done something like this:
+```python
+@jax.jit
+def f(x):
+    for i in range(100):
+        x = my_complicated_function(x)
+    return x
+```
+When JAX traces through this, it can't see the `for` loop. (`jax.jit` replaces the `x` argument with a tracer object that records everything that happens to it -- and this effectively unrolls the loop.) As a result you'll get 100 independent copies of `my_complicated_function`, which all get compiled separately.
+
+In this case, a `jax.lax.scan` is probably what you want. Likewise it's usually also preferable to rewrite even simple stuff like
+```python
+x2 = f(x1)
+x3 = f(x2)
+```
+as a little length-2 scan.
+
 ## TypeError: not a valid JAX type.
 
 You might be getting an error like
@@ -98,7 +149,7 @@ This error happens because a model, when treated as a PyTree, may have leaves th
 
 Instead of [`jax.jit`](https://jax.readthedocs.io/en/latest/_autosummary/jax.jit.html), use [`equinox.filter_jit`][]. Likewise for [other transformations](https://docs.kidger.site/equinox/api/filtering/transformations).
 
-# How do I mark an array as being non-trainable? (Like PyTorch's buffers?)
+## How do I mark an array as being non-trainable? (Like PyTorch's buffers?)
 
 This can be done by using `jax.lax.stop_gradient`:
 ```python
