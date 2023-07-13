@@ -264,8 +264,11 @@ def _is_none(x):
     return x is None
 
 
-def _is_jvp_tracer(x):
-    return isinstance(x, ad.JVPTracer)
+def _is_jvp_tracer(main):
+    def _is_jvp_tracer_impl(x):
+        return isinstance(x, ad.JVPTracer) and x._trace.main is main
+
+    return _is_jvp_tracer_impl
 
 
 def filter_jvp(
@@ -273,18 +276,23 @@ def filter_jvp(
 ) -> tuple[_T, PyTree]:
     """Like `jax.jvp`, but accepts arbitrary PyTrees. (Not just JAXable types.)
 
+    In the following, an "inexact arraylike" refers to either a floating-point JAX
+    array, or a complex JAX array, or a Python `float`, or a Python `complex`. These are
+    the types which JAX considers to be differentiable.
+
     **Arguments:**
 
     - `fn`: Function to be differentiated. Its arguments can be Python objects, and
         its return type can be any Python object.
     - `primals`: The primal values at which `fn` should be evaluated. Should be a
         sequence of arguments, and its length should be equal to the number of
-        positional parameter of `fn`.
+        positional parameters of `fn`.
     - `tangents`: The tangent vector for which the Jacobian-vector product should be
         calculated. Should be a PyTree with the same structure as `primals`. The leaves
-        of `tangents` must be either floating-point JAX arrays, or Python floats, or
-        `None`s. The tangent must be `None` for any primal which is not itself a
-        floating-point JAX array or Python float.
+        of `tangents` must either be inexact arraylikes, or they can be `None`s. `None`s
+        are used to indicate (symbolic) zero tangents; in particular these must be
+        passed for all primals that are not inexact arraylikes. (And `None` can also be
+        passed for any inexact arraylike primals too.)
 
     **Returns:**
 
@@ -293,7 +301,9 @@ def filter_jvp(
     product of `fn` evaluated at `primals` with `tangents`.
 
     The `tangents_out` has the same structure as `primals_out`, but has `None` for
-    any leaves that aren't differentiable.
+    any leaves with symbolic zero derivative. (Either because they're not
+    differentiable -- i.e. they're not a floating-point JAX array or Python `float` --
+    or because they have no dependence on any input with non-symbolic-zero tangent.)
 
     !!! Tip
 
@@ -311,10 +321,11 @@ def filter_jvp(
     flat_tangents = jtu.tree_leaves(tangents)  # all non-None tangents are dynamic
 
     def _fn(*_flat_dynamic):
+        _main = jax.core.find_top_trace(_flat_dynamic).main
         _dynamic = jtu.tree_unflatten(treedef, _flat_dynamic)
         _in = combine(_dynamic, static_primals)
         _out = fn(*_in)
-        _dynamic_out, _static_out = partition(_out, _is_jvp_tracer)
+        _dynamic_out, _static_out = partition(_out, _is_jvp_tracer(_main))
         return _dynamic_out, Static(_static_out)
 
     primal_out, tangent_out = jax.jvp(_fn, flat_dynamic_primals, flat_tangents)

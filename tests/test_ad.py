@@ -543,3 +543,19 @@ def test_filter_custom_vjp_defvjp():
 
     f.defvjp(f_fwd, f_bwd)
     jax.grad(lambda x: sum(f(x)))((jnp.array(1.0), jnp.array(1.0)))
+
+
+# We expect the gradient of the second output of `g` to be a symbolic zero, even though
+# it's carrying a JVP tracer from the higher level of the stack.
+def test_double_filter_jvp():
+    def f(x):
+        def g(y):
+            return y, x
+
+        (a, b), (ta, tb) = eqx.filter_jvp(g, (x,), (1.0,))
+        assert a is not None
+        assert b is not None
+        assert ta is not None
+        assert tb is None
+
+    eqx.filter_jvp(f, (1.0,), (1.0,))
