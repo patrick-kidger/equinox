@@ -6,6 +6,7 @@ from collections.abc import Callable, Hashable
 from typing import Any, Optional, overload, Union
 
 import jax
+import jax.core
 import jax.interpreters.batching as batching
 import jax.interpreters.pxla as pxla
 import jax.numpy as jnp
@@ -75,32 +76,49 @@ class if_array:
 
 @dataclasses.dataclass(frozen=True)  # not a pytree
 class if_mapped:
-    """Returns a callable that returns the specified integer if evaluated on a mapped
-    output from a vmap'd or pmap'd function. Otherwise, it returns `None`.
+    """Used with the `out_axes` argument of [`equinox.filter_vmap`][], to only add an
+    output batch axis if necessary.
 
-    !!! Example
-
-        ```python
-        fn = if_array(1)
-        # Evaluate on an array, return the integer.
-        fn(jax.numpy.array([0, 1, 2]))  # 1
-        # Evaluate on not-an-array, return None.
-        fn(True)  # None
-        ```
+    That is, `out_axes=if_mapped(i)` is equivalent to `out_axes=i` for any output that
+    is batched, and `out_axes=None` fofr any output that is not batched.
     """
 
     axis: int
 
+    def __call__(self, x: Any):
+        raise RuntimeError(
+            "`eqx.internal.if_mapped` should not be called directly; it is only valid "
+            "when passed to `out_axes` of `eqx.filter_vmap`."
+        )
+
+
+@dataclasses.dataclass(frozen=True)  # not a pytree
+class _if_mapped:
+    main: Any
+    axis: int
+
     def __call__(self, x: Any) -> Optional[int]:
-        if isinstance(x, batching.BatchTracer):
+        if isinstance(x, batching.BatchTracer) and x._trace.main is self.main:
             if x.batch_dim is batching.not_mapped:
                 return None
             else:
                 return self.axis
-        elif isinstance(x, pxla.MapTracer):
+        elif isinstance(x, pxla.MapTracer) and x._trace.main is self.main:
             return self.axis
         else:
             return None
+
+
+# The existence of this function is a complete hack: it couples together `filter_vmap`
+# with `if_mapped`. I don't see an obvious way around it though.
+def _bind_main(main, out_axes):
+    def _bind(axis):
+        if isinstance(axis, if_mapped):
+            return _if_mapped(main, axis.axis)
+        else:
+            return axis
+
+    return jtu.tree_map(_bind, out_axes)
 
 
 def _swapaxes(array, axis):
@@ -177,9 +195,11 @@ class _VmapWrapper(Module):
         static_args, dynamic_args = partition(args, unmapped_axis)
 
         def _fun_wrapper(_dynamic_args):
+            _main = jax.core.find_top_trace(jtu.tree_leaves(_dynamic_args)).main
             _args = combine(_dynamic_args, static_args)
             _out = self._fun(*_args)
-            _out_axes = _resolve_axes(_out, self._out_axes)
+            _out_axes = _bind_main(_main, self._out_axes)
+            _out_axes = _resolve_axes(_out, _out_axes)
             _none_axes = jtu.tree_map(_is_none, _out_axes, is_leaf=_is_none)
             _nonvmapd, _vmapd = partition(_out, _none_axes)
             return _vmapd, Static((_nonvmapd, _out_axes))
@@ -414,8 +434,10 @@ def _filter_pmap_cache(
             )
 
     def fun_wrapped(_dynamic):
+        _main = jax.core.find_top_trace(jtu.tree_leaves(_dynamic))
         _fun, _args, _, _out_axes = combine(_dynamic, static)
         _out = _fun(*_args)
+        _out_axes = _bind_main(_main, _out_axes)
         _out_axes = _resolve_axes(_out, _out_axes)
         jtu.tree_map(_check_map_out_axis, _out_axes)
         _pmapd = []
