@@ -6,9 +6,10 @@ import jax.core
 import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
+import jax.lax as lax
 import jax.numpy as jnp
 import jax.tree_util as jtu
-from jaxtyping import Array, PyTree
+from jaxtyping import Array, Bool, PyTree
 
 from .._ad import filter_custom_vjp
 from .._doc_utils import WithRepr
@@ -16,6 +17,7 @@ from .._errors import error_if
 from .._filters import combine, filter, is_array, is_array_like, partition
 from .._module import Module
 from .._pretty_print import pformat_short_array_text, tree_pformat, tree_pprint
+from .._unvmap import unvmap_any
 
 
 def announce_transform(
@@ -154,6 +156,12 @@ def _debug_backward_nan_bwd(residuals, grad_x, perturbed, x, name, terminate):
         ]
         grad_x = error_if(grad_x, jnp.any(jnp.stack(nans)), "Encountered NaN")
     return grad_x
+
+
+def breakpoint_if(pred: Bool[Array, "..."]):
+    # We can't just write `jax.debug.breakpoint` for the second branch. For some reason
+    # it needs as lambda wrapper.
+    lax.cond(unvmap_any(pred), lambda: jax.debug.breakpoint(), lambda: None)
 
 
 _dce_store = {}
