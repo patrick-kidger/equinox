@@ -3,12 +3,16 @@ from typing import Any
 from typing_extensions import ParamSpec
 
 import jax
+import jax._src.traceback_util as traceback_util
 import jax.core
 import jax.tree_util as jtu
 from jaxtyping import PyTree
 
 from ._filters import combine, is_array, partition
 from ._module import Module, module_update_wrapper, Static
+
+
+traceback_util.register_exclusion(__file__)
 
 
 _P = ParamSpec("_P")

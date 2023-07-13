@@ -158,10 +158,13 @@ def _debug_backward_nan_bwd(residuals, grad_x, perturbed, x, name, terminate):
     return grad_x
 
 
-def breakpoint_if(pred: Bool[Array, "..."]):
+def breakpoint_if(pred: Bool[Array, "..."], **kwargs):
     # We can't just write `jax.debug.breakpoint` for the second branch. For some reason
     # it needs as lambda wrapper.
-    lax.cond(unvmap_any(pred), lambda: jax.debug.breakpoint(), lambda: None)
+    token = kwargs.get("token", None)
+    return lax.cond(
+        unvmap_any(pred), lambda: jax.debug.breakpoint(**kwargs), lambda: token
+    )
 
 
 _dce_store = {}

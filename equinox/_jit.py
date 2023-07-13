@@ -6,6 +6,7 @@ from typing import Any, overload, TypeVar
 from typing_extensions import ParamSpec
 
 import jax
+import jax._src.traceback_util as traceback_util
 from jaxtyping import PyTree
 
 from ._compile_utils import (
@@ -20,6 +21,9 @@ from ._deprecate import deprecated_0_10
 from ._doc_utils import doc_remove_args
 from ._filters import combine, is_array, partition
 from ._module import Module, module_update_wrapper, Partial, Static
+
+
+traceback_util.register_exclusion(__file__)
 
 
 _P = ParamSpec("_P")

@@ -10,7 +10,6 @@ from .._doc_utils import doc_remove_args as doc_remove_args, doc_repr as doc_rep
 from .._enum import Enumeration as Enumeration
 from .._errors import (
     branched_error_if as branched_error_if,
-    branched_error_p as branched_error_p,
     error_if as error_if,
 )
 from .._misc import left_broadcast_to as left_broadcast_to

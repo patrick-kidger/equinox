@@ -3,10 +3,14 @@ from collections.abc import Callable
 from typing import Any, Union
 
 import jax
+import jax._src.traceback_util as traceback_util
 from jaxtyping import PyTree
 
 from ._filters import combine, is_array, partition
 from ._module import Static
+
+
+traceback_util.register_exclusion(__file__)
 
 
 def _filter(x):
