@@ -6,6 +6,7 @@ from collections.abc import Callable, Hashable
 from typing import Any, Optional, overload, Union
 
 import jax
+import jax._src.traceback_util as traceback_util
 import jax.core
 import jax.interpreters.batching as batching
 import jax.interpreters.pxla as pxla
@@ -25,6 +26,9 @@ from ._deprecate import deprecated_0_10
 from ._doc_utils import doc_remove_args
 from ._filters import combine, filter, is_array, is_array_like, partition
 from ._module import Module, module_update_wrapper, Partial, Static
+
+
+traceback_util.register_exclusion(__file__)
 
 
 ResolvedAxisSpec = Optional[int]

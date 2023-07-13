@@ -16,6 +16,7 @@ from typing import (
 from typing_extensions import ParamSpec
 
 import jax
+import jax._src.traceback_util as traceback_util
 import jax.core
 import jax.interpreters.ad as ad
 import jax.numpy as jnp
@@ -34,6 +35,9 @@ from ._filters import (
 from ._make_jaxpr import filter_make_jaxpr
 from ._module import field, Module, module_update_wrapper, Partial, Static
 from ._tree import tree_equal
+
+
+traceback_util.register_exclusion(__file__)
 
 
 _P = ParamSpec("_P")
@@ -597,7 +601,9 @@ class filter_custom_jvp:
                 raise ValueError("Received keyword tangent")
             t_args = jtu.tree_map(_drop_nondiff, t_args, d_args)
             args, kwargs = combine(dynamic, static)
-            return fn_jvp(args, t_args, **kwargs)
+            out, t_out = fn_jvp(args, t_args, **kwargs)
+            t_out = jtu.tree_map(_none_to_zero, t_out, out, is_leaf=_is_none)
+            return out, t_out
 
         self.fn.defjvp(fn_jvp_wrapper, symbolic_zeros=True)
 

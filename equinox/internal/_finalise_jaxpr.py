@@ -180,7 +180,6 @@ def finalise_make_jaxpr(fn, *, return_shape: bool = False):
 
 
 # Register finalisation rules for Equinox's custom primitives.
-from .._errors import branched_error_p
 from .._unvmap import unvmap_all_p, unvmap_any_p, unvmap_max_p
 from ._debug import announce_jaxpr_p
 from ._loop import maybe_set_p, select_if_vmap_p
@@ -201,15 +200,6 @@ for prim in (
     nonbatchable_p,
 ):
     register_impl_finalisation(prim)
-
-
-# Assume no errors are raised after finalisation. Can't use the impl rule as that
-# has a pure_callback.
-def _branched_error_if_finalisation(pred, index, *x, msgs):
-    return x
-
-
-primitive_finalisations[branched_error_p] = _branched_error_if_finalisation
 
 
 # To make this also useful as debugging tool, we also inline some calls.
