@@ -670,7 +670,9 @@ def _none_to_zero(ct, x):
         if x is None:
             return None
         else:
-            aval = jax.core.get_aval(x).at_least_vspace()
+            # No raising-to-vspace. JAX is internally inconsistent, and expects integers
+            # to have integer tangents from custom_{jvp,vjp} rules
+            aval = jax.core.get_aval(x)  # .at_least_vspace()
             return jax.custom_derivatives.SymbolicZero(aval)
     else:
         return ct
