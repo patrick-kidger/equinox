@@ -101,7 +101,7 @@ def error_if(
     x: PyTree,
     pred: Bool[ArrayLike, "..."],
     msg: str,
-    on_error: Literal["default", "raise", "breakpoint"] = "default",
+    on_error: Literal["default", "raise", "breakpoint", "unsafe_ignore"] = "default",
 ) -> PyTree:
     """Throws an error based on runtime values. Works even under JIT.
 
@@ -113,9 +113,12 @@ def error_if(
         error will be raised if any of them are `True`. If vmap'd then an error will be
         raised if any batch element has `True`.
     - `msg`: the string to display as an error message.
-    - `on_error`: how to raise the error. Valid values are either `"default"`,
-        `"raise"`, or `"breakpoint"`. The default value of `"default"` defers to the
-        `EQX_ON_ERROR` environment variable, which itself defaults to `"raise"`.
+    - `on_error`: how to behave when an error is raised. Valid values are either
+        `"default"`, `"raise"`, `"breakpoint"`, or `"unsafe_ignore"`. The default value
+        of `"default"` defers to the `EQX_ON_ERROR` environment variable, which itself
+        defaults to `"raise"`. Of the other three: `"raise"` will raise a runtime error,
+        `"breakpoint"` will open a debugger, and `"unsafe_ignore"` will do nothing at
+        all.
 
     **Returns:**
 
@@ -142,19 +145,21 @@ def branched_error_if(
     pred: Bool[ArrayLike, "..."],
     index: Int[ArrayLike, "..."],
     msgs: Sequence[str],
-    on_error: Literal["default", "raise", "breakpoint"] = "default",
+    on_error: Literal["default", "raise", "breakpoint", "unsafe_ignore"] = "default",
 ) -> PyTree:
     """As [`equinox.internal.error_if`][], but will raise one of
     several `msgs` depending on the value of `index`.
     """
     if on_error == "default":
         on_error = os.environ.get("EQX_ON_ERROR", "raise")  # pyright: ignore
-        if on_error not in ("raise", "breakpoint"):
+        if on_error not in ("raise", "breakpoint", "unsafe_ignore"):
             raise RuntimeError("Unrecognised value for `EQX_ON_ERROR`.")
         on_error = cast(Literal["raise", "breakpoint"], on_error)
     else:
-        if on_error not in ("raise", "breakpoint"):
+        if on_error not in ("raise", "breakpoint", "unsafe_ignore"):
             raise RuntimeError("Unrecognised value for `on_error`.")
+    if on_error == "unsafe_ignore":
+        return x
     with jax.ensure_compile_time_eval():
         pred = unvmap_any(pred)
         index = unvmap_max(index)
