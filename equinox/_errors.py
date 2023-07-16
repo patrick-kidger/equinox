@@ -79,7 +79,9 @@ def _error(x, pred, index, *, msgs, on_error):
             return x
 
         def handle_error(x):
-            x = jax.pure_callback(display_msg, x, index)  # pyright: ignore
+            x = jax.pure_callback(  # pyright: ignore
+                display_msg, x, x, index, vectorized=True
+            )
             return jax.debug.breakpoint(token=x)
 
         return lax.cond(pred, handle_error, lambda y: y, x)
