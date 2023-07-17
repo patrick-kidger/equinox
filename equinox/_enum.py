@@ -1,5 +1,6 @@
 from typing import Any, cast, TYPE_CHECKING, Union
 
+import jax._src.traceback_util as traceback_util
 import jax.core
 import jax.numpy as jnp
 import numpy as np
@@ -8,6 +9,9 @@ from jaxtyping import Array, ArrayLike, Bool, Int
 from ._doc_utils import doc_repr
 from ._errors import branched_error_if
 from ._module import field, Module
+
+
+traceback_util.register_exclusion(__file__)
 
 
 def _magic(name: str) -> bool:

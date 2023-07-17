@@ -72,26 +72,34 @@ def _error(x, pred, index, *, msgs, on_error):
         return lax.cond(pred, handle_error, lambda: x)
 
     elif on_error == "breakpoint":
-        # TODO: find a way to have this be DCE'd if `x` is.
 
-        def display_msg(x, _index):
+        def display_msg(_index):
             print(msgs[_index.item()])
-            return x
+            return _index
 
-        def handle_error(x):
-            x = jax.pure_callback(  # pyright: ignore
-                display_msg, x, x, index, vectorized=True
+        def to_nan(_index):
+            del _index
+            return jtu.tree_map(_nan_like, struct)
+
+        def handle_error():
+            _index = jax.pure_callback(  # pyright: ignore
+                display_msg, index, index, vectorized=True
             )
-            return jax.debug.breakpoint(token=x)
+            _index = jax.debug.breakpoint(token=_index)
+            return jax.pure_callback(  # pyright: ignore
+                to_nan, struct, _index, vectorized=True
+            )
 
-        return lax.cond(pred, handle_error, lambda y: y, x)
+        struct = jax.eval_shape(lambda: x)
+        return lax.cond(pred, handle_error, lambda: x)
     else:
         assert False
 
 
 # Use a custom_jvp to put the lax.cond outside of AD.
-# This is needed as lax.cond will unnecessarily promote symbolic
-# zeros to non-symbolic-zeros, and we'd really like to avoid that.
+# This is needed as (a) lax.cond will unnecessarily promote symbolic
+# zeros to non-symbolic-zeros, and we'd really like to avoid that, and (b) we need to
+# wrap our pure_callbacks in custom JVP rules.
 @_error.def_jvp
 def _error_jvp(primals, tangents, *, msgs, on_error):
     x, pred, index = primals
