@@ -276,7 +276,7 @@ def _is_jvp_tracer(main):
 
 
 def filter_jvp(
-    fn: Callable[..., _T], primals: Sequence, tangents: Sequence
+    fn: Callable[..., _T], primals: Sequence, tangents: Sequence, **kwargs
 ) -> tuple[_T, PyTree]:
     """Like `jax.jvp`, but accepts arbitrary PyTrees. (Not just JAXable types.)
 
@@ -297,6 +297,7 @@ def filter_jvp(
         are used to indicate (symbolic) zero tangents; in particular these must be
         passed for all primals that are not inexact arraylikes. (And `None` can also be
         passed for any inexact arraylike primals too.)
+    - `**kwargs`: Any keyword arguments to pass to `fn`. These are not differentiated.
 
     **Returns:**
 
@@ -328,7 +329,7 @@ def filter_jvp(
         _main = jax.core.find_top_trace(_flat_dynamic).main
         _dynamic = jtu.tree_unflatten(treedef, _flat_dynamic)
         _in = combine(_dynamic, static_primals)
-        _out = fn(*_in)
+        _out = fn(*_in, **kwargs)
         _dynamic_out, _static_out = partition(_out, _is_jvp_tracer(_main))
         return _dynamic_out, Static(_static_out)
 
