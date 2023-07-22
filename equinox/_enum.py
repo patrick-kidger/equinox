@@ -140,20 +140,20 @@ class EnumerationItem(Module):
     _value: Int[Union[Array, np.ndarray], ""]
     _enumeration: type["Enumeration"] = field(static=True)
 
-    def __eq__(self, other) -> Bool[ArrayLike, ""]:  # pyright: ignore
+    def __eq__(self, other) -> Bool[Array, ""]:  # pyright: ignore
         if isinstance(other, EnumerationItem):
             if self._enumeration is other._enumeration:
                 with jax.ensure_compile_time_eval():
-                    return self._value == other._value
+                    return jnp.asarray(self._value == other._value)
         raise ValueError(
             "Can only compare equality between enumerations of the same type."
         )
 
-    def __ne__(self, other) -> Bool[ArrayLike, ""]:  # pyright: ignore
+    def __ne__(self, other) -> Bool[Array, ""]:  # pyright: ignore
         if isinstance(other, EnumerationItem):
             if self._enumeration is other._enumeration:
                 with jax.ensure_compile_time_eval():
-                    return self._value != other._value
+                    return jnp.asarray(self._value != other._value)
         raise ValueError(
             "Can only compare equality between enumerations of the same type."
         )
@@ -164,6 +164,23 @@ class EnumerationItem(Module):
         return f"{prefix}<{message}>"
 
     def error_if(self, token, pred):
+        """Conditionally raise a runtime error, with message given by this enumeration
+        item.
+
+        See [`equinox.error_if`][] for more information on the behaviour of errors.
+
+        **Arguments:**
+
+        - `token`: the token to thread the error on to. This should be a PyTree
+            containing at least one array. The error will be checked after this array
+            has been computed, and before the return value from this function is used.
+        - `pred`: the condition to raise the error on. Will raise if this evaluates to
+            True at runtime.
+
+        **Returns:**
+
+        `token` is returned unchanged.
+        """
         return branched_error_if(
             token, pred, self._value, self._enumeration._index_to_message
         )
@@ -255,6 +272,14 @@ else:
 
         result = MORE_RESULTS.linear_solve_failed
         ```
+
+        Enumerations are often used to represent error conditions. As such they have
+        built-in support for raising runtime errors, via [`equinox.error_if`][]:
+        ```python
+        x = result.error_if(x, pred)
+        ```
+        this is equivalent to `x = eqx.error_if(x, pred, msg)`, where `msg` is the
+        string corresponding to the enumeration item.
         """
 
         @classmethod
@@ -336,10 +361,3 @@ else:
             raise ValueError(
                 f"Arguments to {name}.where(...) must be members of {name}."
             )
-
-        # In addition we have an `.error_if` method that does not form part of the
-        # public API.
-        #
-        # Runtime errors aren't something we're willing to commit to offering in the
-        # public API, as JAX may change something on this front, and the implementation
-        # uses custom primitives.

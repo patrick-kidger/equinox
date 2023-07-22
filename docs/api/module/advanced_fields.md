@@ -17,3 +17,7 @@ Equinox modules can be used as [abstract base classes](https://docs.python.org/3
 ::: equinox.AbstractClassVar
     selection:
         members: false
+
+## Creating wrapper modules
+
+::: equinox.module_update_wrapper

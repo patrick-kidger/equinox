@@ -7,6 +7,7 @@ from typing_extensions import ParamSpec
 
 import jax
 import jax._src.traceback_util as traceback_util
+import jax.core
 from jaxtyping import PyTree
 
 from ._compile_utils import (

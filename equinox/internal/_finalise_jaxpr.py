@@ -181,7 +181,7 @@ def finalise_make_jaxpr(fn, *, return_shape: bool = False):
 
 # Register finalisation rules for Equinox's custom primitives.
 from .._unvmap import unvmap_all_p, unvmap_any_p, unvmap_max_p
-from ._debug import announce_jaxpr_p
+from ..debug._announce_transform import announce_jaxpr_p
 from ._loop import maybe_set_p, select_if_vmap_p
 from ._noinline import noinline_p
 from ._nontraceable import nonbatchable_p, nondifferentiable_backward_p, nontraceable_p

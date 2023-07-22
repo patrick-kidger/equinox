@@ -5,7 +5,7 @@ internal_lru_caches = []
 def clear_caches():
     """Clears internal Equinox caches.
 
-    Best used before calling `jax.clear_caches()` and `jax.clear_backends()`.
+    Best used before calling `jax.clear_caches()` or `jax.clear_backends()`.
 
     **Arguments:**
 
