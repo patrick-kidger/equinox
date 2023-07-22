@@ -1,6 +1,6 @@
 import importlib.metadata
 
-from . import internal as internal, nn as nn
+from . import debug as debug, internal as internal, nn as nn
 from ._ad import (
     filter_closure_convert as filter_closure_convert,
     filter_custom_jvp as filter_custom_jvp,
@@ -17,6 +17,7 @@ from ._better_abstract import (
 from ._caches import clear_caches as clear_caches
 from ._callback import filter_pure_callback as filter_pure_callback
 from ._enum import Enumeration as Enumeration
+from ._errors import branched_error_if as branched_error_if, error_if as error_if
 from ._eval_shape import filter_eval_shape as filter_eval_shape
 from ._filters import (
     combine as combine,

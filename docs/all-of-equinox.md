@@ -143,7 +143,7 @@ Equinox includes four main things:
 - For building models: `equinox.Module`.
 - Prebuilt neural network layers: `equinox.nn.Linear`, `equinox.nn.Conv2d`, etc.
 - Filtering, and filtered transformations: `equinox.partition`, `equinox.filter_jit` etc.
-- Some utilities to help manipulate PyTrees: `equinox.tree_at` etc.
+- Other useful tools: for serialisation, manipulating PyTrees, etc.
 
 See also the API reference on the left.
 

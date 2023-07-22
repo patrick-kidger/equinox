@@ -129,12 +129,13 @@ nav:
         - Filtering:
             - 'api/filtering/partition-combine.md'
             - 'api/filtering/transformations.md'
-        - Utilities:
-            - 'api/utilities/manipulation.md'
-            - 'api/utilities/serialisation.md'
-            - 'api/utilities/enumerations.md'
-            - 'api/utilities/pretty-printing.md'
-            - 'api/utilities/miscellaneous.md'
+        - 'api/caches.md'
+        - 'api/debug.md'
+        - 'api/enumerations.md'
+        - 'api/errors.md'
+        - 'api/manipulation.md'
+        - 'api/pretty-printing.md'
+        - 'api/serialisation.md'
     - Misc:
         - 'tricks.md'
         - 'citation.md'

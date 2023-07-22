@@ -1,17 +1,21 @@
+import functools as ft
+import inspect
 import os
 import warnings
 from collections.abc import Sequence
-from typing import cast, Literal
+from typing import cast, Literal, Union
 
 import jax
 import jax._src.traceback_util as traceback_util
 import jax.core
 import jax.lax as lax
+import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
 from jaxtyping import Array, ArrayLike, Bool, Int, PyTree
 
 from ._ad import filter_custom_jvp
+from ._doc_utils import doc_remove_args
 from ._filters import combine, is_array, partition
 from ._unvmap import unvmap_any, unvmap_max
 
@@ -19,14 +23,14 @@ from ._unvmap import unvmap_any, unvmap_max
 traceback_util.register_exclusion(__file__)
 
 
-def _nan_like(x: np.ndarray) -> np.ndarray:
+def _nan_like(x: Union[Array, np.ndarray]) -> Union[Array, np.ndarray]:
     dtype = np.result_type(x)
     if np.issubdtype(dtype, np.inexact):
-        return np.full(x.shape, np.nan, dtype)
+        return np.broadcast_to(np.array(np.nan, dtype), x.shape)
     elif np.issubdtype(dtype, np.integer):
-        return np.full(x.shape, np.iinfo(dtype).max, dtype)
+        return np.broadcast_to(np.array(np.iinfo(dtype).max, dtype), x.shape)
     elif np.issubdtype(dtype, np.bool_):
-        return np.full(x.shape, True, dtype)
+        return np.broadcast_to(np.array(True, dtype), x.shape)
     else:
         return x
 
@@ -85,13 +89,21 @@ def _error(x, pred, index, *, msgs, on_error):
             _index = jax.pure_callback(  # pyright: ignore
                 display_msg, index, index, vectorized=True
             )
-            _index = jax.debug.breakpoint(token=_index)
+            # Support JAX with and without DCE behaviour on breakpoints.
+            if "token" in inspect.signature(jax.debug.breakpoint).parameters.keys():
+                breakpoint_kwargs = dict(token=_index)
+            else:
+                breakpoint_kwargs = {}
+            _index = jax.debug.breakpoint(**breakpoint_kwargs)
             return jax.pure_callback(  # pyright: ignore
                 to_nan, struct, _index, vectorized=True
             )
 
         struct = jax.eval_shape(lambda: x)
         return lax.cond(pred, handle_error, lambda: x)
+
+    elif on_error == "nan":
+        return lax.cond(pred, ft.partial(jtu.tree_map, _nan_like), lambda y: y, x)
     else:
         assert False
 
@@ -107,33 +119,73 @@ def _error_jvp(primals, tangents, *, msgs, on_error):
     return _error(x, pred, index, msgs=msgs, on_error=on_error), tx
 
 
+def _currently_jitting():
+    return isinstance(jnp.array(1) + 1, jax.core.Tracer)
+
+
+if os.environ.get("EQX_ON_ERROR") == "breakpoint":
+    # TODO: remove this branch once JAX issue #16732 is fixed.
+    _old_jit = jax.jit
+
+    @ft.wraps(jax.jit)
+    def fixed_jit(fun, *args, **kwargs):
+        jit_fun = _old_jit(fun, *args, **kwargs)
+
+        def fixed_jit_impl(*args2, **kwargs2):
+            if _currently_jitting():
+                warnings.warn(
+                    "Ignoring intermediate `jax.jit` decorator, to work around JAX "
+                    "issue #16732, as `EQX_ON_ERROR=breakpoint` is set."
+                )
+                return fun(*args2, **kwargs2)
+            else:
+                return jit_fun(*args2, **kwargs2)
+
+        return fixed_jit_impl
+
+    jax.jit = fixed_jit
+
+
+# Remove the `on_error` argument from the public API for now. If you pass
+# `on_error="breakpoint"` -- rather than setting `EQX_ON_ERROR=breakpoint` -- then our
+# fix for JAX issue #16732 -- above -- can't kick in. So in practice this
+# argument probably won't work.
+@doc_remove_args("on_error")
 def error_if(
     x: PyTree,
     pred: Bool[ArrayLike, "..."],
     msg: str,
-    on_error: Literal["default", "raise", "breakpoint", "unsafe_ignore"] = "default",
+    on_error: Literal["default", "raise", "breakpoint", "nan"] = "default",
 ) -> PyTree:
     """Throws an error based on runtime values. Works even under JIT.
 
     **Arguments:**
 
-    - `x`: will be returned unchanged; used to determine where the error check happens
-        in the overall computation. Can be any PyTree; must contain at least one array.
+    - `x`: will be returned unchanged. This is used to determine where the error check
+        happens in the overall computation: it will happen after `x` is computed and
+        before the return value is used. `x` can be any PyTree, and it must contain at
+        least one array.
     - `pred`: a boolean for whether to raise an error. Can be an array of bools; an
         error will be raised if any of them are `True`. If vmap'd then an error will be
         raised if any batch element has `True`.
     - `msg`: the string to display as an error message.
-    - `on_error`: how to behave when an error is raised. Valid values are either
-        `"default"`, `"raise"`, `"breakpoint"`, or `"unsafe_ignore"`. The default value
-        of `"default"` defers to the `EQX_ON_ERROR` environment variable, which itself
-        defaults to `"raise"`. Of the other three: `"raise"` will raise a runtime error,
-        `"breakpoint"` will open a debugger, and `"unsafe_ignore"` will do nothing at
-        all.
+
+    In addition, the `EQX_ON_ERROR` environment variable is checked for how any runtime
+    errors should be handled. Possible values are:
+
+    - `EQX_ON_ERROR=raise` will raise a runtime error.
+    - `EQX_ON_ERROR=breakpoint` will open a debugger. Note that this option may prevent
+        certain compiler optimisations, so permanently fixing this value is not
+        recommended. You will need to also pass the `-s` flag to `pytest`, if you are
+        also using that.
+    - `EQX_ON_ERROR=nan` will return `NaN` instead of `x`, and then continue the
+        computation.
 
     **Returns:**
 
-    The original argument `x` unchanged. If this return value is unused then the error
-    check will not be performed.
+    The original argument `x` unchanged. **If this return value is unused then the error
+    check will not be performed.** (It will be removed as part of dead code
+    elimination.)
 
     !!! Example
 
@@ -150,26 +202,25 @@ def error_if(
     return branched_error_if(x, pred, 0, [msg], on_error)
 
 
+@doc_remove_args("on_error")
 def branched_error_if(
     x: PyTree,
     pred: Bool[ArrayLike, "..."],
     index: Int[ArrayLike, "..."],
     msgs: Sequence[str],
-    on_error: Literal["default", "raise", "breakpoint", "unsafe_ignore"] = "default",
+    on_error: Literal["default", "raise", "breakpoint", "nan"] = "default",
 ) -> PyTree:
-    """As [`equinox.internal.error_if`][], but will raise one of
-    several `msgs` depending on the value of `index`.
+    """As [`equinox.error_if`][], but will raise one of
+    several `msgs` depending on the value of `index`. If `index` is vmap'd, then the
+    error message from the largest value (across the whole batch) will be used.
     """
     if on_error == "default":
         on_error = os.environ.get("EQX_ON_ERROR", "raise")  # pyright: ignore
-        if on_error not in ("raise", "breakpoint", "unsafe_ignore"):
+        if on_error not in ("raise", "breakpoint", "nan"):
             raise RuntimeError("Unrecognised value for `EQX_ON_ERROR`.")
-        on_error = cast(Literal["raise", "breakpoint"], on_error)
     else:
-        if on_error not in ("raise", "breakpoint", "unsafe_ignore"):
+        if on_error not in ("raise", "breakpoint", "nan"):
             raise RuntimeError("Unrecognised value for `on_error`.")
-    if on_error == "unsafe_ignore":
-        return x
     with jax.ensure_compile_time_eval():
         pred = unvmap_any(pred)
         index = unvmap_max(index)
@@ -188,6 +239,8 @@ def branched_error_if(
                     elif on_error == "breakpoint":
                         print(msgs[index])
                         breakpoint()
+                    elif on_error == "nan":
+                        return jtu.tree_map(_nan_like, x)
                     else:
                         assert False
                 # else defer error to runtime, when the index is known.
