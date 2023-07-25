@@ -107,3 +107,22 @@ def test_nan():
 
     y = f(1.0, True)
     assert jnp.isnan(y)
+
+
+def test_assert_dce():
+    @jax.jit
+    def f(x):
+        x = x + 1
+        eqxi.assert_dce(x, msg="oh no")
+        return x
+
+    f(1.0)
+
+    @jax.jit
+    def g(x):
+        x = x + 1
+        eqxi.assert_dce(x, msg="oh no")
+        return x
+
+    with jax.disable_jit():
+        g(1.0)

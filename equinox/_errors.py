@@ -3,7 +3,7 @@ import inspect
 import os
 import warnings
 from collections.abc import Sequence
-from typing import cast, Literal, Union
+from typing import Literal, Union
 
 import jax
 import jax._src.traceback_util as traceback_util
@@ -86,8 +86,9 @@ def _error(x, pred, index, *, msgs, on_error):
             return jtu.tree_map(_nan_like, struct)
 
         def handle_error():
+            index_struct = jax.eval_shape(lambda: index)
             _index = jax.pure_callback(  # pyright: ignore
-                display_msg, index, index, vectorized=True
+                display_msg, index_struct, index, vectorized=True
             )
             # Support JAX with and without DCE behaviour on breakpoints.
             if "token" in inspect.signature(jax.debug.breakpoint).parameters.keys():
@@ -155,6 +156,7 @@ def error_if(
     x: PyTree,
     pred: Bool[ArrayLike, "..."],
     msg: str,
+    *,
     on_error: Literal["default", "raise", "breakpoint", "nan"] = "default",
 ) -> PyTree:
     """Throws an error based on runtime values. Works even under JIT.
@@ -199,7 +201,7 @@ def error_if(
         f(jax.numpy.array(-1))
         ```
     """
-    return branched_error_if(x, pred, 0, [msg], on_error)
+    return branched_error_if(x, pred, 0, [msg], on_error=on_error)
 
 
 @doc_remove_args("on_error")
@@ -208,6 +210,7 @@ def branched_error_if(
     pred: Bool[ArrayLike, "..."],
     index: Int[ArrayLike, "..."],
     msgs: Sequence[str],
+    *,
     on_error: Literal["default", "raise", "breakpoint", "nan"] = "default",
 ) -> PyTree:
     """As [`equinox.error_if`][], but will raise one of
@@ -222,14 +225,22 @@ def branched_error_if(
         if on_error not in ("raise", "breakpoint", "nan"):
             raise RuntimeError("Unrecognised value for `on_error`.")
     with jax.ensure_compile_time_eval():
-        pred = unvmap_any(pred)
-        index = unvmap_max(index)
+        # This carefully does not perform any JAX operations if `pred` and `index` are
+        # a bool and an int.
+        # This ensures we can use `error_if` before init_google.
+        if not isinstance(pred, bool):
+            pred = unvmap_any(pred)
+        if not isinstance(index, int):
+            index = unvmap_max(index)
         if not isinstance(pred, jax.core.Tracer):
-            if pred.item():
+            if isinstance(pred, Array):
+                pred = pred.item()
+            assert type(pred) is bool
+            if pred:
                 if not isinstance(index, jax.core.Tracer):
                     if isinstance(index, Array):
                         index = index.item()
-                    index = cast(int, index)
+                    assert type(index) is int
                     warnings.warn(
                         "`Error can be resolved statically. Handling at trace-time "
                         "rather than waiting until runtime."
@@ -253,3 +264,19 @@ def branched_error_if(
         raise ValueError("No arrays to thread error on to.")
     dynamic_x = _error(dynamic_x, pred, index, msgs=msgs, on_error=on_error)
     return combine(dynamic_x, static_x)
+
+
+def assert_dce(
+    x: PyTree,
+    msg: str,
+    *,
+    on_error: Literal["default", "raise", "breakpoint", "nan"] = "default",
+) -> PyTree:
+    """Asserts that a particular array (or PyTree of arrays) is DCE'd."""
+
+    if _currently_jitting():
+        pred = jnp.invert(False)  # Prevent the trace-time error-raising from running.
+        return error_if(x, pred, msg, on_error=on_error)
+    else:
+        # Don't run if not JIT'ing, as without the compiler nothing will be DCE'd.
+        return x

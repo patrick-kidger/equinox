@@ -14,6 +14,7 @@ from .._enum import Enumeration as Enumeration
 
 # Backward compatibility: expose via `equinox.internal`. Now available under `equinox`.
 from .._errors import (
+    assert_dce as assert_dce,
     branched_error_if as branched_error_if,
     error_if as error_if,
 )
@@ -39,8 +40,6 @@ from ..debug import (
     inspect_dce as inspect_dce,
     store_dce as store_dce,
 )
-
-# Note that `announce_jaxpr_p` should be exposed here regardless.
 from ..debug._announce_transform import announce_jaxpr_p as announce_jaxpr_p
 from ._finalise_jaxpr import (
     finalise_eval_jaxpr as finalise_eval_jaxpr,
