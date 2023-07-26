@@ -427,6 +427,18 @@ class _ClosureConvert(Module):
     in_static: _FlatPyTree[Any] = field(static=True)
     out_static: _FlatPyTree[Any] = field(static=True)
 
+    @property
+    def in_struct(self):
+        dynamic = _unflatten(self.in_dynamic_struct)
+        static = _unflatten(self.in_static)
+        return combine(dynamic, static)
+
+    @property
+    def out_struct(self):
+        dynamic = _unflatten(self.out_dynamic_struct)
+        static = _unflatten(self.out_static)
+        return combine(dynamic, static)
+
     def __call__(self, *args, **kwargs):
         self_in_dynamic_struct = _unflatten(self.in_dynamic_struct)
         self_out_dynamic_struct = _unflatten(self.out_dynamic_struct)
