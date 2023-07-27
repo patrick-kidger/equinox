@@ -30,7 +30,7 @@ def store_dce(x: PyTree[Array], name: Hashable = None):
     function. When the JIT'd function is called, then whether each array got DCE'd or
     not is recorded. This can subsequently be inspected using `inspect_dce`.
 
-    !!! Example:
+    !!! Example
 
         ```python
         @jax.jit
