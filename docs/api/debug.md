@@ -14,7 +14,8 @@ In addition to the following tools, JAX itself also provides:
 
 - the `jax.debug.print` function, for printing results under JIT.
 - the `jax.debug.breakpoint` function, for opening a debugger under JIT.
-- the `JAX_DEBUG_NANS=1` environment variable, for halting the computation once a NaN is encountered. This works best for NaNs encountered on the forward pass and outside of loops. If your NaN occurs on the backward pass only, then try [`equinox.debug.backward_nan`][] below. If the NaN occurs inside of a loop, then consider pairing this with `JAX_DISABLE_JIT=1`. (Many loops are implicitly jit'd.) - the `JAX_DISABLE_JIT=1` environment variable, for running the computation without JIT. This will be *much* slower, so this isn't always practical.
+- the `JAX_DEBUG_NANS=1` environment variable, for halting the computation once a NaN is encountered. This works best for NaNs encountered on the forward pass and outside of loops. If your NaN occurs on the backward pass only, then try [`equinox.debug.backward_nan`][] below. If the NaN occurs inside of a loop, then consider pairing this with `JAX_DISABLE_JIT=1`. (Many loops are implicitly jit'd.)
+- the `JAX_DISABLE_JIT=1` environment variable, for running the computation without JIT. This will be *much* slower, so this isn't always practical.
 - the `JAX_TRACEBACK_FILTERING=off` environment variable, which means errors and debuggers will include JAX and Equinox internals. (Which by default are filtered out.)
 
 ## Equinox tools
