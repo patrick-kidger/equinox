@@ -3,7 +3,7 @@ import functools as ft
 import inspect
 import weakref
 from collections.abc import Callable
-from typing import Any, cast, TypeVar, Union
+from typing import Any, cast, TYPE_CHECKING, TypeVar, Union
 from typing_extensions import dataclass_transform, ParamSpec
 
 import jax.tree_util as jtu
@@ -114,8 +114,7 @@ _has_dataclass_init = weakref.WeakKeyDictionary()
 
 # Inherits from ABCMeta as a convenience for a common use-case.
 # It's not a feature we use ourselves.
-@dataclass_transform(field_specifiers=(dataclasses.field, field, static_field))
-class _ModuleMeta(ABCMeta):
+class _ModuleMeta(ABCMeta):  # pyright: ignore
     def __new__(mcs, name, bases, dict_):  # pyright: ignore
         dict_ = {
             k: _wrap_method(v) if _not_magic(k) and inspect.isfunction(v) else v
@@ -203,6 +202,14 @@ class _ModuleMeta(ABCMeta):
                 setattr(self, field.name, converter(getattr(self, field.name)))
         object.__setattr__(self, "__class__", cls)
         return self
+
+
+if TYPE_CHECKING:
+    import abc
+
+    @dataclass_transform(field_specifiers=(dataclasses.field, field, static_field))
+    class _ModuleMeta(abc.ABCMeta):
+        pass
 
 
 _wrapper_field_names = {
@@ -337,8 +344,8 @@ class Module(metaclass=_ModuleMeta):
 
     **Initialisation**
 
-    A default `__init__` is automatically provided, which just fills in fields with the
-    arguments passed. For example `MyModule(weight, bias, submodule)`.
+    A default `__init__` is automatically provided, which just fills in fields with
+    the arguments passed. For example `MyModule(weight, bias, submodule)`.
 
     Alternatively (quite commonly) you can provide an `__init__` method yourself:
 
@@ -381,9 +388,10 @@ class Module(metaclass=_ModuleMeta):
 
     **Usage**
 
-    After you have defined your model, then you can use it just like any other PyTree
-    -- that just happens to have some methods attached. In particular you can pass it
-    around across `jax.jit`, `jax.grad` etc. in exactly the way that you're used to.
+    After you have defined your model, then you can use it just like any other
+    PyTree -- that just happens to have some methods attached. In particular you can
+    pass it around across `jax.jit`, `jax.grad` etc. in exactly the way that you're
+    used to.
 
     !!! example
 
@@ -398,15 +406,17 @@ class Module(metaclass=_ModuleMeta):
                 ...
         ```
 
-        because `self` is just a PyTree. Unlike most other neural network libaries, you
-        can mix Equinox and native JAX without any difficulties at all.
+        because `self` is just a PyTree. Unlike most other neural network libaries,
+        you can mix Equinox and native JAX without any difficulties at all.
 
     !!! tip
 
-        Equinox modules are all [ABCs](https://docs.python.org/3/library/abc.html) by
-        default. This means you can use [`abc.abstractmethod`](https://docs.python.org/3/library/abc.html#abc.abstractmethod).
-        You can also create abstract instance attributes or abstract class attributes,
-        see [`equinox.AbstractVar`][] and [`equinox.AbstractClassVar`][].
+        Equinox modules are all [ABCs](https://docs.python.org/3/library/abc.html)
+        by default. This means you can use
+        [`abc.abstractmethod`](https://docs.python.org/3/library/abc.html#abc.abstractmethod).
+        You can also create abstract instance attributes or abstract class
+        attributes, see [`equinox.AbstractVar`][] and
+        [`equinox.AbstractClassVar`][].
     """  # noqa: E501
 
     def __hash__(self):
