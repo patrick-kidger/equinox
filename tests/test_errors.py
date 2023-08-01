@@ -126,3 +126,159 @@ def test_assert_dce():
 
     with jax.disable_jit():
         g(1.0)
+
+
+def test_traceback_tracetime_jax():
+    @eqx.filter_jit
+    def f(x):
+        return g(x)
+
+    @eqx.filter_jit
+    def g(x):
+        bool(x)
+
+    try:
+        f(jnp.array(1.0))
+    except Exception as e:
+        assert e.__cause__ is None
+        assert "EQX_ON_ERROR" not in str(e)
+        assert "JAX_TRACEBACK_FILTERING" in str(e)
+        tb = e.__traceback__
+        code_stack = []
+        while tb is not None:
+            code_stack.append(tb.tb_frame.f_code)
+            tb = tb.tb_next
+        assert len(code_stack) == 3
+        one, two, three = code_stack
+        assert one.co_filename.endswith("test_errors.py")
+        assert one.co_name == "test_traceback_tracetime_jax"
+        assert two.co_filename.endswith("test_errors.py")
+        assert two.co_name == "f"
+        assert three.co_filename.endswith("test_errors.py")
+        assert three.co_name == "g"
+
+
+def test_traceback_tracetime_eqx():
+    @eqx.filter_jit
+    def f(x):
+        return g(x)
+
+    @eqx.filter_jit
+    def g(x):
+        eqx.error_if(x, True, "egads")
+
+    try:
+        f(jnp.array(1.0))
+    except Exception as e:
+        assert e.__cause__ is None
+        assert "egads" in str(e)
+        assert "EQX_ON_ERROR" not in str(e)
+        assert "JAX_TRACEBACK_FILTERING" in str(e)
+        tb = e.__traceback__
+        code_stack = []
+        while tb is not None:
+            if not tb.tb_frame.f_code.co_filename.startswith("<@beartype"):
+                code_stack.append(tb.tb_frame.f_code)
+            tb = tb.tb_next
+        assert len(code_stack) == 3
+        one, two, three = code_stack
+        assert one.co_filename.endswith("test_errors.py")
+        assert one.co_name == "test_traceback_tracetime_eqx"
+        assert two.co_filename.endswith("test_errors.py")
+        assert two.co_name == "f"
+        assert three.co_filename.endswith("test_errors.py")
+        assert three.co_name == "g"
+
+
+def test_traceback_tracetime_custom():
+    @eqx.filter_jit
+    def f(x):
+        return g(x)
+
+    @eqx.filter_jit
+    def g(x):
+        raise Exception("egads")
+
+    try:
+        f(jnp.array(1.0))
+    except Exception as e:
+        assert e.__cause__ is None
+        assert "egads" in str(e)
+        assert "EQX_ON_ERROR" not in str(e)
+        assert "JAX_TRACEBACK_FILTERING" in str(e)
+        tb = e.__traceback__
+        code_stack = []
+        while tb is not None:
+            code_stack.append(tb.tb_frame.f_code)
+            tb = tb.tb_next
+        assert len(code_stack) == 3
+        one, two, three = code_stack
+        assert one.co_filename.endswith("test_errors.py")
+        assert one.co_name == "test_traceback_tracetime_custom"
+        assert two.co_filename.endswith("test_errors.py")
+        assert two.co_name == "f"
+        assert three.co_filename.endswith("test_errors.py")
+        assert three.co_name == "g"
+
+
+def test_traceback_runtime_eqx():
+    @eqx.filter_jit
+    def f(x):
+        return g(x)
+
+    @eqx.filter_jit
+    def g(x):
+        return eqx.error_if(x, x > 0, "egads")
+
+    try:
+        f(jnp.array(1.0))
+    except Exception as e:
+        assert e.__cause__ is None
+        assert "egads" in str(e)
+        assert "EQX_ON_ERROR" in str(e)
+        assert "JAX_TRACEBACK_FILTERING" not in str(e)
+        tb = e.__traceback__
+        code_stack = []
+        while tb is not None:
+            code_stack.append(tb.tb_frame.f_code)
+            tb = tb.tb_next
+        assert len(code_stack) == 1
+        assert code_stack[0].co_filename.endswith("test_errors.py")
+        assert code_stack[0].co_name == "test_traceback_runtime_eqx"
+
+
+def test_traceback_runtime_custom():
+    class FooException(Exception):
+        pass
+
+    @eqx.filter_jit
+    def f(x):
+        return g(x)
+
+    @eqx.filter_jit
+    def g(x):
+        def _raises():
+            raise FooException("egads")
+
+        return jax.pure_callback(_raises, x)  # pyright: ignore
+
+    try:
+        f(jnp.array(1.0))
+    except Exception as e:
+        assert e.__cause__ is not None
+        assert "egads" in str(e)
+        assert "EQX_ON_ERROR" not in str(e)
+        assert "JAX_TRACEBACK_FILTERING" not in str(e)
+        tb = e.__traceback__
+        code_stack = []
+        while tb is not None:
+            code_stack.append(tb.tb_frame.f_code)
+            tb = tb.tb_next
+        assert len(code_stack) == 3
+        one, two, three = code_stack
+        assert one.co_filename.endswith("test_errors.py")
+        assert one.co_name == "test_traceback_runtime_custom"
+        assert two.co_filename.endswith("equinox/_jit.py")
+        assert two.co_name == "__call__"
+        assert three.co_filename.endswith("equinox/_jit.py")
+        assert three.co_name == "_call"

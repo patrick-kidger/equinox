@@ -21,6 +21,7 @@ from ._custom_types import sentinel
 from ._deprecate import deprecated_0_10
 from ._doc_utils import doc_remove_args
 from ._filters import combine, is_array, partition
+from ._misc import currently_jitting
 from ._module import Module, module_update_wrapper, Partial, Static
 
 
@@ -69,6 +70,62 @@ def _postprocess(out):
     return combine(dynamic_out, static_out.value)
 
 
+try:
+    # Not public API, so wrap in a try-except for forward compatibility.
+    XlaRuntimeError = jax.lib.xla_extension.XlaRuntimeError  # pyright: ignore
+except Exception:
+    # Unused dummy
+    class XlaRuntimeError(Exception):
+        pass
+
+
+_eqx_on_error_msg = """
+-------
+This error occurred during the runtime of your JAX program. Setting the environment
+variable `EQX_ON_ERROR=breakpoint` is usually the most useful way to debug such errors.
+(This can be navigated using most of the the usual commands for the Python debugger:
+`u` and `d` to move through stack frames, the name of a variable to print its value,
+etc.) See also `https://docs.kidger.site/equinox/api/errors/#equinox.error_if` for more
+information.
+"""
+
+_eqx_traceback_filtering_msg = """
+-------
+This error has some JAX- and Equinox-internal frames removed from the traceback. Set
+`JAX_TRACEBACK_FILTERING=off` to include these internal frames as well.
+"""
+
+
+def _modify_traceback(e: Exception):
+    # Remove JAX's UnfilteredStackTrace, with its huge error messages.
+    e.__cause__ = None
+    # Remove _JitWrapper.__call__ and _JitWrapper._call from the traceback
+    e.__traceback__ = e.__traceback__.tb_next.tb_next  # pyright: ignore
+    # IPython ignores __tracebackhide__ directives for the frame that actually raises
+    # the error. We fix that here.
+    if jax.config.jax_traceback_filtering in (None, "auto"):  # pyright: ignore
+        try:
+            get_ipython()  # pyright: ignore
+        except NameError:
+            pass
+        else:
+            import IPython  # pyright: ignore
+
+            # Check that IPython supports __tracebackhide__
+            if IPython.version_info[:2] >= (7, 17):  # pyright: ignore
+                tb = e.__traceback__
+                tb_stack = []
+                while tb is not None:
+                    tb_stack.append(tb)
+                    tb = tb.tb_next
+                for tb in reversed(tb_stack):
+                    if not tb.tb_frame.f_locals.get("__tracebackhide__", False):
+                        tb.tb_next = None
+                        break
+                else:
+                    e.__traceback__ = None
+
+
 class _JitWrapper(Module):
     _signature: inspect.Signature
     _dynamic_fun: PyTree
@@ -104,7 +161,43 @@ class _JitWrapper(Module):
             return _postprocess(out)
 
     def __call__(self, /, *args, **kwargs):
-        return self._call(False, args, kwargs)
+        try:
+            return self._call(False, args, kwargs)
+        except XlaRuntimeError as e:
+            # Catch Equinox's runtime errors, and strip the more intimidating parts of
+            # the error message.
+            (msg,) = e.args
+            prefix = "INTERNAL: Generated function failed: CpuCallback error: EqxRuntimeError: "  # noqa: E501
+            is_eqx_error = msg.startswith(prefix)
+            if is_eqx_error:
+                msg = msg.removeprefix(prefix)
+                msg, _ = msg.rsplit("\n\nAt:\n", 1)
+                msg = msg + _eqx_on_error_msg
+                e.args = (msg,)
+                if jax.config.jax_traceback_filtering in (  # pyright: ignore
+                    None,
+                    "auto",
+                ):
+                    _modify_traceback(e)
+            raise
+        except Exception as e:
+            # Catch JAX's trace-time errors, and strip the terrifying-looking traceback.
+            # This is one of the most off-putting things about JAX errors!
+            if (
+                jax.config.jax_traceback_filtering in (None, "auto")  # pyright: ignore
+                and not currently_jitting()
+            ):
+                if len(e.args) == 0:  # `raise FooException`
+                    msg = _eqx_traceback_filtering_msg
+                elif len(e.args) == 1:  # `raise FooException("...")`
+                    (msg,) = e.args
+                    msg = msg + _eqx_traceback_filtering_msg
+                else:  # No idea if this ever happens
+                    raise
+                # Edit in-place because JAX errors have a custom __init__.
+                e.args = (msg,)
+                _modify_traceback(e)
+            raise
 
     def lower(self, /, *args, **kwargs) -> Lowered:
         return self._call(True, args, kwargs)
