@@ -240,7 +240,6 @@ class ABCMeta(abc.ABCMeta):
                             pass
                         else:
                             if not _is_concretisation(new_annotation, annotation):
-                                print(annotation, new_annotation)
                                 raise TypeError(
                                     "Base class and derived class have mismatched type "
                                     f"annotations for {name}"

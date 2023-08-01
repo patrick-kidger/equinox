@@ -21,7 +21,6 @@ from ._custom_types import sentinel
 from ._deprecate import deprecated_0_10
 from ._doc_utils import doc_remove_args
 from ._filters import combine, is_array, partition
-from ._misc import currently_jitting
 from ._module import Module, module_update_wrapper, Partial, Static
 
 
@@ -89,41 +88,38 @@ etc.) See also `https://docs.kidger.site/equinox/api/errors/#equinox.error_if` f
 information.
 """
 
-_eqx_traceback_filtering_msg = """
--------
-This error has some JAX- and Equinox-internal frames removed from the traceback. Set
-`JAX_TRACEBACK_FILTERING=off` to include these internal frames as well.
-"""
-
 
 def _modify_traceback(e: Exception):
     # Remove JAX's UnfilteredStackTrace, with its huge error messages.
     e.__cause__ = None
     # Remove _JitWrapper.__call__ and _JitWrapper._call from the traceback
-    e.__traceback__ = e.__traceback__.tb_next.tb_next  # pyright: ignore
+    tb = e.__traceback__ = e.__traceback__.tb_next.tb_next  # pyright: ignore
+    try:
+        # See https://github.com/google/jax/blob/69cd3ebe99ce12a9f22e50009c00803a095737c7/jax/_src/traceback_util.py#L190  # noqa: E501
+        jax.lib.xla_extension.replace_thread_exc_traceback(tb)  # pyright: ignore
+    except AttributeError:
+        pass
     # IPython ignores __tracebackhide__ directives for the frame that actually raises
     # the error. We fix that here.
-    if jax.config.jax_traceback_filtering in (None, "auto"):  # pyright: ignore
-        try:
-            get_ipython()  # pyright: ignore
-        except NameError:
-            pass
-        else:
-            import IPython  # pyright: ignore
+    try:
+        get_ipython()  # pyright: ignore
+    except NameError:
+        pass
+    else:
+        import IPython  # pyright: ignore
 
-            # Check that IPython supports __tracebackhide__
-            if IPython.version_info[:2] >= (7, 17):  # pyright: ignore
-                tb = e.__traceback__
-                tb_stack = []
-                while tb is not None:
-                    tb_stack.append(tb)
-                    tb = tb.tb_next
-                for tb in reversed(tb_stack):
-                    if not tb.tb_frame.f_locals.get("__tracebackhide__", False):
-                        tb.tb_next = None
-                        break
-                else:
-                    e.__traceback__ = None
+        # Check that IPython supports __tracebackhide__
+        if IPython.version_info[:2] >= (7, 17):  # pyright: ignore
+            tb_stack = []
+            while tb is not None:
+                tb_stack.append(tb)
+                tb = tb.tb_next
+            for tb in reversed(tb_stack):
+                if not tb.tb_frame.f_locals.get("__tracebackhide__", False):
+                    tb.tb_next = None
+                    break
+            else:
+                e.__traceback__ = None
 
 
 class _JitWrapper(Module):
@@ -166,6 +162,8 @@ class _JitWrapper(Module):
         except XlaRuntimeError as e:
             # Catch Equinox's runtime errors, and strip the more intimidating parts of
             # the error message.
+            if len(e.args) != 1 or not isinstance(e.args[0], str):
+                raise  # No idea if this ever happens. But if it does, just bail.
             (msg,) = e.args
             prefix = "INTERNAL: Generated function failed: CpuCallback error: EqxRuntimeError: "  # noqa: E501
             is_eqx_error = msg.startswith(prefix)
@@ -180,24 +178,14 @@ class _JitWrapper(Module):
                 ):
                     _modify_traceback(e)
             raise
-        except Exception as e:
-            # Catch JAX's trace-time errors, and strip the terrifying-looking traceback.
-            # This is one of the most off-putting things about JAX errors!
-            if (
-                jax.config.jax_traceback_filtering in (None, "auto")  # pyright: ignore
-                and not currently_jitting()
-            ):
-                if len(e.args) == 0:  # `raise FooException`
-                    msg = _eqx_traceback_filtering_msg
-                elif len(e.args) == 1:  # `raise FooException("...")`
-                    (msg,) = e.args
-                    msg = msg + _eqx_traceback_filtering_msg
-                else:  # No idea if this ever happens
-                    raise
-                # Edit in-place because JAX errors have a custom __init__.
-                e.args = (msg,)
-                _modify_traceback(e)
-            raise
+        # I considered also catching `Exception`, and removing the terrifying-looking
+        # JAX exception that occurs by default.
+        # This ends up being difficult to get working reliably (e.g. KeyError has a
+        # different __str__ so modifying the `.args` is hard/undefined; JAX errors have
+        # a different __init__ so overwriting __str__ in a new class ends up requiring
+        # magic; taking a different approach and overwriting sys.excepthook is ignored
+        # under IPython, ...)
+        # All in all, not worth it.
 
     def lower(self, /, *args, **kwargs) -> Lowered:
         return self._call(True, args, kwargs)
