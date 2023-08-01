@@ -38,13 +38,15 @@ def doc_repr(obj: _T, string: str) -> _T:
 
 def doc_remove_args(*args):
     def doc_remove_args_impl(fn):
-        sig = inspect.signature(fn)
-        new_params = []
-        for param in sig.parameters.values():
-            if param.name not in args:
-                new_params.append(param)
-        sig = sig.replace(parameters=new_params)
-        fn.__signature__ = sig
+        if getattr(typing, "GENERATING_DOCUMENTATION", False):
+            sig = inspect.signature(fn)
+            new_params = []
+            for param in sig.parameters.values():
+                if param.name not in args:
+                    new_params.append(param)
+            sig = sig.replace(parameters=new_params)
+            # Force-set it when doing `doc_remove_args(filter_jit(...))`.
+            object.__setattr__(fn, "__signature__", sig)
         return fn
 
     return doc_remove_args_impl

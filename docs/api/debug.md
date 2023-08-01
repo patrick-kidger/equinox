@@ -10,7 +10,7 @@ A common source of NaNs when backpropagating is when using one of the above oper
 
 ## JAX tools
 
-In addition to the following tools, JAX itself also provides:
+JAX itself provides the following tools:
 
 - the `jax.debug.print` function, for printing results under JIT.
 - the `jax.debug.breakpoint` function, for opening a debugger under JIT.
@@ -36,8 +36,8 @@ In addition to the following tools, JAX itself also provides:
 
 ::: equinox.debug.inspect_dce
 
----
+## Runtime errors
 
-If you are getting a runtime error from [`equinox.error_if`][] -- this is often a terrifying-looking error messaging including something like `jaxlib.xla_extension.XlaRuntimeError: INTERNAL: Generated function failed: CpuCallback error: RuntimeError:` -- then you can control the on-error behaviour via the environment variable `EQX_ON_ERROR`.
+If you are getting a runtime error from [`equinox.error_if`][], then you can control the on-error behaviour via the environment variable `EQX_ON_ERROR`. If ran from `jax.jit` then this will be a long error message starting `jaxlib.xla_extension.XlaRuntimeError: INTERNAL: Generated function failed: CpuCallback error: RuntimeError: ...`; if ran from `eqx.filter_jit` then some of the extra boilerplate will be removed from the error message, and it will simply start with `jaxlib.xla_extension.XlaRuntimeError: ...`.
 
 In particular, setting `EQX_ON_ERROR=breakpoint` will open a `jax.debug.breakpoint` where the error arises. See the [runtime errors](./errors.md) for more information and for other values of this environment variable.

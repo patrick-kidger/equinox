@@ -1,6 +1,5 @@
 import functools as ft
 import inspect
-import os
 import warnings
 from collections.abc import Sequence
 from typing import Literal, Union
@@ -15,8 +14,11 @@ import numpy as np
 from jaxtyping import Array, ArrayLike, Bool, Int, PyTree
 
 from ._ad import filter_custom_jvp
+from ._config import EQX_ON_ERROR
 from ._doc_utils import doc_remove_args
 from ._filters import combine, is_array, partition
+from ._jit import filter_jit
+from ._misc import currently_jitting
 from ._unvmap import unvmap_any, unvmap_max
 
 
@@ -48,12 +50,24 @@ You will need to manually kill this job and/or restart the runtime.
 """
 
 
+# This is never actually surfaced to an end user -- it always becomes an XlaRuntimeError
+class EqxRuntimeError(RuntimeError):
+    pass
+
+
+class EquinoxTracetimeError(RuntimeError):
+    pass
+
+
+EquinoxTracetimeError.__module__ = "equinox"
+
+
 @filter_custom_jvp
 def _error(x, pred, index, *, msgs, on_error):
     if on_error == "raise":
 
         def raises(_index):
-            raise RuntimeError(msgs[_index.item()])
+            raise EqxRuntimeError(msgs[_index.item()])
 
         def tpu_msg(_out, _index):
             msg = msgs[_index.item()]
@@ -120,11 +134,7 @@ def _error_jvp(primals, tangents, *, msgs, on_error):
     return _error(x, pred, index, msgs=msgs, on_error=on_error), tx
 
 
-def _currently_jitting():
-    return isinstance(jnp.array(1) + 1, jax.core.Tracer)
-
-
-if os.environ.get("EQX_ON_ERROR") == "breakpoint":
+if EQX_ON_ERROR == "breakpoint":
     # TODO: remove this branch once JAX issue #16732 is fixed.
     _old_jit = jax.jit
 
@@ -133,7 +143,7 @@ if os.environ.get("EQX_ON_ERROR") == "breakpoint":
         jit_fun = _old_jit(fun, *args, **kwargs)
 
         def fixed_jit_impl(*args2, **kwargs2):
-            if _currently_jitting():
+            if currently_jitting():
                 warnings.warn(
                     "Ignoring intermediate `jax.jit` decorator, to work around JAX "
                     "issue #16732, as `EQX_ON_ERROR=breakpoint` is set."
@@ -217,13 +227,28 @@ def branched_error_if(
     several `msgs` depending on the value of `index`. If `index` is vmap'd, then the
     error message from the largest value (across the whole batch) will be used.
     """
-    if on_error == "default":
-        on_error = os.environ.get("EQX_ON_ERROR", "raise")  # pyright: ignore
-        if on_error not in ("raise", "breakpoint", "nan"):
-            raise RuntimeError("Unrecognised value for `EQX_ON_ERROR`.")
+    leaves = jtu.tree_leaves((x, pred, index))
+    # This carefully does not perform any JAX operations if `pred` and `index` are
+    # a bool and an int.
+    # This ensures we can use `error_if` before init_google.
+    if any(is_array(leaf) for leaf in leaves):
+        return branched_error_if_impl_jit(x, pred, index, msgs, on_error=on_error)
     else:
-        if on_error not in ("raise", "breakpoint", "nan"):
-            raise RuntimeError("Unrecognised value for `on_error`.")
+        return branched_error_if_impl(x, pred, index, msgs, on_error=on_error)
+
+
+def branched_error_if_impl(
+    x: PyTree,
+    pred: Bool[ArrayLike, "..."],
+    index: Int[ArrayLike, "..."],
+    msgs: Sequence[str],
+    *,
+    on_error: Literal["default", "raise", "breakpoint", "nan"],
+) -> PyTree:
+    if on_error == "default":
+        on_error = EQX_ON_ERROR
+    elif on_error not in ("raise", "breakpoint", "nan"):
+        raise RuntimeError("Unrecognised value for `on_error`.")
     with jax.ensure_compile_time_eval():
         # This carefully does not perform any JAX operations if `pred` and `index` are
         # a bool and an int.
@@ -241,16 +266,17 @@ def branched_error_if(
                     if isinstance(index, Array):
                         index = index.item()
                     assert type(index) is int
-                    warnings.warn(
-                        "`Error can be resolved statically. Handling at trace-time "
-                        "rather than waiting until runtime."
-                    )
                     if on_error == "raise":
-                        raise RuntimeError(msgs[index])
+                        raise EquinoxTracetimeError(msgs[index])
                     elif on_error == "breakpoint":
                         print(msgs[index])
                         breakpoint()
                     elif on_error == "nan":
+                        warnings.warn(
+                            "Resolving error at trace time (because the predicate is "
+                            "statically resolvable), by substituting NaNs (because "
+                            "`on_error='nan'`)."
+                        )
                         return jtu.tree_map(_nan_like, x)
                     else:
                         assert False
@@ -266,6 +292,11 @@ def branched_error_if(
     return combine(dynamic_x, static_x)
 
 
+# filter_jit does some work to produce nicer runtime error messages.
+# We also place it here to ensure a consistent experience when using JAX in eager mode.
+branched_error_if_impl_jit = filter_jit(branched_error_if_impl)
+
+
 def assert_dce(
     x: PyTree,
     msg: str,
@@ -274,7 +305,7 @@ def assert_dce(
 ) -> PyTree:
     """Asserts that a particular array (or PyTree of arrays) is DCE'd."""
 
-    if _currently_jitting():
+    if currently_jitting():
         pred = jnp.invert(False)  # Prevent the trace-time error-raising from running.
         return error_if(x, pred, msg, on_error=on_error)
     else:
