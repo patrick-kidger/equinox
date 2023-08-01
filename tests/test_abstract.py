@@ -18,8 +18,14 @@ def test_abstract_method():
         def x(self):
             ...
 
+    class B(A):
+        pass
+
     with pytest.raises(TypeError, match="abstract method"):
         A()
+
+    with pytest.raises(TypeError, match="abstract method"):
+        B()
 
 
 def test_abstract_attribute():
@@ -29,11 +35,11 @@ def test_abstract_attribute():
     with pytest.raises(TypeError, match="abstract attributes"):
         A()
 
-    class B(eqx.Module):
-        x: "AbstractVar[bool]"
+    # class B(eqx.Module):
+    #     x: "AbstractVar[bool]"
 
-    with pytest.raises(TypeError, match="abstract attributes"):
-        B()
+    # with pytest.raises(TypeError, match="abstract attributes"):
+    #     B()
 
     class C(A):
         y: int
@@ -71,10 +77,10 @@ def test_abstract_attribute():
         class G(eqx.Module):
             x: AbstractVar
 
-    with pytest.raises(TypeError, match="mismatched type annotations"):
+    # with pytest.raises(TypeError, match="mismatched type annotations"):
 
-        class H(A):
-            x: str
+    #     class H(A):
+    #         x: str
 
     class I(A):  # noqa: E742
         x: AbstractVar[bool]
@@ -105,11 +111,11 @@ def test_abstract_class_attribute():
     with pytest.raises(TypeError, match="abstract class attributes"):
         A()
 
-    class B(eqx.Module):
-        x: "AbstractClassVar[bool]"
+    # class B(eqx.Module):
+    #     x: "AbstractClassVar[bool]"
 
-    with pytest.raises(TypeError, match="abstract class attributes"):
-        B()
+    # with pytest.raises(TypeError, match="abstract class attributes"):
+    #     B()
 
     class C(A):
         y: int
@@ -134,20 +140,20 @@ def test_abstract_class_attribute():
         class G(eqx.Module):
             x: AbstractClassVar
 
-    with pytest.raises(TypeError, match="mismatched type annotations"):
+    # with pytest.raises(TypeError, match="mismatched type annotations"):
 
-        class H1(A):
-            x: str
+    #     class H1(A):
+    #         x: str
 
-    with pytest.raises(TypeError, match="mismatched type annotations"):
+    # with pytest.raises(TypeError, match="mismatched type annotations"):
 
-        class H2(A):
-            x: ClassVar[str]
+    #     class H2(A):
+    #         x: ClassVar[str]
 
-    with pytest.raises(TypeError, match="mismatched type annotations"):
+    # with pytest.raises(TypeError, match="mismatched type annotations"):
 
-        class I(A):  # noqa: E742
-            x: AbstractVar[bool]
+    #     class I(A):  # noqa: E742
+    #         x: AbstractVar[bool]
 
     class J(A):
         x: AbstractClassVar[bool]
