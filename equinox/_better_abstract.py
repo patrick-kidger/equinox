@@ -7,15 +7,24 @@ is the public API. But the two pieces aren't directly related under-the-hood.)
 """
 import abc
 import dataclasses
-from typing import ClassVar, Generic, get_args, get_origin, TYPE_CHECKING, TypeVar
-from typing_extensions import dataclass_transform
+from typing import (
+    Annotated,
+    ClassVar,
+    Generic,
+    get_args,
+    get_origin,
+    TYPE_CHECKING,
+    TypeVar,
+)
+from typing_extensions import dataclass_transform, TypeAlias
 
 
 _T = TypeVar("_T")
 
 
 if TYPE_CHECKING:
-    from typing import ClassVar as AbstractClassVar, ClassVar as AbstractVar
+    AbstractVar: TypeAlias = Annotated[_T, "AbstractVar"]
+    from typing import ClassVar as AbstractClassVar
 else:
 
     class AbstractVar(Generic[_T]):
@@ -64,18 +73,6 @@ else:
                 attr1: bool
             ```
             should be called as `ConcreteX(attr2, attr1)`.
-
-        ## Known issues
-
-        Due to a Pyright bug
-        ([#4965](https://github.com/microsoft/pyright/issues/4965)), this must be
-        imported as:
-        ```python
-        if TYPE_CHECKING:
-            from typing import ClassVar as AbstractVar
-        else:
-            from equinox import AbstractVar
-        ```
         """
 
     # We can't just combine `ClassVar[AbstractVar[...]]`. At static checking time we
@@ -128,7 +125,6 @@ else:
 
         ## Known issues
 
-
         Due to a Pyright bug
         ([#4965](https://github.com/microsoft/pyright/issues/4965)), this must be
         imported as:
@@ -142,62 +138,72 @@ else:
 
 
 def _process_annotation(annotation):
-    is_abstract = False
-    is_class = False
-    bad_class_var_annotation = False
     if isinstance(annotation, str):
-        if annotation.startswith("AbstractVar["):
-            is_abstract = True
-            is_class = False
-        elif annotation.startswith("AbstractClassVar["):
-            is_abstract = True
-            is_class = True
-        elif annotation.startswith("AbstractVar") or annotation.startswith(
-            "AbstractClassVar"
+        if annotation.startswith("AbstractVar[") or annotation.startswith(
+            "AbstractClassVar["
         ):
-            bad_class_var_annotation = True
+            raise NotImplementedError(
+                "Stringified abstract annotations are not supported"
+            )
+        else:
+            return False, False
     else:
-        if get_origin(annotation) is AbstractVar:
+        if annotation in (AbstractVar, AbstractClassVar):
+            raise TypeError(
+                "Cannot use unsubscripted `AbstractVar` or `AbstractClassVar`."
+            )
+        elif get_origin(annotation) is AbstractVar:
+            if len(get_args(annotation)) != 1:
+                raise TypeError("`AbstractVar` can only have a single argument.")
             is_abstract = True
             is_class = False
         elif get_origin(annotation) is AbstractClassVar:
+            if len(get_args(annotation)) != 1:
+                raise TypeError("`AbstractClassVar` can only have a single argument.")
             is_abstract = True
             is_class = True
-        elif annotation in (AbstractVar, AbstractClassVar):
-            bad_class_var_annotation = True
-    if bad_class_var_annotation:
-        raise TypeError("Cannot use unsubscripted `AbstractVar` or `AbstractClassVar`.")
-    return is_abstract, is_class
+        else:
+            is_abstract = False
+            is_class = False
+        return is_abstract, is_class
 
 
 _sentinel = object()
 
 
+# try:
+#     import beartype
+# except ImportError:
+#     def is_subhint(subhint, superhint) -> bool:
+#         return True  # no checking in this case
+# else:
+#     from beartype.door import is_subhint
+
+
+# TODO: reinstate once https://github.com/beartype/beartype/issues/271 is resolved.
+def is_subhint(subhint, superhint) -> bool:
+    return True
+
+
 def _is_concretisation(sub, super):
-    if isinstance(sub, str) != isinstance(super, str):
-        raise NotImplementedError(
-            "Cannot mix stringified and non-stringified abstract " "type annotations"
-        )
-    if isinstance(sub, str):
-        if super.startswith("AbstractVar["):
-            return sub == super or sub == super[len("AbstractVar[") : -1]
-        elif super.startswith("AbstractClassVar["):
-            return sub == super or sub == super[len("AbstractClassVar[") : -1]
+    if isinstance(sub, str) or isinstance(super, str):
+        raise NotImplementedError("Stringified abstract annotations are not supported")
+    elif get_origin(super) is AbstractVar:
+        if get_origin(sub) in (AbstractVar, AbstractClassVar, ClassVar):
+            (sub_args,) = get_args(sub)
+            (sup_args,) = get_args(super)
         else:
-            assert False
+            sub_args = sub
+            (sup_args,) = get_args(super)
+    elif get_origin(super) is AbstractClassVar:
+        if get_origin(sub) in (AbstractClassVar, ClassVar):
+            (sub_args,) = get_args(sub)
+            (sup_args,) = get_args(super)
+        else:
+            return False
     else:
-        if get_origin(super) is AbstractVar:
-            if get_origin(sub) in (AbstractVar, AbstractClassVar, ClassVar):
-                return get_args(sub) == get_args(super)
-            else:
-                return (sub,) == get_args(super)
-        elif get_origin(super) is AbstractClassVar:
-            if get_origin(sub) in (AbstractClassVar, ClassVar):
-                return get_args(sub) == get_args(super)
-            else:
-                return False
-        else:
-            assert False
+        assert False
+    return is_subhint(sub_args, sup_args)
 
 
 class ABCMeta(abc.ABCMeta):
@@ -219,13 +225,6 @@ class ABCMeta(abc.ABCMeta):
                     except KeyError:
                         pass
                     else:
-                        if isinstance(annotation, str) != isinstance(
-                            existing_annotation, str
-                        ):
-                            raise NotImplementedError(
-                                "Cannot mix stringified and non-stringified abstract "
-                                "type annotations"
-                            )
                         if not (
                             _is_concretisation(annotation, existing_annotation)
                             or _is_concretisation(existing_annotation, annotation)
@@ -241,6 +240,7 @@ class ABCMeta(abc.ABCMeta):
                             pass
                         else:
                             if not _is_concretisation(new_annotation, annotation):
+                                print(annotation, new_annotation)
                                 raise TypeError(
                                     "Base class and derived class have mismatched type "
                                     f"annotations for {name}"
