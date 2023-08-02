@@ -829,10 +829,12 @@ class filter_custom_vjp:
             args, kwargs = combine(nonarray_args_kwargs, array_args_kwargs)
             out, residuals = self.fn_fwd(perturbed, vjp_arg, *args, **kwargs)
             array_out, nonarray_out = partition(out, is_array)
+            array_residuals, nonarray_residuals = partition(residuals, is_array)
             diff_array_out, nondiff_array_out = partition(array_out, is_inexact_array)
             out = diff_array_out, nondiff_array_out, Static(nonarray_out)
             return out, (
-                residuals,
+                array_residuals,
+                Static(nonarray_residuals),
                 diff_array_vjp_arg,
                 nondiff_array_vjp_arg,
                 array_args_kwargs,
@@ -842,12 +844,14 @@ class filter_custom_vjp:
         def fn_bwd_wrapped(nonarray_vjp_arg, nonarray_args_kwargs, residuals, grad_out):
             assert self.fn_bwd is not None
             (
-                residuals,
+                array_residuals,
+                nonarray_residuals,
                 diff_array_vjp_arg,
                 nondiff_array_vjp_arg,
                 array_args_kwargs,
                 perturbed,
             ) = residuals
+            residuals = combine(array_residuals, nonarray_residuals.value)
             vjp_arg = combine(
                 nonarray_vjp_arg, diff_array_vjp_arg, nondiff_array_vjp_arg
             )
