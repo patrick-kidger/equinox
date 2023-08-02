@@ -559,3 +559,19 @@ def test_double_filter_jvp():
         assert tb is None
 
     eqx.filter_jvp(f, (1.0,), (1.0,))
+
+
+def test_filter_custom_vjp_nonarray_residual():
+    @eqx.filter_custom_vjp
+    def f(x):
+        return 2 * x
+
+    @f.def_fwd
+    def f_fwd(_, x):
+        return 2 * x, object()
+
+    @f.def_bwd
+    def f_bwd(token, ct, _, x):
+        return 2 * ct
+
+    jax.grad(f)(1.0)
