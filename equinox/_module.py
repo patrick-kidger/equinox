@@ -406,7 +406,7 @@ class Module(metaclass=_ModuleMeta):
                 ...
         ```
 
-        because `self` is just a PyTree. Unlike most other neural network libaries,
+        because `self` is just a PyTree. Unlike most other neural network libraries,
         you can mix Equinox and native JAX without any difficulties at all.
 
     !!! tip
