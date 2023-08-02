@@ -82,7 +82,7 @@ _eqx_on_error_msg = """
 -------
 This error occurred during the runtime of your JAX program. Setting the environment
 variable `EQX_ON_ERROR=breakpoint` is usually the most useful way to debug such errors.
-(This can be navigated using most of the the usual commands for the Python debugger:
+(This can be navigated using most of the usual commands for the Python debugger:
 `u` and `d` to move through stack frames, the name of a variable to print its value,
 etc.) See also `https://docs.kidger.site/equinox/api/errors/#equinox.error_if` for more
 information.
