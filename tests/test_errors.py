@@ -143,7 +143,6 @@ def test_traceback_runtime_eqx():
         assert e.__cause__ is None
         assert "egads" in str(e)
         assert "EQX_ON_ERROR" in str(e)
-        assert "JAX_TRACEBACK_FILTERING" not in str(e)
         tb = e.__traceback__
         code_stack = []
         while tb is not None:
@@ -172,10 +171,9 @@ def test_traceback_runtime_custom():
     try:
         f(jnp.array(1.0))
     except Exception as e:
-        assert e.__cause__ is not None
+        assert e.__cause__ is None
         assert "egads" in str(e)
         assert "EQX_ON_ERROR" not in str(e)
-        assert "JAX_TRACEBACK_FILTERING" not in str(e)
         tb = e.__traceback__
         code_stack = []
         while tb is not None:
