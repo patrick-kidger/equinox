@@ -34,4 +34,8 @@ from ._pool import (
 )
 from ._rnn import GRUCell as GRUCell, LSTMCell as LSTMCell
 from ._spectral_norm import SpectralNorm as SpectralNorm
-from ._stateful import State as State, StateIndex as StateIndex
+from ._stateful import (
+    State as State,
+    StatefulLayer as StatefulLayer,
+    StateIndex as StateIndex,
+)

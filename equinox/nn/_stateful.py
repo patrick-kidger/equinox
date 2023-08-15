@@ -1,11 +1,12 @@
+import abc
 import types
 from collections.abc import Callable
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Optional, TypeVar
 
 import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
-from jaxtyping import PyTree
+from jaxtyping import Array, PRNGKeyArray, PyTree
 
 from .._module import Module
 from .._pretty_print import bracketed, named_objs, text, tree_pformat
@@ -145,3 +146,30 @@ class State:
             state[key] = value
         self._state = state
         return self
+
+
+class StatefulLayer(Module):
+    """An abstract base class representing a stateful layer within a neural network.
+
+    Stateful layers maintain internal state across calls, which can be useful for tasks
+    such as BatchNormalisation.
+
+    Subclasses must implement the `__call__` method that takes input data and the
+    current state as arguments and returns the output data and updated state.
+
+    !!! info
+
+        This declaration is currently intended for defining the
+        API for use with `nn.Sequential`.
+
+    """
+
+    @abc.abstractmethod
+    def __call__(
+        self,
+        x,
+        state: State,
+        *,
+        key: Optional[PRNGKeyArray],
+    ) -> tuple[Array, State]:
+        raise NotImplementedError("Subclasses must implement the __call__ method.")

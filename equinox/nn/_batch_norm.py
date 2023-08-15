@@ -6,11 +6,11 @@ import jax.lax as lax
 import jax.numpy as jnp
 from jaxtyping import Array, Bool, Float
 
-from .._module import field, Module
-from ._stateful import State, StateIndex
+from .._module import field
+from ._stateful import State, StatefulLayer, StateIndex
 
 
-class BatchNorm(Module):
+class BatchNorm(StatefulLayer):
     r"""Computes a mean and standard deviation over the batch and spatial
     dimensions of an array, and uses these to normalise the whole array. Optionally
     applies a channelwise affine transformation afterwards.

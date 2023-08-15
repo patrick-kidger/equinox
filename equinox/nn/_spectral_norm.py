@@ -6,9 +6,9 @@ import jax.numpy as jnp
 import jax.random as jr
 from jaxtyping import Array, Float, PRNGKeyArray
 
-from .._module import field, Module
+from .._module import field
 from .._tree import tree_at
-from ._stateful import State, StateIndex
+from ._stateful import State, StatefulLayer, StateIndex
 
 
 def _power_iteration(weight, u, v, eps):
@@ -26,7 +26,7 @@ def _power_iteration(weight, u, v, eps):
 _Layer = TypeVar("_Layer")
 
 
-class SpectralNorm(Module, Generic[_Layer]):
+class SpectralNorm(StatefulLayer, Generic[_Layer]):
     """Applies spectral normalisation to a given parameter.
 
     Given a weight matrix $W$, and letting $σ(W)$ denote (an approximation to) its
