@@ -125,17 +125,30 @@ def test_sequential(getkey):
         [
             eqx.nn.Linear(2, 4, key=getkey()),
             eqx.nn.Linear(4, 1, key=getkey()),
+            eqx.nn.BatchNorm(1, axis_name="batch"),
             eqx.nn.Linear(1, 3, key=getkey()),
         ]
     )
-    x = jrandom.normal(getkey(), (2,))
-    assert seq(x).shape == (3,)
+    x = jrandom.normal(getkey(), (1, 2))
+    batch_seq = jax.vmap(seq, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
+    state = eqx.nn.State(seq)
+
+    output, state = batch_seq(x, state)
+    assert output[0].shape == (3,)
     # Test indexing
     assert isinstance(seq[0], eqx.nn.Linear)
     assert isinstance(seq[1:], eqx.nn.Sequential)
-    x = jrandom.normal(getkey(), (4,))
-    assert seq[1:](x).shape == (3,)
-    assert len(seq) == 3
+
+    x = jrandom.normal(getkey(), (1, 4))
+    batch_seq = jax.vmap(
+        seq[1:],
+        axis_name="batch",
+        in_axes=(0, None),
+        out_axes=(0, None),
+    )
+    output, state = batch_seq(x, state)
+    assert output[0].shape == (3,)
+    assert len(seq) == 4
     assert eqx.nn.Sequential(list(seq)) == seq
 
 

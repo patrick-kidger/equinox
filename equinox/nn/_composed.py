@@ -3,8 +3,7 @@ from typing import (
     Any,
     Literal,
     Optional,
-    Protocol,
-    runtime_checkable,
+    overload,
     Union,
 )
 
@@ -12,9 +11,11 @@ import jax.nn as jnn
 import jax.random as jrandom
 from jaxtyping import Array, PRNGKeyArray
 
+from .._custom_types import sentinel
 from .._doc_utils import doc_repr
 from .._module import field, Module
 from ._linear import Linear
+from ._stateful import State, StatefulLayer
 
 
 _identity = doc_repr(lambda x: x, "lambda x: x")
@@ -122,12 +123,6 @@ class MLP(Module):
         return x
 
 
-@runtime_checkable
-class _SequentialLayer(Protocol):
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
-        ...
-
-
 class Sequential(Module):
     """A sequence of [`equinox.Module`][]s applied in order.
 
@@ -136,21 +131,41 @@ class Sequential(Module):
         Activation functions can be added by wrapping them in [`equinox.nn.Lambda`][].
     """
 
-    layers: tuple[_SequentialLayer, ...]
+    layers: tuple
 
-    def __init__(self, layers: Sequence[_SequentialLayer]):
+    def __init__(self, layers: Sequence[Callable]):
         self.layers = tuple(layers)
 
+    @overload
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
+        ...
+
+    @overload
+    def __call__(
+        self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
+    ) -> tuple[Array, State]:
+        ...
+
+    def __call__(
+        self,
+        x: Array,
+        state: State = sentinel,
+        *,
+        key: Optional[PRNGKeyArray] = None,
+    ) -> Union[Array, tuple[Array, State]]:
         """**Arguments:**
 
-        - `x`: Argument passed to the first member of the sequence.
-        - `key`: A `jax.random.PRNGKey`, which will be split and passed to every layer
-            to provide any desired randomness. (Optional. Keyword only argument.)
+        - `x`: passed to the first member of the sequence.
+        - `state`: If provided, then it is passed to any layer which subclasses
+             eqx.nn.StatefulLayer.
+        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
+            (Keyword only argument.)
 
         **Returns:**
-
         The output of the last member of the sequence.
+
+        If `state` is passed, then a 2-tuple of `(output, state)` is returned.
+        If `state` is not passed, then just the output is returned.
         """
 
         if key is None:
@@ -158,10 +173,16 @@ class Sequential(Module):
         else:
             keys = jrandom.split(key, len(self.layers))
         for layer, key in zip(self.layers, keys):
-            x = layer(x, key=key)
-        return x
+            if isinstance(layer, StatefulLayer):
+                x, state = layer(x, state=state, key=key)
+            else:
+                x = layer(x, key=key)
+        if state is sentinel:
+            return x
+        else:
+            return x, state
 
-    def __getitem__(self, i: Union[int, slice]) -> _SequentialLayer:
+    def __getitem__(self, i: Union[int, slice]) -> Callable:
         if isinstance(i, int):
             return self.layers[i]
         elif isinstance(i, slice):

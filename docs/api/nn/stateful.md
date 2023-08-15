@@ -15,3 +15,10 @@ See the [stateful example](../../examples/stateful.ipynb) for an example of work
     selection:
         members:
             - __init__
+
+---
+
+::: equinox.nn.StatefulLayer
+    selection:
+        members:
+            - __call__
