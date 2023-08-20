@@ -8,7 +8,7 @@ from typing_extensions import dataclass_transform, ParamSpec
 
 import jax.tree_util as jtu
 import numpy as np
-from jaxtyping import Array, Bool
+from jaxtyping import Array, Bool, PyTreeDef
 
 from ._better_abstract import ABCMeta, dataclass
 from ._caches import internal_lru_caches
@@ -488,11 +488,21 @@ def module_update_wrapper(
 
 
 class Static(Module):
-    value: Any = field(static=True)
+    _leaves: list[Any] = field(static=True)
+    _treedef: PyTreeDef = field(static=True)  # pyright: ignore
+
+    def __init__(self, value: Any):
+        # Handle pytrees without `__eq__` methods.
+        self._leaves, self._treedef = jtu.tree_flatten(value)
+
+    @property
+    def value(self):
+        return jtu.tree_unflatten(self._treedef, self._leaves)
 
 
 class Partial(Module):
     """Like `functools.partial`, but treats the wrapped function, and partially-applied
+    value: Any = field(static=True)
     args and kwargs, as a PyTree.
 
     This is very much like `jax.tree_util.Partial`. The difference is that the JAX

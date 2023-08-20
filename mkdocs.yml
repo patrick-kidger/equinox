@@ -110,7 +110,7 @@ nav:
             - Stateful operations (e.g. BatchNorm): 'examples/stateful.ipynb'
             - Autoparallelism (e.g. multi-GPU): 'examples/parallelism.ipynb'
             - Serialisation (with hyperparameters): 'examples/serialisation.ipynb'
-    - Full API:
+    - Basic API:
         - Modules:
             - 'api/module/module.md'
             - 'api/module/advanced_fields.md'
@@ -129,11 +129,12 @@ nav:
         - Filtering:
             - 'api/filtering/partition-combine.md'
             - 'api/filtering/transformations.md'
+        - 'api/manipulation.md'
+    - Advanced API:
         - 'api/caches.md'
         - 'api/debug.md'
         - 'api/enumerations.md'
         - 'api/errors.md'
-        - 'api/manipulation.md'
         - 'api/pretty-printing.md'
         - 'api/serialisation.md'
     - Misc:

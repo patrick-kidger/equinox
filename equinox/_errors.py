@@ -105,10 +105,14 @@ def _error(x, pred, index, *, msgs, on_error):
                 display_msg, index_struct, index, vectorized=True
             )
             # Support JAX with and without DCE behaviour on breakpoints.
-            if "token" in inspect.signature(jax.debug.breakpoint).parameters.keys():
-                breakpoint_kwargs = dict(token=_index)
-            else:
-                breakpoint_kwargs = {}
+            breakpoint_params = inspect.signature(
+                jax.debug.breakpoint
+            ).parameters.keys()
+            breakpoint_kwargs = {}
+            if "token" in breakpoint_params:
+                breakpoint_kwargs["token"] = _index
+            if "vectorized" in breakpoint_params:
+                breakpoint_kwargs["vectorized"] = True
             _index = jax.debug.breakpoint(**breakpoint_kwargs)
             return jax.pure_callback(  # pyright: ignore
                 to_nan, struct, _index, vectorized=True
