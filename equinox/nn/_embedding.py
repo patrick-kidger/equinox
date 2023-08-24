@@ -24,8 +24,8 @@ class Embedding(Module):
     ):
         """**Arguments:**
 
-        - `num_embeddings`: Size of embedding dictionary.
-        - `embedding_size`: Size of each embedding vector.
+        - `num_embeddings`: Size of embedding dictionary. Must be non-negative.
+        - `embedding_size`: Size of each embedding vector. Must be non-negative.
         - `weight`: If given, the embedding lookup table. Will be generated randomly
             if not provided.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
