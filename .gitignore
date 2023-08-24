@@ -10,3 +10,4 @@ examples/data
 .idea
 examples/MNIST
 examples/multipart_serialised.eqx
+.python-version
