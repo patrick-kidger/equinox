@@ -33,6 +33,8 @@ class Embedding(Module):
         """
         super().__init__(**kwargs)
         if weight is None:
+            assert num_embeddings >= 0, "num_embeddings must not be negative."
+            assert embedding_size >= 0, "embedding_size must not be negative."
             self.weight = jrandom.normal(key, (num_embeddings, embedding_size))
         else:
             if weight.shape != (num_embeddings, embedding_size):
