@@ -22,7 +22,8 @@ class _LeafWrapper:
 
 
 def _remove_leaf_wrapper(x: _LeafWrapper) -> Any:
-    assert type(x) is _LeafWrapper
+    if not isinstance(x, _LeafWrapper):
+        raise TypeError(f"Operation undefined, {x} is not a leaf of the pytree.")
     return x.value
 
 
