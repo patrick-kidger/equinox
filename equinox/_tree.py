@@ -106,7 +106,7 @@ def tree_at(
         get_last_layer = lambda m: m.layers[-1]
         new_mlp = eqx.tree_at(get_last_layer, mlp, new_linear)
         ```
-        See also the [Tricks](../../../tricks) page.
+        See also the [Tricks](../../tricks) page.
     """  # noqa: E501
 
     # We need to specify a particular node in a PyTree.
