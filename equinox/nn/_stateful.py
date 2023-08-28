@@ -161,9 +161,12 @@ class StatefulLayer(Module):
     @abc.abstractmethod
     def __call__(
         self,
-        x,
+        x: Array,
         state: State,
         *,
         key: Optional[PRNGKeyArray],
     ) -> tuple[Array, State]:
+        """The function signature that stateful layers should conform to, to be
+        compatible with [`equinox.nn.Sequential`][].
+        """
         raise NotImplementedError("Subclasses must implement the __call__ method.")

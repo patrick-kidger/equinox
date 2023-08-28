@@ -118,14 +118,15 @@ nav:
         - Neural network layers:
             - 'api/nn/linear.md'
             - 'api/nn/conv.md'
-            - 'api/nn/pool.md'
             - 'api/nn/rnn.md'
             - 'api/nn/attention.md'
+            - 'api/nn/activations.md'
+            - 'api/nn/pool.md'
             - 'api/nn/dropout.md'
             - 'api/nn/normalisation.md'
             - 'api/nn/embedding.md'
-            - 'api/nn/composed.md'
-            - 'api/nn/activations.md'
+            - 'api/nn/mlp.md'
+            - 'api/nn/sequential.md'
             - 'api/nn/stateful.md'
         - Filtering:
             - 'api/filtering/partition-combine.md'
