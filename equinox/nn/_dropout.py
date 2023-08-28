@@ -1,6 +1,7 @@
 import warnings
 from typing import Optional
 
+import jax
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.random as jrandom
@@ -53,6 +54,7 @@ class Dropout(Module):
     def deterministic(self):
         return self.inference
 
+    @jax.named_scope("eqx.nn.Dropout")
     def __call__(
         self,
         x: Array,

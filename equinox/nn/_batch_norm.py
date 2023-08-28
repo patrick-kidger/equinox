@@ -104,6 +104,7 @@ class BatchNorm(StatefulLayer):
         self.channelwise_affine = channelwise_affine
         self.momentum = momentum
 
+    @jax.named_scope("eqx.nn.BatchNorm")
     def __call__(
         self,
         x: Array,

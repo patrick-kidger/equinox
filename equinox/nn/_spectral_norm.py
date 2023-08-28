@@ -104,6 +104,7 @@ class SpectralNorm(StatefulLayer, Generic[_Layer]):
             u0, v0 = _power_iteration(weight, u0, v0, eps)
         self.uv_index = StateIndex(lambda **_: (u0, v0))
 
+    @jax.named_scope("eqx.nn.SpectralNorm")
     def __call__(
         self,
         x: Array,

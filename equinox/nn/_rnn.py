@@ -1,6 +1,7 @@
 import math
 from typing import Optional
 
+import jax
 import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
@@ -83,6 +84,7 @@ class GRUCell(Module):
         self.hidden_size = hidden_size
         self.use_bias = use_bias
 
+    @jax.named_scope("eqx.nn.GRUCell")
     def __call__(
         self, input: Array, hidden: Array, *, key: Optional[PRNGKeyArray] = None
     ):
@@ -182,6 +184,7 @@ class LSTMCell(Module):
         self.hidden_size = hidden_size
         self.use_bias = use_bias
 
+    @jax.named_scope("eqx.nn.LSTMCell")
     def __call__(self, input, hidden, *, key=None):
         """**Arguments:**
 
