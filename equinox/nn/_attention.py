@@ -236,7 +236,8 @@ class MultiheadAttention(Module):
             `(kv_seq_length, value_size)`.
         - `mask`: Optional mask preventing attention to certain positions. Should either
             be a JAX array of shape `(query_seq_length, kv_seq_length)`, or (for custom
-            per-head masking) `(num_heads, query_seq_length, kv_seq_length)`.
+            per-head masking) `(num_heads, query_seq_length, kv_seq_length)`. A value of
+            `False` at a position indicates that position should be ignored.
         - `key`: A `jax.random.PRNGKey` used for dropout. Unused if `dropout = 0`.
             (Keyword only argument.)
         - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
