@@ -149,19 +149,13 @@ class State:
 
 
 class StatefulLayer(Module):
-    """An abstract base class representing a stateful layer within a neural network.
-
-    Stateful layers maintain internal state across calls, which can be useful for tasks
-    such as BatchNormalisation.
+    """An abstract base class, used to mark a stateful layer for the sake of
+    [`equinox.nn.Sequential`][]. If `Sequential` sees that a layer inherits
+    from `StatefulLayer`, then it will know to pass in `state` as well as the
+    piped data `x`.
 
     Subclasses must implement the `__call__` method that takes input data and the
     current state as arguments and returns the output data and updated state.
-
-    !!! info
-
-        This declaration is currently intended for defining the
-        API for use with `nn.Sequential`.
-
     """
 
     @abc.abstractmethod
