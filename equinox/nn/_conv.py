@@ -2,6 +2,7 @@ import itertools as it
 from collections.abc import Callable, Sequence
 from typing import Optional, TypeVar, Union
 
+import jax
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.random as jrandom
@@ -150,6 +151,7 @@ class Conv(Module):
         self.groups = groups
         self.use_bias = use_bias
 
+    @jax.named_scope("eqx.nn.Conv")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
@@ -422,6 +424,7 @@ class ConvTranspose(Module):
         self.groups = groups
         self.use_bias = use_bias
 
+    @jax.named_scope("eqx.nn.ConvTranspose")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 

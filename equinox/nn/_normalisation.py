@@ -101,6 +101,7 @@ class LayerNorm(Module):
     ) -> tuple[Array, State]:
         ...
 
+    @jax.named_scope("eqx.nn.LayerNorm")
     def __call__(
         self, x: Array, state: State = sentinel, *, key: Optional[PRNGKeyArray] = None
     ) -> Union[Array, tuple[Array, State]]:
@@ -212,6 +213,7 @@ class GroupNorm(Module):
     ) -> tuple[Array, State]:
         ...
 
+    @jax.named_scope("eqx.nn.GroupNorm")
     def __call__(
         self, x: Array, state: State = sentinel, *, key: Optional[PRNGKeyArray] = None
     ) -> Union[Array, tuple[Array, State]]:

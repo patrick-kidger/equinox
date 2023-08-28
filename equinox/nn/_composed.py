@@ -7,6 +7,7 @@ from typing import (
     Union,
 )
 
+import jax
 import jax.nn as jnn
 import jax.random as jrandom
 from jaxtyping import Array, PRNGKeyArray
@@ -103,6 +104,7 @@ class MLP(Module):
         self.use_bias = use_bias
         self.use_final_bias = use_final_bias
 
+    @jax.named_scope("eqx.nn.MLP")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
@@ -137,6 +139,7 @@ class Sequential(Module):
         self.layers = tuple(layers)
 
     @overload
+    @jax.named_scope("eqx.nn.Sequential")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         ...
 

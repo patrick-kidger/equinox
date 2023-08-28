@@ -1,5 +1,6 @@
 from typing import Optional
 
+import jax
 import jax.random as jrandom
 from jaxtyping import Array, Float, PRNGKeyArray
 
@@ -45,6 +46,7 @@ class Embedding(Module):
         self.num_embeddings = num_embeddings
         self.embedding_size = embedding_size
 
+    @jax.named_scope("eqx.nn.Embedding")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 

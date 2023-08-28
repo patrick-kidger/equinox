@@ -1,6 +1,7 @@
 import math
 from typing import Any, Literal, Optional, TypeVar, Union
 
+import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array, PRNGKeyArray
@@ -58,6 +59,7 @@ class Linear(Module):
         self.out_features = out_features
         self.use_bias = use_bias
 
+    @jax.named_scope("eqx.nn.Linear")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
@@ -109,6 +111,7 @@ class Identity(Module):
         # Ignores args and kwargs
         super().__init__()
 
+    @jax.named_scope("eqx.nn.Identity")
     def __call__(self, x: _T, *, key: Optional[PRNGKeyArray] = None) -> _T:
         """**Arguments:**
 

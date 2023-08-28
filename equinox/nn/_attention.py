@@ -213,6 +213,7 @@ class MultiheadAttention(Module):
         self.use_value_bias = use_value_bias
         self.use_output_bias = use_output_bias
 
+    @jax.named_scope("eqx.nn.MultiheadAttention")
     def __call__(
         self,
         query: Float[Array, "q_seq q_size"],
