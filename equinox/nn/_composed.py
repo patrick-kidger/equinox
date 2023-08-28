@@ -156,8 +156,8 @@ class Sequential(Module):
         """**Arguments:**
 
         - `x`: passed to the first member of the sequence.
-        - `state`: If provided, then it is passed to any layer which subclasses
-             eqx.nn.StatefulLayer.
+        - `state`: If provided, then it is passed to, and updated from, any layer
+            which subclasses [`equinox.nn.StatefulLayer`][].
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
 
