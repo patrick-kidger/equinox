@@ -8,7 +8,8 @@ from jaxtyping import Array, Float, PRNGKeyArray
 
 from .._module import field
 from .._tree import tree_at
-from ._stateful import State, StatefulLayer, StateIndex
+from ._sequential import StatefulLayer
+from ._stateful import State, StateIndex
 
 
 def _power_iteration(weight, u, v, eps):

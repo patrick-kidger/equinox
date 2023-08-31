@@ -1,12 +1,11 @@
-import abc
 import types
 from collections.abc import Callable
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, Generic, TypeVar
 
 import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
-from jaxtyping import Array, PRNGKeyArray, PyTree
+from jaxtyping import PyTree
 
 from .._module import Module
 from .._pretty_print import bracketed, named_objs, text, tree_pformat
@@ -146,27 +145,3 @@ class State:
             state[key] = value
         self._state = state
         return self
-
-
-class StatefulLayer(Module):
-    """An abstract base class, used to mark a stateful layer for the sake of
-    [`equinox.nn.Sequential`][]. If `Sequential` sees that a layer inherits
-    from `StatefulLayer`, then it will know to pass in `state` as well as the
-    piped data `x`.
-
-    Subclasses must implement the `__call__` method that takes input data and the
-    current state as arguments and returns the output data and updated state.
-    """
-
-    @abc.abstractmethod
-    def __call__(
-        self,
-        x: Array,
-        state: State,
-        *,
-        key: Optional[PRNGKeyArray],
-    ) -> tuple[Array, State]:
-        """The function signature that stateful layers should conform to, to be
-        compatible with [`equinox.nn.Sequential`][].
-        """
-        raise NotImplementedError("Subclasses must implement the __call__ method.")

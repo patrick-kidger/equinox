@@ -7,7 +7,8 @@ import jax.numpy as jnp
 from jaxtyping import Array, Bool, Float
 
 from .._module import field
-from ._stateful import State, StatefulLayer, StateIndex
+from ._sequential import StatefulLayer
+from ._stateful import State, StateIndex
 
 
 class BatchNorm(StatefulLayer):
