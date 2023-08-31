@@ -40,4 +40,9 @@ from ._sequential import (
     StatefulLayer as StatefulLayer,
 )
 from ._spectral_norm import SpectralNorm as SpectralNorm
-from ._stateful import State as State, StateIndex as StateIndex
+from ._stateful import (
+    delete_init_state as delete_init_state,
+    make_with_state as make_with_state,
+    State as State,
+    StateIndex as StateIndex,
+)
