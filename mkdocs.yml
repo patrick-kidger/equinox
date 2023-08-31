@@ -127,6 +127,7 @@ nav:
             - 'api/nn/embedding.md'
             - 'api/nn/mlp.md'
             - 'api/nn/sequential.md'
+            - 'api/nn/inference.md'
             - 'api/nn/stateful.md'
         - Filtering:
             - 'api/filtering/partition-combine.md'
