@@ -168,7 +168,7 @@ class MultiheadAttention(Module):
         - `dropout_p`: Dropout probability on attention weights.
         - `inference`: Whether to actually apply dropout at all. If `True` then dropout
             is not applied. If `False` then dropout is applied. This may be toggled
-            with [`equinox.tree_inference`][] or overridden during
+            with [`equinox.nn.inference_mode`][] or overridden during
             [`equinox.nn.MultiheadAttention.__call__`][].
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)

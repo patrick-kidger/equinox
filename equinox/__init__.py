@@ -53,7 +53,6 @@ from ._tree import (
     tree_check as tree_check,
     tree_equal as tree_equal,
     tree_flatten_one_level as tree_flatten_one_level,
-    tree_inference as tree_inference,
 )
 from ._update import apply_updates as apply_updates
 from ._vmap_pmap import (
@@ -61,6 +60,7 @@ from ._vmap_pmap import (
     filter_vmap as filter_vmap,
     if_array as if_array,
 )
+from .nn import inference_mode as tree_inference  # noqa: F401 - backward compatibility
 
 
 __version__ = importlib.metadata.version("equinox")

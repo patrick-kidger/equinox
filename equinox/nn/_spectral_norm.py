@@ -49,7 +49,7 @@ class SpectralNorm(StatefulLayer, Generic[_Layer]):
     Note that this layer behaves differently during training and inference. During
     training then power iterations are updated; during inference they are fixed.
     Whether the model is in training or inference mode should be toggled using
-    [`equinox.tree_inference`][].
+    [`equinox.nn.inference_mode`][].
     """  # noqa: E501
 
     layer: _Layer
@@ -81,7 +81,7 @@ class SpectralNorm(StatefulLayer, Generic[_Layer]):
         - `eps`: Epsilon for numerical stability when calculating norms.
         - `inference`: Whether this is in inference mode, at which time no power
             iterations are performed.  This may be toggled with
-            [`equinox.tree_inference`][].
+            [`equinox.nn.inference_mode`][].
         - `key`: A `jax.random.PRNGKey` used to provide randomness for initialisation.
             (Keyword only argument.)
         """

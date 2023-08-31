@@ -13,6 +13,7 @@ from ._conv import (
 )
 from ._dropout import Dropout as Dropout
 from ._embedding import Embedding as Embedding
+from ._inference import inference_mode as inference_mode
 from ._linear import Identity as Identity, Linear as Linear
 from ._mlp import MLP as MLP
 from ._normalisation import GroupNorm as GroupNorm, LayerNorm as LayerNorm

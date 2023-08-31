@@ -38,7 +38,7 @@ class BatchNorm(StatefulLayer):
     training then statistics are computed using the input data, and the running
     statistics updated. During inference then just the running statistics are used.
     Whether the model is in training or inference mode should be toggled using
-    [`equinox.tree_inference`][].
+    [`equinox.nn.inference_mode`][].
     """  # noqa: E501
 
     weight: Optional[Float[Array, "input_size"]]
@@ -79,7 +79,7 @@ class BatchNorm(StatefulLayer):
         - `inference`: If `False` then the batch means and variances will be calculated
             and used to update the running statistics. If `True` then the running
             statistics are directly used for normalisation. This may be toggled with
-            [`equinox.tree_inference`][] or overridden during
+            [`equinox.nn.inference_mode`][] or overridden during
             [`equinox.nn.BatchNorm.__call__`][].
         - `dtype`: The dtype of the input array.
         """
