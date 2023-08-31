@@ -92,12 +92,12 @@ class BatchNorm(StatefulLayer):
         else:
             self.weight = None
             self.bias = None
-        self.first_time_index = StateIndex(lambda **_: jnp.array(True))
-        make_buffers = lambda **_: (
+        self.first_time_index = StateIndex(jnp.array(True))
+        init_buffers = (
             jnp.empty((input_size,), dtype=dtype),
             jnp.empty((input_size,), dtype=dtype),
         )
-        self.state_index = StateIndex(make_buffers)
+        self.state_index = StateIndex(init_buffers)
         self.inference = inference
         self.axis_name = axis_name
         self.input_size = input_size
