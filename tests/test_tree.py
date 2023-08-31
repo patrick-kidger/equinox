@@ -155,10 +155,10 @@ def test_tree_equal_jit():
     assert not run3(a, 1)
 
 
-def test_tree_inference(getkey):
+def test_inference_mode(getkey):
     attention = eqx.nn.MultiheadAttention(2, 4, key=getkey())
     assert attention.dropout.inference is False
-    attention2 = eqx.tree_inference(attention, True)
+    attention2 = eqx.nn.inference_mode(attention)
     assert attention.dropout.inference is False
     assert attention2.dropout.inference is True
 
