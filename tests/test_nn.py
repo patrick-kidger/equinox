@@ -823,7 +823,7 @@ def test_batch_norm(getkey):
 
     # Test that the statistics don't update at inference
 
-    ibn = eqx.tree_inference(bn, value=True)
+    ibn = eqx.nn.inference_mode(bn, value=True)
     vibn = jax.vmap(ibn, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
     out, state = vibn(4 * x1 + 20, state)
     running_mean3, running_var3 = state.get(bn.state_index)
@@ -869,7 +869,7 @@ def test_spectral_norm(getkey):
     spectral = eqx.tree_at(
         lambda s: s.layer.weight, spectral, spectral.layer.weight + 1
     )
-    spectral = eqx.tree_inference(spectral, value=True)
+    spectral = eqx.nn.inference_mode(spectral, value=True)
     assert not jnp.allclose(λ1(), 1)
     for _ in range(100):
         _, state = spectral(x, state)
