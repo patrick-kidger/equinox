@@ -2,7 +2,7 @@ import functools as ft
 import inspect
 import warnings
 from collections.abc import Callable
-from typing import Any, overload, TypeVar
+from typing import Any, Literal, overload, TypeVar
 from typing_extensions import ParamSpec
 
 import jax
@@ -196,18 +196,22 @@ class _JitWrapper(Module):
 
 @overload
 def filter_jit(
-    *, donate: str = "none"
+    *, donate: Literal["all", "warn", "none"] = "none"
 ) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]:
     ...
 
 
 @overload
-def filter_jit(fun: Callable[_P, _T], *, donate: str = "none") -> Callable[_P, _T]:
+def filter_jit(
+    fun: Callable[_P, _T], *, donate: Literal["all", "warn", "none"] = "none"
+) -> Callable[_P, _T]:
     ...
 
 
 @doc_remove_args("jitkwargs")
-def filter_jit(fun=sentinel, *, donate: str = "none", **jitkwargs):
+def filter_jit(
+    fun=sentinel, *, donate: Literal["all", "warn", "none"] = "none", **jitkwargs
+):
     """An easier-to-use version of `jax.jit`. All JAX and NumPy arrays are traced, and
     all other types are held static.
 
