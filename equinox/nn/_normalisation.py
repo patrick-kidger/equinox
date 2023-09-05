@@ -5,7 +5,7 @@ from typing import Optional, overload, Union
 
 import jax
 import jax.numpy as jnp
-from jaxtyping import Array, PRNGKeyArray
+from jaxtyping import Array, Float, PRNGKeyArray
 
 from .._custom_types import sentinel
 from .._misc import left_broadcast_to
@@ -50,16 +50,16 @@ class LayerNorm(Module):
 
     """
 
-    shape: Union[None, int, Sequence[int]] = field(static=True)
+    shape: tuple[int] = field(static=True)
     eps: float = field(static=True)
     use_weight: bool = field(static=True)
     use_bias: bool = field(static=True)
-    weight: Optional[Array]
-    bias: Optional[Array]
+    weight: Optional[Float[Array, "*shape"]]
+    bias: Optional[Float[Array, "*shape"]]
 
     def __init__(
         self,
-        shape: Union[None, int, Sequence[int]],
+        shape: Union[int, Sequence[int]],
         eps: float = 1e-5,
         use_weight: bool = True,
         use_bias: bool = True,
@@ -69,14 +69,17 @@ class LayerNorm(Module):
     ):
         """**Arguments:**
 
-        - `shape`: Input shape. May be left unspecified (e.g. just `None`) if
-            `elementwise_affine=False`.
+        - `shape`: Shape of the input.
         - `eps`: Value added to denominator for numerical stability.
         - `use_weight`: Whether the module has learnable affine weights.
         - `use_bias`: Whether the module has learnable affine biases.
         - `elementwise_affine`: Deprecated alternative to `use_weight` and `use_bias`.
         """
         super().__init__(**kwargs)
+        if isinstance(shape, int):
+            shape = (shape,)
+        else:
+            shape = tuple(shape)
         self.shape = shape
         self.eps = eps
         if elementwise_affine is not None:
@@ -103,11 +106,15 @@ class LayerNorm(Module):
 
     @jax.named_scope("eqx.nn.LayerNorm")
     def __call__(
-        self, x: Array, state: State = sentinel, *, key: Optional[PRNGKeyArray] = None
+        self,
+        x: Float[Array, "*shape"],
+        state: State = sentinel,
+        *,
+        key: Optional[PRNGKeyArray] = None,
     ) -> Union[Array, tuple[Array, State]]:
         """**Arguments:**
 
-        - `x`: A JAX array.
+        - `x`: A JAX array, with the same shape as the `shape` passed to `__init__`.
         - `state`: Ignored; provided for interchangability with the
             [`equinox.nn.BatchNorm`][] API.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
@@ -121,6 +128,10 @@ class LayerNorm(Module):
         is passed through unchanged. If `state` is not passed, then just the output is
         returned.
         """
+        if x.shape != self.shape:
+            raise ValueError(
+                "`LayerNorm(shape)(x)` must satisfy the invariant `shape == x.shape`"
+            )
         mean = jnp.mean(x, keepdims=True)
         variance = jnp.var(x, keepdims=True)
         variance = jnp.maximum(0.0, variance)
