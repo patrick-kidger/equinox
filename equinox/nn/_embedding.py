@@ -1,9 +1,11 @@
 from typing import Optional
 
 import jax
+import jax.numpy as jnp
 import jax.random as jrandom
-from jaxtyping import Array, Float, PRNGKeyArray
+from jaxtyping import Array, ArrayLike, Float, Int, PRNGKeyArray
 
+from .._filters import is_array_like
 from .._module import field, Module
 
 
@@ -16,28 +18,49 @@ class Embedding(Module):
 
     def __init__(
         self,
-        num_embeddings: int,
-        embedding_size: int,
+        num_embeddings: Optional[int] = None,  # pyright: ignore
+        embedding_size: Optional[int] = None,  # pyright: ignore
         weight: Optional[Float[Array, "num_embeddings embedding_size"]] = None,
         *,
-        key: PRNGKeyArray,
+        key: Optional[PRNGKeyArray] = None,
         **kwargs,
     ):
         """**Arguments:**
 
+        `Embedding` should be initialised with either:
+
         - `num_embeddings`: Size of embedding dictionary. Must be non-negative.
         - `embedding_size`: Size of each embedding vector. Must be non-negative.
-        - `weight`: If given, the embedding lookup table. Will be generated randomly
-            if not provided.
-        - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
-            initialisation. (Keyword only argument.)
+        - `key`: A `jax.random.PRNGKey` used to provide randomness for initialisation
+            of the embedding lookup table. (Keyword only argument.)
+
+        Or:
+
+        - `weight`: The embedding lookup table, of shape
+            `(num_embeddings, embedding_size)`.
         """
         super().__init__(**kwargs)
         if weight is None:
-            assert num_embeddings >= 0, "num_embeddings must not be negative."
-            assert embedding_size >= 0, "embedding_size must not be negative."
+            if num_embeddings is None or embedding_size is None or key is None:
+                raise ValueError(
+                    "Must provide `eqx.nn.Embedding(num_embeddings=..., "
+                    "embedding_size=..., key=...)` if not providing the weight "
+                    "directly."
+                )
+            if num_embeddings < 0:
+                raise ValueError("num_embeddings must not be negative.")
+            if embedding_size < 0:
+                raise ValueError("embedding_size must not be negative.")
             self.weight = jrandom.normal(key, (num_embeddings, embedding_size))
         else:
+            if weight.ndim != 2:
+                raise ValueError(
+                    "weight must have shape (num_embeddings, embedding_size)."
+                )
+            if num_embeddings is None:
+                num_embeddings: int = weight.shape[0]
+            if embedding_size is None:
+                embedding_size: int = weight.shape[1]
             if weight.shape != (num_embeddings, embedding_size):
                 raise ValueError(
                     "weight must have shape (num_embeddings, embedding_size)."
@@ -47,10 +70,12 @@ class Embedding(Module):
         self.embedding_size = embedding_size
 
     @jax.named_scope("eqx.nn.Embedding")
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
+    def __call__(
+        self, x: Int[ArrayLike, ""], *, key: Optional[PRNGKeyArray] = None
+    ) -> Array:
         """**Arguments:**
 
-        - `x`: The table index.
+        - `x`: The table index. Should be a scalar integer array.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
 
@@ -59,4 +84,10 @@ class Embedding(Module):
         A JAX array of shape `(embedding_size,)`, from the x-th index of the embedding
         table.
         """
-        return self.weight[x]
+        if is_array_like(x) and jnp.shape(x) == ():
+            return self.weight[x]
+        else:
+            raise ValueError(
+                "`eqx.nn.Embedding()(x)` should be called with a scalar index `x`. "
+                "Use `jax.vmap` if you would like to index with multiple values."
+            )
