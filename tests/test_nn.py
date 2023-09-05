@@ -671,17 +671,21 @@ def test_multihead_attention_deterministic(getkey):
 
 def test_embedding(getkey):
     emb = eqx.nn.Embedding(100, 512, key=getkey())
-    x = jnp.array([1])
-    assert emb(x).shape == (1, 512)
+    x = jnp.array(1)
+    assert emb(x).shape == (512,)
 
     emb = eqx.nn.Embedding(num_embeddings=10, embedding_size=20, key=getkey())
-    x = jnp.array([0])
-    assert emb(x).shape == (1, 20)
+    x = jnp.array(0)
+    assert emb(x).shape == (20,)
 
     emb = eqx.nn.Embedding(
         10, 10, weight=jnp.linspace(0.1, 10, 100).reshape(10, 10), key=getkey()
     )
-    x = jnp.array([-1])
+    x = jnp.array(-1)
+    assert jnp.allclose(emb(x), jnp.linspace(9.1, 10.0, 10))
+
+    emb = eqx.nn.Embedding(weight=jnp.linspace(0.1, 10, 100).reshape(10, 10))
+    x = jnp.array(-1)
     assert jnp.allclose(emb(x), jnp.linspace(9.1, 10.0, 10))
 
 
