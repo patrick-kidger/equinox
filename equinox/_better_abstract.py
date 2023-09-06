@@ -206,25 +206,52 @@ def _is_concretisation(sub, super):
     return is_subhint(sub_args, sup_args)
 
 
+def _is_just_static_field(field):
+    # These are just the default kwargs of eqx.field apart from static
+    valid_props = (
+        ("default", dataclasses.MISSING),
+        ("default_factory", dataclasses.MISSING),
+        ("kw_only", dataclasses.MISSING),
+        ("init", True),
+    )
+    is_valid = True
+    for attr, v_allowed in valid_props:
+        v = getattr(field, attr)
+        if v_allowed != v:
+            is_valid = False
+    if not field.metadata.get("static", False):
+        is_valid = False
+    if not is_valid:
+        raise ValueError(
+            "Only eqx.field(static=True) is allowed for abstract attributes"
+        )
+    return True
+
+
 class ABCMeta(abc.ABCMeta):
     def register(cls, subclass):
         raise ValueError
 
-    def __new__(mcs, name, bases, namespace, /, **kwargs):
-        cls = super().__new__(mcs, name, bases, namespace, **kwargs)
+    def __new__(mcs, clsname, bases, namespace, /, **kwargs):
+        # Empty dictionary of annotations that will be filled up from all baseclasses.
         abstract_vars = dict()
         abstract_class_vars = dict()
+        static_abstractvars = set()
         for attr, group in [
             ("__abstractvars__", abstract_vars),
             ("__abstractclassvars__", abstract_class_vars),
         ]:
             for base in bases:
+                # For this baseclass check that existing annotations are compatible with
+                # with annotations found in previous baseclasses.
                 for name, annotation in base.__dict__.get(attr, dict()).items():
                     try:
                         existing_annotation = group[name]
                     except KeyError:
+                        # No previous annotation, so skip.
                         pass
                     else:
+                        # Found previous annotation, check compatibility.
                         if not (
                             _is_concretisation(annotation, existing_annotation)
                             or _is_concretisation(existing_annotation, annotation)
@@ -233,9 +260,9 @@ class ABCMeta(abc.ABCMeta):
                                 "Base classes have mismatched type annotations for "
                                 f"{name}"
                             )
-                    if "__annotations__" in cls.__dict__:
+                    if "__annotations__" in namespace:
                         try:
-                            new_annotation = cls.__annotations__[name]
+                            new_annotation = namespace["__annotations__"][name]
                         except KeyError:
                             pass
                         else:
@@ -244,29 +271,84 @@ class ABCMeta(abc.ABCMeta):
                                     "Base class and derived class have mismatched type "
                                     f"annotations for {name}"
                                 )
-                    # Not just `if name not in namespace`, as `cls.__dict__` may be
+                            else:
+                                # It is a concretization, so check wether the abstract
+                                # variable was declared as static in the base class.
+                                was_declared_static = False
+                                try:
+                                    was_declared_static = (
+                                        name in base.__static_abstractvars__
+                                    )
+                                except AttributeError:
+                                    pass
+                                # If so, keep record of that name for further processing
+                                if was_declared_static:
+                                    static_abstractvars.add(name)
+                    # FIXME: is this important?
+                    # Not just `if name not in namespace`, as `namespace` may be
                     # slightly bigger from `__init_subclass__`.
-                    if name not in cls.__dict__:
+                    if name not in namespace:
+                        # This is true, if no default value was set yet
                         group[name] = annotation
-        if "__annotations__" in cls.__dict__:
-            for name, annotation in cls.__annotations__.items():
+        # Mark attributes static that have been flagged so via a static abstractvar in
+        # a base class
+        for name in static_abstractvars:
+            # Three options
+            try:
+                # Check wether default value was specified
+                default = namespace[name]
+            except KeyError:
+                # 1) No default value. So set one as static field.
+                namespace[name] = dataclasses.field(metadata={"static": True})
+            else:
+                if isinstance(default, dataclasses.Field):
+                    # 2) There was a default value specified and its a field. Make sure
+                    # it is static
+                    # FIXME: don't now if the ignore here is needed or one could just
+                    # change the assigmnent to something that doesn't complain.
+                    default.metadata["static"] = True  # pyright: ignore
+                else:
+                    # 3) There was a defauled value, but its not a field. So wrap field
+                    # around it
+                    namespace[name] = dataclasses.field(
+                        default=default, metadata={"static": True}
+                    )
+        # Now go through all new annotations. When they are abstract, they should either
+        # not have a value OR have a static field without default as a value
+        if "__annotations__" in namespace:
+            for name, annotation in namespace["__annotations__"].items():
                 is_abstract, is_class = _process_annotation(annotation)
                 if is_abstract:
                     if name in namespace:
-                        if is_class:
-                            raise TypeError(
-                                f"Abstract class attribute {name} cannot have value"
-                            )
+                        default = namespace[name]
+                        if isinstance(
+                            default, dataclasses.Field
+                        ) and _is_just_static_field(default):
+                            # The default value is just a static field. So add it to the
+                            # static fields
+                            static_abstractvars.add(name)
+                            # Remove the value from the namespace
+                            namespace.pop(name)
+                            print("DEBUG: Found static field", name)
+                            print("DEBUG:", namespace["__annotations__"])
                         else:
-                            raise TypeError(
-                                f"Abstract attribute {name} cannot have value"
-                            )
+                            # Abstract values with other default values are not allowed
+                            if is_class:
+                                raise TypeError(
+                                    f"Abstract class attribute {name} cannot have value"
+                                )
+                            else:
+                                raise TypeError(
+                                    f"Abstract attribute {name} cannot have value"
+                                )
                     if is_class:
                         abstract_class_vars[name] = annotation
                     else:
                         abstract_vars[name] = annotation
+        cls = super().__new__(mcs, clsname, bases, namespace, **kwargs)
         cls.__abstractvars__ = abstract_vars  # pyright: ignore
         cls.__abstractclassvars__ = abstract_class_vars  # pyright: ignore
+        cls.__static_abstractvars__ = static_abstractvars  # pyright: ignore
         return cls
 
     def __call__(cls, *args, **kwargs):

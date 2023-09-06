@@ -1,4 +1,5 @@
 import abc
+from dataclasses import fields
 from typing import ClassVar, TYPE_CHECKING
 
 import pytest
@@ -102,6 +103,20 @@ def test_abstract_attribute():
 
     class M2(A):
         x = True
+
+    class A2(A):
+        x: AbstractVar[bool] = eqx.field(static=True)
+
+    class N1(A2):
+        x: bool = False
+
+    n1 = N1()
+    assert fields(n1)[0].metadata["static"]
+
+    with pytest.raises(ValueError, match="is allowed for abstract attributes"):
+
+        class A3(A):
+            x: AbstractVar[bool] = eqx.field(static=False)
 
 
 def test_abstract_class_attribute():
