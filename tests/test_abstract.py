@@ -107,11 +107,14 @@ def test_abstract_attribute():
     class A2(A):
         x: AbstractVar[bool] = eqx.field(static=True)
 
+    with pytest.raises(TypeError, match="abstract attributes"):
+
+        A2()
+
     class N1(A2):
         x: bool = False
 
-    n1 = N1()
-    assert fields(n1)[0].metadata["static"]
+    assert fields(N1())[0].metadata["static"]
 
     with pytest.raises(ValueError, match="is allowed for abstract attributes"):
 
