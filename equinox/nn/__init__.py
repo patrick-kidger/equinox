@@ -39,6 +39,7 @@ from ._sequential import (
     Sequential as Sequential,
     StatefulLayer as StatefulLayer,
 )
+from ._shared import Shared as Shared
 from ._spectral_norm import SpectralNorm as SpectralNorm
 from ._stateful import (
     delete_init_state as delete_init_state,
