@@ -188,6 +188,14 @@ def test_tree_flatten_one_level():
         eqx.tree_flatten_one_level(x)
 
 
+# This matches the behaviour of `jax._src.tree_util.flatten_one_level`
+def test_tree_flatten_one_level_special():
+    x = [None, None, eqx.Module(), 1, 2]
+    leaves, treedef = eqx.tree_flatten_one_level(x)
+    assert leaves == [None, None, eqx.Module(), 1, 2]
+    assert treedef == jtu.tree_structure([0, 0, 0, 0, 0])
+
+
 def test_tree_check():
     x = []
     y = []
@@ -226,3 +234,16 @@ def test_tree_check():
     a = SubComponent()
     with pytest.raises(ValueError):
         eqx.tree_check(a)
+
+
+def test_tree_check_none():
+    eqx.tree_check([None, None])
+
+
+def test_tree_check_integer():
+    eqx.tree_check([0, 0])
+
+
+def test_tree_check_module():
+    a = eqx.Module()  # same `id(...)` for both entries passed to `tree_check`.
+    eqx.tree_check([a, a])
