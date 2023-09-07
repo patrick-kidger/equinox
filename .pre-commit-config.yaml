@@ -12,7 +12,7 @@ repos:
     rev: v1.1.315
     hooks:
     - id: pyright
-      additional_dependencies: [beartype, einops, jax, jaxtyping, pytest, tensorflow, tf2onnx, typing_extensions]
+      additional_dependencies: [beartype, einops, jax, jaxtyping, optax, pytest, tensorflow, tf2onnx, typing_extensions]
   - repo: https://github.com/nbQA-dev/nbQA
     rev: 1.6.3
     hooks:
