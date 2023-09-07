@@ -41,6 +41,7 @@ from ..debug import (
     store_dce as store_dce,
 )
 from ..debug._announce_transform import announce_jaxpr_p as announce_jaxpr_p
+from ._closure_to_pytree import closure_to_pytree as closure_to_pytree
 from ._finalise_jaxpr import (
     finalise_eval_jaxpr as finalise_eval_jaxpr,
     finalise_fn as finalise_fn,
