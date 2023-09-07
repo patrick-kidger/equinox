@@ -128,6 +128,7 @@ nav:
             - 'api/nn/mlp.md'
             - 'api/nn/sequential.md'
             - 'api/nn/inference.md'
+            - 'api/nn/shared.md'
             - 'api/nn/stateful.md'
         - Filtering:
             - 'api/filtering/partition-combine.md'
