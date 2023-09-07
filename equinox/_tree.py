@@ -387,7 +387,7 @@ def tree_flatten_one_level(
                 # tree_subnodes(x)
                 # ```
                 # as `x` is not an immediate subnode of itself.
-                # If you want to check for that then use `tree_check_acyclic`.
+                # If you want to check for that then use `tree_check`.
                 try:
                     type_string = type(pytree).__name__
                 except AttributeError:
