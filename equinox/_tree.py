@@ -338,6 +338,14 @@ def tree_flatten_one_level(
     return jtu.tree_flatten(pytree, is_leaf=is_leaf)
 
 
+def tree_check_internal(pytree, skip) -> None:
+    """As `tree_check`, but can skips checking some nodes (typically those that have
+    alread been checked).
+    """
+    all_nodes = {}
+    _tree_check(pytree, all_nodes, skip)
+
+
 def tree_check(pytree: Any) -> None:
     """Checks if the PyTree is well-formed: does it have no self-references, and does
     it have no duplicate layers.
@@ -389,13 +397,13 @@ def tree_check(pytree: Any) -> None:
     A `ValueError` if the PyTree is not well-formed.
     """
     all_nodes = {}
-    _tree_check(pytree, all_nodes)
+    _tree_check(pytree, all_nodes, skip=lambda _: False)
 
 
 _leaf_treedef = jtu.tree_structure(0)
 
 
-def _tree_check(node, all_nodes):
+def _tree_check(node, all_nodes, skip):
     subnodes, treedef = tree_flatten_one_level(node)
     # We allow duplicate leaves and empty containers, so don't raise an error with those
     if treedef != _leaf_treedef and treedef.num_leaves > 0:
@@ -422,7 +430,8 @@ def _tree_check(node, all_nodes):
         except AttributeError:
             # AttributeError: in case we cannot get __name__ for some weird reason.
             type_string = "<unknown type>"
-        all_nodes[id(node)] = (True, type_string)
-        for subnode in subnodes:
-            _tree_check(subnode, all_nodes)
+        if not skip(node):
+            all_nodes[id(node)] = (True, type_string)
+            for subnode in subnodes:
+                _tree_check(subnode, all_nodes, skip)
         all_nodes[id(node)] = (False, type_string)

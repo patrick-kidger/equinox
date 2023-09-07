@@ -1,6 +1,7 @@
 import abc
 import dataclasses
 import functools as ft
+import gc
 from collections.abc import Callable
 from typing import Any
 
@@ -540,3 +541,25 @@ def test_strict_fields():
             @abc.abstractmethod
             def foo(self):
                 pass
+
+
+def test_tree_check_cache(getkey):
+    gc.collect()
+    has_been_checked = eqx._module._has_been_checked
+    num_checked = len(has_been_checked)
+    mlp = eqx.nn.MLP(2, 2, 2, 2, key=getkey())
+    # +4: one for `MLP`, and three for its `Linear` layers inside.
+    assert len(has_been_checked) == num_checked + 4
+    del mlp
+    gc.collect()
+    assert len(has_been_checked) == num_checked
+
+
+def test_duplicate_layer_error(getkey):
+    class M(eqx.Module):
+        l1: eqx.nn.Linear
+        l2: eqx.nn.Linear
+
+    linear = eqx.nn.Linear(2, 2, key=getkey())
+    with pytest.raises(ValueError, match="As of Equinox v0.11.0"):
+        M(linear, linear)
