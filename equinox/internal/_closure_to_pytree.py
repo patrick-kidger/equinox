@@ -49,10 +49,14 @@ class _FunctionWithEquality:
 
     def information(self):
         try:
+            # `fn` not defined in REPL.
             source = inspect.getsource(self.fn)
         except OSError:
-            source = None
-        return self.fn.__qualname__, self.fn.__module__, source
+            # `fn` defined in REPL. In practice this will lead to recompilations based
+            # on function identity, but correctness >> speed.
+            return self.fn
+        else:
+            return self.fn.__qualname__, self.fn.__module__, source
 
     def __hash__(self):
         return hash(self.information())
