@@ -115,12 +115,12 @@ _has_dataclass_init = weakref.WeakKeyDictionary()
 # Inherits from ABCMeta as a convenience for a common use-case.
 # It's not a feature we use ourselves.
 class _ModuleMeta(ABCMeta):  # pyright: ignore
-    def __new__(mcs, name, bases, dict_):  # pyright: ignore
+    def __new__(mcs, name, bases, dict_, **kwargs):  # pyright: ignore
         dict_ = {
             k: _wrap_method(v) if _not_magic(k) and inspect.isfunction(v) else v
             for k, v in dict_.items()
         }
-        cls = super().__new__(mcs, name, bases, dict_)
+        cls = super().__new__(mcs, name, bases, dict_, **kwargs)
         # Do override subclasses' dataclass-__init__-s. (None of which call super, so
         # they must be overriden.)
         # Don't override custom __init__'s, which leads to poor ergonomics:
