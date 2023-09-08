@@ -183,11 +183,27 @@ def test_wrap_method():
             return self.a + b
 
     m = MyModule(13)
-    assert isinstance(m.f, jtu.Partial)
+    assert isinstance(m.f, eqx.Module)
     flat, treedef = jtu.tree_flatten(m.f)
     assert len(flat) == 1
     assert flat[0] == 13
     assert jtu.tree_unflatten(treedef, flat)(2) == 15
+
+
+def test_eq_method():
+    # Expected behaviour from non-Module methods
+    class A:
+        def f(self):
+            pass
+
+    a = A()
+    assert a.f == a.f
+
+    class B(eqx.Module):
+        def f(self):
+            pass
+
+    assert B().f == B().f
 
 
 def test_init_subclass():

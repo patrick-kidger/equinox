@@ -92,8 +92,9 @@ information.
 def _modify_traceback(e: Exception):
     # Remove JAX's UnfilteredStackTrace, with its huge error messages.
     e.__cause__ = None
-    # Remove _JitWrapper.__call__ and _JitWrapper._call from the traceback
-    tb = e.__traceback__ = e.__traceback__.tb_next.tb_next  # pyright: ignore
+    # Remove _JitWrapper.__call__ and _JitWrapper._call and Method.__call__ from the
+    # traceback
+    tb = e.__traceback__ = e.__traceback__.tb_next.tb_next.tb_next  # pyright: ignore
     try:
         # See https://github.com/google/jax/blob/69cd3ebe99ce12a9f22e50009c00803a095737c7/jax/_src/traceback_util.py#L190  # noqa: E501
         jax.lib.xla_extension.replace_thread_exc_traceback(tb)  # pyright: ignore
