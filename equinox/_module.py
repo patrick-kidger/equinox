@@ -1,6 +1,7 @@
 import dataclasses
 import functools as ft
 import inspect
+import types
 import weakref
 from collections.abc import Callable
 from typing import Any, cast, TYPE_CHECKING, TypeVar, Union
@@ -100,8 +101,7 @@ class _wrap_method:
     def __get__(self, instance, owner):
         if instance is None:
             return self.method
-        _method = ft.wraps(self.method)(jtu.Partial(self.method, instance))
-        delattr(_method, "__wrapped__")
+        _method = module_update_wrapper(BoundMethod(self.method, instance), self.method)
         return _method
 
 
@@ -540,3 +540,15 @@ class Partial(Module):
         The result of the wrapped function.
         """
         return self.func(*self.args, *args, **kwargs, **self.keywords)
+
+
+class BoundMethod(Module):
+    func: types.FunctionType = field(static=True)
+    instance: Module
+
+    def __call__(self, *args, **kwargs):
+        return self.func(self.instance, *args, **kwargs)
+
+    @property
+    def __wrapped__(self):
+        return self.func.__get__(self.instance, type(self.instance))  # pyright: ignore

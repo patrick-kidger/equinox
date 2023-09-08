@@ -2,6 +2,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
+import equinox as eqx
 import equinox.internal as eqxi
 
 from .helpers import shaped_allclose
@@ -245,11 +246,11 @@ def test_error_if():
 
     token = jnp.array(True)
     A.a.error_if(token, False)
-    jax.jit(A.a.error_if)(token, False)
+    eqx.filter_jit(A.a.error_if)(token, False)
     with pytest.raises(Exception):
         A.a.error_if(token, True)
     with pytest.raises(Exception):
-        jax.jit(A.a.error_if)(token, True)
+        eqx.filter_jit(A.a.error_if)(token, True)
 
 
 def test_compile_time_eval():
