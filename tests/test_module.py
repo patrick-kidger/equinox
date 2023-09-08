@@ -252,3 +252,20 @@ def test_wrapped(getkey):
     y = eqx.filter_vmap(eqx.nn.Linear(2, 2, key=getkey()))
     x, y = eqx.filter((x, y), eqx.is_array)
     jtu.tree_map(lambda x, y: x + y, x, y)
+
+
+def test_class_creation_kwargs():
+    called = False
+
+    class A(eqx.Module):
+        def __init_subclass__(cls, foo, **kwargs) -> None:
+            nonlocal called
+            assert not called
+            called = True
+            assert foo
+            assert len(kwargs) == 0
+
+    class B(A, foo=True):
+        pass
+
+    assert called
