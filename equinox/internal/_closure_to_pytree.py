@@ -8,6 +8,7 @@
 # So here we simply replace all function closures with pytrees, with each of their cell
 # contents as their subnodes.
 
+import inspect
 import types
 from typing import Any, Optional
 
@@ -47,7 +48,11 @@ class _FunctionWithEquality:
         self.fn = fn
 
     def information(self):
-        return self.fn.__qualname__, self.fn.__module__
+        try:
+            source = inspect.getsource(self.fn)
+        except OSError:
+            source = None
+        return self.fn.__qualname__, self.fn.__module__, source
 
     def __hash__(self):
         return hash(self.information())
