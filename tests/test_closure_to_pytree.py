@@ -43,3 +43,31 @@ def test_fixup_optax():
     assert compiling == 1
     f(optim2)
     assert compiling == 1
+
+
+def test_closure_same_name():
+    def f(flag):
+        if flag:
+
+            def g(y):
+                return 1 + y
+
+        else:
+
+            def g(y):
+                return 2 + y
+
+        def h(y):
+            return g(y)
+
+        return h
+
+    h1 = eqxi.closure_to_pytree(f(True))
+    h2 = eqxi.closure_to_pytree(f(False))
+
+    @eqx.filter_jit
+    def run(f, y):
+        return f(y)
+
+    assert run(h1, jnp.array(1.0)) == 2
+    assert run(h2, jnp.array(1.0)) == 3
