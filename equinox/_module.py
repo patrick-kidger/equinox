@@ -96,8 +96,45 @@ class _wrap_method:
     def __get__(self, instance, owner):
         if instance is None:
             return self.method
-        _method = module_update_wrapper(BoundMethod(self.method, instance), self.method)
-        return _method
+        elif isinstance(instance, _Initable):
+            raise ValueError(
+                """Cannot assign methods in __init__.
+
+That is, something like the following is not allowed:
+```
+class MyModule(eqx.Module):
+    foo: Callable
+
+    def __init__(self):
+        self.foo = self.bar
+
+    def bar(self):
+        ...
+```
+this is because Equinox modules are PyTrees -- but the above does not have a tree
+structure! `self.foo.instance` is a cycle that brings us back to `self`.
+
+In the above example, you probably want something like this instead:
+```
+class MyModule(eqx.Module):
+    @property
+    def foo(self):
+        return self.bar
+
+    def bar(self):
+        ...
+```
+so that you can still use `self.foo`, but it is not stored in the PyTree structure.
+
+This is a check that was introduced in Equinox v0.11.0. Before this, the above error
+went uncaught, possibly leading to silently wrong behaviour.
+"""
+            )
+        else:
+            _method = module_update_wrapper(
+                BoundMethod(self.method, instance), self.method
+            )
+            return _method
 
 
 def _not_magic(k: str) -> bool:
@@ -223,6 +260,10 @@ _wrapper_field_names = {
 }
 
 
+class _Initable:
+    pass
+
+
 @ft.lru_cache(maxsize=128)
 def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
     if wraps:
@@ -232,7 +273,7 @@ def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
             field.name for field in dataclasses.fields(cls)  # pyright: ignore
         }
 
-    class _InitableModule(cls):  # pyright: ignore
+    class _InitableModule(cls, _Initable):  # pyright: ignore
         pass
 
     # Done like this to avoid dataclasses complaining about overriding setattr on a
