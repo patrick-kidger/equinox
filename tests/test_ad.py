@@ -340,6 +340,15 @@ def test_closure_convert_basic():
     f(1.0, 1.0)
 
 
+def test_closure_convert_trivial():
+    def f(a):
+        return a + 1
+
+    f2 = eqx.filter_closure_convert(f, 1)
+    f2.out_struct
+    assert type(f2).__name__ == "_TrivialClosureConvert"
+
+
 def test_closure_convert_custom_jvp():
     @eqx.filter_custom_jvp
     def call(f, x):
