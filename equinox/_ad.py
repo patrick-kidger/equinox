@@ -76,7 +76,7 @@ class _GradWrapper(Module):
 
     @property
     def __wrapped__(self):
-        return self._fun_value_and_grad
+        return self._fun_value_and_grad.__wrapped__  # pyright: ignore
 
     def __call__(self, /, *args, **kwargs):
         value, grad = self._fun_value_and_grad(*args, **kwargs)
@@ -172,7 +172,7 @@ def filter_value_and_grad(
             "as the first argument."
         )
 
-    return module_update_wrapper(_ValueAndGradWrapper(fun, has_aux, gradkwargs), fun)
+    return module_update_wrapper(_ValueAndGradWrapper(fun, has_aux, gradkwargs))
 
 
 @overload
@@ -262,7 +262,7 @@ def filter_grad(fun=sentinel, *, has_aux: bool = False, **gradkwargs):
 
     fun_value_and_grad = filter_value_and_grad(fun, has_aux=has_aux, **gradkwargs)
     fun_value_and_grad = cast(_ValueAndGradWrapper, fun_value_and_grad)
-    return module_update_wrapper(_GradWrapper(fun_value_and_grad, has_aux), fun)
+    return module_update_wrapper(_GradWrapper(fun_value_and_grad, has_aux))
 
 
 def _is_none(x):
