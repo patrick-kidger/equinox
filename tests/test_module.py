@@ -1,4 +1,5 @@
 import functools as ft
+from collections.abc import Callable
 from typing import Any
 
 import jax
@@ -136,6 +137,54 @@ def test_inheritance():
     m = MyModule7(value4=1, value7=2)
     assert m.weight4 == 1
     assert m.weight7 == 2
+
+
+# This used to be allowed, but was frankly very sketchy -- it introduced cycles into
+# things. We now explicitly try to catch this as an error.
+def test_method_assignment():
+    class A(eqx.Module):
+        foo: Callable
+        x: jax.Array
+
+        def __init__(self, x):
+            # foo is assigned before x! Therefore
+            # self.bar.instance.x` doesn't exist yet.
+            self.foo = self.bar
+            self.x = x
+
+        def bar(self):
+            return self.x + 1
+
+    x = jnp.array(3)
+    with pytest.raises(ValueError, match="Cannot assign methods in __init__"):
+        A(x)
+
+
+def test_method_assignment2():
+    # From https://github.com/patrick-kidger/equinox/issues/327
+    class Component(eqx.Module):
+        transform: Callable[[float], float]
+        validator: Callable[[Callable], Callable]
+
+        def __init__(self, transform=lambda x: x, validator=lambda f: f) -> None:
+            self.transform = transform
+            self.validator = validator
+
+        def __call__(self, x):
+            return self.validator(self.transform)(x)
+
+    class SubComponent(Component):
+        test: Callable[[float], float]
+
+        def __init__(self, test=lambda x: 2 * x) -> None:
+            self.test = test
+            super().__init__(self._transform)
+
+        def _transform(self, x):
+            return self.test(x)
+
+    with pytest.raises(ValueError, match="Cannot assign methods in __init__"):
+        SubComponent()
 
 
 @pytest.mark.parametrize("new", (False, True))
