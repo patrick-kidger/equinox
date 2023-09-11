@@ -294,4 +294,4 @@ def filter_jit(
         _cached=cached,
         _filter_warning=filter_warning,
     )
-    return module_update_wrapper(jit_wrapper, fun)
+    return module_update_wrapper(jit_wrapper)
