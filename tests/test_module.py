@@ -1,3 +1,4 @@
+import dataclasses
 import functools as ft
 from typing import Any
 
@@ -285,3 +286,104 @@ def test_class_creation_kwargs():
         pass
 
     assert called
+
+
+def test_check_init():
+    class FooException(Exception):
+        pass
+
+    called_a = False
+    called_b = False
+
+    class A(eqx.Module):
+        a: int
+
+        def __check_init__(self):
+            nonlocal called_a
+            called_a = True
+            if self.a >= 0:
+                raise FooException
+
+    class B(A):
+        def __check_init__(self):
+            nonlocal called_b
+            called_b = True
+
+    class C(A):
+        pass
+
+    assert not called_a
+    assert not called_b
+    A(-1)
+    assert called_a
+    assert not called_b
+
+    called_a = False
+    with pytest.raises(FooException):
+        A(1)
+    assert called_a
+    assert not called_b
+
+    called_a = False
+    B(-1)
+    assert called_a
+    assert called_b
+
+    called_a = False
+    called_b = False
+    with pytest.raises(FooException):
+        B(1)
+    assert called_a
+    assert called_b  # B.__check_init__ is called before A.__check_init__
+
+    called_a = False
+    called_b = False
+    C(-1)
+    assert called_a
+    assert not called_b
+
+    called_a = False
+    with pytest.raises(FooException):
+        C(1)
+    assert called_a
+    assert not called_b
+
+
+def test_check_init_order():
+    called_a = False
+    called_b = False
+    called_c = False
+
+    class A(eqx.Module):
+        def __check_init__(self):
+            nonlocal called_a
+            called_a = True
+
+    class B(A):
+        def __check_init__(self):
+            nonlocal called_b
+            called_b = True
+            raise ValueError
+
+    class C(B):
+        def __check_init__(self):  # pyright: ignore
+            nonlocal called_c
+            called_c = True
+
+    with pytest.raises(ValueError):
+        C()
+
+    assert called_c
+    assert called_b
+    assert not called_a
+
+
+def test_check_init_no_assignment():
+    class A(eqx.Module):
+        x: int
+
+        def __check_init__(self):
+            self.x = 4
+
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        A(1)

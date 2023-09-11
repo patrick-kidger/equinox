@@ -196,6 +196,13 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
             else:
                 setattr(self, field.name, converter(getattr(self, field.name)))
         object.__setattr__(self, "__class__", cls)
+        for kls in cls.__mro__:
+            try:
+                check = kls.__dict__["__check_init__"]
+            except KeyError:
+                pass
+            else:
+                check(self)
         return self
 
 
