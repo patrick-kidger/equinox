@@ -26,6 +26,7 @@ from jaxtyping import Array, ArrayLike, Complex, Float, PyTree, PyTreeDef
 from ._custom_types import sentinel
 from ._deprecate import deprecated_0_10
 from ._doc_utils import doc_remove_args
+from ._eval_shape import cached_filter_eval_shape
 from ._filters import (
     combine,
     is_array,
@@ -416,6 +417,47 @@ _T = TypeVar("_T")
 _FlatPyTree = tuple[list[_T], PyTreeDef]
 
 
+def _check_closure_convert_input(self, args, kwargs):
+    self_in_dynamic_struct = _unflatten(self.in_dynamic_struct)
+    self_in_static = _unflatten(self.in_static)
+    in_dynamic, in_static = partition((args, kwargs), is_array)
+    in_dynamic_struct = jax.eval_shape(lambda: in_dynamic)
+    # `is` because `tree_equal` may return a tracer
+    if tree_equal(in_dynamic_struct, self_in_dynamic_struct) is not True:
+        raise ValueError(
+            "Closure-converted function called with different dynamic arguments to "
+            "the example arguments provided."
+        )
+    if tree_equal(in_static, self_in_static) is not True:
+        raise ValueError(
+            "Closure-converted function called with different static arguments to "
+            "the example arguments provided."
+        )
+    return in_dynamic
+
+
+class _TrivialClosureConvert(Module):
+    fn: types.FunctionType
+    in_dynamic_struct: _FlatPyTree[jax.ShapeDtypeStruct] = field(static=True)
+    in_static: _FlatPyTree[Any] = field(static=True)
+
+    @property
+    def in_struct(self):
+        dynamic = _unflatten(self.in_dynamic_struct)
+        static = _unflatten(self.in_static)
+        return combine(dynamic, static)
+
+    @property
+    def out_struct(self):
+        args, kwargs = self.in_struct
+        return cached_filter_eval_shape(self.fn, *args, **kwargs)
+
+    def __call__(self, *args, **kwargs):
+        # unused output
+        _ = _check_closure_convert_input(self, args, kwargs)
+        return self.fn(*args, **kwargs)
+
+
 class _ClosureConvert(Module):
     # Important that `jaxpr` be a leaf (and not static), so that it is a tuple element
     # when passing through `filter_primitive_bind` and thus visible to
@@ -440,27 +482,13 @@ class _ClosureConvert(Module):
         return combine(dynamic, static)
 
     def __call__(self, *args, **kwargs):
-        self_in_dynamic_struct = _unflatten(self.in_dynamic_struct)
-        self_out_dynamic_struct = _unflatten(self.out_dynamic_struct)
-        self_in_static = _unflatten(self.in_static)
-        self_out_static = _unflatten(self.out_static)
-        in_dynamic, in_static = partition((args, kwargs), is_array)
-        in_dynamic_struct = jax.eval_shape(lambda: in_dynamic)
-        # `is` because `tree_equal` may return a tracer
-        if tree_equal(in_dynamic_struct, self_in_dynamic_struct) is not True:
-            raise ValueError(
-                "Closure-converted function called with different dynamic arguments to "
-                "the example arguments provided."
-            )
-        if tree_equal(in_static, self_in_static) is not True:
-            raise ValueError(
-                "Closure-converted function called with different static arguments to "
-                "the example arguments provided."
-            )
+        in_dynamic = _check_closure_convert_input(self, args, kwargs)
         in_dynamic_flat = jtu.tree_leaves(in_dynamic)
         out_dynamic_flat = jax.core.eval_jaxpr(
             self.jaxpr, self.consts, *in_dynamic_flat
         )
+        self_out_dynamic_struct = _unflatten(self.out_dynamic_struct)
+        self_out_static = _unflatten(self.out_static)
         out_dynamic_struct_flat, out_dynamic_treedef = jtu.tree_flatten(
             self_out_dynamic_struct
         )
@@ -509,24 +537,25 @@ def filter_closure_convert(fn: Callable[_P, _T], *args, **kwargs) -> Callable[_P
         f(1., 1.)
         ```
     """
+    in_dynamic, in_static = partition((args, kwargs), _is_struct)
+    in_dynamic_struct = jax.eval_shape(lambda: in_dynamic)
+    in_dynamic_struct = jtu.tree_flatten(in_dynamic_struct)
+    in_static = jtu.tree_flatten(in_static)
     if isinstance(fn, types.FunctionType) and fn.__closure__ is None:
         # In this case, it's not possible to have any closed-over tracers.
         # Skip jaxpr tracing for efficiency.
-        return fn
-    closed_jaxpr, out_dynamic_struct, out_static = filter_make_jaxpr(fn)(
-        *args, **kwargs
-    )  # pyright: ignore
-    in_dynamic, in_static = partition((args, kwargs), _is_struct)
-    in_dynamic_struct = jax.eval_shape(lambda: in_dynamic)
-    jaxpr = closed_jaxpr.jaxpr
-    consts = closed_jaxpr.consts
-    in_dynamic_struct = jtu.tree_flatten(in_dynamic_struct)
-    out_dynamic_struct = jtu.tree_flatten(out_dynamic_struct)
-    in_static = jtu.tree_flatten(in_static)
-    out_static = jtu.tree_flatten(out_static)
-    closure_converted = _ClosureConvert(
-        jaxpr, consts, in_dynamic_struct, out_dynamic_struct, in_static, out_static
-    )
+        closure_converted = _TrivialClosureConvert(fn, in_dynamic_struct, in_static)
+    else:
+        closed_jaxpr, out_dynamic_struct, out_static = filter_make_jaxpr(fn)(
+            *args, **kwargs
+        )  # pyright: ignore
+        jaxpr = closed_jaxpr.jaxpr
+        consts = closed_jaxpr.consts
+        out_dynamic_struct = jtu.tree_flatten(out_dynamic_struct)
+        out_static = jtu.tree_flatten(out_static)
+        closure_converted = _ClosureConvert(
+            jaxpr, consts, in_dynamic_struct, out_dynamic_struct, in_static, out_static
+        )
     closure_converted = cast(Callable[_P, _T], closure_converted)
     return closure_converted
 
