@@ -4,7 +4,7 @@ import inspect
 import types
 import weakref
 from collections.abc import Callable
-from typing import Any, cast, TYPE_CHECKING, TypeVar, Union
+from typing import Any, cast, Optional, TYPE_CHECKING, TypeVar, Union
 from typing_extensions import dataclass_transform, ParamSpec
 
 import jax.tree_util as jtu
@@ -131,9 +131,7 @@ went uncaught, possibly leading to silently wrong behaviour.
 """
             )
         else:
-            _method = module_update_wrapper(
-                BoundMethod(self.method, instance), self.method
-            )
+            _method = module_update_wrapper(BoundMethod(self.method, instance))
             return _method
 
 
@@ -476,10 +474,11 @@ class Module(metaclass=_ModuleMeta):
 
 # Modifies in-place, just like functools.update_wrapper
 def module_update_wrapper(
-    wrapper: Module, wrapped: Callable[_P, _T]
+    wrapper: Module, wrapped: Optional[Callable[_P, _T]] = None
 ) -> Callable[_P, _T]:
     """Like `functools.update_wrapper` (or its better-known cousin, `functools.wraps`),
-    but can be used on [`equinox.Module`][]s. (Which are normally immutable.)
+    but acts on [`equinox.Module`][]s, and does not modify its input (it returns the
+    updated module instead).
 
     !!! Example
 
@@ -495,7 +494,7 @@ def module_update_wrapper(
                 return self.fn
 
         def make_wrapper(fn):
-            return eqx.module_update_wrapper(Wrapper(fn), fn)
+            return eqx.module_update_wrapper(Wrapper(fn))
         ```
 
     For example, [`equinox.filter_jit`][] returns a module representing the JIT'd
@@ -504,10 +503,29 @@ def module_update_wrapper(
 
     Note that as in the above example, the wrapper class must supply a `__wrapped__`
     property, which redirects to the wrapped object.
+
+    **Arguments:**
+
+    - `wrapper`: the instance of the wrapper.
+    - `wrapped`: optional, the callable that is being wrapped. If omitted then
+        `wrapper.__wrapped__` will be used.
+
+    **Returns:**
+
+    A copy of `wrapper`, with the attributes `__module__`, `__name__`, `__qualname__`,
+    `__doc__`, and `__annotations__` copied over from the wrapped function.
     """
     cls = wrapper.__class__
     if not isinstance(getattr(cls, "__wrapped__", None), property):
         raise ValueError("Wrapper module must supply `__wrapped__` as a property.")
+
+    if wrapped is None:
+        wrapped = wrapper.__wrapped__  # pyright: ignore
+
+    # Make a clone, to avoid mutating the original input.
+    leaves, treedef = jtu.tree_flatten(wrapper)
+    wrapper = jtu.tree_unflatten(treedef, leaves)
+
     initable_cls = _make_initable(cls, wraps=True)
     object.__setattr__(wrapper, "__class__", initable_cls)
     try:
