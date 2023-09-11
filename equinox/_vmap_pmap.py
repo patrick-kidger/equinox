@@ -406,7 +406,7 @@ def filter_vmap(
         _axis_size=axis_size,
         _vmapkwargs=vmapkwargs,
     )
-    return module_update_wrapper(vmap_wrapper, fun)
+    return module_update_wrapper(vmap_wrapper)
 
 
 @compile_cache
@@ -722,4 +722,4 @@ def filter_pmap(
         _filter_warning=filter_warning,
         _pmapkwargs=pmapkwargs,
     )
-    return module_update_wrapper(pmap_wrapper, fun)
+    return module_update_wrapper(pmap_wrapper)

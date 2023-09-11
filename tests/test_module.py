@@ -9,6 +9,7 @@ import jax.tree_util as jtu
 import pytest
 
 import equinox as eqx
+import equinox.internal as eqxi
 
 from .helpers import shaped_allclose
 
@@ -271,17 +272,40 @@ def test_init_subclass():
 
 
 def test_wrapper_attributes():
-    def f(x):
-        pass
+    def f(x: int) -> str:
+        """some doc"""
+        return "hi"
 
-    fjit = eqx.filter_jit(f)
-    # Gets __name__ attribute from module_update_wrapper
+    def h(x: int) -> str:
+        """some other doc"""
+        return "bye"
 
-    @eqx.filter_jit  # Flattens and unflattens
-    def g(k):
-        k.__name__
+    noinline = lambda x: eqxi.noinline(h, abstract_fn=x)
 
-    g(fjit)
+    for wrapper in (
+        eqx.filter_jit,
+        eqx.filter_grad,
+        eqx.filter_value_and_grad,
+        eqx.filter_vmap,
+        eqx.filter_pmap,
+        noinline,
+    ):
+        f_wrap = wrapper(f)
+        # Gets __name__ attribute from module_update_wrapper
+
+        called = False
+
+        @eqx.filter_jit  # Flattens and unflattens
+        def g(k):
+            nonlocal called
+            called = True
+            assert k.__name__ == "f"
+            assert k.__doc__ == "some doc"
+            assert k.__qualname__ == "test_wrapper_attributes.<locals>.f"
+            assert k.__annotations__ == {"x": int, "return": str}
+
+        g(f_wrap)
+        assert called
 
 
 # https://github.com/patrick-kidger/equinox/issues/337

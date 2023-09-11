@@ -76,4 +76,4 @@ def filter_make_jaxpr(
     `int`, `float`, `complex`) are treated as static inputs; wrap them in JAX/NumPy
     arrays if you would like them to be traced.
     """
-    return module_update_wrapper(_MakeJaxpr(fun), fun)
+    return module_update_wrapper(_MakeJaxpr(fun))
