@@ -44,9 +44,7 @@ def field(
         making it part of the PyTree structure rather than a leaf).
     - `**kwargs`: All other keyword arguments are passed on to `dataclass.field`.
 
-    **Converter**
-
-    !!! example
+    !!! example "Example for `converter`"
 
         ```python
         class MyModule(eqx.Module):
@@ -56,9 +54,7 @@ def field(
         assert isinstance(mymodule.foo, jax.Array)
         ```
 
-    **Static**
-
-    !!! example
+    !!! example "Example for `static`"
 
         ```python
         class MyModule(eqx.Module):
@@ -71,12 +67,11 @@ def field(
         assert "static" in str(treedef)
         ```
 
-    This means that it does not interact with any JAX transforms, like JIT or grad.
-    This means that it's usually a bug to make JAX arrays be static fields.
-
-    This is an advanced feature that should very rarely be used. It is preferred to
-    just filter out each field with `eqx.partition` whenever you need to select only
-    some fields.
+    `static=True` means that this field is not a node of the PyTree, so it does not
+    interact with any JAX transforms, like JIT or grad. This means that it is usually a
+    bug to make JAX arrays be static fields. `static=True` should very rarely be used.
+    It is preferred to just filter out each field with `eqx.partition` whenever you need
+    to select only some fields.
     """
     try:
         metadata = dict(kwargs["metadata"])
