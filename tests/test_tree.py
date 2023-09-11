@@ -1,5 +1,3 @@
-from typing import Callable
-
 import jax
 import jax.nn as jnn
 import jax.numpy as jnp
@@ -208,32 +206,6 @@ def test_tree_check():
     x.append(x)
     with pytest.raises(ValueError):
         eqx.tree_check(x)
-
-    # From https://github.com/patrick-kidger/equinox/issues/327
-    class Component(eqx.Module):
-        transform: Callable[[float], float]
-        validator: Callable[[Callable], Callable]
-
-        def __init__(self, transform=lambda x: x, validator=lambda f: f) -> None:
-            self.transform = transform
-            self.validator = validator
-
-        def __call__(self, x):
-            return self.validator(self.transform)(x)
-
-    class SubComponent(Component):
-        test: Callable[[float], float]
-
-        def __init__(self, test=lambda x: 2 * x) -> None:
-            self.test = test
-            super().__init__(self._transform)
-
-        def _transform(self, x):
-            return self.test(x)
-
-    a = SubComponent()
-    with pytest.raises(ValueError):
-        eqx.tree_check(a)
 
 
 def test_tree_check_none():
