@@ -141,7 +141,7 @@ nav:
         - 'api/pretty-printing.md'
         - 'api/serialisation.md'
     - Misc:
+        - 'faq.md'
         - 'tricks.md'
         - 'pattern.md'
         - 'citation.md'
-        - 'faq.md'

@@ -13,7 +13,7 @@ The following is a very useful design pattern. It's not mandatory, but it comes 
     
     Finally, we should never re-override a method. Once a subclass implements a method, that's it.
 
-This idea is very simple. Now, let's take a deep dive on why this is such a neat pattern. :)
+This idea is very simple. Now, let's take a deep dive on why this is such a neat pattern, and how Equinox offers special tools to support this.
 
 ## Level 1: Abstract base classes (ABCs) as interfaces
 
@@ -116,7 +116,7 @@ class CubicInterpolation(AbstractPolynomialInterpolation):
         coeffs = ...  # some implementation
         super().__init__(coeffs)
 ```
-but once you have multiple classes involved, then splitting up your initialisation like this very quickly becomes far less readable. (And a reliable source of bugs.) Overall, we mandate that `__init__` methods only appear once, on our final concrete classes.
+but once you have multiple classes involved, then splitting up your initialisation like this very quickly becomes far less readable. (And a reliable source of bugs.) Overall, we mandate that `__init__` methods and (non-abstract) fields may only be defined on concrete classes. Equinox supports checking this via a `strict=True` flag, passes as `class Foo(eqx.Module, strict=True)`.
 
 ## Level 3: implement methods precisely once, and concrete-means-final
 
@@ -127,7 +127,7 @@ In practice, we argue that's a good idea! This rule means that when you see code
 def foo(interp: AbstractPolynomialInterpolation)
     ... = interp(...)
 ```
-you know that it is calling `AbstractPolynomialInterpolation.__call__`, and not anything else. This is great for code readability.
+you know that it is calling `AbstractPolynomialInterpolation.__call__`, and not anything else. This is great for code readability. Once again, this may be checked via a `strict=True` flag, passed as `class Foo(eqx.Module, strict=True)`.
 
 If we assume this, then we now find ourselves arriving at a conclusion: concrete means final. That is, once we have a concrete class (every abstract method/attribute defined in our ABCs is now overriden with an implementation, so we can instantiate this class), then it is now final (we're not allowed to re-override things, so subclassing is pointless).
 
