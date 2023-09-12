@@ -1,3 +1,4 @@
+import abc
 import dataclasses
 import functools as ft
 import inspect
@@ -142,15 +143,40 @@ def _not_magic(k: str) -> bool:
 _has_dataclass_init = weakref.WeakKeyDictionary()
 
 
+_dummy_abstract = abc.abstractmethod(lambda self: 1)
+
+
 # Inherits from ABCMeta as a convenience for a common use-case.
 # It's not a feature we use ourselves.
 class _ModuleMeta(ABCMeta):  # pyright: ignore
-    def __new__(mcs, name, bases, dict_, **kwargs):  # pyright: ignore
-        dict_ = {
-            k: _wrap_method(v) if _not_magic(k) and inspect.isfunction(v) else v
-            for k, v in dict_.items()
-        }
+    def __new__(
+        mcs, name, bases, dict_, /, strict: bool = False, **kwargs
+    ):  # pyright: ignore
+        if strict:
+            for base in bases:
+                if not issubclass(base, Module):
+                    raise TypeError(
+                        "Strict `eqx.Module`s must only inherit from subclasses of "
+                        "`eqx.Module`."
+                    )
         cls = super().__new__(mcs, name, bases, dict_, **kwargs)
+        for k, v in cls.__dict__.items():
+            if _not_magic(k) and inspect.isfunction(v):
+                setattr(cls, k, _wrap_method(v))
+                if strict:
+                    if not getattr(v, "__isabstractmethod__", False):
+                        for base in bases:
+                            old_v = getattr(base, k, _dummy_abstract)
+                            if not inspect.isfunction(old_v):
+                                raise TypeError(
+                                    "Strict `eqx.Module`s cannot override non-methods "
+                                    "with methods."
+                                )
+                            if not getattr(old_v, "__isabstractmethod__", False):
+                                raise TypeError(
+                                    "Strict `eqx.Module`s cannot override concrete "
+                                    "methods."
+                                )
         # Do override subclasses' dataclass-__init__-s. (None of which call super, so
         # they must be overriden.)
         # Don't override custom __init__'s, which leads to poor ergonomics:
@@ -174,6 +200,21 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
         cls = dataclass(eq=False, repr=False, frozen=True, init=_init)(
             cls  # pyright: ignore
         )
+        if strict:
+            if (
+                len(cls.__abstractmethods__) > 0
+                or len(cls.__abstractvars__) > 0
+                or len(cls.__abstractclassvars__) > 0
+            ):
+                if not _init:
+                    raise TypeError(
+                        "Strict `eqx.Module`s cannot have `__init__` methods."
+                    )
+                if len(dataclasses.fields(cls)) > 0:
+                    raise TypeError(
+                        "Strict `eqx.Module`s cannot have fields. (You probably meant "
+                        "to mark them as `eqx.AbstractVar[...]` instead.)"
+                    )
         # must happen after `dataclass(...)` we use this in `__getattribute__` to avoid
         # making any property(def __wrapped__) visible until then. We want to be able to
         # support property(def __wrapped__) for the sake of classes whose instances are
@@ -450,14 +491,17 @@ class Module(metaclass=_ModuleMeta):
         because `self` is just a PyTree. Unlike most other neural network libraries,
         you can mix Equinox and native JAX without any difficulties at all.
 
-    !!! tip
+    !!! tip "For fans of strong typing."
 
         Equinox modules are all [ABCs](https://docs.python.org/3/library/abc.html)
         by default. This means you can use
         [`abc.abstractmethod`](https://docs.python.org/3/library/abc.html#abc.abstractmethod).
         You can also create abstract instance attributes or abstract class
         attributes, see [`equinox.AbstractVar`][] and
-        [`equinox.AbstractClassVar`][].
+        [`equinox.AbstractClassVar`][]. Finally, optional Rust/Julia-like type-checking
+        may be enabled by passing `strict=True`, e.g.
+        `class Foo(eqx.Module, strict=True)`; see [this guide](../../../pattern/) for
+        the technical details.
     """  # noqa: E501
 
     def __hash__(self):
