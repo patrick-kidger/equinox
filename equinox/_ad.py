@@ -1002,7 +1002,7 @@ def filter_checkpoint(
         )
 
     return module_update_wrapper(
-        _CheckpointWrapper(fun, prevent_cse=prevent_cse, policy=policy), fun
+        _CheckpointWrapper(fun, prevent_cse=prevent_cse, policy=policy)
     )
 
 
@@ -1036,10 +1036,10 @@ class _CheckpointWrapper(Module):
         def fun_checkpoint(_static, _dynamic):
             _args, _kwargs = combine(_static, _dynamic)
             out = self._fun(*_args, **_kwargs)
-            _dynamic_out, _static_out = partition(out, _is_struct)
+            _dynamic_out, _static_out = partition(out, is_array)
             return _dynamic_out, Static(_static_out)
 
-        dynamic, static = partition((args, kwargs), _is_struct)
+        dynamic, static = partition((args, kwargs), is_array)
         dynamic_out, static_out = fun_checkpoint(static, dynamic)
 
         return combine(dynamic_out, static_out.value)
