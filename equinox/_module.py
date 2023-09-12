@@ -1,3 +1,8 @@
+"""Implements the core Module abstraction.
+
+This includes both the core dataclass+pytree combo, plus various related pieces of
+functionality.
+"""
 import abc
 import dataclasses
 import functools as ft
@@ -21,6 +26,12 @@ from ._tree import tree_equal
 
 _P = ParamSpec("_P")
 _T = TypeVar("_T")
+
+
+#
+# Part 1: fields. We extend `dataclasses.field` with a wrapper supporting extra features
+# like type converters, and marking a field as static metadata.
+#
 
 
 def static_field(**kwargs):
@@ -88,6 +99,191 @@ def field(
     return dataclasses.field(**kwargs)
 
 
+#
+# Part 2: Modules!
+# This is the core of Equinox.
+#
+
+
+# Inherits from ABCMeta to support `eqx.{AbstractVar, AbstractClassVar}` and
+# `abc.abstractmethod`.
+class _ModuleMeta(ABCMeta):  # pyright: ignore
+
+    # This method is called whenever you definite a module: `class Foo(eqx.Module): ...`
+    def __new__(mcs, name, bases, dict_, /, strict: bool = False, **kwargs):
+        # [Step 1] We support an optional `strict` mode for Rust-like strictness in the
+        # type checking.
+        # In practice this is probably too much for your average user, but it's a great
+        # way to build robust libraries.
+        if strict:
+            for base in bases:
+                if not issubclass(base, Module):
+                    raise TypeError(
+                        "Strict `eqx.Module`s must only inherit from other subclasses "
+                        "of `eqx.Module`."
+                    )
+        # [Step 2] Create the class as normal.
+        cls = super().__new__(mcs, name, bases, dict_, **kwargs)
+        # [Step 3] Arrange for bound methods to be treated as PyTrees as well. This
+        # ensures that
+        # ```
+        # @jax.jit
+        # def run(fn):
+        #     ...
+        # run(SomeModule().some_method)
+        # ```
+        # works.
+        for k, v in cls.__dict__.items():
+            if _not_magic(k) and inspect.isfunction(v):
+                setattr(cls, k, _wrap_method(v))
+                if strict:
+                    if not getattr(v, "__isabstractmethod__", False):
+                        for base in bases:
+                            old_v = getattr(base, k, _dummy_abstract)
+                            if not inspect.isfunction(old_v):
+                                raise TypeError(
+                                    "Strict `eqx.Module`s cannot override non-methods "
+                                    "with methods."
+                                )
+                            if not getattr(old_v, "__isabstractmethod__", False):
+                                raise TypeError(
+                                    "Strict `eqx.Module`s cannot override concrete "
+                                    "methods."
+                                )
+        # [Step 4] Create a default `__init__` method if a user method isn't provided.
+        #
+        # If as a superclass has a custom `__init__`, then don't create a default
+        # `__init__` here. (Otherwise e..g if `B` has a custom init then
+        # `class A(B): pass` would set a dataclass init on `A`.)
+        # If a superclass has a default `__init__`, then do create a new default one
+        # here. (Dataclass default `__init__`s don't call `super()`, so they must be
+        # overriden directly.)
+        if "__init__" in cls.__dict__:
+            _init = False
+        else:
+            for kls in cls.__mro__:
+                try:
+                    _init = _has_dataclass_init[kls]
+                except KeyError:
+                    pass
+                else:
+                    break
+            else:
+                assert name == "Module"
+                _init = True  # eqx.Module itself
+        if _init:
+            init_doc = cls.__init__.__doc__
+        # [Step 5] Register as a dataclass.
+        cls = dataclass(eq=False, repr=False, frozen=True, init=_init)(
+            cls  # pyright: ignore
+        )
+        # [Step 4b] -- finish off the business of default `__init__` methods.
+        # (This part has to happen after dataclass registration.)
+        _has_dataclass_init[cls] = _init
+        if _init:
+            cls.__init__.__doc__ = init_doc  # pyright: ignore
+            cls.__init__.__module__ = cls.__module__
+        # [Step 6] Check strict abstract modules.
+        if strict:
+            if (
+                len(cls.__abstractmethods__) > 0
+                or len(cls.__abstractvars__) > 0
+                or len(cls.__abstractclassvars__) > 0
+            ):
+                if not cls.__name__.startswith("Abstract"):
+                    raise TypeError(
+                        "Abstract strict `eqx.Module`s must be named starting with "
+                        "`Abstract`."
+                    )
+                if not _init:
+                    raise TypeError(
+                        "Abstract strict `eqx.Module`s cannot have `__init__` methods."
+                    )
+                if len(dataclasses.fields(cls)) > 0:
+                    raise TypeError(
+                        "Abstract strict `eqx.Module`s cannot have fields. (You "
+                        "probably meant to mark them as `eqx.AbstractVar[...]` "
+                        "instead.)"
+                    )
+        # [Step 7] Register as a pytree.
+        jtu.register_pytree_with_keys(
+            cls,
+            flatten_with_keys=ft.partial(
+                _flatten_module, with_keys=True
+            ),  # pyright: ignore
+            flatten_func=ft.partial(
+                _flatten_module, with_keys=False
+            ),  # pyright: ignore
+            unflatten_func=ft.partial(_unflatten_module, cls),  # pyright: ignore
+        )
+        # Done!
+        return cls
+
+    # This method is called whenever you initialise a module: `MyModule(...)`
+    def __call__(cls, *args, **kwargs):
+        # [Step 1] Modules are immutable -- except during construction. So defreeze
+        # before init.
+        initable_cls = _make_initable(cls, wraps=False)
+        # [Step 2] Instantiate the class as normal. (`__init__` and `__post_init__`)
+        self = super(_ModuleMeta, initable_cls).__call__(*args, **kwargs)
+        # [Step 3] Check that all fields are occupied.
+        missing_names = {
+            field.name
+            for field in dataclasses.fields(cls)  # pyright: ignore
+            if field.init and field.name not in dir(self)
+        }
+        if len(missing_names):
+            raise ValueError(
+                f"The following fields were not initialised during __init__: "
+                f"{missing_names}"
+            )
+        # [Step 4] Run any custom converters.
+        for field in dataclasses.fields(self):
+            try:
+                converter = field.metadata["converter"]
+            except KeyError:
+                pass
+            else:
+                setattr(self, field.name, converter(getattr(self, field.name)))
+        object.__setattr__(self, "__class__", cls)
+        # [Step 5] Run any custom validators.
+        for kls in cls.__mro__:
+            try:
+                check = kls.__dict__["__check_init__"]
+            except KeyError:
+                pass
+            else:
+                check(self)
+        return self
+
+    # This bit is kind of sneaky. This is the reason that `_has_dataclass_init` is done
+    # after dataclass registration -- we sneakily treat it as a marker for whether
+    # dataclass registration has happened yet. And if it hasn't, we hide any
+    # `__wrapped__` attribute. We want such attributes for the sake of
+    # `module_update_wrapper`, but if `dataclass` sees it then it tries to follow it.
+    def __getattribute__(cls, item):
+        value = super().__getattribute__(item)
+        if (
+            item == "__wrapped__"
+            and isinstance(value, property)
+            and cls not in _has_dataclass_init
+        ):
+            raise AttributeError
+        else:
+            return value
+
+
+if TYPE_CHECKING:
+
+    @dataclass_transform(field_specifiers=(dataclasses.field, field, static_field))
+    class _ModuleMeta(abc.ABCMeta):
+        pass
+
+
+def _not_magic(k: str) -> bool:
+    return not (k.startswith("__") and k.endswith("__"))
+
+
 class _wrap_method:
     def __init__(self, method):
         self.method = method
@@ -113,7 +309,7 @@ class MyModule(eqx.Module):
         ...
 ```
 this is because Equinox modules are PyTrees -- but the above does not have a tree
-structure! `self.foo.instance` is a cycle that brings us back to `self`.
+structure! `self.foo.__self__` is a cycle that brings us back to `self`.
 
 In the above example, you probably want something like this instead:
 ```
@@ -136,158 +332,8 @@ went uncaught, possibly leading to silently wrong behaviour.
             return _method
 
 
-def _not_magic(k: str) -> bool:
-    return not (k.startswith("__") and k.endswith("__"))
-
-
-_has_dataclass_init = weakref.WeakKeyDictionary()
-
-
 _dummy_abstract = abc.abstractmethod(lambda self: 1)
-
-
-# Inherits from ABCMeta as a convenience for a common use-case.
-# It's not a feature we use ourselves.
-class _ModuleMeta(ABCMeta):  # pyright: ignore
-    def __new__(
-        mcs, name, bases, dict_, /, strict: bool = False, **kwargs
-    ):  # pyright: ignore
-        if strict:
-            for base in bases:
-                if not issubclass(base, Module):
-                    raise TypeError(
-                        "Strict `eqx.Module`s must only inherit from subclasses of "
-                        "`eqx.Module`."
-                    )
-        cls = super().__new__(mcs, name, bases, dict_, **kwargs)
-        for k, v in cls.__dict__.items():
-            if _not_magic(k) and inspect.isfunction(v):
-                setattr(cls, k, _wrap_method(v))
-                if strict:
-                    if not getattr(v, "__isabstractmethod__", False):
-                        for base in bases:
-                            old_v = getattr(base, k, _dummy_abstract)
-                            if not inspect.isfunction(old_v):
-                                raise TypeError(
-                                    "Strict `eqx.Module`s cannot override non-methods "
-                                    "with methods."
-                                )
-                            if not getattr(old_v, "__isabstractmethod__", False):
-                                raise TypeError(
-                                    "Strict `eqx.Module`s cannot override concrete "
-                                    "methods."
-                                )
-        # Do override subclasses' dataclass-__init__-s. (None of which call super, so
-        # they must be overriden.)
-        # Don't override custom __init__'s, which leads to poor ergonomics:
-        # e.g. if `B` has a custom init then `class A(B): pass` would otherwise set a
-        # dataclass init that overrides the custom __init__.
-        if "__init__" in cls.__dict__:
-            _init = False
-        else:
-            for kls in cls.__mro__:
-                try:
-                    _init = _has_dataclass_init[kls]
-                except KeyError:
-                    pass
-                else:
-                    break
-            else:
-                assert name == "Module"
-                _init = True  # eqx.Module itself
-        if _init:
-            init_doc = cls.__init__.__doc__
-        cls = dataclass(eq=False, repr=False, frozen=True, init=_init)(
-            cls  # pyright: ignore
-        )
-        if strict:
-            if (
-                len(cls.__abstractmethods__) > 0
-                or len(cls.__abstractvars__) > 0
-                or len(cls.__abstractclassvars__) > 0
-            ):
-                if not _init:
-                    raise TypeError(
-                        "Strict `eqx.Module`s cannot have `__init__` methods."
-                    )
-                if len(dataclasses.fields(cls)) > 0:
-                    raise TypeError(
-                        "Strict `eqx.Module`s cannot have fields. (You probably meant "
-                        "to mark them as `eqx.AbstractVar[...]` instead.)"
-                    )
-        # must happen after `dataclass(...)` we use this in `__getattribute__` to avoid
-        # making any property(def __wrapped__) visible until then. We want to be able to
-        # support property(def __wrapped__) for the sake of classes whose instances are
-        # wrappers (i.e. via `module_update_wrapper`), but this means that a
-        # `__wrapped__` object is also visible on the class object itself, despite not
-        # pointing to a callable. `dataclass(...)` spots this and tries to use it form
-        # a signature.
-        _has_dataclass_init[cls] = _init
-        if _init:
-            cls.__init__.__doc__ = init_doc  # pyright: ignore
-            cls.__init__.__module__ = cls.__module__
-        jtu.register_pytree_with_keys(
-            cls,
-            flatten_with_keys=ft.partial(
-                _flatten_module, with_keys=True
-            ),  # pyright: ignore
-            flatten_func=ft.partial(
-                _flatten_module, with_keys=False
-            ),  # pyright: ignore
-            unflatten_func=ft.partial(_unflatten_module, cls),  # pyright: ignore
-        )
-        return cls
-
-    # See note above for `_has_dataclass_init`.
-    def __getattribute__(cls, item):
-        value = super().__getattribute__(item)
-        if (
-            item == "__wrapped__"
-            and isinstance(value, property)
-            and cls not in _has_dataclass_init
-        ):
-            raise AttributeError
-        else:
-            return value
-
-    def __call__(cls, *args, **kwargs):
-        # Defreeze it during __init__
-        initable_cls = _make_initable(cls, wraps=False)
-        self = super(_ModuleMeta, initable_cls).__call__(*args, **kwargs)
-        missing_names = {
-            field.name
-            for field in dataclasses.fields(cls)  # pyright: ignore
-            if field.init and field.name not in dir(self)
-        }
-        if len(missing_names):
-            raise ValueError(
-                f"The following fields were not initialised during __init__: "
-                f"{missing_names}"
-            )
-        for field in dataclasses.fields(self):
-            try:
-                converter = field.metadata["converter"]
-            except KeyError:
-                pass
-            else:
-                setattr(self, field.name, converter(getattr(self, field.name)))
-        object.__setattr__(self, "__class__", cls)
-        for kls in cls.__mro__:
-            try:
-                check = kls.__dict__["__check_init__"]
-            except KeyError:
-                pass
-            else:
-                check(self)
-        return self
-
-
-if TYPE_CHECKING:
-    import abc
-
-    @dataclass_transform(field_specifiers=(dataclasses.field, field, static_field))
-    class _ModuleMeta(abc.ABCMeta):
-        pass
+_has_dataclass_init = weakref.WeakKeyDictionary()
 
 
 _wrapper_field_names = {
@@ -336,8 +382,7 @@ def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
 internal_lru_caches.append(_make_initable)
 
 
-# This class exists primarily just to hide the wrapper fields from the PyTreeDef repr.
-# Stuff like the docstring can be pretty long and entirely unhelpful to print out.
+# Used to provide a pretty repr when doing `jtu.tree_structure(SomeModule(...))`.
 @dataclass()
 class _FlattenedData:
     dynamic_field_names: tuple
@@ -356,12 +401,16 @@ class _FlattenedData:
 
 
 def _flatten_module(module: "Module", with_keys: bool):
+    # Subnodes in the PyTree
     dynamic_field_names = []
     dynamic_field_values = []
+    # Static metadata, placed in aux.
     static_field_names = []
     static_field_values = []
+    # Python metadata like `__doc__` and `__module__`.
     wrapper_field_names = []
     wrapper_field_values = []
+
     for field_ in dataclasses.fields(module):
         name = field_.name
         try:
@@ -394,6 +443,11 @@ def _flatten_module(module: "Module", with_keys: bool):
 
 
 def _unflatten_module(cls: type["Module"], aux: _FlattenedData, dynamic_field_values):
+    # This doesn't go via `__init__`. A user may have done something nontrivial there,
+    # and the field values may be dummy values as used in various places throughout JAX.
+    # See also
+    # https://jax.readthedocs.io/en/latest/pytrees.html#custom-pytrees-and-initialization,
+    # which was (I believe) inspired by Equinox's approach here.
     module = object.__new__(cls)
     for name, value in zip(aux.dynamic_field_names, dynamic_field_values):
         object.__setattr__(module, name, value)
@@ -498,10 +552,9 @@ class Module(metaclass=_ModuleMeta):
         [`abc.abstractmethod`](https://docs.python.org/3/library/abc.html#abc.abstractmethod).
         You can also create abstract instance attributes or abstract class
         attributes, see [`equinox.AbstractVar`][] and
-        [`equinox.AbstractClassVar`][]. Finally, optional Rust/Julia-like type-checking
+        [`equinox.AbstractClassVar`][]. Finally, some optional strict type-checking
         may be enabled by passing `strict=True`, e.g.
-        `class Foo(eqx.Module, strict=True)`; see [this guide](../../../pattern/) for
-        the technical details.
+        `class Foo(eqx.Module, strict=True)`; see [strict modules](../advanced_fields/#strict-modules) for details.
     """  # noqa: E501
 
     def __hash__(self):
@@ -516,7 +569,32 @@ class Module(metaclass=_ModuleMeta):
         return tree_pformat(self)
 
 
-# Modifies in-place, just like functools.update_wrapper
+# Not using `jax.tree_util.Partial` as it doesn't implement __eq__ very well. See #480.
+class BoundMethod(Module):
+    """Just like a normal Python bound method... except that this one is a PyTree!
+
+    This stores `__self__` as a subnode.
+    """
+
+    __func__: types.FunctionType = field(static=True)
+    __self__: Module
+
+    def __call__(self, *args, **kwargs):
+        return self.__func__(self.__self__, *args, **kwargs)
+
+    @property
+    def __wrapped__(self):
+        return self.__func__.__get__(  # pyright: ignore
+            self.__self__, type(self.__self__)
+        )
+
+
+#
+# Part 3: some downstream pieces. These don't actually affect the core `Module`
+# abstraction, but this file is a convenient place to put them.
+#
+
+
 def module_update_wrapper(
     wrapper: Module, wrapped: Optional[Callable[_P, _T]] = None
 ) -> Callable[_P, _T]:
@@ -592,19 +670,6 @@ def module_update_wrapper(
     return cast(Callable[_P, _T], wrapper)
 
 
-class Static(Module):
-    _leaves: list[Any] = field(static=True)
-    _treedef: PyTreeDef = field(static=True)  # pyright: ignore
-
-    def __init__(self, value: Any):
-        # Handle pytrees without `__eq__` methods.
-        self._leaves, self._treedef = jtu.tree_flatten(value)
-
-    @property
-    def value(self):
-        return jtu.tree_unflatten(self._treedef, self._leaves)
-
-
 class Partial(Module):
     """Like `functools.partial`, but treats the wrapped function, and partially-applied
     value: Any = field(static=True)
@@ -647,13 +712,23 @@ class Partial(Module):
         return self.func(*self.args, *args, **kwargs, **self.keywords)
 
 
-class BoundMethod(Module):
-    func: types.FunctionType = field(static=True)
-    instance: Module
+class Static(Module):
+    """Wraps a value into a `eqx.field(static=True)`.
 
-    def __call__(self, *args, **kwargs):
-        return self.func(self.instance, *args, **kwargs)
+    This is useful to treat something as just static metadata with respect to a JAX
+    transformation; for example this is used to return non-arrays from a filtered
+    transform.
+    """
+
+    _leaves: list[Any] = field(static=True)
+    _treedef: PyTreeDef = field(static=True)  # pyright: ignore
+
+    def __init__(self, value: Any):
+        # By flattening, we handle pytrees without `__eq__` methods.
+        # When comparing static metadata for equality, this means we never actually
+        # call `value.__eq__`.
+        self._leaves, self._treedef = jtu.tree_flatten(value)
 
     @property
-    def __wrapped__(self):
-        return self.func.__get__(self.instance, type(self.instance))  # pyright: ignore
+    def value(self):
+        return jtu.tree_unflatten(self._treedef, self._leaves)
