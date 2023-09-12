@@ -489,12 +489,12 @@ def test_strict_non_module_base():
 
 
 def test_strict_method_reoverride():
-    class A(eqx.Module, strict=True):
+    class AbstractA(eqx.Module, strict=True):
         @abc.abstractmethod
         def foo(self, x):
             pass
 
-    class B(A, strict=True):
+    class B(AbstractA, strict=True):
         def foo(self, x):
             pass
 
