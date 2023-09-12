@@ -8,8 +8,6 @@ A few of the highlights available here are:
 
 **_loop/** A while loop which may be backpropagated through, using an online checkpointing scheme. Also implements a recursive checkpointed ("treeverse") scan.
 
-**../_errors.py:** Runtime errors. For verifying arguments or for checking that a computation succeeded. Now working on CPUs+GPUs+TPUs! (The file exists in the main namespace for dependency reasons but is (semi-publicly) exposed only in `equinox.internal`.)
-
 **_noinline.py:** MLIR sub-graphs. Can reduce compile times by removing the inlining of a function called repeatedly. Also makes it possible to iteratively recompile: change and recompile just the sub/super-computation, without needing to recompile the whole computation graph. Only tested on CPU.
 
 **_omega.py**: Neat syntax for tree-mapping arithmetic. E.g. `(x**ω + y**ω).ω == jtu.tree_map(operator.add, x, y)`. See also [tree-math](https://github.com/google/tree-math), for a similar idea but without the neat syntax.
