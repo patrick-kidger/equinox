@@ -39,7 +39,7 @@ This method has three key differences compared to the `__post_init__` provided b
     class Parent(eqx.Module):
         x: int
 
-        def __check_init__(self):
+        def __post_init__(self):
             if self.x <= 0:
                 raise ValueError("Oh no!")
 
