@@ -16,7 +16,7 @@ from ._better_abstract import ABCMeta, dataclass
 from ._caches import internal_lru_caches
 from ._doc_utils import doc_repr
 from ._pretty_print import tree_pformat
-from ._tree import tree_equal
+from ._tree import tree_check_internal, tree_equal
 
 
 _P = ParamSpec("_P")
@@ -141,6 +141,11 @@ def _not_magic(k: str) -> bool:
 
 
 _has_dataclass_init = weakref.WeakKeyDictionary()
+_has_been_checked = weakref.WeakValueDictionary()
+
+
+def _skip(node):
+    return isinstance(node, Module) and node is _has_been_checked.get(id(node), None)
 
 
 _dummy_abstract = abc.abstractmethod(lambda self: 1)
@@ -272,6 +277,8 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
             else:
                 setattr(self, field.name, converter(getattr(self, field.name)))
         object.__setattr__(self, "__class__", cls)
+        # Note that these checks only run during the initial creation, and not during
+        # unflattening.
         for kls in cls.__mro__:
             try:
                 check = kls.__dict__["__check_init__"]
@@ -279,6 +286,38 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
                 pass
             else:
                 check(self)
+        try:
+            tree_check_internal(self, _skip)
+        except ValueError as e:
+            raise ValueError(
+                "As of Equinox v0.11.0, `equinox.Module`s now validate that there "
+                "aren't any repeated layers inside a module. This is because this was "
+                "previously a common bug.\n"
+                "As an example, something like this:\n"
+                "```\n`"
+                "class MyModule(eqx.Module):\n"
+                "    linear1: eqx.nn.Linear\n"
+                "    linear2: eqx.nn.Linear\n"
+                "\n"
+                "    def __init__(self, ...):\n"
+                "        linear = eqx.nn.Linear(...)\n"
+                "        self.linear1 = linear\n"
+                "        self.linear2 = linear\n"
+                "```\n"
+                "resulted in two independent linear layers after a gradient update had "
+                "happened.\n"
+                "An exception is being thrown now as this error been detected.\n"
+                "If you intended to share the layer, then use the new functionality "
+                "`eqx.nn.Shared`. If you intended to have two duplicate copies, then "
+                "please instantiate two separate layers. If it's easier, you can also "
+                "clone an existing layer by doing\n"
+                "```\n"
+                "layer = ...\n"
+                "leaves, treedef = jax.tree_util.tree_flatten(layer)\n"
+                "clone_layer = jax.tree_util.tree_unflatten(treedef, leaves)\n"
+                "```"
+            ) from e
+        _has_been_checked[id(self)] = self
         return self
 
 
