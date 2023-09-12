@@ -1,3 +1,4 @@
+import abc
 import dataclasses
 import functools as ft
 from collections.abc import Callable
@@ -460,3 +461,82 @@ def test_check_init_no_assignment():
 
     with pytest.raises(dataclasses.FrozenInstanceError):
         A(1)
+
+
+def test_strict_noerrors():
+    class Abstract(eqx.Module, strict=True):
+        @abc.abstractmethod
+        def foo(self, x):
+            pass
+
+    class Concrete1(Abstract, strict=True):
+        def foo(self, x):
+            return x + 1
+
+    class Concrete2(Abstract):
+        def foo(self, x):
+            return x + 1
+
+
+def test_strict_non_module_base():
+    class NotAModule:
+        pass
+
+    with pytest.raises(TypeError, match="subclasses of `eqx.Module`"):
+
+        class MyModule(eqx.Module, NotAModule, strict=True):
+            pass
+
+
+def test_strict_method_reoverride():
+    class A(eqx.Module, strict=True):
+        @abc.abstractmethod
+        def foo(self, x):
+            pass
+
+    class B(A, strict=True):
+        def foo(self, x):
+            pass
+
+    with pytest.raises(TypeError, match="concrete methods"):
+
+        class C(B, strict=True):
+            def foo(self, x):
+                pass
+
+
+def test_strict_init():
+    with pytest.raises(TypeError, match="__init__"):
+
+        class Abstract(eqx.Module, strict=True):
+            def __init__(self):
+                pass
+
+            @abc.abstractmethod
+            def foo(self):
+                pass
+
+
+def test_strict_fields():
+    class Abstract1(eqx.Module, strict=True):
+        bar: eqx.AbstractVar[int]
+
+        @abc.abstractmethod
+        def foo(self):
+            pass
+
+    class Abstract2(eqx.Module, strict=True):
+        bar: eqx.AbstractClassVar[int]
+
+        @abc.abstractmethod
+        def foo(self):
+            pass
+
+    with pytest.raises(TypeError, match="fields"):
+
+        class Abstract3(eqx.Module, strict=True):
+            bar: int
+
+            @abc.abstractmethod
+            def foo(self):
+                pass
