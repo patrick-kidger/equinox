@@ -969,3 +969,82 @@ if getattr(typing, "GENERATING_DOCUMENTATION", False) and not TYPE_CHECKING:
 
     filter_custom_jvp.__doc__ = _filter_custom_jvp_doc
     filter_custom_vjp.__doc__ = _filter_custom_vjp_doc
+
+
+def filter_checkpoint(
+    fun: Callable[_P, _T] = sentinel,
+    *,
+    prevent_cse: bool = True,
+    policy: Optional[Callable[..., bool]] = None,
+) -> Callable[_P, _T]:
+    """Filtered version of `jax.checkpoint`.
+
+    Gradient checkpointing is a technique for reducing memory usage during
+    backpropagation, especially when used with reverse mode automatic differentiation
+    (e.g., `jax.grad` or `equinox.filter_grad`).
+
+    **Arguments:**
+
+    - `fun`: The function to be checkpointed. Will be called as `fun(*args, **kwargs)`.
+        Can return an arbitrary PyTree.
+    - `prevent_cse`: If `True` (the default), then JAX will not perform common
+    subexpression elimination. Please see the documentation for `jax.checkpoint
+    ` for more details.
+    - `policy`: Callable for controlling which intermediate values should be
+    rematerialized. It should be one of the attributes of `jax.checkpoint_policies`.
+    """
+
+    if fun is sentinel:
+        return ft.partial(  # pyright: ignore
+            filter_checkpoint,
+            prevent_cse=prevent_cse,
+            policy=policy,
+        )
+
+    return module_update_wrapper(
+        _CheckpointWrapper(fun, prevent_cse=prevent_cse, policy=policy)
+    )
+
+
+class _CheckpointWrapper(Module):
+    _fun: Callable
+    _prevent_cse: bool
+    _policy: Optional[Callable[..., bool]]
+
+    def __init__(
+        self,
+        fun: Callable,
+        *,
+        prevent_cse: bool = True,
+        policy: Optional[Callable[..., bool]] = None,
+    ):
+        self._fun = fun
+        self._prevent_cse = prevent_cse
+        self._policy = policy
+
+    @property
+    def __wrapped__(self):
+        return self._fun
+
+    def __call__(self, *args, **kwargs):
+        @ft.partial(
+            jax.checkpoint,  # pyright: ignore
+            prevent_cse=self._prevent_cse,
+            policy=self._policy,
+            static_argnums=(0,),
+        )
+        def fun_checkpoint(_static, _dynamic):
+            _args, _kwargs = combine(_static, _dynamic)
+            out = self._fun(*_args, **_kwargs)
+            _dynamic_out, _static_out = partition(out, is_array)
+            return _dynamic_out, Static(_static_out)
+
+        dynamic, static = partition((args, kwargs), is_array)
+        dynamic_out, static_out = fun_checkpoint(static, dynamic)
+
+        return combine(dynamic_out, static_out.value)
+
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        return Partial(self, instance)

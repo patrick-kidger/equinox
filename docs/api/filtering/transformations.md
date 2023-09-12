@@ -38,6 +38,10 @@ Likewise, `eqx.filter_grad` will automatically differentiate all floating-point 
 
 ---
 
+::: equinox.filter_checkpoint
+
+---
+
 ::: equinox.filter_custom_jvp
 
 ---
