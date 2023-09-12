@@ -142,5 +142,6 @@ nav:
         - 'api/serialisation.md'
     - Misc:
         - 'tricks.md'
+        - 'pattern.md'
         - 'citation.md'
         - 'faq.md'
