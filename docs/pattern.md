@@ -77,7 +77,7 @@ class AbstractInterpolation(eqx.Module):
 
 
 class AbstractPolynomialInterpolation(AbstractInterpolation)
-    coeffs: AbstractVar[Array]
+    coeffs: eqx.AbstractVar[Array]
 
     def degree(self) -> int:
         return len(self.coeffs)
@@ -116,7 +116,7 @@ class CubicInterpolation(AbstractPolynomialInterpolation):
         coeffs = ...  # some implementation
         super().__init__(coeffs)
 ```
-but once you have multiple classes involved, then splitting up your initialisation like this very quickly becomes far less readable. (And a reliable source of bugs.) Overall, we mandate that `__init__` methods and (non-abstract) fields may only be defined on concrete classes. Equinox supports checking this via a `strict=True` flag, passes as `class Foo(eqx.Module, strict=True)`.
+but once you have multiple classes involved, then splitting up your initialisation like this very quickly becomes far less readable. (And a reliable source of bugs.) Overall, we recommend that `__init__` methods and (non-abstract) fields may only be defined on concrete classes. Equinox will enforce this when defined via `class Foo(eqx.Module, strict=True)`.
 
 ## Level 3: implement methods precisely once, and concrete-means-final
 
@@ -199,10 +199,10 @@ class B(A, AA):
 
 B() # bug!
 ```
-And in this case `B()` calls `A.__init__` which then fails to call `AA.__init__`. Bug! Co-operative multiple inheritance only works if everyone, well, co-operates.
+And in this case `B()` calls `A.__init__` which then fails to call `AA.__init__`. Co-operative multiple inheritance only works if everyone, well, co-operates.
 
-Besides that, when you call `super().__init__`, then because `super()` could be pointing at almost any class at all, then in general it's essentially impossible to pass it the right arguments. "Only use keyword arguments" is the closest to a resolution that this issue has, and it's still fragile.
+Besides that, when you call `super().__init__`, then you don't actually know what method you're calling -- because `super()` could be pointing at almost any class at all. This means that it's not possible to know what arguments to pass to `super().__init__`! "Only use keyword arguments" is the closest to a resolution that this issue has, and it's still fragile.
 
 **These ideas have appeared in &lt;XYZ language&gt;?**
 
-Yup! Variants of this design pattern are very common, especially in modern languages like Julia/Rust/etc.etc. There's not really anything new here -- but because Equinox is specifically designed to support this design pattern, this guide is intended as a self-contained reference to it.
+Yup! Variants of this design pattern are very common, especially in modern languages like Julia/Rust/etc.etc.

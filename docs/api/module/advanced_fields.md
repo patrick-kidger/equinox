@@ -84,3 +84,39 @@ This method has three key differences compared to the `__post_init__` provided b
 ## Creating wrapper modules
 
 ::: equinox.module_update_wrapper
+
+## Strict modules
+
+Equinox supports an entirely optional "strict mode", for validating that you follow the abstract/final design pattern as discussed in [this style guide](../../../pattern/).
+
+When enabled via
+```python
+class Foo(eqx.Module, strict=True):
+    ...
+```
+then the following things are checked when you define your class (an error raised if they fail).
+
+- That all base classes also inherit from `eqx.Module`.
+- That abstract classes have names beginning with `Abstract`.
+- That abstract classes do not implement an `__init__` method.
+- That abstract classes do not have any fields.
+- That no concrete method is overridden. For example, this will raise an error:
+    ```python
+    class Foo(eqx.Module):
+        def f(self): ...
+
+    class Bar(Foo, strict=True):
+        def f(self): ...
+    ```
+    but this is allowed:
+    ```python
+    class Abstract(eqx.Module):
+        @abc.abstractmethod
+        def f(self): ...
+
+    class Concrete(Abstract, strict=True):
+        def f(self): ...
+    ```
+    This check essentially also ensures that concrete classes are final.
+
+Just the strict module is checked. It does not matter whether any of the superclasses are strict, and subclasses will not become strict unless they also opt-in. This makes it possible to safely enable strict modules in a library, without affecting any downstream users.
