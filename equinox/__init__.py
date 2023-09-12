@@ -2,6 +2,7 @@ import importlib.metadata
 
 from . import debug as debug, internal as internal, nn as nn
 from ._ad import (
+    filter_checkpoint as filter_checkpoint,
     filter_closure_convert as filter_closure_convert,
     filter_custom_jvp as filter_custom_jvp,
     filter_custom_vjp as filter_custom_vjp,
