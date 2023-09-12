@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TYPE_CHECKING, TypeVar, Union
 from typing_extensions import ParamSpec
 
 import jax
@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import jax.tree_util as jtu
 from jaxtyping import PyTree
 
-from .._module import Module
+from .._module import field, Module
 from .._pretty_print import bracketed, named_objs, text, tree_pformat
 from .._tree import tree_at
 
@@ -42,7 +42,9 @@ class StateIndex(Module, Generic[_Value]):
     [`equinox.nn.BatchNorm`][] for further reference.
     """  # noqa: E501
 
-    marker: object
+    # Starts off as an `object` when initialised; later replaced with an `int` inside
+    # `make_with_state`.
+    marker: Union[object, int] = field(static=True)
     init: _Value
 
     def __init__(self, init: _Value):
@@ -334,10 +336,34 @@ def make_with_state(make_model: Callable[_P, _T]) -> Callable[_P, tuple[_T, Stat
         ```
     """
 
-    def make_with_state_impl(*args: _P.args, **kwargs: _P.kwargs) -> tuple[_T, State]:
-        model = make_model(*args, **kwargs)
-        state = State(model)
-        model = delete_init_state(model)
-        return model, state
+    # _P.{args, kwargs} not supported by beartype
+    if TYPE_CHECKING:
+
+        def make_with_state_impl(
+            *args: _P.args, **kwargs: _P.kwargs
+        ) -> tuple[_T, State]:
+            ...
+
+    else:
+
+        def make_with_state_impl(*args, **kwargs) -> tuple[_T, State]:
+            model = make_model(*args, **kwargs)
+
+            # Replace all markers with `int`s. This is needed to ensure that two calls
+            # to `make_with_state` produce compatible models and states.
+            leaves, treedef = jtu.tree_flatten(model, is_leaf=_is_index)
+            counter = 0
+            new_leaves = []
+            for leaf in leaves:
+                if _is_index(leaf):
+                    leaf = StateIndex(leaf.init)
+                    object.__setattr__(leaf, "marker", counter)
+                    counter += 1
+                new_leaves.append(leaf)
+            model = jtu.tree_unflatten(treedef, new_leaves)
+
+            state = State(model)
+            model = delete_init_state(model)
+            return model, state
 
     return make_with_state_impl
