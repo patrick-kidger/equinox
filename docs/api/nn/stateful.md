@@ -1,6 +1,6 @@
 # Stateful operations
 
-These are the tools that underly stateful operations, like [`equinox.nn.BatchNorm`][] or [`equinox.nn.SpectralNorm`][]. These are fairly unusual layers, so most users will not need this part of the API.
+These are the tools that underlie stateful operations, like [`equinox.nn.BatchNorm`][] or [`equinox.nn.SpectralNorm`][]. These are fairly unusual layers, so most users will not need this part of the API.
 
 !!! Example
 
