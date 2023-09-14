@@ -14,9 +14,9 @@ TypeError: zeros_like requires ndarray or scalar arguments, got <class 'jax._src
 
 This can be fixed by doing
 ```python
-optim.init(eqx.filter(model, eqx.is_array))
+optim.init(eqx.filter(model, eqx.is_inexact_array))
 ```
-which after a little thought should make sense: Optax can only optimise JAX arrays. It's not meaningful to ask Optax to optimise whichever other arbitrary Python objects may be a part of your model. (e.g. the activation function of an `eqx.nn.MLP`).
+which after a little thought should make sense: Optax can only optimise floating-point JAX arrays. It's not meaningful to ask Optax to optimise whichever other arbitrary Python objects may be a part of your model. (e.g. the activation function of an `eqx.nn.MLP`).
 
 ## A module saved in two places has become two independent copies.
 
