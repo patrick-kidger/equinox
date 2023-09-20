@@ -584,3 +584,11 @@ def test_filter_custom_vjp_nonarray_residual():
         return 2 * ct
 
     jax.grad(f)(1.0)
+
+
+def test_positional_first_argument():
+    x = jnp.array(1.0)
+    with pytest.raises(TypeError, match="Functions wrapped with"):
+        eqx.filter_grad(lambda x: x + 1)(x=x)
+    with pytest.raises(TypeError, match="Functions wrapped with"):
+        eqx.filter_value_and_grad(lambda x, y: x + y)(x=x, y=x)
