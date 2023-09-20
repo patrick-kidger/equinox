@@ -25,6 +25,27 @@ classifiers = [
 urls = {repository = "https://github.com/patrick-kidger/equinox" }
 dependencies = ["jax>=0.4.13", "jaxtyping>=0.2.20", "typing_extensions>=4.5.0"]
 
+[tool.poetry]
+name = "equinox"
+description = "Elegant easy-to-use neural networks in JAX."
+version = "0.10.11"
+authors = ["Patrick Kidger <contact@kidger.site>"]
+
+[tool.poetry.dependencies]
+python = "^3.11.0"
+jax = "^0.4.13"
+jaxlib = "^0.4.13"
+jaxtyping = "^0.2.20"
+typing_extensions = "^4.5.0"
+
+[tool.poetry.dev-dependencies]
+beartype = "^0.16.1"
+black = "^23.9.1"
+pre-commit = "^3.4.0"
+pytest = "^7.3.2"
+pyright = "^1.1.327"
+ruff = "^0.0.290"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
