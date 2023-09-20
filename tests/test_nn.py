@@ -848,7 +848,7 @@ def test_spectral_norm(getkey):
     def λ1():
         u, v = state.get(spectral.uv_index)
         σ = jnp.einsum("i,ij,j->", u, spectral.layer.weight, v)
-        _, s, _ = jnp.linalg.svd(spectral.layer.weight / σ)
+        _, s, _ = jnp.linalg.svd(spectral.layer.weight / σ)  # pyright: ignore
         return s[0]
 
     x = jrandom.normal(getkey(), (5,))
