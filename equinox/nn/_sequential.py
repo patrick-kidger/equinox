@@ -1,6 +1,5 @@
-import abc
 from collections.abc import Callable, Sequence
-from typing import Any, Optional, overload, Union
+from typing import Any, ClassVar, Optional, overload, Union
 
 import jax
 import jax.random as jr
@@ -11,7 +10,36 @@ from .._module import Module
 from ._stateful import State
 
 
-class Sequential(Module):
+class StatefulLayer(Module):
+    """An abstract base class, used by [`equinox.nn.Sequential`][], to mark that a layer
+    might be stateful. If `Sequential` sees that a layer inherits from `StatefulLayer`,
+    then it will call `layer.is_stateful()` to check whether to call the layer as
+    `new_x = layer(x)` or `(new_x, new_state) = layer(x, state)`.
+    """
+
+    def is_stateful(self) -> bool:
+        """Indicates whether this layer should be considered stateful.
+
+        The default implementation just returns True, but subclasses may override this
+        to provide custom logic if the layer is only "maybe stateful". (E.g. if they
+        optioanlly use stateful sublayers themselves.)
+
+        **Arguments:**
+
+        None
+
+        **Returns:**
+
+        A boolean. `True` indicates that the layer should be called as
+        `(new_x, new_state) = layer(x, state)`. `False` indicates that the layer should
+        be called as `new_x = layer(x)`.
+        """
+        return True
+
+    __call__: ClassVar[Callable]
+
+
+class Sequential(StatefulLayer):
     """A sequence of [`equinox.Module`][]s applied in order.
 
     !!! note
@@ -23,6 +51,11 @@ class Sequential(Module):
 
     def __init__(self, layers: Sequence[Callable]):
         self.layers = tuple(layers)
+
+    def is_stateful(self) -> bool:
+        return any(
+            isinstance(x, StatefulLayer) and x.is_stateful() for x in self.layers
+        )
 
     @overload
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
@@ -62,7 +95,7 @@ class Sequential(Module):
         else:
             keys = jr.split(key, len(self.layers))
         for layer, key in zip(self.layers, keys):
-            if isinstance(layer, StatefulLayer):
+            if isinstance(layer, StatefulLayer) and layer.is_stateful():
                 x, state = layer(x, state=state, key=key)
             else:
                 x = layer(x, key=key)
@@ -90,30 +123,6 @@ Sequential.__init__.__doc__ = """**Arguments:**
 
 - `layers`: A sequence of [`equinox.Module`][]s.
 """
-
-
-class StatefulLayer(Module):
-    """An abstract base class, used to mark a stateful layer for the sake of
-    [`equinox.nn.Sequential`][]. If `Sequential` sees that a layer inherits
-    from `StatefulLayer`, then it will know to pass in `state` as well as the
-    piped data `x`.
-
-    Subclasses must implement the `__call__` method that takes input data and the
-    current state as arguments and returns the output data and updated state.
-    """
-
-    @abc.abstractmethod
-    def __call__(
-        self,
-        x: Array,
-        state: State,
-        *,
-        key: Optional[PRNGKeyArray],
-    ) -> tuple[Array, State]:
-        """The function signature that stateful layers should conform to, to be
-        compatible with [`equinox.nn.Sequential`][].
-        """
-        raise NotImplementedError("Subclasses must implement the __call__ method.")
 
 
 class Lambda(Module):
