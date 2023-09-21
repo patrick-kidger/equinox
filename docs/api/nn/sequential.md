@@ -25,4 +25,4 @@ These are useful when building fairly straightforward models. But for anything n
 ::: equinox.nn.StatefulLayer
     selection:
         members:
-            - __call__
+            - is_stateful

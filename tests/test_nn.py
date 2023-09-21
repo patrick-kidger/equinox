@@ -152,6 +152,45 @@ def test_sequential(getkey):
     assert eqx.nn.Sequential(list(seq)) == seq
 
 
+@pytest.mark.parametrize("inner_stateful", (False, True))
+@pytest.mark.parametrize("outer_stateful", (False, True))
+def test_nested_sequential(inner_stateful, outer_stateful, getkey):
+    def make():
+        inner_seq = eqx.nn.Sequential(
+            [
+                eqx.nn.Linear(2, 4, key=getkey()),
+                eqx.nn.BatchNorm(4, axis_name="batch")
+                if inner_stateful
+                else eqx.nn.Identity(),
+                eqx.nn.Linear(4, 3, key=getkey()),
+            ]
+        )
+        outer_seq = eqx.nn.Sequential(
+            [
+                eqx.nn.Linear(5, 2, key=getkey()),
+                inner_seq,
+                eqx.nn.BatchNorm(3, axis_name="batch")
+                if outer_stateful
+                else eqx.nn.Identity(),
+                eqx.nn.Linear(3, 6, key=getkey()),
+            ]
+        )
+        return outer_seq
+
+    x = jrandom.normal(getkey(), (1, 5))
+    if inner_stateful or outer_stateful:
+        model, state = eqx.nn.make_with_state(make)()
+        out, state = jax.vmap(
+            model, axis_name="batch", in_axes=(0, None), out_axes=(0, None)
+        )(x, state)
+        assert isinstance(state, eqx.nn.State)
+    else:
+        model = make()
+        out = jax.vmap(model, axis_name="batch")(x)
+    assert isinstance(out, jax.Array)
+    assert out.shape == (1, 6)
+
+
 def test_mlp(getkey):
     mlp = eqx.nn.MLP(2, 3, 8, 2, key=getkey())
     x = jrandom.normal(getkey(), (2,))
