@@ -160,3 +160,44 @@ class Model(eqx.Module):
     def __call__(self, x):
         return self.param * x + jax.lax.stop_gradient(self.buffer)
 ```
+
+## How does Equinox compare to...?
+
+#### ...PyTorch?
+
+JAX+Equinox is usually faster than PyTorch (a stronger JIT compiler), and more featureful (e.g. supporting jit-of-vmap, forward-mode autolinearisation, and autoparallelism).
+
+For those doing scientific computing or scientific ML, then JAX+Equinox also has a much stronger ecosystem. For example, PyTorch no longer has a library for solving differential equations (torchdiffeq is unmaintained). Meanwhile, JAX has [Diffrax](https://github.com/patrick-kidger/diffrax).
+
+Both JAX+Equinox and PyTorch are roughly equally easy to use. PyTorch tends to be a easier for new users (e.g. it's closer to being "Python as normal", and there's less functional programming), whilst JAX+Equinox generally supports advanced use-cases more cleanly (e.g. PyTorch has multiple JIT compilers each with their own quirks -- `torch.{fx, jit.script, jit.trace, compile, _dynamo, ...}` -- whilst JAX+Equinox just has the one).
+
+PyTorch is older, and enjoys broader adoption -- it's generally easier to find developers for PyTorch, or off-the-shelf model implementations using it.
+
+#### ...Keras?
+
+These are two very different libraries, with very different target audiences. Keras is great for plug-and-play building of models -- it's often compared to using Lego. This makes it a convenient framework for standing up neural networks quickly. Equinox is much lower level: it tries to support more general use-cases (e.g. its downstream scientific ecosystem), but usually requires greater proficiency with numerical computing / software development / machine learning.
+
+#### ...Flax?
+
+- Flax introduces multiple new abstractions (`flax.linen.Module`, `flax.linen.Variable`, `Module.setup` vs `flax.linen.compact`, `flax.struct.dataclass`, etc.). Equinox tries to avoid adding new abstractions to core JAX; everything is always just a PyTree.
+- Flax is a DSL: it is generally incompatible with non-Flax code, and requires using wrapped `flax.linen.{vmap, scan, ...}` rather than the native `jax.{vmap, ...}`. In contrast, Equinox allows you to use native JAX operations and aims to be compatible with arbitrary JAX code.
+- Bound methods of `eqx.Module` are just PyTrees. In Flax this isn't the case -- passing around bound methods will either result in errors or recompilations, depending what you do. Likewise, `eqx.Module` handles inheritance correctly, including propagating metadata like docstrings. The equivalent `flax.struct.dataclass` silently misbehaves. Overall Equinox seems to have fewer footguns.
+- Equinox offers several advanced features (like [runtime errors](../api/errors/) or [PyTree manipulation](../api/manipulation/#equinox.tree_at)) not found in other libraries.
+
+See also the [Equinox paper](https://arxiv.org/abs/2111.00254).
+
+#### ...Julia?
+
+The Julia ecosystem has [historically been buggy](https://kidger.site/thoughts/jax-vs-julia/).
+
+At time of writing, Julia does not yet have a robust autodifferentiation system. For example, it has multiple competing implementations -- both Diffractor.jl and ForwardDiff.jl for forward-mode autodifferentiation, and all of Tracker.jl, Zygote.jl, Enzyme.jl, ReverseDiff.jl for reverse-mode autodifferentiation. It does not yet support higher-order autodifferentiation robustly. In contrast, JAX+Equinox use a single strong autodifferentiation system.
+
+However, note that JAX+Equinox don't try to offer a completely general programming model: they are optimised for arrays and linear algebra. (Essentially, the sorts of things you use NumPy for.) They're not designed for e.g. a branch-and-bound combinatorial optimisation algorithm, and for these purposes Julia will be superior.
+
+Julia is often a small amount faster on microbenchmarks on CPUs. JAX+Equinox supports running on TPUs, whilst Julia generally does not.
+
+**You're obviously biased! Are the above comparisons fair?**
+
+Seriously, we think they're fair! Nonetheless all of the above approaches have their adherents, so it seems like all of these approaches are doing something right. So if you're already happily using one of them for your current project... then keep using them. (Don't rewrite things for no reason.) But conversely, we'd invite you to try Equinox for your next project. :)
+
+For what it's worth, if you have the time to learn (e.g. you're a grad student), then we'd strongly recommend trying all of the above. All of these libraries have made substantial innovations, and have all made substantially moved the numerical computing space forward. Equinox deliberately takes inspiration from them. For example Julia has an excellent type system, and this has strongly informed [this Equinox design pattern](../pattern/).
