@@ -470,7 +470,7 @@ class _ClosureConvert(Module):
     # when passing through `filter_primitive_bind` and thus visible to
     # `jax.core.subjaxprs`
     jaxpr: jax.core.Jaxpr
-    consts: PyTree[Array]  # Captured in the PyTree structure of _ClosureConvert
+    consts: PyTree[ArrayLike]  # Captured in the PyTree structure of _ClosureConvert
     in_dynamic_struct: _FlatPyTree[jax.ShapeDtypeStruct] = field(static=True)
     out_dynamic_struct: _FlatPyTree[jax.ShapeDtypeStruct] = field(static=True)
     in_static: _FlatPyTree[Any] = field(static=True)
