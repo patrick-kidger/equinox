@@ -61,7 +61,7 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
         jnp.save(f, x)
     elif isinstance(x, np.ndarray):
         np.save(f, x)
-    elif isinstance(x, (bool, float, complex, int)):
+    elif isinstance(x, (bool, float, complex, int, np.generic)):
         np.save(f, x)
     else:
         pass
@@ -105,6 +105,14 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
         return np.load(f)
     elif isinstance(x, (bool, float, complex, int)):
         return np.load(f).item()
+    elif isinstance(x, np.generic):
+        y = np.load(f)
+        try:
+            # `item()` converts back to base types like `float`
+            # so we have to use the constructor
+            return type(x)(y.astype(x.dtype).item())
+        except ValueError:
+            return type(x)(jnp.frombuffer(y, dtype=x.dtype)[0].item())
     else:
         return x
 

@@ -3,6 +3,7 @@ import os
 import jax
 import jax.numpy as jnp
 import numpy as np
+from jax.dtypes import bfloat16
 
 import equinox as eqx
 
@@ -77,6 +78,30 @@ def test_leaf_serialisation_file(getkey, tmp_path):
     assert eqx.tree_equal(tree_serialisable, tree_loaded_serialisable)
     assert tree_loaded_func is like_func
     assert tree_loaded_obj is like_obj
+
+
+def test_generic_dtype_serialisation(getkey, tmp_path):
+    # Ensure we can round trip when we start with an array
+    jax_array = jnp.array(bfloat16(1))
+    eqx.tree_serialise_leaves(tmp_path, jax_array)
+    like_jax_array = jnp.array(bfloat16(2))
+    loaded_jax_array = eqx.tree_deserialise_leaves(tmp_path, like_jax_array)
+    assert eqx.tree_equal(jax_array, loaded_jax_array)
+
+    tree = jnp.array(1), bfloat16(1), np.float32(1), jnp.array(1)
+    like_tree = jnp.array(2), bfloat16(2), np.float32(2), jnp.array(2)
+
+    # Ensure we can round trip when we start with a scalar
+    eqx.tree_serialise_leaves(tmp_path, tree)
+    loaded_tree = eqx.tree_deserialise_leaves(tmp_path, like_tree)
+    # Can't use `tree_equal` because `is_array` treats `bfloat16` as an array and
+    # ends up trying to call `all()` on a `bool`
+    assert loaded_tree == tree
+
+    # Ensure we can round trip when we start with a scalar that we've JAX JITed
+    eqx.tree_serialise_leaves(tmp_path, jax.jit(lambda x: x)(tree))
+    loaded_tree = eqx.tree_deserialise_leaves(tmp_path, like_tree)
+    assert loaded_tree == tree
 
 
 def test_custom_leaf_serialisation(getkey, tmp_path):
