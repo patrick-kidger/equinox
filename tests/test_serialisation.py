@@ -3,6 +3,7 @@ import os
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 from jax.dtypes import bfloat16
 
 import equinox as eqx
@@ -78,6 +79,37 @@ def test_leaf_serialisation_file(getkey, tmp_path):
     assert eqx.tree_equal(tree_serialisable, tree_loaded_serialisable)
     assert tree_loaded_func is like_func
     assert tree_loaded_obj is like_obj
+
+
+def test_helpful_errors(getkey, tmp_path):
+    # Test that we get a helpful error message when the loading itself fails
+    tree = jnp.array(1), {}
+    eqx.tree_serialise_leaves(tmp_path, tree)
+    bad_like_tree = jnp.array(2), {
+        "a": jnp.array(2),
+        "b": jnp.array(2),
+    }
+    with pytest.raises(
+        EOFError,
+        match=r"Error at leaf with path \(SequenceKey\(idx=1\), DictKey\(key='a'\)\)",
+    ):
+        _ = eqx.tree_deserialise_leaves(tmp_path, bad_like_tree)
+
+    # Test that we get a helpful error message when the types don't match
+    tree = jnp.array(1), {
+        "a": jnp.array(1),
+        "b": jnp.array(1),
+    }
+    eqx.tree_serialise_leaves(tmp_path, tree)
+    bad_like_tree = jnp.array(2), {
+        "a": jnp.array(2, dtype=jnp.float32),
+        "b": jnp.array(2),
+    }
+    with pytest.raises(
+        RuntimeError,
+        match=r"Deserialised leaf at path \(SequenceKey\(idx=1\), DictKey\(key='a'\)\)",
+    ):
+        _ = eqx.tree_deserialise_leaves(tmp_path, bad_like_tree)
 
 
 def test_generic_dtype_serialisation(getkey, tmp_path):

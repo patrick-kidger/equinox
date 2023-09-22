@@ -1,6 +1,7 @@
 import pathlib
 from collections.abc import Callable
 from contextlib import contextmanager
+from functools import wraps
 from typing import Any, BinaryIO, Optional, Union
 
 import jax
@@ -20,9 +21,19 @@ def _ordered_tree_map(
     in fixed order. (Namely depth-first left-to-right.)
     """
     # Discussion: https://github.com/patrick-kidger/equinox/issues/136
-    leaves, treedef = jtu.tree_flatten(tree, is_leaf)
-    all_leaves = [leaves] + [treedef.flatten_up_to(r) for r in rest]
-    return treedef.unflatten(f(*xs) for xs in zip(*all_leaves))
+    paths_and_leaves, treedef = jtu.tree_flatten_with_path(tree, is_leaf)
+    all_leaves = list(zip(*paths_and_leaves)) + [treedef.flatten_up_to(r) for r in rest]
+
+    @wraps(f)
+    def _f(*xs):
+        try:
+            return f(*xs[1:])
+        except Exception as e:
+            if e.args and "Error at leaf with path" not in e.args[0]:
+                e.args = (f"Error at leaf with path {xs[0]}",) + e.args
+            raise e
+
+    return treedef.unflatten(_f(*xs) for xs in zip(*all_leaves))
 
 
 def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
@@ -139,22 +150,22 @@ def _maybe_open(path_or_file: Union[str, pathlib.Path, BinaryIO], mode: str):
         yield path_or_file
 
 
-def _assert_same(new, old):
+def _assert_same(path, new, old):
     if type(new) is not type(old):
         raise RuntimeError(
-            f"Deserialised leaf has changed type from {type(old)} in `like` to "
-            f"{type(new)} on disk."
+            f"Deserialised leaf at path {path} has changed type from "
+            f"{type(old)} in `like` to {type(new)} on disk."
         )
     if isinstance(new, (np.ndarray, jax.Array)):
         if new.shape != old.shape:
             raise RuntimeError(
-                f"Deserialised leaf has changed shape from {old.shape} in `like` to "
-                f"{new.shape} on disk."
+                f"Deserialised leaf at path {path} has changed shape from "
+                f"{old.shape} in `like` to {new.shape} on disk."
             )
         if new.dtype != old.dtype:
             raise RuntimeError(
-                f"Deserialised leaf has changed dtype from {old.dtype} in `like` to "
-                f"{new.dtype} on disk."
+                f"Deserialised leaf at path {path} has changed dtype from "
+                f"{old.dtype} in `like` to {new.dtype} on disk."
             )
 
 
@@ -276,5 +287,5 @@ def tree_deserialise_leaves(
             return _ordered_tree_map(__deserialise, x, is_leaf=is_leaf)
 
         out = _ordered_tree_map(_deserialise, filter_spec, like)
-    jtu.tree_map(_assert_same, out, like, is_leaf=is_leaf)
+    jtu.tree_map_with_path(_assert_same, out, like, is_leaf=is_leaf)
     return out
