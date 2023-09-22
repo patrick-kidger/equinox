@@ -293,9 +293,47 @@ class _wrap_method:
     def __get__(self, instance, owner):
         if instance is None:
             return self.method
-        elif isinstance(instance, _Initable):
-            raise ValueError(
-                """Cannot assign methods in __init__.
+        else:
+            # Why `inplace=True`?
+            # This is safe because the `BoundMethod` was only instantiated here.
+            # This is necessary so that `_method.__self__ is instance`, which is used
+            # as part of a no-cycle check in `_make_initable`.
+            _method = _module_update_wrapper(
+                BoundMethod(self.method, instance), None, inplace=True
+            )
+            return _method
+
+
+_dummy_abstract = abc.abstractmethod(lambda self: 1)
+_has_dataclass_init = weakref.WeakKeyDictionary()
+
+
+_wrapper_field_names = {
+    "__module__",
+    "__name__",
+    "__qualname__",
+    "__doc__",
+    "__annotations__",
+}
+
+
+@ft.lru_cache(maxsize=128)
+def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
+    if wraps:
+        field_names = _wrapper_field_names
+    else:
+        field_names = {
+            field.name for field in dataclasses.fields(cls)  # pyright: ignore
+        }
+
+    class _InitableModule(cls):  # pyright: ignore
+        pass
+
+    def __setattr__(self, name, value):
+        if name in field_names:
+            if isinstance(value, BoundMethod) and value.__self__ is self:
+                raise ValueError(
+                    """Cannot assign methods in __init__.
 
 That is, something like the following is not allowed:
 ```
@@ -326,49 +364,14 @@ so that you can still use `self.foo`, but it is not stored in the PyTree structu
 This is a check that was introduced in Equinox v0.11.0. Before this, the above error
 went uncaught, possibly leading to silently wrong behaviour.
 """
-            )
-        else:
-            _method = module_update_wrapper(BoundMethod(self.method, instance))
-            return _method
-
-
-_dummy_abstract = abc.abstractmethod(lambda self: 1)
-_has_dataclass_init = weakref.WeakKeyDictionary()
-
-
-_wrapper_field_names = {
-    "__module__",
-    "__name__",
-    "__qualname__",
-    "__doc__",
-    "__annotations__",
-}
-
-
-class _Initable:
-    pass
-
-
-@ft.lru_cache(maxsize=128)
-def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
-    if wraps:
-        field_names = _wrapper_field_names
-    else:
-        field_names = {
-            field.name for field in dataclasses.fields(cls)  # pyright: ignore
-        }
-
-    class _InitableModule(cls, _Initable):  # pyright: ignore
-        pass
-
-    # Done like this to avoid dataclasses complaining about overriding setattr on a
-    # frozen class.
-    def __setattr__(self, name, value):
-        if name in field_names:
-            object.__setattr__(self, name, value)
+                )
+            else:
+                object.__setattr__(self, name, value)
         else:
             raise AttributeError(f"Cannot set attribute {name}")
 
+    # Done like this to avoid dataclasses complaining about overriding setattr on a
+    # frozen class.
     _InitableModule.__setattr__ = __setattr__
     # Make beartype happy
     _InitableModule.__init__ = cls.__init__  # pyright: ignore
@@ -637,6 +640,12 @@ def module_update_wrapper(
     A copy of `wrapper`, with the attributes `__module__`, `__name__`, `__qualname__`,
     `__doc__`, and `__annotations__` copied over from the wrapped function.
     """
+    return _module_update_wrapper(wrapper, wrapped, inplace=False)
+
+
+def _module_update_wrapper(
+    wrapper: Module, wrapped: Optional[Callable[_P, _T]], inplace: bool
+) -> Callable[_P, _T]:
     cls = wrapper.__class__
     if not isinstance(getattr(cls, "__wrapped__", None), property):
         raise ValueError("Wrapper module must supply `__wrapped__` as a property.")
@@ -644,9 +653,10 @@ def module_update_wrapper(
     if wrapped is None:
         wrapped = wrapper.__wrapped__  # pyright: ignore
 
-    # Make a clone, to avoid mutating the original input.
-    leaves, treedef = jtu.tree_flatten(wrapper)
-    wrapper = jtu.tree_unflatten(treedef, leaves)
+    if not inplace:
+        # Make a clone, to avoid mutating the original input.
+        leaves, treedef = jtu.tree_flatten(wrapper)
+        wrapper = jtu.tree_unflatten(treedef, leaves)
 
     initable_cls = _make_initable(cls, wraps=True)
     object.__setattr__(wrapper, "__class__", initable_cls)

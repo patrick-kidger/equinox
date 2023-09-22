@@ -150,8 +150,9 @@ def test_method_assignment():
         x: jax.Array
 
         def __init__(self, x):
-            # foo is assigned before x! Therefore
-            # self.bar.instance.x` doesn't exist yet.
+            # foo is assigned before x! We have that `self.bar.__self__` is a copy of
+            # `self`, but for which self.bar.__self__.x` doesn't exist yet. Then later
+            # calling `self.foo()` would raise an error.
             self.foo = self.bar
             self.x = x
 
@@ -188,6 +189,17 @@ def test_method_assignment2():
 
     with pytest.raises(ValueError, match="Cannot assign methods in __init__"):
         SubComponent()
+
+
+def test_method_access_during_init():
+    class Foo(eqx.Module):
+        def __init__(self):
+            self.method()
+
+        def method(self):
+            pass
+
+    Foo()
 
 
 @pytest.mark.parametrize("new", (False, True))
