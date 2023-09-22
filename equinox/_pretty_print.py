@@ -10,6 +10,8 @@ import jax.tree_util as jtu
 import numpy as np
 from jaxtyping import PyTree
 
+from ._doc_utils import WithRepr
+
 
 Dataclass = Any
 NamedTuple = Any  # workaround typeguard bug
@@ -140,7 +142,7 @@ def _pformat_dataclass(obj, **kwargs) -> pp.Doc:
     # values to the module so the repr fails.
     objs = named_objs(
         [
-            (field.name, getattr(obj, field.name, "<uninitialised>"))
+            (field.name, getattr(obj, field.name, WithRepr(None, "<uninitialised>")))
             for field in dataclasses.fields(obj)
             if field.repr
         ],
