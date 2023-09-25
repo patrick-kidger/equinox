@@ -33,7 +33,7 @@ class Positive(eqx.Module):
 
 This method has three key differences compared to the `__post_init__` provided by dataclasses:
 
-- It is not overridden by an `__init__` method of a subclass. In contrast, the following code has a silent bug:
+- It is not overridden by an `__init__` method of a subclass. In contrast, the following code has a bug (Equinox will raise a warning if you do this):
     
     ```python
     class Parent(eqx.Module):

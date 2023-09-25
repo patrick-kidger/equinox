@@ -552,3 +552,30 @@ def test_strict_fields():
             @abc.abstractmethod
             def foo(self):
                 pass
+
+
+def test_post_init_warning():
+    class A(eqx.Module):
+        called = False
+
+        def __post_init__(self):
+            type(self).called = True
+
+    with pytest.warns(
+        UserWarning, match="test_module.test_post_init_warning.<locals>.B"
+    ):
+
+        class B(A):
+            def __init__(self):
+                pass
+
+    with pytest.warns(
+        UserWarning, match="test_module.test_post_init_warning.<locals>.C"
+    ):
+
+        class C(B):
+            pass
+
+    B()
+    C()
+    assert not A.called
