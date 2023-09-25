@@ -40,11 +40,14 @@ def static_field(**kwargs):
     return field(**kwargs, static=True)
 
 
-_identity = doc_repr(lambda x: x, "lambda x: x")
+_converter_sentinel: Any = doc_repr(object(), "lambda x: x")
 
 
 def field(
-    *, converter: Callable[[Any], Any] = _identity, static: bool = False, **kwargs
+    *,
+    converter: Callable[[Any], Any] = _converter_sentinel,
+    static: bool = False,
+    **kwargs,
 ):
     """Equinox supports extra functionality on top of the default dataclasses.
 
@@ -94,7 +97,23 @@ def field(
         raise ValueError("Cannot use metadata with `static` already set.")
     if "static" in metadata:
         raise ValueError("Cannot use metadata with `static` already set.")
-    metadata["converter"] = converter
+    # We don't just use `lambda x: x` as the default, so that this works:
+    # ```
+    # class Abstract(eqx.Module):
+    #     x: int = eqx.field()
+    #
+    # class Concrete(Abstract):
+    #    @property
+    #    def x(self):
+    #        pass
+    # ```
+    # otherwise we try to call the default converter on a property without a setter,
+    # and an error is raised.
+    # Oddities like the above are to be discouraged, of course, but in particular
+    # `field(init=False)` was sometimes used to denote an abstract field (prior to the
+    # introduction of `AbstractVar`), so we do want to support this.
+    if converter is not _converter_sentinel:
+        metadata["converter"] = converter
     if static:
         metadata["static"] = True
     return dataclasses.field(**kwargs)
@@ -273,7 +292,9 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
         missing_names = {
             field.name
             for field in dataclasses.fields(cls)  # pyright: ignore
-            if field.init and field.name not in dir(self)
+            # Not `vars` or `__dict__`, to allow for `property`s overwriting a field.
+            # Not recommended, but allowable for backward compatibility.
+            if field.name not in dir(self)
         }
         if len(missing_names):
             raise ValueError(
@@ -464,8 +485,11 @@ def _flatten_module(module: "Module", with_keys: bool):
     for field_ in dataclasses.fields(module):
         name = field_.name
         try:
+            # Not `getattr` so that we don't pick up `property`s.
             value = module.__dict__[name]
         except KeyError:
+            # Uninitialised values during `__init__`, or when `property`s overwrite a
+            # field.
             continue
         if field_.metadata.get("static", False):
             static_field_names.append(name)
