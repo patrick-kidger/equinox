@@ -2,6 +2,7 @@ import abc
 import dataclasses
 import functools as ft
 from collections.abc import Callable
+from dataclasses import InitVar
 from typing import Any
 
 import jax
@@ -594,3 +595,96 @@ def test_inherit_doc():
         pass
 
     assert B.__init__.__doc__ == "Hey there!"
+
+
+@pytest.mark.parametrize("a_post_init", (False, True))
+@pytest.mark.parametrize("b_post_init", (False, True))
+@pytest.mark.parametrize("c_post_init", (False, True))
+def test_conversion_once(a_post_init, b_post_init, c_post_init):
+    def converter(x):
+        nonlocal called
+        assert not called
+        called = True
+        return x
+
+    class A(eqx.Module):
+        x: int = eqx.field(converter=converter)
+
+        if a_post_init:
+
+            def __post_init__(self):
+                pass
+
+    class B(A):
+        if b_post_init:
+
+            def __post_init__(self):
+                pass
+
+    class C(B):
+        if c_post_init:
+
+            def __post_init__(self):
+                pass
+
+    called = False
+    A(1)
+    assert called
+
+    called = False
+    B(1)
+    assert called
+
+    called = False
+    C(1)
+    assert called
+
+
+def test_init_fields():
+    class A(eqx.Module):
+        x: int = eqx.field(init=False)
+
+    with pytest.raises(ValueError, match="The following fields were not initialised"):
+        A()
+
+    class B(eqx.Module):
+        x: int = eqx.field(init=False)
+
+        def __post_init__(self):
+            pass
+
+    with pytest.raises(ValueError, match="The following fields were not initialised"):
+        B()
+
+    class C(eqx.Module):
+        x: int = eqx.field(init=False)
+        flag: InitVar[bool]
+
+        def __post_init__(self, flag):
+            if flag:
+                self.x = 1
+
+    C(flag=True)
+    with pytest.raises(ValueError, match="The following fields were not initialised"):
+        C(flag=False)
+
+
+@pytest.mark.parametrize("field", (dataclasses.field, eqx.field))
+def test_init_as_abstract(field):
+    # Before the introduction of AbstractVar, it was possible to sort-of get the same
+    # behaviour by marking it as an `init=False` field. Here we check that we don't
+    # break that, in particular when it's overridden by a non-field.
+
+    class Abstract(eqx.Module):
+        foo: int = field(init=False)
+
+    class Concrete(Abstract):
+        @property
+        def foo(self):
+            return 1
+
+    x = Concrete()
+    leaves, treedef = jtu.tree_flatten(x)
+    assert len(leaves) == 0
+    y = jtu.tree_unflatten(treedef, leaves)
+    assert y.foo == 1
