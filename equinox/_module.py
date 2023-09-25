@@ -8,6 +8,7 @@ import dataclasses
 import functools as ft
 import inspect
 import types
+import warnings
 import weakref
 from collections.abc import Callable
 from typing import Any, cast, Optional, TYPE_CHECKING, TypeVar, Union
@@ -172,7 +173,37 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
                 assert name == "Module"
                 _init = True  # eqx.Module itself
         if _init:
+            # Dataclass-generated __init__
             init_doc = cls.__init__.__doc__
+        if not _init:
+            # User-provided __init__
+            # _Initable check to avoid printing out another warning on initialisation.
+            if getattr(cls, "__post_init__", None) is not None and not issubclass(
+                cls, _Initable
+            ):
+                warnings.warn(
+                    f"Class `{cls.__module__}.{cls.__qualname__}` has both an "
+                    "`__init__` method and a `__post_init__` method. This means that "
+                    "the `__post_init__` method will not be run!\n"
+                    "The reason for this is that `__post_init__` is intended to be "
+                    "used with the automatically-generated `__init__` method provided "
+                    "by Python dataclasses, which are generated of the form:\n"
+                    "```\n"
+                    "def __init__(self, field1, field2)\n"
+                    "    self.field1 = field1\n"
+                    "    self.field2 = field2\n"
+                    "    self.__post_init__()\n"
+                    "```\n"
+                    "and as such a user-provided `__init__` overrides both the setting "
+                    "of fields, and the calling of `__post_init__`.\n"
+                    "The above is purely how Python dataclasses work, and has nothing "
+                    "to do with Equinox!\n"
+                    "If you are using `__post_init__` to check that certain invariants "
+                    "hold, then consider using `__check_init__` instead. This is an "
+                    "Equinox-specific extension that is always ran. See here for more "
+                    "details: "
+                    "https://docs.kidger.site/equinox/api/module/advanced_fields/#checking-invariants"  # noqa: E501
+                )
         # [Step 5] Register as a dataclass.
         cls = dataclass(eq=False, repr=False, frozen=True, init=_init)(
             cls  # pyright: ignore
@@ -317,6 +348,10 @@ _wrapper_field_names = {
 }
 
 
+class _Initable:
+    pass
+
+
 @ft.lru_cache(maxsize=128)
 def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
     if wraps:
@@ -326,7 +361,7 @@ def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
             field.name for field in dataclasses.fields(cls)  # pyright: ignore
         }
 
-    class _InitableModule(cls):  # pyright: ignore
+    class _InitableModule(cls, _Initable):  # pyright: ignore
         pass
 
     def __setattr__(self, name, value):
