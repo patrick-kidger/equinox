@@ -579,3 +579,18 @@ def test_post_init_warning():
     B()
     C()
     assert not A.called
+
+
+def test_inherit_doc():
+    # This is not what dataclasses do by default -- they would set `B.__init__.__doc__`
+    # to `None`
+
+    class A(eqx.Module):
+        pass
+
+    A.__init__.__doc__ = "Hey there!"
+
+    class B(A):
+        pass
+
+    assert B.__init__.__doc__ == "Hey there!"
