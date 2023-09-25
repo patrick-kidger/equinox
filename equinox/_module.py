@@ -212,7 +212,19 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
         # (This part has to happen after dataclass registration.)
         _has_dataclass_init[cls] = _init
         if _init:
+            # Assign `__doc__` in case its been manually overriden:
+            # ```
+            # class Foo(eqx.Module):
+            #     x: int
+            #
+            # Foo.__init__.__doc__ = "Foo should be called with with an integer `x`."
+            #
+            # class Bar(Foo):
+            #     pass
+            # ```
+            # With `Bar.__init__.__doc__` used during documentation generation.
             cls.__init__.__doc__ = init_doc  # pyright: ignore
+            # TODO: is this next line still necessary?
             cls.__init__.__module__ = cls.__module__
         # [Step 6] Check strict abstract modules.
         if strict:
