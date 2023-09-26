@@ -696,10 +696,14 @@ class Module(metaclass=_ModuleMeta):
         [`abc.abstractmethod`](https://docs.python.org/3/library/abc.html#abc.abstractmethod).
         You can also create abstract instance attributes or abstract class
         attributes, see [`equinox.AbstractVar`][] and
-        [`equinox.AbstractClassVar`][]. Finally, some optional strict type-checking
-        may be enabled by passing `strict=True`, e.g.
-        `class Foo(eqx.Module, strict=True)`; see [strict modules](../advanced_fields/#strict-modules) for details.
+        [`equinox.AbstractClassVar`][].
     """  # noqa: E501
+
+    #     [`equinox.AbstractClassVar`][]. Finally, some optional strict type-checking
+    #     may be enabled by passing `strict=True`, e.g.
+    #     `class Foo(eqx.Module, strict=True)`; see
+    #     [strict modules](../advanced_fields/#strict-modules) for details.
+    # """  # noqa: E501
 
     def __hash__(self):
         return hash(tuple(jtu.tree_leaves(self)))

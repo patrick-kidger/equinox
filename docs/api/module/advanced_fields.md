@@ -85,6 +85,7 @@ This method has three key differences compared to the `__post_init__` provided b
 
 ::: equinox.module_update_wrapper
 
+<!--
 ## Strict modules
 
 Equinox supports an entirely optional "strict mode", for validating that you follow the abstract/final design pattern as discussed in [this style guide](../../../pattern/).
@@ -118,4 +119,4 @@ then the following things are checked when you define your class (an error is ra
         def f(self): ...
     ```
 
-Just the strict `Module` is checked. Subclasses will not become strict unless they also opt-in. This makes it possible to safely enable strict modules in a library, without affecting any downstream users.
+Just the strict `Module` is checked. Subclasses will not become strict unless they also opt-in. This makes it possible to safely enable strict modules in a library, without affecting any downstream users.-->
