@@ -55,7 +55,9 @@ def field(
 
     - `converter`: a function to call on this field when the model is initialised. For
         example, `field(converter=jax.numpy.asarray)` to convert
-        `bool`/`int`/`float`/`complex` values to JAX arrays.
+        `bool`/`int`/`float`/`complex` values to JAX arrays. This is ran after the
+        `__init__` method (i.e. when using a user-provided `__init__`), and before
+        `__post_init__` (i.e. when using the default dataclass initialisation).
     - `static`: whether the field should not interact with any JAX transform at all (by
         making it part of the PyTree structure rather than a leaf).
     - `**kwargs`: All other keyword arguments are passed on to `dataclass.field`.
@@ -348,7 +350,11 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
             raise TypeError("Cannot instantiate abstract `equinox.Module`.")
         # [Step 1] Modules are immutable -- except during construction. So defreeze
         # before init.
-        initable_cls = _make_initable(cls, wraps=False)
+        if _has_dataclass_init[cls]:
+            post_init = getattr(cls, "__post_init__", None)
+        else:
+            post_init = None
+        initable_cls = _make_initable(cls, post_init, wraps=False)
         # [Step 2] Instantiate the class as normal. (`__init__` and `__post_init__`)
         # and then re-freeze.
         self = super(_ModuleMeta, initable_cls).__call__(*args, **kwargs)
@@ -366,13 +372,11 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
                 f"{missing_names}"
             )
         # [Step 4] Run any custom converters.
-        for field in dataclasses.fields(self):
-            try:
-                converter = field.metadata["converter"]
-            except KeyError:
-                pass
-            else:
-                setattr(self, field.name, converter(getattr(self, field.name)))
+        if post_init is None:
+            # `if post_init is not None` then conversion happened in the override of
+            # `__post_init__` in `initable_cls`.
+            _convert_fields(self, init=True)
+            _convert_fields(self, init=False)
         object.__setattr__(self, "__class__", cls)
         # [Step 5] Run any custom validators.
         for kls in cls.__mro__:
@@ -474,8 +478,13 @@ class _Initable:
     pass
 
 
+# We pass `post_init` as an argument, rather than just looking up `cls.__post_init__`,
+# in case someone instantiates a Module, then monkey-patches `__post_init__`, then
+# instantiates another Module.
+# Which is a crazy thing to do, but never let it be said that Equinox doesn't handle
+# your edge cases.
 @ft.lru_cache(maxsize=128)
-def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
+def _make_initable(cls: _ModuleMeta, post_init, wraps: bool) -> _ModuleMeta:
     if wraps:
         field_names = _wrapper_field_names
     else:
@@ -484,7 +493,15 @@ def _make_initable(cls: _ModuleMeta, wraps: bool) -> _ModuleMeta:
         }
 
     class _InitableModule(cls, _Initable):  # pyright: ignore
-        pass
+        if post_init is not None:
+
+            @ft.wraps(post_init)
+            def __post_init__(self, *args, **kwargs):
+                # Do conversion before `__post_init__`, as a user convenience.
+                _convert_fields(self, init=True)
+                post_init(self, *args, **kwargs)
+                # Now convert all the fields filled in by `__post_init__` as well.
+                _convert_fields(self, init=False)
 
     def __setattr__(self, name, value):
         if name in field_names:
@@ -540,6 +557,23 @@ went uncaught, possibly leading to silently wrong behaviour.
 
 
 internal_lru_caches.append(_make_initable)
+
+
+def _convert_fields(module, init: bool):
+    for field in dataclasses.fields(module):
+        if field.init is init:
+            try:
+                converter = field.metadata["converter"]
+            except KeyError:
+                pass
+            else:
+                try:
+                    value = getattr(module, field.name)
+                except AttributeError:
+                    # Let the all-fields-are-filled check handle the error.
+                    pass
+                else:
+                    setattr(module, field.name, converter(value))
 
 
 # Used to provide a pretty repr when doing `jtu.tree_structure(SomeModule(...))`.
@@ -822,7 +856,7 @@ def _module_update_wrapper(
         leaves, treedef = jtu.tree_flatten(wrapper)
         wrapper = jtu.tree_unflatten(treedef, leaves)
 
-    initable_cls = _make_initable(cls, wraps=True)
+    initable_cls = _make_initable(cls, None, wraps=True)
     object.__setattr__(wrapper, "__class__", initable_cls)
     try:
         # Like `ft.update_wrapper(wrapper, wrapped, updated=())`.
