@@ -94,12 +94,12 @@ When enabled via
 class Foo(eqx.Module, strict=True):
     ...
 ```
-then the following things are checked when you define your class (an error raised if they fail).
+then the following things are checked when you define your class (an error is raised if they fail).
 
-- That all base classes also inherit from `eqx.Module`.
-- That abstract classes have names beginning with `Abstract`.
-- That abstract classes do not implement an `__init__` method.
-- That abstract classes do not have any fields.
+- That all base classes are also strict `eqx.Module`s.
+- That concrete classes are final.
+- The `__init__` method and all fields are all defined on a single class.
+- That abstract classes have names beginning with `"Abstract"`.
 - That no concrete method is overridden. For example, this will raise an error:
     ```python
     class Foo(eqx.Module):
@@ -117,6 +117,5 @@ then the following things are checked when you define your class (an error raise
     class Concrete(Abstract, strict=True):
         def f(self): ...
     ```
-    This check essentially also ensures that concrete classes are final.
 
-Just the strict module is checked. It does not matter whether any of the superclasses are strict, and subclasses will not become strict unless they also opt-in. This makes it possible to safely enable strict modules in a library, without affecting any downstream users.
+Just the strict `Module` is checked. Subclasses will not become strict unless they also opt-in. This makes it possible to safely enable strict modules in a library, without affecting any downstream users.

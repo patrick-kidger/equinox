@@ -488,49 +488,12 @@ def test_strict_noerrors():
 
     class Concrete2(Abstract):
         def foo(self, x):
-            return x + 1
+            return x + 2
 
-
-def test_strict_non_module_base():
-    class NotAModule:
-        pass
-
-    with pytest.raises(TypeError, match="subclasses of `eqx.Module`"):
-
-        class MyModule(eqx.Module, NotAModule, strict=True):
-            pass
-
-
-def test_strict_method_reoverride():
-    class AbstractA(eqx.Module, strict=True):
-        @abc.abstractmethod
+    class Concrete3(Concrete2):
         def foo(self, x):
-            pass
+            return x + 3
 
-    class B(AbstractA, strict=True):
-        def foo(self, x):
-            pass
-
-    with pytest.raises(TypeError, match="concrete methods"):
-
-        class C(B, strict=True):
-            def foo(self, x):
-                pass
-
-
-def test_strict_init():
-    with pytest.raises(TypeError, match="__init__"):
-
-        class Abstract(eqx.Module, strict=True):
-            def __init__(self):
-                pass
-
-            @abc.abstractmethod
-            def foo(self):
-                pass
-
-
-def test_strict_fields():
     class Abstract1(eqx.Module, strict=True):
         bar: eqx.AbstractVar[int]
 
@@ -545,12 +508,176 @@ def test_strict_fields():
         def foo(self):
             pass
 
-    with pytest.raises(TypeError, match="fields"):
+    class Abstract3(eqx.Module, strict=True):
+        bar: int
 
-        class Abstract3(eqx.Module, strict=True):
-            bar: int
+        @abc.abstractmethod
+        def foo(self):
+            pass
+
+
+def test_strict_non_module_base():
+    class NotAModule:
+        pass
+
+    with pytest.raises(
+        TypeError, match="Strict `eqx.Module`s must only inherit from other strict"
+    ):
+
+        class MyModule(NotAModule, eqx.Module, strict=True):
+            pass
+
+    class NotAStrictModule(eqx.Module):
+        pass
+
+    with pytest.raises(
+        TypeError, match="Strict `eqx.Module`s must only inherit from other strict"
+    ):
+
+        class MyModule2(NotAStrictModule, eqx.Module, strict=True):
+            pass
+
+
+def test_strict_concrete_is_final():
+    class Concrete(eqx.Module, strict=True):
+        pass
+
+    with pytest.raises(
+        TypeError, match="very strict `eqx.Module` must be either abstract or final"
+    ):
+
+        class Concrete2(Concrete, strict=True):
+            pass
+
+
+@pytest.mark.parametrize("super_init_or_attr", ("init", "attr"))
+@pytest.mark.parametrize("sub_init_or_attr", ("init", "attr"))
+@pytest.mark.parametrize("abstract_flag", (False, True))
+def test_strict_init(super_init_or_attr, sub_init_or_attr, abstract_flag):
+    class Abstract(eqx.Module, strict=True, abstract=abstract_flag):
+        if super_init_or_attr == "init":
+
+            def __init__(self):
+                pass
+
+        else:
+            x: int
+
+        if not abstract_flag:
 
             @abc.abstractmethod
+            def foo(self):
+                pass
+
+    with pytest.raises(
+        TypeError, match="For readability, any custom `__init__` method, and all fields"
+    ):
+
+        class Concrete1(Abstract, strict=True):
+            if sub_init_or_attr == "init":
+
+                def __init__(self):
+                    pass
+
+            else:
+                y: str
+
+            def foo(self):
+                pass
+
+
+def test_strict_init_in_abstract():
+    class AbstractA(eqx.Module):
+        a: int
+        b: int
+
+        def __init__(self, x):
+            self.a = x
+            self.b = x
+
+        @abc.abstractmethod
+        def foo(self):
+            pass
+
+    class ConcreteB(AbstractA):
+        def foo(self):
+            pass
+
+    # No way to teach pyright about Equinox's different behaviour for `__init__` than
+    # is provided by dataclasses.
+    instance = ConcreteB(x=1)  # pyright: ignore
+    assert instance.a == 1
+    assert instance.b == 1
+
+
+def test_strict_init_transitive():
+    class AbstractA(eqx.Module, strict=True, abstract=True):
+        x: int
+
+    class AbstractB(AbstractA, strict=True, abstract=True):
+        pass
+
+    with pytest.raises(
+        TypeError, match="For readability, any custom `__init__` method, and all fields"
+    ):
+
+        class C(AbstractB, strict=True):
+            y: str
+
+
+def test_strict_abstract_name():
+    with pytest.raises(
+        TypeError, match="Abstract strict `eqx.Module`s must be named starting with"
+    ):
+
+        class NotAbstract(eqx.Module, strict=True, abstract=True):
+            pass
+
+
+def test_strict_method_reoverride():
+    class AbstractA(eqx.Module, strict=True):
+        @abc.abstractmethod
+        def foo(self, x):
+            pass
+
+    class AbstractB(AbstractA, strict=True):
+        def foo(self, x):
+            pass
+
+        @abc.abstractmethod
+        def bar(self, x):
+            pass
+
+    with pytest.raises(
+        TypeError, match="Strict `eqx.Module`s cannot override concrete"
+    ):
+
+        class C(AbstractB, strict=True):
+            def foo(self, x):
+                pass
+
+            def bar(self, x):
+                pass
+
+    class AbstractD(eqx.Module, strict=True, abstract=True):
+        foo = 4
+
+    class AbstractD2(AbstractD, strict=True, abstract=True):
+        pass
+
+    with pytest.raises(
+        TypeError, match="Strict `eqx.Module`s cannot override non-methods"
+    ):
+
+        class E(AbstractD, strict=True):
+            def foo(self):
+                pass
+
+    with pytest.raises(
+        TypeError, match="Strict `eqx.Module`s cannot override non-methods"
+    ):
+
+        class E2(AbstractD2, strict=True):
             def foo(self):
                 pass
 

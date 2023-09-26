@@ -128,23 +128,20 @@ def field(
 # Inherits from ABCMeta to support `eqx.{AbstractVar, AbstractClassVar}` and
 # `abc.abstractmethod`.
 class _ModuleMeta(ABCMeta):  # pyright: ignore
-
     # This method is called whenever you definite a module: `class Foo(eqx.Module): ...`
-    def __new__(mcs, name, bases, dict_, /, strict: bool = False, **kwargs):
-        # [Step 1] We support an optional `strict` mode for Rust-like strictness in the
-        # type checking.
-        # In practice this is probably too much for your average user, but it's a great
-        # way to build robust libraries.
-        if strict:
-            for base in bases:
-                if not issubclass(base, Module):
-                    raise TypeError(
-                        "Strict `eqx.Module`s must only inherit from other subclasses "
-                        "of `eqx.Module`."
-                    )
-        # [Step 2] Create the class as normal.
+    def __new__(
+        mcs,
+        name,
+        bases,
+        dict_,
+        /,
+        strict: bool = False,
+        abstract: bool = False,
+        **kwargs,
+    ):
+        # [Step 1] Create the class as normal.
         cls = super().__new__(mcs, name, bases, dict_, **kwargs)
-        # [Step 3] Arrange for bound methods to be treated as PyTrees as well. This
+        # [Step 2] Arrange for bound methods to be treated as PyTrees as well. This
         # ensures that
         # ```
         # @jax.jit
@@ -156,47 +153,32 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
         for k, v in cls.__dict__.items():
             if _not_magic(k) and inspect.isfunction(v):
                 setattr(cls, k, _wrap_method(v))
-                if strict:
-                    if not getattr(v, "__isabstractmethod__", False):
-                        for base in bases:
-                            old_v = getattr(base, k, _dummy_abstract)
-                            if not inspect.isfunction(old_v):
-                                raise TypeError(
-                                    "Strict `eqx.Module`s cannot override non-methods "
-                                    "with methods."
-                                )
-                            if not getattr(old_v, "__isabstractmethod__", False):
-                                raise TypeError(
-                                    "Strict `eqx.Module`s cannot override concrete "
-                                    "methods."
-                                )
-        # [Step 4] Create a default `__init__` method if a user method isn't provided.
+        # [Step 3] Create a default `__init__` method if a user method isn't provided.
         #
         # If as a superclass has a custom `__init__`, then don't create a default
-        # `__init__` here. (Otherwise e..g if `B` has a custom init then
+        # `__init__` here. (Otherwise e.g. if `B` has a custom init then
         # `class A(B): pass` would set a dataclass init on `A`.)
         # If a superclass has a default `__init__`, then do create a new default one
         # here. (Dataclass default `__init__`s don't call `super()`, so they must be
         # overriden directly.)
-        if "__init__" in cls.__dict__:
-            _init = False
+        added_custom_init = "__init__" in cls.__dict__
+        if added_custom_init:
+            _dataclass_init = False
         else:
             for kls in cls.__mro__:
                 try:
-                    _init = _has_dataclass_init[kls]
+                    _dataclass_init = _has_dataclass_init[kls]
                 except KeyError:
                     pass
                 else:
                     break
             else:
                 assert name == "Module"
-                _init = True  # eqx.Module itself
-        if _init:
-            # Dataclass-generated __init__
+                _dataclass_init = True  # eqx.Module itself
+        if _dataclass_init:  # Using a dataclass-generated `__init__`.
             init_doc = cls.__init__.__doc__
-        if not _init:
-            # User-provided __init__
-            # _Initable check to avoid printing out another warning on initialisation.
+        if not _dataclass_init:  # Using a user-provided `__init__`.
+            # Check `_Initable` to avoid printing out duplicate warnings.
             if getattr(cls, "__post_init__", None) is not None and not issubclass(
                 cls, _Initable
             ):
@@ -215,7 +197,7 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
                     "```\n"
                     "and as such a user-provided `__init__` overrides both the setting "
                     "of fields, and the calling of `__post_init__`.\n"
-                    "The above is purely how Python dataclasses work, and has nothing "
+                    "The above is how Python dataclasses work, and has nothing "
                     "to do with Equinox!\n"
                     "If you are using `__post_init__` to check that certain invariants "
                     "hold, then consider using `__check_init__` instead. This is an "
@@ -223,14 +205,14 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
                     "details: "
                     "https://docs.kidger.site/equinox/api/module/advanced_fields/#checking-invariants"  # noqa: E501
                 )
-        # [Step 5] Register as a dataclass.
-        cls = dataclass(eq=False, repr=False, frozen=True, init=_init)(
+        # [Step 4] Register as a dataclass.
+        cls = dataclass(eq=False, repr=False, frozen=True, init=_dataclass_init)(
             cls  # pyright: ignore
         )
-        # [Step 4b] -- finish off the business of default `__init__` methods.
+        # [Step 3b] -- finish off the business of default `__init__` methods.
         # (This part has to happen after dataclass registration.)
-        _has_dataclass_init[cls] = _init
-        if _init:
+        _has_dataclass_init[cls] = _dataclass_init
+        if _dataclass_init:
             # Assign `__doc__` in case its been manually overriden:
             # ```
             # class Foo(eqx.Module):
@@ -241,33 +223,108 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
             # class Bar(Foo):
             #     pass
             # ```
-            # With `Bar.__init__.__doc__` used during documentation generation.
+            # E.g. `Bar.__init__.__doc__` may be used during documentation generation.
             cls.__init__.__doc__ = init_doc  # pyright: ignore
             # TODO: is this next line still necessary?
             cls.__init__.__module__ = cls.__module__
-        # [Step 6] Check strict abstract modules.
+        # [Step 5] We support an optional `strict` mode for Rust-like strictness in the
+        # type checking.
+        # In practice this is probably too much for your average user, but it's a great
+        # way to build robust libraries.
+        _is_force_abstract[cls] = abstract
+        _is_strict[cls] = strict
         if strict:
-            if (
-                len(cls.__abstractmethods__) > 0
-                or len(cls.__abstractvars__) > 0
-                or len(cls.__abstractclassvars__) > 0
-            ):
+            for base in bases:
+                if base is Module:
+                    # We shouldn't check `Module` itself: we can't make it strict as to
+                    # be able to inherit from it we would need to make it abstract. To
+                    # be able to make it abstract its name must start with `Abstract`.
+                    # That we cannot do for backward compatibility.
+                    continue
+                # Invariant: all base classes are also strict modules.
+                if not issubclass(base, Module):
+                    raise TypeError(
+                        "Strict `eqx.Module`s must only inherit from other strict "
+                        f"`eqx.Module`s. `{cls.__module__}.{cls.__qualname__}` is a "
+                        "strict Module inheriting from "
+                        f"`{base.__module__}.{base.__qualname__}`, which is not a "
+                        "`Module` at all."
+                    )
+                if not _is_strict[base]:
+                    raise TypeError(
+                        "Strict `eqx.Module`s must only inherit from other strict "
+                        f"`eqx.Module`s. `{cls.__module__}.{cls.__qualname__}` is a "
+                        "strict Module inheriting from "
+                        f"`{base.__module__}.{base.__qualname__}`, which is a "
+                        "`Module`, but not a strict `Module`."
+                    )
+                # Invariant: concrete means final.
+                if not _is_abstract(base):
+                    raise TypeError(
+                        "Every strict `eqx.Module` must be either abstract or final. "
+                        "This means that it is not possible to inherit from a concrete "
+                        f"strict `eqx.Module`. `{cls.__module__}.{cls.__qualname__}` "
+                        "is a strict Module inheriting from "
+                        f"`{base.__module__}.{base.__qualname__}`, which is a concrete "
+                        "strict `Module`."
+                    )
+                # Invariant: field definitions and __init__ methods must all appear on
+                # just one class in a hierarchy.
+                base_num_fields = len(dataclasses.fields(base))
+                if (base_num_fields > 0) or (not _has_dataclass_init[base]):
+                    # If we've added more fields, or added a custom init method, then
+                    # error.
+                    if len(dataclasses.fields(cls)) != base_num_fields:
+                        raise TypeError(
+                            "For readability, any custom `__init__` method, and all "
+                            "fields, must all be defined on the same strict Module."
+                            f"{cls.__module__}.{cls.__qualname__} is a strict Module "
+                            "that is attempting to add fields, and inherit from "
+                            f"{base.__module__}.{base.__qualname__}. However the "
+                            "latter already has fields or a custom `__init__` defined."
+                        )
+                    if added_custom_init:
+                        raise TypeError(
+                            "For readability, any custom `__init__` method, and all "
+                            "fields, must all be defined on the same strict Module."
+                            f"{cls.__module__}.{cls.__qualname__} is a strict Module "
+                            "that is attempting to define a custom `__init__` method, "
+                            f"and inherit from {base.__module__}.{base.__qualname__}. "
+                            "However the latter already has fields "
+                            "or a custom `__init__` defined."
+                        )
+            if _is_abstract(cls):
+                # Invariant: abstract classes have names beginning with `Abstract`.
                 if not cls.__name__.startswith("Abstract"):
                     raise TypeError(
                         "Abstract strict `eqx.Module`s must be named starting with "
-                        "`Abstract`."
+                        f"`Abstract`. Got {name} when defining "
+                        f"{cls.__module__}.{cls.__qualname__}."
                     )
-                if not _init:
-                    raise TypeError(
-                        "Abstract strict `eqx.Module`s cannot have `__init__` methods."
-                    )
-                if len(dataclasses.fields(cls)) > 0:
-                    raise TypeError(
-                        "Abstract strict `eqx.Module`s cannot have fields. (You "
-                        "probably meant to mark them as `eqx.AbstractVar[...]` "
-                        "instead.)"
-                    )
-        # [Step 7] Register as a pytree.
+            for k, v in cls.__dict__.items():
+                if isinstance(v, _wrap_method):
+                    v = v.method
+                    # Invariant: concrete methods are not overridden.
+                    if not getattr(v, "__isabstractmethod__", False):
+                        for base in bases:
+                            old_v = getattr(base, k, _dummy_abstract)
+                            if not inspect.isfunction(old_v):
+                                raise TypeError(
+                                    "Strict `eqx.Module`s cannot override non-methods "
+                                    "with methods. "
+                                    f"`{cls.__module__}.{cls.__qualname__}.{k}` is "
+                                    "attempting to override "
+                                    f"`{base.__module__}.{base.__qualname__}.{k}`."
+                                )
+                            if not getattr(old_v, "__isabstractmethod__", False):
+                                raise TypeError(
+                                    "Strict `eqx.Module`s cannot override concrete "
+                                    "methods. "
+                                    f"`{cls.__module__}.{cls.__qualname__}.{k}` is "
+                                    "attempting to override "
+                                    f"`{base.__module__}.{base.__qualname__}.{k}`."
+                                )
+        # [Step 6] Register as a pytree.
         jtu.register_pytree_with_keys(
             cls,
             flatten_with_keys=ft.partial(
@@ -283,6 +340,8 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
 
     # This method is called whenever you initialise a module: `MyModule(...)`
     def __call__(cls, *args, **kwargs):
+        if _is_force_abstract[cls]:
+            raise TypeError("Cannot instantiate abstract `equinox.Module`.")
         # [Step 1] Modules are immutable -- except during construction. So defreeze
         # before init.
         initable_cls = _make_initable(cls, wraps=False)
@@ -369,7 +428,18 @@ class _wrap_method:
 
 
 _dummy_abstract = abc.abstractmethod(lambda self: 1)
+_is_force_abstract = weakref.WeakKeyDictionary()
+_is_strict = weakref.WeakKeyDictionary()
 _has_dataclass_init = weakref.WeakKeyDictionary()
+
+
+def _is_abstract(cls):
+    return (
+        _is_force_abstract[cls]
+        or len(cls.__abstractmethods__) > 0
+        or len(cls.__abstractvars__) > 0
+        or len(cls.__abstractclassvars__) > 0
+    )
 
 
 _wrapper_field_names = {
