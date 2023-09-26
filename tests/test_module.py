@@ -236,8 +236,87 @@ def test_converter():
 
         def __init__(self, a):
             self.field = a
+            assert type(self.field) is float
 
-    assert shaped_allclose(MyModule(1.0).field, jnp.array(1.0))  # pyright: ignore
+    assert shaped_allclose(MyModuleWithInit(1.0).field, jnp.array(1.0))
+
+    called = False
+
+    class MyModuleWithPostInit(eqx.Module):
+        field: jax.Array = eqx.field(converter=jnp.asarray)
+
+        def __post_init__(self):
+            nonlocal called
+            assert not called
+            called = True
+            assert shaped_allclose(self.field, jnp.array(1.0))
+
+    MyModuleWithPostInit(1.0)  # pyright: ignore
+    assert called
+
+
+# Please don't actually do this in real code.
+#
+# Note that `Foo` had to start with a `__post_init__` method for this to work.
+# Dataclasses check for the presence of a `__post_init__` method when the class is
+# created, and at that time creates a flag declaring whether to run `__post_init__` at
+# initialisation time.
+def test_converter_monkeypatched_postinit():
+    called1 = False
+
+    class Foo(eqx.Module):
+        field: jax.Array = eqx.field(converter=jnp.asarray)
+
+        def __post_init__(self):
+            nonlocal called1
+            assert not called1
+            called1 = True
+            assert shaped_allclose(self.field, jnp.array(1.0))
+
+    assert shaped_allclose(Foo(1.0).field, jnp.array(1.0))  # pyright: ignore
+    assert called1
+
+    called2 = False
+
+    def __post_init__(self):
+        nonlocal called2
+        assert not called2
+        called2 = True
+        assert shaped_allclose(self.field, jnp.array(1.0))
+
+    Foo.__post_init__ = __post_init__  # pyright: ignore
+    assert shaped_allclose(Foo(1.0).field, jnp.array(1.0))  # pyright: ignore
+    assert called2
+
+
+def test_init_and_postinit():
+    class Foo(eqx.Module):
+        field: jax.Array = eqx.field(converter=jnp.asarray)
+
+        def __post_init__(self):
+            assert False
+
+    with pytest.warns(UserWarning, match="__init__` method and a `__post_init__"):
+
+        class Bar(Foo):
+            def __init__(self):
+                self.field = 1  # pyright: ignore
+
+    assert shaped_allclose(Bar().field, jnp.array(1))
+
+    class Qux(eqx.Module):
+        field: jax.Array = eqx.field(converter=jnp.asarray)
+
+        def __init__(self):
+            self.field = 1  # pyright: ignore
+
+    with pytest.warns(UserWarning, match="__init__` method and a `__post_init__"):
+
+        class Quux(Qux):
+            def __post_init__(self):
+                assert False
+
+    assert shaped_allclose(Quux().field, jnp.array(1))  # pyright: ignore
 
 
 def test_wrap_method():
