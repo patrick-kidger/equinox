@@ -11,7 +11,7 @@ import types
 import warnings
 import weakref
 from collections.abc import Callable
-from typing import Any, cast, Optional, TYPE_CHECKING, TypeVar, Union
+from typing import Any, cast, Optional, Protocol, TYPE_CHECKING, TypeVar, Union
 from typing_extensions import dataclass_transform, ParamSpec
 
 import jax.tree_util as jtu
@@ -155,7 +155,7 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
                 setattr(cls, k, _wrap_method(v))
         # [Step 3] Create a default `__init__` method if a user method isn't provided.
         #
-        # If as a superclass has a custom `__init__`, then don't create a default
+        # If a superclass has a custom `__init__`, then don't create a default
         # `__init__` here. (Otherwise e.g. if `B` has a custom init then
         # `class A(B): pass` would set a dataclass init on `A`.)
         # If a superclass has a default `__init__`, then do create a new default one
@@ -169,6 +169,7 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
                 try:
                     _dataclass_init = _has_dataclass_init[kls]
                 except KeyError:
+                    # Non-Module superclasses.
                     pass
                 else:
                     break
@@ -240,6 +241,9 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
                     # be able to inherit from it we would need to make it abstract. To
                     # be able to make it abstract its name must start with `Abstract`.
                     # That we cannot do for backward compatibility.
+                    continue
+                if _is_special_form(base):
+                    # Skip `typing.Generic` etc.
                     continue
                 # Invariant: all base classes are also strict modules.
                 if not issubclass(base, Module):
@@ -346,6 +350,7 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
         # before init.
         initable_cls = _make_initable(cls, wraps=False)
         # [Step 2] Instantiate the class as normal. (`__init__` and `__post_init__`)
+        # and then re-freeze.
         self = super(_ModuleMeta, initable_cls).__call__(*args, **kwargs)
         # [Step 3] Check that all fields are occupied.
         missing_names = {
@@ -401,6 +406,20 @@ if TYPE_CHECKING:
     @dataclass_transform(field_specifiers=(dataclasses.field, field, static_field))
     class _ModuleMeta(abc.ABCMeta):
         pass
+
+
+def _is_special_form(cls):
+    # This function is basically a heuristic hack.
+    # If you're getting spurious warnings from this, and think you have another kind of
+    # class that should be excluded from Equinox's checks, then please open a GitHub
+    # issue: https://github.com/patrick-kidger/equinox/issues
+    if cls is _Initable:
+        return True
+    if cls.__module__ in ("typing", "typing_extensions", "collections.abc"):
+        return True
+    if Protocol in cls.__bases__:
+        return True
+    return False
 
 
 def _not_magic(k: str) -> bool:
