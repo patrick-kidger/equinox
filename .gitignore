@@ -5,6 +5,7 @@ build/
 dist/
 site/
 examples/data
+examples/CIFAR
 .all_objects.cache
 .pymon
 .idea
