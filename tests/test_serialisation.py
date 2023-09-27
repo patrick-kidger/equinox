@@ -126,14 +126,12 @@ def test_generic_dtype_serialisation(getkey, tmp_path):
     # Ensure we can round trip when we start with a scalar
     eqx.tree_serialise_leaves(tmp_path, tree)
     loaded_tree = eqx.tree_deserialise_leaves(tmp_path, like_tree)
-    # Can't use `tree_equal` because `is_array` treats `bfloat16` as an array and
-    # ends up trying to call `all()` on a `bool`
-    assert loaded_tree == tree
+    assert eqx.tree_equal(loaded_tree, tree)
 
     # Ensure we can round trip when we start with a scalar that we've JAX JITed
     eqx.tree_serialise_leaves(tmp_path, jax.jit(lambda x: x)(tree))
     loaded_tree = eqx.tree_deserialise_leaves(tmp_path, like_tree)
-    assert loaded_tree == tree
+    assert eqx.tree_equal(loaded_tree, tree)
 
 
 def test_custom_leaf_serialisation(getkey, tmp_path):

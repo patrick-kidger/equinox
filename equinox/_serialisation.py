@@ -1,7 +1,7 @@
+import functools as ft
 import pathlib
 from collections.abc import Callable
 from contextlib import contextmanager
-from functools import wraps
 from typing import Any, BinaryIO, Optional, Union
 
 import jax
@@ -9,6 +9,8 @@ import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
 from jaxtyping import PyTree
+
+from ._filters import is_array_like
 
 
 def _ordered_tree_map(
@@ -24,7 +26,7 @@ def _ordered_tree_map(
     paths_and_leaves, treedef = jtu.tree_flatten_with_path(tree, is_leaf)
     all_leaves = list(zip(*paths_and_leaves)) + [treedef.flatten_up_to(r) for r in rest]
 
-    @wraps(f)
+    @ft.wraps(f)
     def _f(*xs):
         try:
             return f(*xs[1:])
@@ -72,8 +74,8 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
         jnp.save(f, x)
     elif isinstance(x, np.ndarray):
         np.save(f, x)
-    elif isinstance(x, (bool, float, complex, int, np.generic)):
-        np.save(f, x)
+    elif is_array_like(x):
+        jnp.save(f, x)
     else:
         pass
 
@@ -114,16 +116,8 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
         return jnp.load(f)
     elif isinstance(x, np.ndarray):
         return np.load(f)
-    elif isinstance(x, (bool, float, complex, int)):
-        return np.load(f).item()
-    elif isinstance(x, np.generic):
-        y = np.load(f)
-        try:
-            # `item()` converts back to base types like `float`
-            # so we have to use the constructor
-            return type(x)(y.astype(x.dtype).item())
-        except ValueError:
-            return type(x)(jnp.frombuffer(y, dtype=x.dtype)[0].item())
+    elif is_array_like(x):
+        return type(x)(jnp.load(f).item())
     else:
         return x
 
