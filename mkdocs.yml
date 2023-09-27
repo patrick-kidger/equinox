@@ -104,6 +104,7 @@ nav:
             - Generative score-based diffusion: 'examples/score_based_diffusion.ipynb'
             - BERT language model: 'examples/bert.ipynb'
             - U-Net implementation: 'examples/unet.ipynb'
+            - Vision transformer: 'examples/vision_transformer.ipynb'
             - Image GAN: 'examples/deep_convolutional_gan.ipynb'
         - Features:
             - Freezing parameters: 'examples/frozen_layer.ipynb'

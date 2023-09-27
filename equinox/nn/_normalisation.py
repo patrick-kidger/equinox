@@ -131,6 +131,13 @@ class LayerNorm(Module):
         if x.shape != self.shape:
             raise ValueError(
                 "`LayerNorm(shape)(x)` must satisfy the invariant `shape == x.shape`"
+                f"Received `shape={self.shape} and `x.shape={x.shape}`. You might need "
+                "to replace `layer_norm(x)` with `jax.vmap(layer_norm)(x)`.\n"
+                "\n"
+                "If this is a new error for you, it might be because this became "
+                "stricter in Equinox v0.11.0. Previously all that was required is that "
+                "`x.shape` ended with `shape`. However, this turned out to be a "
+                "frequent source of bugs, so we made the check stricter!"
             )
         mean = jnp.mean(x, keepdims=True)
         variance = jnp.var(x, keepdims=True)
