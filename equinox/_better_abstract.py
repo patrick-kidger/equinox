@@ -214,6 +214,7 @@ class ABCMeta(abc.ABCMeta):
         cls = super().__new__(mcs, name, bases, namespace, **kwargs)
         abstract_vars = dict()
         abstract_class_vars = dict()
+        cls_annotations = cls.__dict__.get("__annotations__", {})
         for attr, group in [
             ("__abstractvars__", abstract_vars),
             ("__abstractclassvars__", abstract_class_vars),
@@ -233,38 +234,34 @@ class ABCMeta(abc.ABCMeta):
                                 "Base classes have mismatched type annotations for "
                                 f"{name}"
                             )
-                    if "__annotations__" in cls.__dict__:
-                        try:
-                            new_annotation = cls.__annotations__[name]
-                        except KeyError:
-                            pass
-                        else:
-                            if not _is_concretisation(new_annotation, annotation):
-                                raise TypeError(
-                                    "Base class and derived class have mismatched type "
-                                    f"annotations for {name}"
-                                )
+                    try:
+                        new_annotation = cls_annotations[name]
+                    except KeyError:
+                        pass
+                    else:
+                        if not _is_concretisation(new_annotation, annotation):
+                            raise TypeError(
+                                "Base class and derived class have mismatched type "
+                                f"annotations for {name}"
+                            )
                     # Not just `if name not in namespace`, as `cls.__dict__` may be
                     # slightly bigger from `__init_subclass__`.
-                    if name not in cls.__dict__:
+                    if name not in cls.__dict__ and name not in cls_annotations:
                         group[name] = annotation
-        if "__annotations__" in cls.__dict__:
-            for name, annotation in cls.__annotations__.items():
-                is_abstract, is_class = _process_annotation(annotation)
-                if is_abstract:
-                    if name in namespace:
-                        if is_class:
-                            raise TypeError(
-                                f"Abstract class attribute {name} cannot have value"
-                            )
-                        else:
-                            raise TypeError(
-                                f"Abstract attribute {name} cannot have value"
-                            )
+        for name, annotation in cls_annotations.items():
+            is_abstract, is_class = _process_annotation(annotation)
+            if is_abstract:
+                if name in namespace:
                     if is_class:
-                        abstract_class_vars[name] = annotation
+                        raise TypeError(
+                            f"Abstract class attribute {name} cannot have value"
+                        )
                     else:
-                        abstract_vars[name] = annotation
+                        raise TypeError(f"Abstract attribute {name} cannot have value")
+                if is_class:
+                    abstract_class_vars[name] = annotation
+                else:
+                    abstract_vars[name] = annotation
         cls.__abstractvars__ = abstract_vars  # pyright: ignore
         cls.__abstractclassvars__ = abstract_class_vars  # pyright: ignore
         return cls
@@ -277,17 +274,11 @@ class ABCMeta(abc.ABCMeta):
                 f"attributes {abstract_class_vars}"
             )
         self = super().__call__(*args, **kwargs)
-        abstract_vars = set()
-        for name in cls.__abstractvars__:  # pyright: ignore
-            # Deliberately not doing `if name in self.__dict__` to allow for use of
-            # properties (which are actually class attributes) to override abstract
-            # instance variables.
-            if getattr(self, name, _sentinel) is _sentinel:
-                abstract_vars.add(name)
-        if len(abstract_vars) > 0:
+        if len(cls.__abstractvars__) > 0:  # pyright: ignore
+            abstract_class_vars = set(cls.__abstractvars__)  # pyright: ignore
             raise TypeError(
                 f"Can't instantiate abstract class {cls.__name__} with abstract "
-                f"attributes {abstract_vars}"
+                f"attributes {abstract_class_vars}"
             )
         return self
 
