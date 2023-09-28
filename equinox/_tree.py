@@ -231,11 +231,11 @@ def tree_at(
 
 def tree_equal(*pytrees: PyTree) -> Union[bool, np.bool_, Bool[Array, ""]]:
     """Returns `True` if all input PyTrees are equal. Every PyTree must have the same
-    structure. Any JAX or NumPy arrays (as leaves) must have the same shape, dtype, and
-    values to be considered equal. JAX arrays and NumPy arrays are considered equal
-    to each other.
+    structure, and all leaves must be equal. For JAX arrays, NumPy arrays, or NumPy
+    scalars: they must have the same shape, dtype, and values to be considered equal.
+    JAX and NumPy are considered equal to each other.
 
-    If used under JIT then this may return a tracer.
+    If used under JIT, and any arrays are present, then this may return a tracer.
 
     **Arguments:**
 
@@ -256,9 +256,13 @@ def tree_equal(*pytrees: PyTree) -> Union[bool, np.bool_, Bool[Array, ""]]:
                 if is_array(elem_):
                     if (elem.shape != elem_.shape) or (elem.dtype != elem_.dtype):
                         return False
-                    allsame = jnp.all(elem == elem_)
-                    if allsame is False:
-                        return False
+                    if isinstance(elem, (np.ndarray, np.generic)) and isinstance(
+                        elem_, (np.ndarray, np.generic)
+                    ):
+                        # Avoid promoting to a tracer if possible.
+                        allsame = np.all(elem == elem_)
+                    else:
+                        allsame = jnp.all(elem == elem_)
                     out = out & allsame
                 else:
                     return False
