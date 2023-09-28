@@ -13,6 +13,13 @@ from jaxtyping import PyTree
 from ._filters import is_array_like
 
 
+class TreePathError(RuntimeError):
+    path: tuple
+
+
+TreePathError.__name__ = TreePathError.__qualname__ = "RuntimeError"
+
+
 def _ordered_tree_map(
     f: Callable[..., Any],
     tree: Any,
@@ -27,13 +34,18 @@ def _ordered_tree_map(
     all_leaves = list(zip(*paths_and_leaves)) + [treedef.flatten_up_to(r) for r in rest]
 
     @ft.wraps(f)
-    def _f(*xs):
+    def _f(path, *xs):
         try:
-            return f(*xs[1:])
+            return f(*xs)
+        except TreePathError as e:
+            combo_path = path + e.path
+            exc = TreePathError(f"Error at leaf with path {combo_path}")
+            exc.path = combo_path
+            raise exc from e
         except Exception as e:
-            if e.args and "Error at leaf with path" not in e.args[0]:
-                e.args = (f"Error at leaf with path {xs[0]}",) + e.args
-            raise e
+            exc = TreePathError(f"Error at leaf with path {path}")
+            exc.path = path
+            raise exc from e
 
     return treedef.unflatten(_f(*xs) for xs in zip(*all_leaves))
 
@@ -73,8 +85,10 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
     if isinstance(x, jax.Array):
         jnp.save(f, x)
     elif isinstance(x, np.ndarray):
+        # Important to use `np` here so that we don't cast NumPy arrays to JAX arrays.
         np.save(f, x)
     elif is_array_like(x):
+        # Important to use `jnp` here to handle `bfloat16`.
         jnp.save(f, x)
     else:
         pass
@@ -115,8 +129,11 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
     if isinstance(x, jax.Array):
         return jnp.load(f)
     elif isinstance(x, np.ndarray):
+        # Important to use `np` here to avoid promoting NumPy arrays to JAX.
         return np.load(f)
     elif is_array_like(x):
+        # np.generic gets deserialised directly as an array, so convert back to a scalar
+        # type here. Important to use `jnp` here to handle `bfloat16`.
         return type(x)(jnp.load(f).item())
     else:
         return x
