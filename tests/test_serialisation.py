@@ -8,6 +8,8 @@ from jax.dtypes import bfloat16
 
 import equinox as eqx
 
+from .helpers import shaped_allclose
+
 
 def _example_trees():
     jax_array1 = jnp.array(1)
@@ -90,7 +92,7 @@ def test_helpful_errors(getkey, tmp_path):
         "b": jnp.array(2),
     }
     with pytest.raises(
-        EOFError,
+        RuntimeError,
         match=r"Error at leaf with path \(SequenceKey\(idx=1\), DictKey\(key='a'\)\)",
     ):
         _ = eqx.tree_deserialise_leaves(tmp_path, bad_like_tree)
@@ -118,7 +120,7 @@ def test_generic_dtype_serialisation(getkey, tmp_path):
     eqx.tree_serialise_leaves(tmp_path, jax_array)
     like_jax_array = jnp.array(bfloat16(2))
     loaded_jax_array = eqx.tree_deserialise_leaves(tmp_path, like_jax_array)
-    assert eqx.tree_equal(jax_array, loaded_jax_array)
+    assert shaped_allclose(jax_array, loaded_jax_array)
 
     tree = jnp.array(1), bfloat16(1), np.float32(1), jnp.array(1)
     like_tree = jnp.array(2), bfloat16(2), np.float32(2), jnp.array(2)
@@ -126,12 +128,12 @@ def test_generic_dtype_serialisation(getkey, tmp_path):
     # Ensure we can round trip when we start with a scalar
     eqx.tree_serialise_leaves(tmp_path, tree)
     loaded_tree = eqx.tree_deserialise_leaves(tmp_path, like_tree)
-    assert eqx.tree_equal(loaded_tree, tree)
+    assert shaped_allclose(loaded_tree, tree)
 
     # Ensure we can round trip when we start with a scalar that we've JAX JITed
     eqx.tree_serialise_leaves(tmp_path, jax.jit(lambda x: x)(tree))
     loaded_tree = eqx.tree_deserialise_leaves(tmp_path, like_tree)
-    assert eqx.tree_equal(loaded_tree, tree)
+    assert shaped_allclose(loaded_tree, tree)
 
 
 def test_custom_leaf_serialisation(getkey, tmp_path):
