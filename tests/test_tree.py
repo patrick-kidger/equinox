@@ -1,11 +1,15 @@
 import jax
+import jax.core
 import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
 import jax.tree_util as jtu
+import numpy as np
 import pytest
 
 import equinox as eqx
+
+from .helpers import shaped_allclose
 
 
 def test_tree_at_replace(getkey):
@@ -151,6 +155,41 @@ def test_tree_equal_jit():
 
     assert run3(a, b)
     assert not run3(a, 1)
+
+
+def test_tree_equal_numpy():
+    x = np.array([1, 2], dtype=np.float32)
+    y = jnp.array([1, 2], dtype=jnp.float32)
+    z = jnp.array([1, 2], dtype=jnp.float16)
+    assert shaped_allclose(eqx.tree_equal(x, x), np.bool_(True))
+    assert shaped_allclose(eqx.tree_equal(x, y), jnp.array(True))
+    assert shaped_allclose(eqx.tree_equal(y, y), jnp.array(True))
+
+    assert shaped_allclose(eqx.tree_equal(x, z), False)
+
+    @jax.jit
+    def f():
+        assert shaped_allclose(eqx.tree_equal(x, x), np.bool_(True))
+        out = eqx.tree_equal(x, y)
+        assert isinstance(out, jax.core.Tracer)
+        return out
+
+    assert shaped_allclose(f(), jnp.array(True))
+
+
+def test_tree_equal_scalars():
+    x = np.float32(1)
+    y = np.array(1, dtype=np.float32)
+    z = np.array(1, dtype=np.float16)
+    # scalar-ness does not matter
+    assert shaped_allclose(eqx.tree_equal(x, y), np.bool_(True))
+    # dtype does matter
+    assert shaped_allclose(eqx.tree_equal(x, z), False)
+
+    z = jax.dtypes.bfloat16(1)
+    w = jax.dtypes.bfloat16(2)
+    assert shaped_allclose(eqx.tree_equal(z, z), np.bool_(True))
+    assert shaped_allclose(eqx.tree_equal(z, w), np.bool_(False))
 
 
 def test_inference_mode(getkey):
