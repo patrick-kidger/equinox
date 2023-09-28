@@ -3,7 +3,7 @@ import dataclasses
 import functools as ft
 from collections.abc import Callable
 from dataclasses import InitVar
-from typing import Any
+from typing import Any, Optional
 
 import jax
 import jax.numpy as jnp
@@ -972,3 +972,21 @@ def test_init_as_abstract(field):
     assert len(leaves) == 0
     y = jtu.tree_unflatten(treedef, leaves)
     assert y.foo == 1
+
+
+# https://github.com/patrick-kidger/equinox/issues/522
+def test_custom_field():
+    def my_field(*, foo: Optional[bool] = None, **kwargs: Any):
+        metadata = kwargs.pop("metadata", {})
+        if foo is not None:
+            metadata["foo"] = foo
+        return eqx.field(metadata=metadata, **kwargs)
+
+    class ExampleModel(eqx.Module):
+        dynamic: jax.Array = my_field(foo=True)
+        static: int = my_field(foo=False, static=True)
+
+    model = ExampleModel(dynamic=jnp.array(1), static=1)
+    dynamic_field, static_field = dataclasses.fields(model)
+    assert dynamic_field.metadata == dict(foo=True)
+    assert static_field.metadata == dict(foo=False, static=True)
