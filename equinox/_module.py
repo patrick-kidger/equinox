@@ -92,9 +92,9 @@ def field(
     to select only some fields.
     """
     try:
-        metadata = dict(kwargs["metadata"])
+        metadata = dict(kwargs.pop("metadata"))  # safety copy
     except KeyError:
-        metadata = kwargs["metadata"] = {}
+        metadata = {}
     if "converter" in metadata:
         raise ValueError("Cannot use metadata with `static` already set.")
     if "static" in metadata:
@@ -118,7 +118,7 @@ def field(
         metadata["converter"] = converter
     if static:
         metadata["static"] = True
-    return dataclasses.field(**kwargs)
+    return dataclasses.field(metadata=metadata, **kwargs)
 
 
 #
