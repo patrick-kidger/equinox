@@ -1,6 +1,7 @@
 from collections.abc import Callable, Sequence
 from typing import Any, Optional, TYPE_CHECKING, Union
 
+import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
 from jaxtyping import Array, Bool, PyTree, PyTreeDef
@@ -255,7 +256,7 @@ def tree_equal(*pytrees: PyTree) -> Union[bool, np.bool_, Bool[Array, ""]]:
                 if is_array(elem_):
                     if (elem.shape != elem_.shape) or (elem.dtype != elem_.dtype):
                         return False
-                    allsame = (elem == elem_).all()
+                    allsame = jnp.all(elem == elem_)
                     if allsame is False:
                         return False
                     out = out & allsame
