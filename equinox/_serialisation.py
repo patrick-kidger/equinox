@@ -17,9 +17,6 @@ class TreePathError(RuntimeError):
     path: tuple
 
 
-TreePathError.__name__ = TreePathError.__qualname__ = "RuntimeError"
-
-
 def _ordered_tree_map(
     f: Callable[..., Any],
     tree: Any,
@@ -133,8 +130,12 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
         return np.load(f)
     elif is_array_like(x):
         # np.generic gets deserialised directly as an array, so convert back to a scalar
-        # type here. Important to use `jnp` here to handle `bfloat16`.
-        return type(x)(jnp.load(f).item())
+        # type here.
+        # See also https://github.com/google/jax/issues/17858
+        out = np.load(f)
+        if isinstance(x, jax.dtypes.bfloat16):
+            out = out.view(jax.dtypes.bfloat16)
+        return type(x)(out.item())
     else:
         return x
 
