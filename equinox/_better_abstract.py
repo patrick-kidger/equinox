@@ -8,7 +8,6 @@ is the public API. But the two pieces aren't directly related under-the-hood.)
 import abc
 import dataclasses
 from typing import (
-    Annotated,
     ClassVar,
     Generic,
     get_args,
@@ -23,7 +22,9 @@ _T = TypeVar("_T")
 
 
 if TYPE_CHECKING:
-    AbstractVar: TypeAlias = Annotated[_T, "AbstractVar"]
+    # Deliberately confuse pyright into treating this as `Unknown`.
+    # Then it won't complain when folks override with a concrete variable in a subclass.
+    AbstractVar: TypeAlias = getattr(abc, "foo" + "bar")  # pyright: ignore
     from typing import ClassVar as AbstractClassVar
 else:
 
