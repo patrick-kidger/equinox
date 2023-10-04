@@ -213,7 +213,7 @@ class TenMLPs(eqx.Module):
     
         def f(_x, _dynamic_mlp):
             mlp = eqx.combine(_dynamic_mlp, static_mlps)
-            return mlp(x), None
+            return mlp(_x), None
     
         out, _ = lax.scan(f, x, dynamic_mlps)
         return out
