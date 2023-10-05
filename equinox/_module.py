@@ -622,6 +622,8 @@ went uncaught, possibly leading to silently wrong behaviour.
     # Appears in AbstractVar error messages
     _InitableModule.__name__ = cls.__name__
     _InitableModule.__qualname__ = cls.__qualname__
+    # I don't have a specific use-case for this but it's probably good practice.
+    _InitableModule.__module__ = cls.__module__
 
     return _InitableModule
 

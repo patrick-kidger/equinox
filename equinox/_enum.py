@@ -138,7 +138,9 @@ following entries:
 
 class EnumerationItem(Module):
     _value: Int[Union[Array, np.ndarray], ""]
-    _enumeration: type["Enumeration"] = field(static=True)
+    # Should have annotation `"type[Enumeration]"`, but this fails due to beartype bug
+    # #289.
+    _enumeration: Any = field(static=True)
 
     def __eq__(self, other) -> Bool[Array, ""]:  # pyright: ignore
         if isinstance(other, EnumerationItem):
