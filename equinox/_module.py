@@ -486,7 +486,8 @@ if TYPE_CHECKING:
 
     @dataclass_transform(field_specifiers=(dataclasses.field, field, static_field))
     class _ModuleMeta(abc.ABCMeta):
-        pass
+        __abstractvars__: frozenset[str]
+        __abstractclassvars__: frozenset[str]
 
 
 def _is_special_form(cls):
