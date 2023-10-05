@@ -75,10 +75,6 @@ else:
             should be called as `ConcreteX(attr2, attr1)`.
         """
 
-    # We can't just combine `ClassVar[AbstractVar[...]]`. At static checking time we
-    # fake `AbstractVar` as `ClassVar` to prevent it from appearing in __init__
-    # signatures. This means that static type checkers think they see
-    # `ClassVar[ClassVar[...]]` which is not allowed.
     class AbstractClassVar(Generic[_T]):
         """Used to mark an abstract class attribute, along with its type. Used as:
         ```python
@@ -146,7 +142,9 @@ def _process_annotation(annotation):
                 "Stringified abstract annotations are not supported"
             )
         else:
-            return False, False
+            is_abstract = False
+            is_class = annotation.startswith("ClassVar[")
+            return is_abstract, is_class
     else:
         if annotation in (AbstractVar, AbstractClassVar):
             raise TypeError(
@@ -162,48 +160,13 @@ def _process_annotation(annotation):
                 raise TypeError("`AbstractClassVar` can only have a single argument.")
             is_abstract = True
             is_class = True
+        elif get_origin(annotation) is ClassVar:
+            is_abstract = False
+            is_class = True
         else:
             is_abstract = False
             is_class = False
         return is_abstract, is_class
-
-
-_sentinel = object()
-
-
-# try:
-#     import beartype
-# except ImportError:
-#     def is_subhint(subhint, superhint) -> bool:
-#         return True  # no checking in this case
-# else:
-#     from beartype.door import is_subhint
-
-
-# TODO: reinstate once https://github.com/beartype/beartype/issues/271 is resolved.
-def is_subhint(subhint, superhint) -> bool:
-    return True
-
-
-def _is_concretisation(sub, super):
-    if isinstance(sub, str) or isinstance(super, str):
-        raise NotImplementedError("Stringified abstract annotations are not supported")
-    elif get_origin(super) is AbstractVar:
-        if get_origin(sub) in (AbstractVar, AbstractClassVar, ClassVar):
-            (sub_args,) = get_args(sub)
-            (sup_args,) = get_args(super)
-        else:
-            sub_args = sub
-            (sup_args,) = get_args(super)
-    elif get_origin(super) is AbstractClassVar:
-        if get_origin(sub) in (AbstractClassVar, ClassVar):
-            (sub_args,) = get_args(sub)
-            (sup_args,) = get_args(super)
-        else:
-            return False
-    else:
-        assert False
-    return is_subhint(sub_args, sup_args)
 
 
 class ABCMeta(abc.ABCMeta):
@@ -212,58 +175,44 @@ class ABCMeta(abc.ABCMeta):
 
     def __new__(mcs, name, bases, namespace, /, **kwargs):
         cls = super().__new__(mcs, name, bases, namespace, **kwargs)
-        abstract_vars = dict()
-        abstract_class_vars = dict()
-        cls_annotations = cls.__dict__.get("__annotations__", {})
-        for attr, group in [
-            ("__abstractvars__", abstract_vars),
-            ("__abstractclassvars__", abstract_class_vars),
-        ]:
-            for base in bases:
-                for name, annotation in base.__dict__.get(attr, dict()).items():
-                    try:
-                        existing_annotation = group[name]
-                    except KeyError:
-                        pass
-                    else:
-                        if not (
-                            _is_concretisation(annotation, existing_annotation)
-                            or _is_concretisation(existing_annotation, annotation)
-                        ):
-                            raise TypeError(
-                                "Base classes have mismatched type annotations for "
-                                f"{name}"
-                            )
-                    try:
-                        new_annotation = cls_annotations[name]
-                    except KeyError:
-                        pass
-                    else:
-                        if not _is_concretisation(new_annotation, annotation):
-                            raise TypeError(
-                                "Base class and derived class have mismatched type "
-                                f"annotations for {name}"
-                            )
-                    # Not just `if name not in namespace`, as `cls.__dict__` may be
-                    # slightly bigger from `__init_subclass__`.
-                    if name not in cls.__dict__ and name not in cls_annotations:
-                        group[name] = annotation
-        for name, annotation in cls_annotations.items():
-            is_abstract, is_class = _process_annotation(annotation)
-            if is_abstract:
-                if name in namespace:
+
+        # We don't try and check that our AbstractVars and AbstractClassVars are
+        # consistently annotated across `cls` and each element of `bases`. Python just
+        # doesn't really provide any way of checking that two hints are compatible.
+        # (Subscripted generics make this complicated!)
+
+        abstract_vars = set()
+        abstract_class_vars = set()
+        for kls in reversed(cls.__mro__):
+            ann = kls.__dict__.get("__annotations__", {})
+            for name, annotation in ann.items():
+                is_abstract, is_class = _process_annotation(annotation)
+                if is_abstract:
                     if is_class:
-                        raise TypeError(
-                            f"Abstract class attribute {name} cannot have value"
-                        )
+                        if name in kls.__dict__:
+                            raise TypeError(
+                                f"Abstract class attribute {name} cannot have value"
+                            )
+                        abstract_vars.discard(name)
+                        abstract_class_vars.add(name)
                     else:
-                        raise TypeError(f"Abstract attribute {name} cannot have value")
-                if is_class:
-                    abstract_class_vars[name] = annotation
+                        if name in kls.__dict__:
+                            raise TypeError(
+                                f"Abstract attribute {name} cannot have value"
+                            )
+                        # If it's already an abstract class var, then superfluous to
+                        # also consider it an abstract var.
+                        if name not in abstract_class_vars:
+                            abstract_vars.add(name)
                 else:
-                    abstract_vars[name] = annotation
-        cls.__abstractvars__ = abstract_vars  # pyright: ignore
-        cls.__abstractclassvars__ = abstract_class_vars  # pyright: ignore
+                    abstract_vars.discard(name)  # not conditional on `is_class`
+                    if is_class:
+                        abstract_class_vars.discard(name)
+            for name in kls.__dict__.keys():
+                abstract_vars.discard(name)
+                abstract_class_vars.discard(name)
+        cls.__abstractvars__ = frozenset(abstract_vars)  # pyright: ignore
+        cls.__abstractclassvars__ = frozenset(abstract_class_vars)  # pyright: ignore
         return cls
 
     def __call__(cls, *args, **kwargs):
