@@ -1,4 +1,4 @@
-from typing import Any, Union
+from typing import Any
 
 import jax
 import jax.core
@@ -8,7 +8,7 @@ import jax.interpreters.mlir as mlir
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.tree_util as jtu
-from jaxtyping import Array, Bool, Shaped
+from jaxtyping import Array, Bool
 
 from ..._filters import combine, is_array, partition
 from ..._module import field, Module
@@ -248,7 +248,8 @@ def _maybe_set(pred, xs, x, i, *, kwargs, makes_false_steps):
 
 
 class _Buffer(Module):
-    _array: Union[Shaped[Array, "..."], "_Buffer"]
+    # annotation removed because beartype can't handle the forward reference.
+    _array: Any  # Union[Shaped[Array, "..."], _Buffer]
     _pred: Bool[Array, ""]
     _tag: object = field(static=True)
     _makes_false_steps: bool = field(static=True)
