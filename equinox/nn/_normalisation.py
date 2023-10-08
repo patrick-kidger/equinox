@@ -1,6 +1,7 @@
 import functools as ft
 import warnings
 from collections.abc import Sequence
+from math import prod
 from typing import Optional, overload, Union
 
 import jax
@@ -263,6 +264,128 @@ class GroupNorm(Module):
             weight = left_broadcast_to(self.weight, out.shape)  # pyright: ignore
             bias = left_broadcast_to(self.bias, out.shape)  # pyright: ignore
             out = weight * out + bias
+        if state is sentinel:
+            return out
+        else:
+            return out, state
+
+
+class RMSNorm(Module):
+    r"""
+    A simplified version of LayerNorm which rescales the inputs, but does not center
+    them. Optionally applies a learned reweighting of the transformed array afterward.
+
+    Given an input array $x$, this layer computes
+
+    $$\frac{x}{\sqrt{\varepsilon + \frac{1}{n}\Vert x \Vert^2_2}} \gamma + \beta$$
+
+    where $\Vert \cdot \Vert_2$ is the 2-norm, $n = \dim(x)$, and $\gamma$ is a
+    learned array with the same shape as $x$ if `use_weight=True`, or
+    $\gamma = 1/\sqrt{n}$ if `use_weight=False`, as proposed in
+    [this paper](https://browse.arxiv.org/abs/2307.14995). `\beta` is an optional bias
+    term.
+
+    ??? cite
+        [Root Mean Square Layer Normalization](https://browse.arxiv.org/abs/1910.07467)
+
+        ```bibtex
+        @article{zhang2019root,
+            title={Root Mean Square Layer Normalization},
+            author={Biao Zhang and Rico Sennrich},
+            year={2019},
+            journal={arXiv:1910.07467}
+    }
+        ```
+    """
+
+    shape: tuple[int] = field(static=True)
+    dim: int = field(static=True)
+    eps: float = field(static=True)
+    use_weight: bool = field(static=True)
+    use_bias: bool = field(static=True)
+    weight: Optional[Float[Array, "*shape"]]
+    bias: Optional[Float[Array, "*shape"]]
+
+    def __init__(
+        self,
+        shape: Union[int, Sequence[int]],
+        eps: float = 1e-5,
+        use_weight: bool = False,
+        use_bias: bool = False,
+        **kwargs,
+    ):
+        """**Arguments:**
+
+        - `shape`: Shape of the input.
+        - `eps`: Value added to denominator for numerical stability.
+        - `use_weight`: Whether the module has learnable affine weights.
+        """
+        super().__init__(**kwargs)
+        if isinstance(shape, int):
+            shape = (shape,)
+        else:
+            shape = tuple(shape)
+        self.shape = shape
+        self.dim = prod(self.shape)
+        self.eps = eps
+        self.use_weight = use_weight
+        self.use_bias = use_bias
+        self.weight = jnp.ones(shape) if use_weight else None
+        self.bias = jnp.ones(shape) if use_bias else None
+
+    @overload
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
+        ...
+
+    @overload
+    def __call__(
+        self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
+    ) -> tuple[Array, State]:
+        ...
+
+    @jax.named_scope("eqx.nn.RMSNorm")
+    def __call__(
+        self,
+        x: Float[Array, "*shape"],
+        state: State = sentinel,
+        *,
+        key: Optional[PRNGKeyArray] = None,
+    ) -> Union[Array, tuple[Array, State]]:
+        """**Arguments:**
+
+        - `x`: A JAX array, with the same shape as the `shape` passed to `__init__`.
+        - `state`: Ignored; provided for interchangability with the
+            [`equinox.nn.BatchNorm`][] API.
+        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
+            (Keyword only argument.)
+
+        **Returns:**
+
+        The output is a JAX array of the same shape as `x`.
+
+        If `state` is passed, then a 2-tuple of `(output, state)` is returned. The state
+        is passed through unchanged. If `state` is not passed, then just the output is
+        returned.
+        """
+        if x.shape != self.shape:
+            raise ValueError(
+                "`RMSNorm(shape)(x)` must satisfy the invariant `shape == x.shape`"
+                f"Received `shape={self.shape} and `x.shape={x.shape}`. You might need "
+                "to replace `rms_norm(x)` with `jax.vmap(rms_norm)(x)`.\n"
+                "\n"
+                "If this is a new error for you, it might be because this became "
+                "stricter in Equinox v0.11.0. Previously all that was required is that "
+                "`x.shape` ended with `shape`. However, this turned out to be a "
+                "frequent source of bugs, so we made the check stricter!"
+            )
+        inv_rms = jax.lax.rsqrt(jnp.sum(x**2) + self.eps)
+        out = inv_rms * x
+        if self.use_weight:
+            out = self.weight * out
+        else:
+            out = jnp.sqrt(self.dim) * out
+        if self.use_bias:
+            out = out + self.bias
         if state is sentinel:
             return out
         else:

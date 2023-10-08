@@ -29,3 +29,11 @@
         members:
             - __init__
             - __call__
+
+---
+
+::: equinox.nn.RMSNorm
+    selection:
+        members:
+            - __init__
+            - __call__
