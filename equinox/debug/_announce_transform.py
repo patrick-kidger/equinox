@@ -60,7 +60,7 @@ def announce_transform(
 
 def _impl(*x, stack, name, intermediates, announce):
     del intermediates
-    stack = stack + ("impl,")
+    stack = stack + ("impl",)
     announce(name + ":".join(stack))
     return x
 
@@ -81,9 +81,20 @@ def _jvp(p, t, *, stack, name, intermediates, announce):
     p_out = announce_jaxpr_p.bind(
         *p, stack=p_stack, name=name, intermediates=intermediates, announce=announce
     )
-    t_out = announce_jaxpr_p.bind(
-        *t, stack=t_stack, name=name, intermediates=intermediates, announce=announce
-    )
+    t_nonzero = [ti for ti in t if type(ti) is not ad.Zero]
+    if len(t_nonzero) > 0:
+        t_nonzero_out = announce_jaxpr_p.bind(
+            *t_nonzero,
+            stack=t_stack,
+            name=name,
+            intermediates=intermediates,
+            announce=announce,
+        )
+    else:
+        t_nonzero_out = []
+    t_nonzero_out = iter(t_nonzero_out)
+    t_out = [ti if type(ti) is ad.Zero else next(t_nonzero_out) for ti in t]
+    assert next(t_nonzero_out, None) is None
     return p_out, t_out
 
 
