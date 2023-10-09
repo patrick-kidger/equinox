@@ -726,3 +726,127 @@ def test_buffer_index():
     eqxi.while_loop(
         cond_fun, body_fun, init, kind="checkpointed", buffers=buffers, max_steps=2
     )
+
+
+# This test includes complexities like buffers, exact ararys, and `None`, just to be
+# sure we handle these complexities here too.
+def test_nondifferentiable_body1():
+    def cond_fun(carry):
+        return True
+
+    def body_fun(carry):
+        step, x, y, z, _ = carry
+        y2 = eqxi.nondifferentiable(y)
+        return step + 1, x + y2, y + 1, z.at[step].set(y), None
+
+    @eqx.filter_jit
+    @jax.value_and_grad
+    def run(x__z, y_in, true):
+        x_in, z_in = x__z
+        init = (0, x_in, y_in, z_in, None)
+        if true:
+            out = _while_as_scan(cond_fun, body_fun, init, max_steps=3)
+        else:
+            out = eqxi.while_loop(
+                cond_fun, body_fun, init, max_steps=3, kind="checkpointed"
+            )
+        _, x_out, y_out, z_out, none = out
+        assert none is None
+        return x_out + y_out + jnp.sum(z_out)
+
+    x_in = jnp.array(1.2)
+    y_in = jnp.array(0.7)
+    z_in = jnp.array([-5.0, -5.0, -5.0])
+    true = run((x_in, z_in), y_in, true=True)
+    outs = run((x_in, z_in), y_in, true=False)
+    assert shaped_allclose(true, outs)
+
+
+def test_nondifferentiable_body2(capfd):
+    def cond_fun(carry):
+        return True
+
+    # This function is set up so that (x, y, z) require multiple passes through to
+    # propagate which values are perturbed.
+    # This function is set up so that w has a cotangent that should be dropped.
+    def body_fun(carry):
+        x, y, z, w = carry
+        w = eqxi.nondifferentiable(w)
+        return x + 1, x + y, y + z, w * 2
+
+    @jax.jit
+    @jax.grad
+    def run(x, y, z, w):
+        x, y, z, w = eqxi.while_loop(
+            cond_fun, body_fun, (x, y, z, w), max_steps=3, kind="checkpointed"
+        )
+        return y + w
+
+    capfd.readouterr()
+    run(1.0, 1.0, 1.0, 1.0)
+    text, _ = capfd.readouterr()
+    assert "perturb_val (False, False, False, (True, True, True, False))" in text
+    assert (
+        "symbolic_zero_gradient (True, True, True, (False, False, True, True))" in text
+    )
+
+
+def test_body_fun_grads(capfd):
+    def cond_fun(carry):
+        return True
+
+    @eqx.filter_jit
+    @jax.grad
+    def run(x__y, true):
+        x, y = x__y
+        # `init` and `body_fun` are deliberately chosen so that `carry[0]` requires a
+        # gradient solely for the purpose of propagating that gradient back into `x`.
+        # (And in particular, not for propagating it back into `init`.)
+        # Thus this test is checking that we get gradients with respect to `body_fun`
+        # correctly.
+        init = (1.0, y)
+
+        def body_fun(carry):
+            a, b = carry
+            return a * x, b + 1
+
+        if true:
+            final = _while_as_scan(cond_fun, body_fun, init, max_steps=3)
+        else:
+            final = eqxi.while_loop(
+                cond_fun, body_fun, init, max_steps=3, kind="checkpointed"
+            )
+        return sum(final)
+
+    x__y = (jnp.array(1.0), jnp.array(1.0))
+
+    capfd.readouterr()
+    outs = run(x__y, true=False)
+    text, _ = capfd.readouterr()
+    assert "perturb_val (False, False, False, (True, True))" in text
+    assert "symbolic_zero_gradient (True, True, True, (False, False))" in text
+
+    true = run(x__y, true=True)
+    assert shaped_allclose(true, outs)
+
+
+def test_trivial_vjp(capfd):
+    def cond_fun(carry):
+        return True
+
+    def body_fun(carry):
+        return carry
+
+    @jax.jit
+    @jax.grad
+    def run(x):
+        a, b = eqxi.while_loop(
+            cond_fun, body_fun, (x, 0.0), max_steps=3, kind="checkpointed"
+        )
+        return b
+
+    capfd.readouterr()
+    assert run(1.0) == 0
+    text, _ = capfd.readouterr()
+    assert "perturb_val (False, False, False, (True, False))" in text
+    assert "symbolic_zero_gradient" not in text

@@ -660,6 +660,10 @@ def _is_symbolic_zero_or_none(x):
     return isinstance(x, jax.custom_derivatives.SymbolicZero) or x is None
 
 
+def _not_symbolic_zero(x):
+    return not isinstance(x, jax.custom_derivatives.SymbolicZero)
+
+
 def _materialise_symbolic_zero(is_zero, ct_x, x):
     if is_zero:
         assert ct_x is None
@@ -753,7 +757,7 @@ def _checkpointed_while_loop_bwd(
     loading values from checkpoints and using treeverse to toggle between forward and
     backward steps.
     """
-    _, perturb_body_fun = perturbed
+    perturb_init_val, perturb_body_fun = perturbed
     _, body_fun = vjp_arg
     grad_final_body_fun = jtu.tree_map(
         lambda x, p: jnp.zeros_like(x) if p else None, body_fun, perturb_body_fun
@@ -915,46 +919,166 @@ def _checkpointed_while_loop_bwd(
         init_step_val, init_step_grad_val, init_index, checkpoints
     )
 
-    # Fixed-point iteration: promote symbolic zeros to materialised zeros if necessary.
-    # Do it inside the dynamic context of a `jax.eval_shape` so that it's as cheap as
+    #
+    # Okay, this next bit is a bit complicated.
+    # We need to figure out exactly which parts of the carry that we're going to compute
+    # cotangents for.
+    # There are three interacting pieces:
+    # (1) Only some inputs even need their cotangents computed (those that are marked
+    #     as perturbed). We should avoid computing intermediate cotangents that aren't
+    #     needed.
+    # (2) Some cotangents may be symbolic zeros. We should avoid materialising any that
+    #     don't need to be materialised.
+    # (3) Some parts of the body function may not be differentiable. (E.g. they call to
+    #     `eqxi.nondifferentiable` or `eqxi.nondifferentiable_backward`.) In particular,
+    #     some inexact arrays may be marked with these. (Anything else is automatically
+    #     nondifferentiable.) As these raise an error eagerly, we can't just take an
+    #     approach of "differentiate everything, then DCE".
+    #
+    # Our strategy is as follows. First, consider those inputs that are perturbed, and
+    # iterate to find all the carries that become perturbed as a result. We obtain a
+    # fixed point.
+    # * This mimicks what JAX does in JVP rules for scans/whiles. And in fact we also
+    #   track perturbation information forward via JVPs (which input tangents affect
+    #   which output tangents), rather than backward via VJPs (which output cotangents
+    #   affect which input cotangents), as this is what JAX does here and we'd like to
+    #   be consistent. (Also, it seems like there might be a catch-22 trying to do this
+    #   with VJPs -- how do you decide which inputs to perturb in your VJP?) This is
+    #   basically handling criteria (1).
+    # * This also means that we're perturbing the minmal amount possible. We don't even
+    #   run the JVP rule for something that isn't differentiated. This is part of
+    #   addressing criteria (3).
+    #
+    # Second, we ignore all cotangents (of our forward output) that aren't on a
+    # perturbed carry. Clearly they're not going to affect anything. So we switch them
+    # to symbolic zeros.
+    # * This is part of addressing criteria (3) -- we avoid propagating cotangents
+    #   that we don't need to. Maybe there's an `eqxi.nondifferentiable_backward` in
+    #   there.
+    #
+    # Third, we find another fixed point, this time for the symbolic zeros. Track which
+    # cotangents affect which cotangents, and materialise the minimal amount possible.
+    # * This addresses criteria (2).
+    # * Note that symbolic zeros are doing double-duty here. We avoid materialising them
+    #   for simple efficiency reasons, sure -- but we also want to keep as many
+    #   unmaterialised as possible, in case there's an `eqxi.nondifferentiable_backward`
+    #   in there, which only accepts symbolic zero cotangents.
+    #
+    # Phew! At that point, job done: we know which cotangents we're propagating and so
+    # we can run our loop.
+    #
+    # The first fixed point basically mimicks what JAX does in the JVP rule for a while
+    # or scan, figuring out which values are perturbed. The second fixed point basically
+    # mimicks what JAX does in the transpose rule of a scan, figuring out which
+    # cotangents are symbolic zeros.
+    #
+
+    # Do this inside the dynamic context of a `jax.eval_shape` so that it's as cheap as
     # possible, without extra tracing.
-    def _resolve_symbolic_zeros(grad_val):
-        symbolic_zero_gradient = jtu.tree_map(_is_none, grad_val, is_leaf=_is_none)
-        new_symbolic_zero_gradient = None
+    def _resolve_perturb_val():
         init_val_buffers = tree_at(
             buffers(_is_none), init_val, filled_buffers, is_leaf=_is_none
         )
-        dynamic_init_val, static_init_val = partition(
-            init_val_buffers, is_inexact_array
-        )
-
-        # Some hackery to extract which inputs still have symbolic zero cotangents.
-        @jax.custom_vjp
-        def _record_symbolic_zero(_dynamic_val):
-            return _dynamic_val
-
-        def _record_symbolic_zero_fwd(_dynamic_val):
-            return jtu.tree_map(_get_value, _dynamic_val), None
-
-        def _record_symbolic_zero_bwd(_, grad_dynamic_val):
-            nonlocal new_symbolic_zero_gradient
-            new_symbolic_zero_gradient = jtu.tree_map(
-                _is_symbolic_zero_or_none, grad_dynamic_val, is_leaf=_is_none
-            )
-            return (grad_dynamic_val,)
-
-        _record_symbolic_zero.defvjp(
-            _record_symbolic_zero_fwd, _record_symbolic_zero_bwd, symbolic_zeros=True
-        )
-
-        def _to_vjp(_dynamic_val):
-            _dynamic_val = _record_symbolic_zero(_dynamic_val)
-            val = combine(_dynamic_val, static_init_val)
-            return filter(body_fun(val), symbolic_zero_gradient, inverse=True)
+        perturb_val = perturb_init_val
+        assert jtu.tree_structure(init_val_buffers) == jtu.tree_structure(perturb_val)
 
         while True:
+            # `body_fun` is included so that we also track perturbatations on that.
+            perturb_pair = (perturb_body_fun, perturb_val)
+            dynamic, static = partition((body_fun, init_val_buffers), perturb_pair)
+            new_perturb_val = sentinel = object()
+
+            @jax.custom_jvp
+            def _record_symbolic_zeros(_dynamic_out):
+                return _dynamic_out
+
+            def _record_symbolic_zeros_jvp(primals, tangents):
+                (primals,) = primals
+                (tangents,) = tangents
+                nonlocal new_perturb_val
+                new_perturb_val = jtu.tree_map(_not_symbolic_zero, tangents)
+                return primals, tangents
+
+            _record_symbolic_zeros.defjvp(
+                _record_symbolic_zeros_jvp, symbolic_zeros=True
+            )
+
+            def _to_linearize(_dynamic):
+                _body_fun, _val = combine(_dynamic, static)
+                _out = _body_fun(_val)
+                _dynamic_out, _static_out = partition(_out, is_inexact_array)
+                _dynamic_out = _record_symbolic_zeros(_dynamic_out)
+                _out = combine(_dynamic_out, _static_out)
+                return _out
+
+            # Not `jax.jvp`, so as not to error if `body_fun` has any `custom_vjp`s.
+            jax.linearize(_to_linearize, dynamic)
+            assert new_perturb_val is not sentinel
+            assert jtu.tree_structure(
+                perturb_val, is_leaf=_is_none
+            ) == jtu.tree_structure(new_perturb_val, is_leaf=_is_none)
+            new_perturb_val = jtu.tree_map(
+                lambda x, y: False if (x is False and y is None) else y,
+                perturb_val,
+                new_perturb_val,
+            )
+            assert jtu.tree_structure(perturb_val) == jtu.tree_structure(
+                new_perturb_val
+            )
+            if tree_equal(perturb_val, new_perturb_val):
+                jtu.tree_map(_assert_bool, perturb_val)
+                if getattr(typing, "TESTING", False):
+                    print("perturb_val", perturb_val)
+                return Static(perturb_val)
+            else:
+                perturb_val = jtu.tree_map(operator.or_, perturb_val, new_perturb_val)
+
+    # Find a fixed point of which values we need to perturb. (Not the same as whether
+    # or not they have symbolic zero cotangents! All unperturbed values must have
+    # symbolic zero cotangents, but some perturbed values may have these as well.)
+    perturb_val = jax.eval_shape(_resolve_perturb_val).value
+
+    # Do this inside the dynamic context of a `jax.eval_shape` so that it's as cheap as
+    # possible, without extra tracing.
+    def _resolve_symbolic_zeros(grad_val):
+        symbolic_zero_gradient = jtu.tree_map(_is_none, grad_val, is_leaf=_is_none)
+        init_val_buffers = tree_at(
+            buffers(_is_none), init_val, filled_buffers, is_leaf=_is_none
+        )
+        dynamic_init_val, static_init_val = partition(init_val_buffers, perturb_val)
+
+        while True:
+            new_symbolic_zero_gradient = sentinel = object()
+
+            # Some hackery to extract which inputs still have symbolic zero cotangents.
+            @jax.custom_vjp
+            def _record_symbolic_zero(_dynamic_val):
+                return _dynamic_val
+
+            def _record_symbolic_zero_fwd(_dynamic_val):
+                return jtu.tree_map(_get_value, _dynamic_val), None
+
+            def _record_symbolic_zero_bwd(_, grad_dynamic_val):
+                nonlocal new_symbolic_zero_gradient
+                new_symbolic_zero_gradient = jtu.tree_map(
+                    _is_symbolic_zero_or_none, grad_dynamic_val, is_leaf=_is_none
+                )
+                return (grad_dynamic_val,)
+
+            _record_symbolic_zero.defvjp(
+                _record_symbolic_zero_fwd,
+                _record_symbolic_zero_bwd,
+                symbolic_zeros=True,
+            )
+
+            def _to_vjp(_dynamic_val):
+                _dynamic_val = _record_symbolic_zero(_dynamic_val)
+                val = combine(_dynamic_val, static_init_val)
+                return filter(body_fun(val), symbolic_zero_gradient, inverse=True)
+
             _, vjp_fn = jax.vjp(_to_vjp, dynamic_init_val)
-            vjp_fn(grad_val)  # get new_symbolic_zero_gradient via nonlocal
+            vjp_fn(grad_val)
+            assert new_symbolic_zero_gradient is not sentinel
             if tree_equal(symbolic_zero_gradient, new_symbolic_zero_gradient):
                 jtu.tree_map(_assert_bool, symbolic_zero_gradient)
                 if getattr(typing, "TESTING", False):
@@ -971,6 +1095,12 @@ def _checkpointed_while_loop_bwd(
                     init_val_buffers,
                 )
 
+    grad_final_val = filter(grad_final_val, perturb_val)
+    # If all provided cotangents end up being irrelevant -- i.e. the perturbed inputs
+    # depend only on those outputs which have symbolic zero cotangents -- then we can
+    # skip the whole computation.
+    if len(jtu.tree_leaves(grad_final_val)) == 0:
+        return jtu.tree_map(lambda _: None, (grad_final_val, body_fun))
     symbolic_zero_gradient = jax.eval_shape(
         _resolve_symbolic_zeros, grad_final_val
     ).value
