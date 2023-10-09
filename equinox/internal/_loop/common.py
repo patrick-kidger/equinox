@@ -322,17 +322,11 @@ def _unwrap_buffers(x):
     return x
 
 
-# Work around JAX issue #15676
-@jax.custom_jvp
-def fixed_asarray(x):
-    return jnp.asarray(x)
-
-
-@fixed_asarray.defjvp
-def _fixed_asarray_jvp(x, tx):
-    (x,) = x
-    (tx,) = tx
-    return fixed_asarray(x), fixed_asarray(tx)
+# Work around JAX issue #15676.
+# This issue arises with both JVP tracing and make_jaxpr tracing. The former can be
+# handled with a custom_jvp, but the latter cannot. So we need to just call `jnp.array`
+# instead.
+fixed_asarray = jnp.array
 
 
 def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers, makes_false_steps):
@@ -417,6 +411,10 @@ def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers, makes_false
         step, pred, _, val = val
         buffer_val = _wrap_buffers(val, pred, tag)
         buffer_val2 = body_fun(buffer_val)
+        # Needed to work with `disable_jit`, as then we lose the automatic
+        # ArrayLike->Array cast provided by JAX's while loops.
+        # The input `val` is already cast to Array below, so this matches that.
+        buffer_val2 = jtu.tree_map(fixed_asarray, buffer_val2)
         # Strip `.named_shape`; c.f. Diffrax issue #246
         struct = jax.eval_shape(lambda: buffer_val)
         struct2 = jax.eval_shape(lambda: buffer_val2)

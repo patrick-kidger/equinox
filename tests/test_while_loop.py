@@ -712,6 +712,17 @@ def test_symbolic_zero(capfd):
     ) in text
 
 
+def test_disable_jit():
+    def cond_fun(carry):
+        return True
+
+    def body_fun(carry):
+        return 5
+
+    with jax.disable_jit():
+        eqxi.while_loop(cond_fun, body_fun, 3, max_steps=3, kind="checkpointed")
+
+
 def test_buffer_index():
     def cond_fun(carry):
         return True
