@@ -50,7 +50,7 @@ class LayerNorm(Module):
 
     """
 
-    shape: tuple[int] = field(static=True)
+    shape: tuple[int, ...] = field(static=True)
     eps: float = field(static=True)
     use_weight: bool = field(static=True)
     use_bias: bool = field(static=True)
