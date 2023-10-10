@@ -14,7 +14,7 @@ import numpy as np
 from jaxtyping import Array, ArrayLike, Bool, Int, PyTree
 
 from ._ad import filter_custom_jvp
-from ._config import EQX_ON_ERROR
+from ._config import EQX_ON_ERROR, EQX_ON_ERROR_BREAKPOINT_FRAMES
 from ._doc_utils import doc_remove_args
 from ._filters import combine, is_array, partition
 from ._jit import filter_jit
@@ -113,6 +113,8 @@ def _error(x, pred, index, *, msgs, on_error):
                 breakpoint_kwargs["token"] = _index
             if "vectorized" in breakpoint_params:
                 breakpoint_kwargs["vectorized"] = True
+            if EQX_ON_ERROR_BREAKPOINT_FRAMES is not None:
+                breakpoint_kwargs["num_frames"] = EQX_ON_ERROR_BREAKPOINT_FRAMES
             _index = jax.debug.breakpoint(**breakpoint_kwargs)
             return jax.pure_callback(  # pyright: ignore
                 to_nan, struct, _index, vectorized=True

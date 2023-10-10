@@ -14,6 +14,7 @@ from collections.abc import Callable
 from typing import Any, cast, Optional, Protocol, TYPE_CHECKING, TypeVar, Union
 from typing_extensions import dataclass_transform, ParamSpec
 
+import jax._src.traceback_util as traceback_util
 import jax.tree_util as jtu
 import numpy as np
 from jaxtyping import Array, Bool, PyTreeDef
@@ -23,6 +24,9 @@ from ._caches import internal_lru_caches
 from ._doc_utils import doc_repr
 from ._pretty_print import tree_pformat
 from ._tree import tree_equal
+
+
+traceback_util.register_exclusion(__file__)
 
 
 _P = ParamSpec("_P")
