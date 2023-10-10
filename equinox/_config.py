@@ -16,3 +16,8 @@ if EQX_ON_ERROR == "breakpoint":
         "The environment variable `EQX_ON_ERROR=breakpoint` is currently set. Note "
         "that this should only be used for debugging, as it slows down runtime speed."
     )
+
+
+EQX_ON_ERROR_BREAKPOINT_FRAMES = os.environ.get("EQX_ON_ERROR_BREAKPOINT_FRAMES", None)
+if EQX_ON_ERROR_BREAKPOINT_FRAMES is not None:
+    EQX_ON_ERROR_BREAKPOINT_FRAMES = int(EQX_ON_ERROR_BREAKPOINT_FRAMES)
