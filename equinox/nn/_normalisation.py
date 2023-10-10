@@ -372,18 +372,11 @@ class RMSNorm(Module):
                 "`RMSNorm(shape)(x)` must satisfy the invariant `shape == x.shape`"
                 f"Received `shape={self.shape} and `x.shape={x.shape}`. You might need "
                 "to replace `rms_norm(x)` with `jax.vmap(rms_norm)(x)`.\n"
-                "\n"
-                "If this is a new error for you, it might be because this became "
-                "stricter in Equinox v0.11.0. Previously all that was required is that "
-                "`x.shape` ended with `shape`. However, this turned out to be a "
-                "frequent source of bugs, so we made the check stricter!"
             )
         inv_rms = jax.lax.rsqrt(jnp.sum(x**2) + self.eps)
-        out = inv_rms * x
+        out = jnp.sqrt(self.dim) * inv_rms * x
         if self.use_weight:
             out = self.weight * out
-        else:
-            out = jnp.sqrt(self.dim) * out
         if self.use_bias:
             out = out + self.bias
         if state is sentinel:
