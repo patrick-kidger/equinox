@@ -30,12 +30,12 @@ class StateIndex(Module, Generic[_Value]):
 
             def __init__(self):
                 init_state = jnp.array(0)
-                self.index = StateIndex(init_state)
+                self.index = eqx.nn.StateIndex(init_state)
 
             def __call__(self, x: Array, state: eqx.nn.State) -> tuple[Array, eqx.nn.State]:
                 current_state = state.get(self.index)
                 new_x = x + current_state
-                new_state = state.set(current_state + 1)
+                new_state = state.set(self.index, current_state + 1)
                 return new_x, new_state
         ```
 
