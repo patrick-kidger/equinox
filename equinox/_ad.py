@@ -100,19 +100,20 @@ class _GradWrapper(Module):
 
 
 _Scalar = Union[float, complex, Float[ArrayLike, ""], Complex[ArrayLike, ""]]
+_ScalarTy = TypeVar("_ScalarTy", bound=_Scalar)
 
 
 @overload
 def filter_value_and_grad(
     *, has_aux: Literal[False] = False
-) -> Callable[[Callable[_P, _Scalar]], Callable[_P, tuple[_Scalar, PyTree]]]:
+) -> Callable[[Callable[_P, _ScalarTy]], Callable[_P, tuple[_ScalarTy, PyTree]]]:
     ...
 
 
 @overload
 def filter_value_and_grad(
-    fun: Callable[_P, _Scalar], *, has_aux: Literal[False] = False
-) -> Callable[_P, tuple[_Scalar, PyTree]]:
+    fun: Callable[_P, _ScalarTy], *, has_aux: Literal[False] = False
+) -> Callable[_P, tuple[_ScalarTy, PyTree]]:
     ...
 
 
@@ -120,15 +121,16 @@ def filter_value_and_grad(
 def filter_value_and_grad(
     *, has_aux: Literal[True] = True
 ) -> Callable[
-    [Callable[_P, tuple[_Scalar, _T]]], Callable[_P, tuple[tuple[_Scalar, _T], PyTree]]
+    [Callable[_P, tuple[_ScalarTy, _T]]],
+    Callable[_P, tuple[tuple[_ScalarTy, _T], PyTree]],
 ]:
     ...
 
 
 @overload
 def filter_value_and_grad(
-    fun: Callable[_P, tuple[_Scalar, _T]], *, has_aux: Literal[True] = True
-) -> Callable[_P, tuple[tuple[_Scalar, _T], PyTree]]:
+    fun: Callable[_P, tuple[_ScalarTy, _T]], *, has_aux: Literal[True] = True
+) -> Callable[_P, tuple[tuple[_ScalarTy, _T], PyTree]]:
     ...
 
 
