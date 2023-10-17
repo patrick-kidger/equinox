@@ -36,6 +36,12 @@ JAX itself provides the following tools:
 
 ::: equinox.debug.inspect_dce
 
+---
+
+::: equinox.debug.assert_max_traces
+
+::: equinox.debug.get_num_traces
+
 ## Runtime errors
 
 If you are getting a runtime error from [`equinox.error_if`][], then you can control the on-error behaviour via the environment variable `EQX_ON_ERROR`. If ran from `jax.jit` then this will be a long error message starting `jaxlib.xla_extension.XlaRuntimeError: INTERNAL: Generated function failed: CpuCallback error: RuntimeError: ...`; if ran from `eqx.filter_jit` then some of the extra boilerplate will be removed from the error message, and it will simply start with `jaxlib.xla_extension.XlaRuntimeError: ...`.
