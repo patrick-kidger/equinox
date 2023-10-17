@@ -192,12 +192,21 @@ def error_if(
     errors should be handled. Possible values are:
 
     - `EQX_ON_ERROR=raise` will raise a runtime error.
-    - `EQX_ON_ERROR=breakpoint` will open a debugger. Note that this option may prevent
-        certain compiler optimisations, so permanently fixing this value is not
-        recommended. You will need to also pass the `-s` flag to `pytest`, if you are
-        also using that.
     - `EQX_ON_ERROR=nan` will return `NaN` instead of `x`, and then continue the
         computation.
+    - `EQX_ON_ERROR=breakpoint` will open a debugger.
+        - Note that this option may prevent certain compiler optimisations, so
+            permanently fixing this value is not recommended.
+        - You will need to also pass the `-s` flag to `pytest`, if you are
+            also using that.
+        - This will sometimes raise a trace-time error due to JAX bug
+            [#16732](https://github.com/google/jax/issues/16732). (Bugs whilst debugging
+            bugs, eek!) If this happens, then it can be worked around by additionally
+            setting the `EQX_ON_ERROR_BREAKPOINT_FRAMES` variable to a small integer,
+            which specifies how many frames upwards the debugger should capture. The
+            JAX bug is triggered when taking too many frames.
+
+    After changing an environment variable, the Python process must be restarted.
 
     **Returns:**
 
