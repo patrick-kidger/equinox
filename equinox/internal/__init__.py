@@ -52,6 +52,7 @@ from ._finalise_jaxpr import (
     primitive_finalisations as primitive_finalisations,
     register_impl_finalisation as register_impl_finalisation,
 )
+from ._getkey import GetKey as GetKey
 from ._loop import (
     maybe_set_p as maybe_set_p,
     scan as scan,
