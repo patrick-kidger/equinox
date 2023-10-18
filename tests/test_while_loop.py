@@ -861,3 +861,32 @@ def test_trivial_vjp(capfd):
     text, _ = capfd.readouterr()
     assert "perturb_val (False, False, False, (True, False))" in text
     assert "symbolic_zero_gradient" not in text
+
+
+def test_buffer_at_set():
+    array = jnp.array([0])
+    assert eqx.tree_equal(eqxi.buffer_at_set(array, 0, 1), jnp.array([1]))
+    assert eqx.tree_equal(eqxi.buffer_at_set(array, 0, 1, pred=False), jnp.array([0]))
+
+    @jax.jit
+    def f(pred):
+        return eqxi.buffer_at_set(array, 0, 1, pred=pred)
+
+    assert eqx.tree_equal(f(True), jnp.array([1]))
+    assert eqx.tree_equal(f(False), jnp.array([0]))
+
+    @jax.jit
+    def g(pred):
+        def cond(_):
+            return True
+
+        def body(carry):
+            assert not eqx.is_array(carry)
+            return eqxi.buffer_at_set(carry, 0, 1, pred=pred)
+
+        return eqxi.while_loop(
+            cond, body, array, max_steps=1, kind="checkpointed", buffers=lambda x: x
+        )
+
+    assert eqx.tree_equal(g(True), jnp.array([1]))
+    assert eqx.tree_equal(g(False), jnp.array([0]))
