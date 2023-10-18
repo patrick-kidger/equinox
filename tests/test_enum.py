@@ -5,7 +5,7 @@ import pytest
 import equinox as eqx
 import equinox.internal as eqxi
 
-from .helpers import shaped_allclose
+from .helpers import tree_allclose
 
 
 def test_equality():
@@ -35,10 +35,10 @@ def test_equality():
     def run3(a):
         return a == A.x
 
-    assert shaped_allclose(run1(), jnp.array(False))
-    assert shaped_allclose(run2(), jnp.array(True))
-    assert shaped_allclose(run3(A.x), jnp.array(True))
-    assert shaped_allclose(run3(A.y), jnp.array(False))
+    assert tree_allclose(run1(), jnp.array(False))
+    assert tree_allclose(run2(), jnp.array(True))
+    assert tree_allclose(run3(A.x), jnp.array(True))
+    assert tree_allclose(run3(A.y), jnp.array(False))
 
 
 def test_where():
