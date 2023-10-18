@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+import jax.tree_util as jtu
 import pytest
 
 import equinox as eqx
@@ -265,3 +266,18 @@ def test_compile_time_eval():
         assert y
 
     f()
+
+
+def test_where_traced_bool_same_branches():
+    class A(eqxi.Enumeration):
+        a = "hi"
+        b = "bye"
+
+    @jax.jit
+    def f(pred, foo):
+        leaves, treedef = jtu.tree_flatten(foo)
+        bar = jtu.tree_unflatten(treedef, leaves)
+        out = A.where(pred, foo, bar)
+        assert out is foo
+
+    f(True, A.a)
