@@ -633,7 +633,8 @@ class filter_custom_jvp:
             "previously passed to indicate a symbolic zero tangent for all objects "
             "that weren't inexact arrays, but all inexact arrays always had an "
             "array-valued tangent. Now, `None` may also be passed to indicate that an "
-            "inexact array has a symbolic zero tangent."
+            "inexact array has a symbolic zero tangent.",
+            stacklevel=2,
         )
 
         def _fn_jvp(args, t_args, **kwargs):
@@ -813,6 +814,7 @@ class filter_custom_vjp:
             "    all objects that weren't inexact arrays, but all inexact arrays "
             "    always had an array-valued gradient. Now, `None` may also be passed "
             "    to indicate that an inexact array has a symbolic zero gradient.",
+            stacklevel=2,
         )
 
         def _fn_fwd(perturbed, vjp_arg, *args, **kwargs):
