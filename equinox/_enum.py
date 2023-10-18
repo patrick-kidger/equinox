@@ -355,10 +355,13 @@ else:
                 raise ValueError("`where` requires a scalar boolean predicate")
             if isinstance(a, EnumerationItem) and isinstance(b, EnumerationItem):
                 if a._enumeration is cls and b._enumeration is cls:
-                    with jax.ensure_compile_time_eval():
-                        value = jnp.where(pred, a._value, b._value)
-                    cls = cast(type[Enumeration], cls)
-                    return EnumerationItem(value, cls)
+                    if a._value is b._value:
+                        return a
+                    else:
+                        with jax.ensure_compile_time_eval():
+                            value = jnp.where(pred, a._value, b._value)
+                        cls = cast(type[Enumeration], cls)
+                        return EnumerationItem(value, cls)
             name = f"{cls.__module__}.{cls.__qualname__}"
             raise ValueError(
                 f"Arguments to {name}.where(...) must be members of {name}."
