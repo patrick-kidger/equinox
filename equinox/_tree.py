@@ -4,7 +4,7 @@ from typing import Any, Optional, TYPE_CHECKING, Union
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
-from jaxtyping import Array, Bool, PyTree, PyTreeDef
+from jaxtyping import Array, ArrayLike, Bool, Float, PyTree, PyTreeDef
 
 from ._custom_types import sentinel
 from ._doc_utils import doc_repr
@@ -229,41 +229,83 @@ def tree_at(
     return out
 
 
-def tree_equal(*pytrees: PyTree) -> Union[bool, np.bool_, Bool[Array, ""]]:
-    """Returns `True` if all input PyTrees are equal. Every PyTree must have the same
-    structure, and all leaves must be equal. For JAX arrays, NumPy arrays, or NumPy
-    scalars: they must have the same shape, dtype, and values to be considered equal.
-    JAX and NumPy are considered equal to each other.
+def _array_equal(x, y, npi, rtol, atol):
+    assert x.dtype == y.dtype
+    if (
+        isinstance(rtol, (int, float))
+        and isinstance(atol, (int, float))
+        and rtol == 0
+        and atol == 0
+    ) or not npi.issubdtype(x.dtype, npi.inexact):
+        return npi.all(x == y)
+    else:
+        return npi.allclose(x, y, rtol=rtol, atol=atol)
 
-    If used under JIT, and any arrays are present, then this may return a tracer.
+
+def tree_equal(
+    *pytrees: PyTree,
+    typematch: bool = False,
+    rtol: Float[ArrayLike, ""] = 0.0,
+    atol: Float[ArrayLike, ""] = 0.0,
+) -> Union[bool, Bool[Array, ""]]:
+    """Returns `True` if all input PyTrees are equal. Every PyTree must have the same
+    structure, and all leaves must be equal.
+
+    - For JAX arrays, NumPy arrays, or NumPy scalars: they must have the same shape and
+        dtype.
+        - If `rtol=0` and `atol=0` (the default) then all their values must be equal.
+            Otherwise they must satisfy
+            `{j}np.allclose(leaf1, leaf2, rtol=rtol, atol=atol)`.
+        - If `typematch=False` (the default) then JAX and NumPy arrays are considered
+            equal to each other. If `typematch=True` then JAX and NumPy are not
+            considered equal to each other.
+    - For non-arrays, if `typematch=False` (the default) then equality is determined
+        with just `leaf1 == leaf2`. If `typematch=True` then
+        `type(leaf1) == type(leaf2)` is also required.
+
+    If used under JIT, and any JAX arrays are present, then this may return a tracer.
+    Use the idiom `result = tree_equal(...) is True` if you'd like to assert that the
+    result is statically true without dependence on the value of any traced arrays.
 
     **Arguments:**
 
     - `*pytrees`: Any number of PyTrees each with any structure.
+    - `typematch:` Whether to additionally require that corresponding leaves should have
+        the same `type(...)` as each other.
+    - `rtol`: Used to determine the `rtol` of `jnp.allclose`/`np.allclose` when
+        comparing inexact (floating or complex) arrays. Defaults to zero, i.e. requires
+        exact equality.
+    - `atol`: As `rtol`.
 
     **Returns:**
 
     A boolean, or bool-typed tracer.
     """
     flat, treedef = jtu.tree_flatten(pytrees[0])
-    out = True
+    traced_out = True
     for pytree in pytrees[1:]:
         flat_, treedef_ = jtu.tree_flatten(pytree)
         if treedef_ != treedef:
             return False
+        assert len(flat) == len(flat_)
         for elem, elem_ in zip(flat, flat_):
-            if is_array(elem):
+            if typematch:
+                if type(elem) != type(elem_):
+                    return False
+            if isinstance(elem, (np.ndarray, np.generic)) and isinstance(
+                elem_, (np.ndarray, np.generic)
+            ):
+                if (
+                    (elem.shape != elem_.shape)
+                    or (elem.dtype != elem_.dtype)
+                    or not _array_equal(elem, elem_, np, rtol, atol)
+                ):
+                    return False
+            elif is_array(elem):
                 if is_array(elem_):
                     if (elem.shape != elem_.shape) or (elem.dtype != elem_.dtype):
                         return False
-                    if isinstance(elem, (np.ndarray, np.generic)) and isinstance(
-                        elem_, (np.ndarray, np.generic)
-                    ):
-                        # Avoid promoting to a tracer if possible.
-                        allsame = np.all(elem == elem_)
-                    else:
-                        allsame = jnp.all(elem == elem_)
-                    out = out & allsame
+                    traced_out = traced_out & _array_equal(elem, elem_, jnp, rtol, atol)
                 else:
                     return False
             else:
@@ -272,7 +314,7 @@ def tree_equal(*pytrees: PyTree) -> Union[bool, np.bool_, Bool[Array, ""]]:
                 else:
                     if elem != elem_:
                         return False
-    return out
+    return traced_out
 
 
 def tree_flatten_one_level(

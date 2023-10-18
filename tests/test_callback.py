@@ -5,7 +5,7 @@ import pytest
 
 import equinox as eqx
 
-from .helpers import shaped_allclose
+from .helpers import tree_allclose
 
 
 def test_callback():
@@ -21,14 +21,14 @@ def test_callback():
     out = eqx.filter_pure_callback(
         f, jnp.array(1.0), sentinel1, result_shape_dtypes=out_struct
     )
-    assert shaped_allclose(out, (jnp.array(2.0), sentinel2))
+    assert tree_allclose(out, (jnp.array(2.0), sentinel2))
 
     @eqx.filter_jit
     def g(x):
         return eqx.filter_pure_callback(f, x, sentinel1, result_shape_dtypes=out_struct)
 
     out = g(jnp.array(2.0))
-    assert shaped_allclose(out, (jnp.array(3.0), sentinel2))
+    assert tree_allclose(out, (jnp.array(3.0), sentinel2))
 
 
 def test_wrong():

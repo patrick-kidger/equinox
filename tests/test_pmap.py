@@ -9,7 +9,7 @@ import pytest
 
 import equinox as eqx
 
-from .helpers import shaped_allclose as _shaped_allclose
+from .helpers import tree_allclose as _shaped_allclose
 
 
 (cpu,) = jax.devices("cpu")
