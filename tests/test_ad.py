@@ -550,7 +550,8 @@ def test_filter_custom_vjp_defvjp():
         g0, g1, g2 = g
         return g0 + g1, g2
 
-    f.defvjp(f_fwd, f_bwd)
+    with pytest.warns():
+        f.defvjp(f_fwd, f_bwd)
     jax.grad(lambda x: sum(f(x)))((jnp.array(1.0), jnp.array(1.0)))
 
 
