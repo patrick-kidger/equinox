@@ -812,7 +812,7 @@ class filter_custom_vjp:
             "- `None` was previously passed to indicate a symbolic zero gradient for "
             "    all objects that weren't inexact arrays, but all inexact arrays "
             "    always had an array-valued gradient. Now, `None` may also be passed "
-            "    to indicate that an inexact array has a symbolic zero gradient."
+            "    to indicate that an inexact array has a symbolic zero gradient.",
         )
 
         def _fn_fwd(perturbed, vjp_arg, *args, **kwargs):

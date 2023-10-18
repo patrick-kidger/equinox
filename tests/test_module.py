@@ -13,7 +13,7 @@ import pytest
 import equinox as eqx
 import equinox.internal as eqxi
 
-from .helpers import shaped_allclose
+from .helpers import tree_allclose
 
 
 def test_module_not_enough_attributes():
@@ -229,7 +229,7 @@ def test_converter():
     class MyModule(eqx.Module):
         field: jax.Array = eqx.field(converter=jnp.asarray)
 
-    assert shaped_allclose(MyModule(1.0).field, jnp.array(1.0))  # pyright: ignore
+    assert tree_allclose(MyModule(1.0).field, jnp.array(1.0))  # pyright: ignore
 
     class MyModuleWithInit(eqx.Module):
         field: jax.Array = eqx.field(converter=jnp.asarray)
@@ -238,7 +238,7 @@ def test_converter():
             self.field = a
             assert type(self.field) is float
 
-    assert shaped_allclose(MyModuleWithInit(1.0).field, jnp.array(1.0))
+    assert tree_allclose(MyModuleWithInit(1.0).field, jnp.array(1.0))
 
     called = False
 
@@ -249,7 +249,7 @@ def test_converter():
             nonlocal called
             assert not called
             called = True
-            assert shaped_allclose(self.field, jnp.array(1.0))
+            assert tree_allclose(self.field, jnp.array(1.0))
 
     MyModuleWithPostInit(1.0)  # pyright: ignore
     assert called
@@ -259,7 +259,7 @@ def test_converter_monkeypatched_init():
     class Foo(eqx.Module):
         field: jax.Array = eqx.field(converter=jnp.asarray)
 
-    assert shaped_allclose(Foo(1.0).field, jnp.array(1.0))  # pyright: ignore
+    assert tree_allclose(Foo(1.0).field, jnp.array(1.0))  # pyright: ignore
 
     called = False
     init = Foo.__init__
@@ -271,7 +271,7 @@ def test_converter_monkeypatched_init():
         init(self, *args, **kwargs)
 
     Foo.__init__ = __init__
-    assert shaped_allclose(Foo(1.0).field, jnp.array(1.0))  # pyright: ignore
+    assert tree_allclose(Foo(1.0).field, jnp.array(1.0))  # pyright: ignore
     assert called
 
 
@@ -289,9 +289,9 @@ def test_converter_monkeypatched_postinit():
             nonlocal called1
             assert not called1
             called1 = True
-            assert shaped_allclose(self.field, jnp.array(1.0))
+            assert tree_allclose(self.field, jnp.array(1.0))
 
-    assert shaped_allclose(Foo(1.0).field, jnp.array(1.0))  # pyright: ignore
+    assert tree_allclose(Foo(1.0).field, jnp.array(1.0))  # pyright: ignore
     assert called1
 
     called2 = False
@@ -306,7 +306,7 @@ def test_converter_monkeypatched_postinit():
         post_init(self)
 
     Foo.__post_init__ = __post_init__  # pyright: ignore
-    assert shaped_allclose(Foo(1.0).field, jnp.array(1.0))  # pyright: ignore
+    assert tree_allclose(Foo(1.0).field, jnp.array(1.0))  # pyright: ignore
     assert called2
     assert called1
 
@@ -334,10 +334,10 @@ def test_converter_init_hierarchy(base_is_module):
     # In either case, conversion should happen.
 
     called = False
-    assert shaped_allclose(C(1).x, jnp.array(1))
+    assert tree_allclose(C(1).x, jnp.array(1))
     assert called
 
-    assert shaped_allclose(D(1).x, jnp.array(1))  # pyright: ignore
+    assert tree_allclose(D(1).x, jnp.array(1))  # pyright: ignore
     # No `called` check, we're not using `A.__init__`.
 
 
@@ -359,11 +359,11 @@ def test_converter_post_init_hierarchy(base_is_module):
         pass
 
     called = False
-    assert shaped_allclose(C(1).x, jnp.array(1))  # pyright: ignore
+    assert tree_allclose(C(1).x, jnp.array(1))  # pyright: ignore
     assert called
 
     called = False
-    assert shaped_allclose(D(1).x, jnp.array(1))  # pyright: ignore
+    assert tree_allclose(D(1).x, jnp.array(1))  # pyright: ignore
     assert called
 
 
@@ -380,7 +380,7 @@ def test_init_and_postinit():
             def __init__(self):
                 self.field = 1  # pyright: ignore
 
-    assert shaped_allclose(Bar().field, jnp.array(1))
+    assert tree_allclose(Bar().field, jnp.array(1))
 
     class Qux(eqx.Module):
         field: jax.Array = eqx.field(converter=jnp.asarray)
@@ -394,7 +394,7 @@ def test_init_and_postinit():
             def __post_init__(self):
                 assert False
 
-    assert shaped_allclose(Quux().field, jnp.array(1))  # pyright: ignore
+    assert tree_allclose(Quux().field, jnp.array(1))  # pyright: ignore
 
 
 def test_wrap_method():

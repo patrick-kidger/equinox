@@ -4,7 +4,7 @@ import jax.random as jr
 
 import equinox as eqx
 
-from .helpers import shaped_allclose
+from .helpers import tree_allclose
 
 
 def test_simple():
@@ -12,9 +12,9 @@ def test_simple():
     def addone(x):
         return x + 1
 
-    assert shaped_allclose(addone(1), 2)
-    assert shaped_allclose(addone(jnp.array(1)), jnp.array(2))
-    assert shaped_allclose(eqx.filter_jit(addone)(jnp.array(1)), jnp.array(2))
+    assert tree_allclose(addone(1), 2)
+    assert tree_allclose(addone(jnp.array(1)), jnp.array(2))
+    assert tree_allclose(eqx.filter_jit(addone)(jnp.array(1)), jnp.array(2))
 
 
 def test_mlp(getkey):
@@ -27,9 +27,9 @@ def test_mlp(getkey):
     o2 = mlp_jit(x)
     o3 = mlp_noinline(x)
     o4 = mlp_jit_noinline(x)
-    assert shaped_allclose(o1, o2)
-    assert shaped_allclose(o1, o3)
-    assert shaped_allclose(o1, o4)
+    assert tree_allclose(o1, o2)
+    assert tree_allclose(o1, o3)
+    assert tree_allclose(o1, o4)
 
 
 def test_vmap(getkey):
@@ -44,9 +44,9 @@ def test_vmap(getkey):
     o2 = mlp_jit_vmap(x)
     o3 = mlp_vmap_noinline(x)
     o4 = mlp_jit_vmap_noinline(x)
-    assert shaped_allclose(o1, o2, atol=1e-5)
-    assert shaped_allclose(o1, o3, atol=1e-5)
-    assert shaped_allclose(o1, o4, atol=1e-5)
+    assert tree_allclose(o1, o2, atol=1e-5)
+    assert tree_allclose(o1, o3, atol=1e-5)
+    assert tree_allclose(o1, o4, atol=1e-5)
 
 
 def test_jvp(getkey):
@@ -62,9 +62,9 @@ def test_jvp(getkey):
     o2 = mlp_jit_jvp(x, y)
     o3 = mlp_jvp_noinline(x, y)
     o4 = mlp_jit_jvp_noinline(x, y)
-    assert shaped_allclose(o1, o2)
-    assert shaped_allclose(o1, o3)
-    assert shaped_allclose(o1, o4)
+    assert tree_allclose(o1, o2)
+    assert tree_allclose(o1, o3)
+    assert tree_allclose(o1, o4)
 
 
 def test_grad(getkey):
@@ -79,9 +79,9 @@ def test_grad(getkey):
     o2 = mlp_jit_grad(x)
     o3 = mlp_grad_noinline(x)
     o4 = mlp_jit_grad_noinline(x)
-    assert shaped_allclose(o1, o2)
-    assert shaped_allclose(o1, o3)
-    assert shaped_allclose(o1, o4)
+    assert tree_allclose(o1, o2)
+    assert tree_allclose(o1, o3)
+    assert tree_allclose(o1, o4)
 
 
 def test_num_traces():
@@ -97,7 +97,7 @@ def test_num_traces():
     def g(x):
         return fn(x) + fn(x) + fn(x) + fn(x)
 
-    assert shaped_allclose(g(1), jnp.array(8))
+    assert tree_allclose(g(1), jnp.array(8))
     assert num_traces == 2
 
 
@@ -109,8 +109,8 @@ def test_pytree_in():
 
     o1 = fn(lambda x: x + 1, [(1,)])
     o2 = fn(lambda x: x + 1, ([jnp.array(1)],))
-    assert shaped_allclose(o1, 2)
-    assert shaped_allclose(o2, jnp.array(2))
+    assert tree_allclose(o1, 2)
+    assert tree_allclose(o2, jnp.array(2))
 
 
 def test_abstract():
@@ -140,8 +140,8 @@ def test_abstract():
         call_num_traces += 1
         return fn(x, y)
 
-    assert shaped_allclose(call(f, 2, 3), jnp.array(5))
-    assert shaped_allclose(call(g, 2, 3), jnp.array(6))
+    assert tree_allclose(call(f, 2, 3), jnp.array(5))
+    assert tree_allclose(call(g, 2, 3), jnp.array(6))
     assert f_num_traces == 1
     assert g_num_traces == 1
     assert call_num_traces == 1
@@ -197,7 +197,7 @@ def test_complicated(getkey):
 
     xs = jnp.array([1.0, 2.0, 3.0])
 
-    assert shaped_allclose(run(xs), run_noinline(xs))
+    assert tree_allclose(run(xs), run_noinline(xs))
     assert num_lowerings == 3
     # Why three lowerings?
     # 1. Primal computation

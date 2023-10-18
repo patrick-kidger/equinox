@@ -11,7 +11,7 @@ import jax.tree_util as jtu
 import equinox as eqx
 import equinox.internal as eqxi
 
-from .helpers import shaped_allclose
+from .helpers import tree_allclose
 
 
 def test_call():
@@ -110,24 +110,24 @@ def test_call():
         return x**2 + 1
 
     bound = ft.partial(newprim, fn)
-    assert shaped_allclose(bound(2), 5)
-    assert shaped_allclose(jax.jit(bound)(2), jnp.array(5))
+    assert tree_allclose(bound(2), 5)
+    assert tree_allclose(jax.jit(bound)(2), jnp.array(5))
 
     vbound = jax.vmap(bound)
     y = jnp.array([1.0, 2.0])
-    assert shaped_allclose(vbound(y), jnp.array([2.0, 5.0]))
-    assert shaped_allclose(jax.jit(vbound)(y), jnp.array([2.0, 5.0]))
+    assert tree_allclose(vbound(y), jnp.array([2.0, 5.0]))
+    assert tree_allclose(jax.jit(vbound)(y), jnp.array([2.0, 5.0]))
 
     primals, tangents = jax.jvp(bound, (y,), (y,))
-    assert shaped_allclose(primals, jnp.array([2.0, 5.0]))
-    assert shaped_allclose(tangents, jnp.array([2.0, 8.0]))
+    assert tree_allclose(primals, jnp.array([2.0, 5.0]))
+    assert tree_allclose(tangents, jnp.array([2.0, 8.0]))
 
     primals, tangents = jax.jvp(vbound, (y,), (y,))
-    assert shaped_allclose(primals, jnp.array([2.0, 5.0]))
-    assert shaped_allclose(tangents, jnp.array([2.0, 8.0]))
+    assert tree_allclose(primals, jnp.array([2.0, 5.0]))
+    assert tree_allclose(tangents, jnp.array([2.0, 8.0]))
 
     cotangents = jax.grad(bound)(5.0)
-    assert shaped_allclose(cotangents, jnp.array(10.0))
+    assert tree_allclose(cotangents, jnp.array(10.0))
 
     assert jvpd
     assert batchd
@@ -162,41 +162,39 @@ def test_vprim():
     y2 = jnp.array([[1.0, 3.5], [2.0, 1.5], [0.0, 0.2]])
 
     o1 = [jnp.array([2.0, 7.0]), jnp.array([1.0, 3.5, 3.5, 1.0])]
-    assert shaped_allclose(bind(y), o1)
-    assert shaped_allclose(jax.jit(bind)(y), o1)
+    assert tree_allclose(bind(y), o1)
+    assert tree_allclose(jax.jit(bind)(y), o1)
 
     dtype = jnp.array(1.0).dtype  # default floating-point dtype
     o2 = [jax.ShapeDtypeStruct((2,), dtype), jax.ShapeDtypeStruct((4,), dtype)]
-    assert shaped_allclose(jax.eval_shape(bind, y), o2)
+    assert tree_allclose(jax.eval_shape(bind, y), o2)
 
     t_o1 = [jnp.array([5.5, 3.0]), jnp.array([1.0, 3.5, 2.0, 4.5])]
     o3 = (o1, t_o1)
-    assert shaped_allclose(jax.jvp(bind, (y,), (y + 2,)), o3)
+    assert tree_allclose(jax.jvp(bind, (y,), (y + 2,)), o3)
 
     o4 = [
         jnp.array([[2.0, 7.0], [4.0, 3.0], [0.0, 0.4]]),
         jnp.array([[1.0, 3.5, 3.5, 1.0], [2.0, 1.5, 1.5, 2.0], [0.0, 0.2, 0.2, 0.0]]),
     ]
-    assert shaped_allclose(jax.vmap(bind)(y2), o4)
-    assert shaped_allclose(jax.jit(jax.vmap(bind))(y2), o4)
-    assert shaped_allclose(jax.vmap(jax.jit(bind))(y2), o4)
+    assert tree_allclose(jax.vmap(bind)(y2), o4)
+    assert tree_allclose(jax.jit(jax.vmap(bind))(y2), o4)
+    assert tree_allclose(jax.vmap(jax.jit(bind))(y2), o4)
 
-    assert shaped_allclose(
-        jax.vmap(jax.vmap(bind))(y2[None]), [o4[0][None], o4[1][None]]
-    )
+    assert tree_allclose(jax.vmap(jax.vmap(bind))(y2[None]), [o4[0][None], o4[1][None]])
 
     o5 = [jax.ShapeDtypeStruct((3, 2), dtype), jax.ShapeDtypeStruct((3, 4), dtype)]
-    assert shaped_allclose(jax.eval_shape(jax.vmap(bind), y2), o5)
+    assert tree_allclose(jax.eval_shape(jax.vmap(bind), y2), o5)
 
     t_o4 = [
         jnp.array([[5.5, 3.0], [3.5, 4.0], [2.2, 2.0]]),
         jnp.array([[1.0, 3.5, 2.0, 4.5], [2.0, 1.5, 3.0, 2.5], [0.0, 0.2, 1.0, 1.2]]),
     ]
     o6 = (o4, t_o4)
-    assert shaped_allclose(jax.jvp(jax.vmap(bind), (y2,), (y2 + 2,)), o6)
+    assert tree_allclose(jax.jvp(jax.vmap(bind), (y2,), (y2 + 2,)), o6)
 
     o7 = jnp.array([3.0, 10.5])
-    assert shaped_allclose(jax.linear_transpose(bind, y)(o1), (o7,))
+    assert tree_allclose(jax.linear_transpose(bind, y)(o1), (o7,))
 
     o8 = jnp.array([[3.0, 10.5], [6.0, 4.5], [0.0, 0.6]])
-    assert shaped_allclose(jax.linear_transpose(jax.vmap(bind), y2)(o4), (o8,))
+    assert tree_allclose(jax.linear_transpose(jax.vmap(bind), y2)(o4), (o8,))
