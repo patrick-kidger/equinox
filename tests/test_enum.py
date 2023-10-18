@@ -23,6 +23,7 @@ def test_equality():
         A.x == 0  # pyright: ignore
     with pytest.raises(ValueError):
         A.x == B.z  # pyright: ignore
+    assert not A.x.is_traced()
 
     @jax.jit
     def run1():
@@ -34,6 +35,7 @@ def test_equality():
 
     @jax.jit
     def run3(a):
+        assert a.is_traced()
         return a == A.x
 
     assert shaped_allclose(run1(), jnp.array(False))
@@ -260,12 +262,15 @@ def test_compile_time_eval():
         b = "bye"
 
     @jax.jit
-    def f():
+    def f(pred):
         x = A.where(True, A.a, A.b)
+        assert not x.is_traced()
         y = x == A.a
         assert y
+        z = A.where(pred, A.a, A.b)
+        assert z.is_traced()
 
-    f()
+    f(True)
 
 
 def test_where_traced_bool_same_branches():

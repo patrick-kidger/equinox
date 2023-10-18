@@ -187,6 +187,9 @@ class EnumerationItem(Module):
             token, pred, self._value, self._enumeration._index_to_message
         )
 
+    def is_traced(self) -> bool:
+        return isinstance(self._value, jax.core.Tracer)
+
 
 if TYPE_CHECKING:
     import enum
