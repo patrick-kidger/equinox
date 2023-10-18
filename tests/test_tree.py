@@ -9,8 +9,6 @@ import pytest
 
 import equinox as eqx
 
-from .helpers import shaped_allclose
-
 
 def test_tree_at_replace(getkey):
     key = getkey()
@@ -115,10 +113,14 @@ def test_tree_at_none_leaf():
     assert x == (True, None, 0)
 
 
+def _typeequal(x, y):
+    return (type(x) == type(y)) and (x == y)
+
+
 def test_tree_equal():
     key1 = jrandom.PRNGKey(0)
     key2 = jrandom.PRNGKey(1)
-    # Not using getkey as ever-so-in-principle two random keys could produce the same
+    # Not using `getkey` as ever-so-in-principle two random keys could produce the same
     # weights (like that's ever going to happen).
     pytree1 = [1, 2, 3, {"a": jnp.array([1.0, 2.0])}, eqx.nn.Linear(1, 2, key=key1)]
     pytree2 = [1, 2, 3, {"a": jnp.array([1.0, 2.0])}, eqx.nn.Linear(1, 2, key=key1)]
@@ -126,11 +128,11 @@ def test_tree_equal():
     pytree4 = [1, 2, 3, {"a": jnp.array([1.0, 4.0])}, eqx.nn.Linear(1, 2, key=key1)]
     pytree5 = [1, 2, 4, {"a": jnp.array([1.0, 2.0])}, eqx.nn.Linear(1, 2, key=key1)]
 
-    assert eqx.tree_equal(pytree1, pytree1, pytree1)
-    assert eqx.tree_equal(pytree1, pytree2)
-    assert not eqx.tree_equal(pytree1, pytree3)
-    assert not eqx.tree_equal(pytree1, pytree4)
-    assert not eqx.tree_equal(pytree1, pytree5)
+    assert _typeequal(eqx.tree_equal(pytree1, pytree1, pytree1), jnp.array(True))
+    assert _typeequal(eqx.tree_equal(pytree1, pytree2), jnp.array(True))
+    assert _typeequal(eqx.tree_equal(pytree1, pytree3), jnp.array(False))
+    assert _typeequal(eqx.tree_equal(pytree1, pytree4), jnp.array(False))
+    assert _typeequal(eqx.tree_equal(pytree1, pytree5), False)
 
 
 def test_tree_equal_jit():
@@ -139,7 +141,7 @@ def test_tree_equal_jit():
 
     @jax.jit
     def run1():
-        assert not eqx.tree_equal(a, 0)
+        assert _typeequal(eqx.tree_equal(a, 0), False)
 
     run1()
 
@@ -147,34 +149,40 @@ def test_tree_equal_jit():
     def run2():
         return eqx.tree_equal(a, b)
 
-    assert run2()
+    assert _typeequal(run2(), jnp.array(True))
 
     @jax.jit
     def run3(x, y):
         return eqx.tree_equal(x, y)
 
-    assert run3(a, b)
-    assert not run3(a, 1)
+    assert _typeequal(run3(a, b), jnp.array(True))
+    assert _typeequal(run3(a, 1), jnp.array(False))
 
 
 def test_tree_equal_numpy():
     x = np.array([1, 2], dtype=np.float32)
+    x2 = np.array([1, 2], dtype=np.float32)
     y = jnp.array([1, 2], dtype=jnp.float32)
     z = jnp.array([1, 2], dtype=jnp.float16)
-    assert shaped_allclose(eqx.tree_equal(x, x), np.bool_(True))
-    assert shaped_allclose(eqx.tree_equal(x, y), jnp.array(True))
-    assert shaped_allclose(eqx.tree_equal(y, y), jnp.array(True))
-
-    assert shaped_allclose(eqx.tree_equal(x, z), False)
+    assert _typeequal(eqx.tree_equal(x, x), True)
+    assert _typeequal(eqx.tree_equal(x, x2), True)
+    assert _typeequal(eqx.tree_equal(x, x2, typematch=True), True)
+    assert _typeequal(eqx.tree_equal(x, y), jnp.array(True))
+    assert _typeequal(eqx.tree_equal(x, y, typematch=True), False)
+    assert _typeequal(eqx.tree_equal(y, y), jnp.array(True))
+    assert _typeequal(eqx.tree_equal(y, y, typematch=True), jnp.array(True))
+    assert _typeequal(eqx.tree_equal(x, z), False)
+    assert _typeequal(eqx.tree_equal(y, z), False)
 
     @jax.jit
     def f():
-        assert shaped_allclose(eqx.tree_equal(x, x), np.bool_(True))
+        assert _typeequal(eqx.tree_equal(x, x), True)
+        assert _typeequal(eqx.tree_equal(x, y, typematch=True), False)
         out = eqx.tree_equal(x, y)
         assert isinstance(out, jax.core.Tracer)
         return out
 
-    assert shaped_allclose(f(), jnp.array(True))
+    assert _typeequal(f(), jnp.array(True))
 
 
 def test_tree_equal_scalars():
@@ -182,14 +190,25 @@ def test_tree_equal_scalars():
     y = np.array(1, dtype=np.float32)
     z = np.array(1, dtype=np.float16)
     # scalar-ness does not matter
-    assert shaped_allclose(eqx.tree_equal(x, y), np.bool_(True))
+    assert _typeequal(eqx.tree_equal(x, y), True)
     # dtype does matter
-    assert shaped_allclose(eqx.tree_equal(x, z), False)
+    assert _typeequal(eqx.tree_equal(x, z), False)
 
     z = jax.dtypes.bfloat16(1)
+    z2 = jax.dtypes.bfloat16(1)
     w = jax.dtypes.bfloat16(2)
-    assert shaped_allclose(eqx.tree_equal(z, z), np.bool_(True))
-    assert shaped_allclose(eqx.tree_equal(z, w), np.bool_(False))
+    assert _typeequal(eqx.tree_equal(z, z2), True)
+    assert _typeequal(eqx.tree_equal(z, w), False)
+
+
+def test_tree_allclose():
+    x = np.array(1.0, dtype=np.float32)
+    y = np.array(1.00001, dtype=np.float32)
+    z = jnp.array(1.00001, dtype=np.float32)
+    assert _typeequal(eqx.tree_equal(x, y), False)
+    assert _typeequal(eqx.tree_equal(x, y, atol=1e-3), True)
+    assert _typeequal(eqx.tree_equal(x, z, atol=1e-3), jnp.array(True))
+    assert _typeequal(eqx.tree_equal(x, z, typematch=True, atol=1e-3), False)
 
 
 def test_inference_mode(getkey):
