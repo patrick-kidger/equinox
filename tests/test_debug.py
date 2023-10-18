@@ -43,14 +43,14 @@ def test_backward_nan(capfd):
 def test_check_dce(capfd):
     @jax.jit
     def f(x):
-        a, _ = eqx.debug.store_dce((x**2, x + 1))
+        a, _, _ = eqx.debug.store_dce((x**2, x + 1, "foobar"))
         return a
 
     f(1)
     capfd.readouterr()
     eqx.debug.inspect_dce()
     text, _ = capfd.readouterr()
-    assert "(i32[], <DCE'd>)" in text
+    assert "(i32[], <DCE'd>, 'foobar')" in text
 
 
 def test_max_traces():
