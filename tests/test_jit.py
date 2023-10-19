@@ -266,7 +266,7 @@ def test_wrap_jax_partial(getkey):
     eqx.filter_jit(g)
 
 
-def test_buffer_donation(getkey):
+def test_buffer_donation_function():
     @eqx.filter_jit(donate="all")
     def f(x):
         return x + 1
@@ -275,9 +275,26 @@ def test_buffer_donation(getkey):
     old_p = x.unsafe_buffer_pointer()
     new_x = f(x)
     assert tree_allclose(new_x, jnp.array(1.0))
-    assert new_x.unsafe_buffer_pointer() == old_p
     assert x.is_deleted()
+    assert new_x.unsafe_buffer_pointer() == old_p
 
+
+def test_buffer_donation_function_except_first():
+    @eqx.filter_jit(donate="warn-except-first")
+    def f(x, y):
+        return x + y
+
+    x = jnp.array(0.0)
+    y = jnp.array(1.0)
+    old_p = y.unsafe_buffer_pointer()
+    new_x = f(x, y)
+    assert tree_allclose(new_x, jnp.array(1.0))
+    assert not x.is_deleted()
+    assert y.is_deleted()
+    assert new_x.unsafe_buffer_pointer() == old_p
+
+
+def test_buffer_donation_method(getkey):
     num_traces = 0
 
     class M(eqx.Module):
@@ -320,6 +337,8 @@ def test_buffer_donation(getkey):
     for flag in jtu.tree_leaves(old_m_deleted_flag):
         assert flag is True or flag is None
 
+
+def test_buffer_donation_instance(getkey):
     num_traces = 0
 
     class F(eqx.Module):
@@ -374,12 +393,13 @@ def test_donation_warning():
 
 
 # Issue 325
-def test_aot_compilation():
+@pytest.mark.parametrize("donate", ("all", "all-except-first", "none"))
+def test_aot_compilation(donate):
     def f(x, y):
         return 2 * x + y
 
     x, y = jnp.array(3), 4
-    lowered = eqx.filter_jit(f).lower(x, y)
+    lowered = eqx.filter_jit(f, donate=donate).lower(x, y)
     lowered.as_text()
     compiled = lowered.compile()
     compiled(x, y)

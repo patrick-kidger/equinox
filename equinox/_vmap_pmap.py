@@ -487,7 +487,7 @@ def _preprocess(info, args, kwargs):
     maybe_dummy = _common_preprocess(axis_size, kwargs)
     del kwargs
     dynamic = filter((fun, args, maybe_dummy, out_axes), is_array)
-    return dynamic
+    return (dynamic,)
 
 
 def _postprocess(out):
@@ -601,7 +601,15 @@ def filter_pmap(
     donate: Literal["all", "warn", "none"] = "none",
     **pmapkwargs,
 ):
-    """Parallelises a function. By default, all JAX/NumPy arrays are parallelised down
+    """
+    !!! warning
+
+        JAX has now added more powerful parallelism APIs directly to the JIT interface.
+        As such, using [`equinox.filter_jit`][] with sharded inputs is now recommended
+        over `filter_pmap`. See also the
+        [parallelism example](../../../examples/parallelism/).
+
+    Parallelises a function. By default, all JAX/NumPy arrays are parallelised down
     their leading axis (i.e. axis index 0), and all other types are broadcast.
 
     `jax.pmap`, and thus `equinox.filter_pmap`, also compiles their function in the same
