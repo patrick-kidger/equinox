@@ -1,4 +1,4 @@
-from typing import Any, Union
+from typing import Any, TYPE_CHECKING, Union
 
 import jax
 import jax.core
@@ -245,6 +245,25 @@ def _maybe_set(pred, xs, x, i, *, kwargs, makes_false_steps):
         makes_false_steps=makes_false_steps
     )
     return out
+
+
+if TYPE_CHECKING:
+    from typing_extensions import Annotated as MaybeBuffer
+else:
+
+    class _MetaBufferItem(type):
+        def __instancecheck__(cls, instance):
+            annotation = cls.annotation
+            while type(instance) is _Buffer:
+                instance = instance._array
+            return isinstance(instance, annotation)
+
+    class MaybeBuffer:
+        def __class_getitem__(cls, item):
+            class _BufferItem(metaclass=_MetaBufferItem):
+                annotation = item
+
+            return _BufferItem
 
 
 class _Buffer(Module):
