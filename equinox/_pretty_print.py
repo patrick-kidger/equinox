@@ -1,5 +1,6 @@
 import dataclasses
 import functools as ft
+import sys
 import types
 from collections.abc import Callable, Sequence
 from typing import Any, Optional, Union
@@ -119,11 +120,25 @@ def _pformat_short_array(
     return pp.text(out)
 
 
-def _pformat_array(obj: Union[jax.Array, np.ndarray], **kwargs) -> pp.Doc:
+def _pformat_array(
+    obj: Union[jax.Array, np.ndarray, "torch.Tensor"],  # pyright: ignore  # noqa: F821
+    **kwargs,
+) -> pp.Doc:
     short_arrays = kwargs["short_arrays"]
     if short_arrays:
-        kind = "numpy" if isinstance(obj, np.ndarray) else None
-        return _pformat_short_array(obj.shape, obj.dtype.name, kind)
+        # Support torch here for the sake of jaxtyping's pretty-printed error messages.
+        if "torch" in sys.modules and isinstance(obj, sys.modules["torch"].Tensor):
+            dtype = repr(obj.dtype).split(".")[1]
+            kind = "torch"
+        else:
+            dtype = obj.dtype.name
+            if isinstance(obj, jax.Array):
+                kind = None
+            elif isinstance(obj, np.ndarray):
+                kind = "numpy"
+            else:
+                kind = "unknown"
+        return _pformat_short_array(obj.shape, dtype, kind)
     else:
         return pp.text(repr(obj))
 
@@ -189,7 +204,9 @@ def tree_pp(obj: PrettyPrintAble, **kwargs) -> pp.Doc:
             return _pformat_namedtuple(obj, **kwargs)
         else:
             return _pformat_tuple(obj, **kwargs)
-    elif isinstance(obj, (np.ndarray, jax.Array)):
+    elif isinstance(obj, (np.ndarray, jax.Array)) or (
+        "torch" in sys.modules and isinstance(obj, sys.modules["torch"].Tensor)
+    ):
         return _pformat_array(obj, **kwargs)
     elif isinstance(obj, (jax.custom_jvp, jax.custom_vjp)):
         return tree_pp(obj.__wrapped__, **kwargs)
