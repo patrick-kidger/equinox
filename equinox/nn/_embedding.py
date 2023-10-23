@@ -181,3 +181,86 @@ class RotaryPositionalEmbedding(Module):
 
         x_rope = (x * freqs_real) + (neg_half_x * freqs_imag)
         return x_rope
+
+
+class SinusoidalPositionalEmbedding(Module):
+    embedding_size: int = field(static=True)
+    max_seq_len: int = field(static=True)
+
+    freq_cis: Float[Array, "max_seq_len embedding_size"] = field(static=True)
+
+    def __init__(
+        self,
+        embedding_size: int,
+        max_seq_len: int,
+        *,
+        key: Optional[PRNGKeyArray] = None,
+        **kwargs,
+    ):
+        """**Arguments:**
+
+        `SinusoidalPositionalEmbedding` requires:
+
+        - `embedding_size`: Size of the token embeddings. Must be non-negative.
+        - `max_seq_len`: The maximum sequence length. Must be non-negative.
+        - `key`: Not used; provided for compatibility with the rest of the Equinox API.
+            (Keyword only argument.)
+        """
+        super().__init__(**kwargs)
+        assert (
+            embedding_size % 2 == 0
+        ), f"embedding_size must be even, but {embedding_size} is not even."
+        assert max_seq_len > 0, f"max_seq_len must be positive, but {max_seq_len} <= 0."
+        assert (
+            embedding_size > 0
+        ), f"embedding_size must be positive, but {embedding_size} <= 0."
+        self.freq_cis = self.get_positional_encoding(max_seq_len, embedding_size)
+        self.embedding_size = embedding_size
+        self.max_seq_len = max_seq_len
+
+    @staticmethod
+    def get_positional_encoding(
+        max_seq_len: int, embedding_size: int
+    ) -> Float[Array, "max_seq_len embedding_size"]:
+        pos = jnp.arange(max_seq_len)[:, jnp.newaxis]
+        div_term = jnp.exp(
+            jnp.arange(0, embedding_size, 2) * -(jnp.log(10000.0) / embedding_size)
+        )
+        # the following expression is closer to the actual notation they used.
+        # div_term = 1 / 10000 ** (jnp.arange(0, embedding_size, 2) / embedding_size)
+        pos_enc = jnp.zeros((max_seq_len, embedding_size))
+        pos_enc = pos_enc.at[:, 0::2].set(jnp.sin(pos * div_term))
+        pos_enc = pos_enc.at[:, 1::2].set(jnp.cos(pos * div_term))
+        return pos_enc
+
+    @jax.named_scope("eqx.nn.SinusoidalPositionalEmbedding")
+    def __call__(
+        self,
+        x: Float[Array, "max_seq_len embedding_size"],
+        *,
+        key: Optional[PRNGKeyArray] = None,
+    ) -> Float[Array, "max_seq_len embedding_size"]:
+        """**Arguments:**
+
+        - `x`: A JAX array of shape `(max_seq_len, embedding_size)`.
+        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
+            (Keyword only argument.)
+
+        **Returns:**
+
+        A JAX array of shape `(max_seq_len, embedding_size)`, with the sinusoidal
+        positional encoding applied to the input.
+        """
+        max_seq_len, embedding_size = x.shape
+        assert embedding_size == self.embedding_size, (
+            f"x.shape[-1] must match self.embedding_size, "
+            f"but {x.shape[-1]} != {self.embedding_size}"
+        )
+        assert max_seq_len == self.max_seq_len, (
+            f"x.shape[0] must be == self.max_seq_len, "
+            f"but {x.shape[0]} != {self.max_seq_len}"
+        )
+        assert (
+            x.shape == self.freq_cis.shape
+        ), f"x.shape must be freq_cis.shape, but {x.shape} != {self.freq_cis.shape}"
+        return x + self.freq_cis
