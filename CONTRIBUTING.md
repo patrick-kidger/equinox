@@ -11,7 +11,7 @@ First fork the library on GitHub.
 Then clone and install the library in development mode:
 
 ```bash
-git clone https://github.com/your-username-here/equinox.git
+git clone https://github.com/patrick-kidger/equinox.git
 cd equinox
 pip install -e .
 ```
