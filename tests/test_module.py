@@ -1,6 +1,7 @@
 import abc
 import dataclasses
 import functools as ft
+import inspect
 from collections.abc import Callable
 from dataclasses import InitVar
 from typing import Any, Optional
@@ -990,3 +991,44 @@ def test_custom_field():
     dynamic_field, static_field = dataclasses.fields(model)
     assert dynamic_field.metadata == dict(foo=True)
     assert static_field.metadata == dict(foo=False, static=True)
+
+
+def test_signature_matches_dataclass():
+    @dataclasses.dataclass
+    class FooDataClass:
+        a: int
+
+    class FooModule(eqx.Module):
+        a: int
+
+    assert inspect.signature(FooDataClass) == inspect.signature(FooModule)
+
+    @dataclasses.dataclass
+    class CallableDataClass:
+        a: int
+
+        def __call__(self):
+            pass
+
+    class CallableModule(eqx.Module):
+        a: int
+
+        def __call__(self):
+            pass
+
+    assert inspect.signature(CallableDataClass) == inspect.signature(CallableModule)
+
+    @dataclasses.dataclass
+    class CustomInitDataClass:
+        a: int
+
+        def __init__(self, b: int):
+            self.a = b
+
+    class CustomInitModule(eqx.Module):
+        a: int
+
+        def __init__(self, b: int):
+            self.a = b
+
+    assert inspect.signature(CustomInitDataClass) == inspect.signature(CustomInitModule)
