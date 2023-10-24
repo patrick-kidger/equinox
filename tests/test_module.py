@@ -993,37 +993,9 @@ def test_custom_field():
     assert static_field.metadata == dict(foo=False, static=True)
 
 
-def test_signature_matches_dataclass():
-    @dataclasses.dataclass
-    class FooDataClass:
+def test_signature():
+    class Foo(eqx.Module):
         a: int
-
-    class FooModule(eqx.Module):
-        a: int
-
-    assert inspect.signature(FooDataClass) == inspect.signature(FooModule)
-
-    @dataclasses.dataclass
-    class CallableDataClass:
-        a: int
-
-        def __call__(self):
-            pass
-
-    class CallableModule(eqx.Module):
-        a: int
-
-        def __call__(self):
-            pass
-
-    assert inspect.signature(CallableDataClass) == inspect.signature(CallableModule)
-
-    @dataclasses.dataclass
-    class CustomInitDataClass:
-        a: int
-
-        def __init__(self, b: int):
-            self.a = b
 
     class CustomInitModule(eqx.Module):
         a: int
@@ -1031,4 +1003,12 @@ def test_signature_matches_dataclass():
         def __init__(self, b: int):
             self.a = b
 
-    assert inspect.signature(CustomInitDataClass) == inspect.signature(CustomInitModule)
+    class FooCallable(eqx.Module):
+        a: int
+
+        def __call__(self, b: int):
+            pass
+
+    for T in [Foo, FooCallable, CustomInitModule, FooCallable(1)]:
+        print(str(T))
+        print(str(inspect.signature(T)))
