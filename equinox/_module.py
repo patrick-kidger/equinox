@@ -431,6 +431,13 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
         # Done!
         return cls
 
+    @property
+    def __signature__(cls):
+        # Use signature of __init__ method for non-callable equinox modules
+        sig = inspect.signature(cls.__init__)
+        params = list(sig.parameters.values())[1:]  # Remove self parameter
+        return sig.replace(parameters=params)
+
     # This method is called whenever you initialise a module: `MyModule(...)`
     def __call__(cls, *args, **kwargs):
         if _is_force_abstract[cls]:

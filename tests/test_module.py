@@ -1,6 +1,7 @@
 import abc
 import dataclasses
 import functools as ft
+import inspect
 from collections.abc import Callable
 from dataclasses import InitVar
 from typing import Any, Optional
@@ -990,3 +991,48 @@ def test_custom_field():
     dynamic_field, static_field = dataclasses.fields(model)
     assert dynamic_field.metadata == dict(foo=True)
     assert static_field.metadata == dict(foo=False, static=True)
+
+
+def signature_test_cases():
+    @dataclasses.dataclass
+    class FooDataClass:
+        a: int
+
+    class FooModule(eqx.Module):
+        a: int
+
+    @dataclasses.dataclass
+    class CustomInitDataClass:
+        def __init__(self, a: int):
+            pass
+
+    class CustomInitModule(eqx.Module):
+        def __init__(self, a: int):
+            pass
+
+    @dataclasses.dataclass
+    class CallableDataClass:
+        a: int
+
+        def __call__(self, b: int):
+            pass
+
+    class CallableModule(eqx.Module):
+        a: int
+
+        def __call__(self, b: int):
+            pass
+
+    test_cases = [
+        (FooDataClass, FooModule),
+        (CustomInitDataClass, CustomInitModule),
+        (CallableDataClass, CallableModule),
+        (CallableDataClass(1), CallableModule(1)),
+    ]
+    return test_cases
+
+
+@pytest.mark.parametrize(("dataclass", "module"), signature_test_cases())
+def test_signature(dataclass, module):
+    # Check module signature matches dataclass signatures.
+    assert inspect.signature(dataclass) == inspect.signature(module)
