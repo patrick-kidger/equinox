@@ -993,22 +993,46 @@ def test_custom_field():
     assert static_field.metadata == dict(foo=False, static=True)
 
 
-def test_signature():
-    class Foo(eqx.Module):
+def signature_test_cases():
+    @dataclasses.dataclass
+    class FooDataClass:
         a: int
+
+    class FooModule(eqx.Module):
+        a: int
+
+    @dataclasses.dataclass
+    class CustomInitDataClass:
+        def __init__(self, a: int):
+            pass
 
     class CustomInitModule(eqx.Module):
-        a: int
+        def __init__(self, a: int):
+            pass
 
-        def __init__(self, b: int):
-            self.a = b
-
-    class FooCallable(eqx.Module):
+    @dataclasses.dataclass
+    class CallableDataClass:
         a: int
 
         def __call__(self, b: int):
             pass
 
-    for T in [Foo, FooCallable, CustomInitModule, FooCallable(1)]:
-        print(str(T))
-        print(str(inspect.signature(T)))
+    class CallableModule(eqx.Module):
+        a: int
+
+        def __call__(self, b: int):
+            pass
+
+    test_cases = [
+        (FooDataClass, FooModule),
+        (CustomInitDataClass, CustomInitModule),
+        (CallableDataClass, CallableModule),
+        (CallableDataClass(1), CallableModule(1)),
+    ]
+    return test_cases
+
+
+@pytest.mark.parametrize(("dataclass", "module"), signature_test_cases())
+def test_signature(dataclass, module):
+    # Check module signature matches dataclass signatures.
+    assert inspect.signature(dataclass) == inspect.signature(module)

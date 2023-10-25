@@ -274,7 +274,7 @@ def filter_jit(
             "`jitkwargs` cannot contain 'static_argnums', 'static_argnames' or "
             "'donate_argnums'"
         )
-    signature = inspect.signature(fun.__call__)
+    signature = inspect.signature(fun)
 
     if donate not in {"all", "warn", "none"}:
         raise ValueError(

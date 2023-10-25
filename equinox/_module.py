@@ -317,11 +317,6 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
             # TODO: is this next line still necessary?
             cls.__init__.__module__ = cls.__module__
 
-        # Assign __signature__ to match dataclass
-        sig = inspect.signature(cls.__init__)
-        params = list(sig.parameters.values())[1:]  # Remove self to match dataclass sig
-        cls.__signature__ = sig.replace(parameters=params)
-
         # [Step 5] We support an optional `strict` mode for Rust-like strictness in the
         # type checking.
         # In practice this is probably too much for your average user, but it's a great
@@ -435,6 +430,13 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
         )
         # Done!
         return cls
+
+    @property
+    def __signature__(cls):
+        # Use signature of __init__ method for non-callable equinox modules
+        sig = inspect.signature(cls.__init__)
+        params = list(sig.parameters.values())[1:]  # Remove self parameter
+        return sig.replace(parameters=params)
 
     # This method is called whenever you initialise a module: `MyModule(...)`
     def __call__(cls, *args, **kwargs):
