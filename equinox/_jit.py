@@ -171,6 +171,7 @@ class _JitWrapper(Module):
         return hashable_combine(self._dynamic_fun, self._static_fun)
 
     def _call(self, is_lower, args, kwargs):
+        __tracebackhide__ = True
         info = (
             self._signature,
             self._dynamic_fun,
@@ -200,6 +201,7 @@ class _JitWrapper(Module):
             return _postprocess(out)
 
     def __call__(self, /, *args, **kwargs):
+        __tracebackhide__ = True
         try:
             return self._call(False, args, kwargs)
         except XlaRuntimeError as e:

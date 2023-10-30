@@ -47,6 +47,7 @@ class _AssertMaxTraces(Module):
         return self.fn
 
     def __call__(self, *args, **kwargs):
+        __tracebackhide__ = True
         num_traces = _traces[self.tag] = _traces[self.tag] + 1
         arguments = inspect.signature(self.fn).bind(*args, **kwargs).arguments
         if self.max_traces is not None and num_traces > self.max_traces:
