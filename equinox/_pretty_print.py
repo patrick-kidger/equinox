@@ -121,7 +121,12 @@ def _pformat_short_array(
 
 
 def _pformat_array(
-    obj: Union[jax.Array, np.ndarray, "torch.Tensor"],  # pyright: ignore  # noqa: F821
+    obj: Union[
+        jax.Array,
+        jax.ShapeDtypeStruct,
+        np.ndarray,
+        "torch.Tensor",  # pyright: ignore  # noqa: F821
+    ],
     **kwargs,
 ) -> pp.Doc:
     short_arrays = kwargs["short_arrays"]
@@ -132,7 +137,7 @@ def _pformat_array(
             kind = "torch"
         else:
             dtype = obj.dtype.name
-            if isinstance(obj, jax.Array):
+            if isinstance(obj, (jax.Array, jax.ShapeDtypeStruct)):
                 kind = None
             elif isinstance(obj, np.ndarray):
                 kind = "numpy"
@@ -204,8 +209,11 @@ def tree_pp(obj: PrettyPrintAble, **kwargs) -> pp.Doc:
             return _pformat_namedtuple(obj, **kwargs)
         else:
             return _pformat_tuple(obj, **kwargs)
-    elif isinstance(obj, (np.ndarray, jax.Array)) or (
-        "torch" in sys.modules and isinstance(obj, sys.modules["torch"].Tensor)
+    elif (
+        isinstance(obj, (np.ndarray, jax.Array))
+        or ("torch" in sys.modules and isinstance(obj, sys.modules["torch"].Tensor))
+        or kwargs.get("struct_as_array", False)
+        and isinstance(obj, jax.ShapeDtypeStruct)
     ):
         return _pformat_array(obj, **kwargs)
     elif isinstance(obj, (jax.custom_jvp, jax.custom_vjp)):
@@ -231,9 +239,11 @@ def _false(_):
 
 def tree_pformat(
     pytree: PrettyPrintAble,
+    *,
     width: int = 80,
     indent: int = 2,
     short_arrays: bool = True,
+    struct_as_array: bool = False,
     follow_wrapped: bool = True,
     truncate_leaf: Callable[[PrettyPrintAble], bool] = _false,
 ) -> str:
@@ -248,6 +258,7 @@ def tree_pformat(
         pytree,
         indent=indent,
         short_arrays=short_arrays,
+        struct_as_array=struct_as_array,
         follow_wrapped=follow_wrapped,
         truncate_leaf=truncate_leaf,
     ).format(width=width)
@@ -255,9 +266,11 @@ def tree_pformat(
 
 def tree_pprint(
     pytree: PrettyPrintAble,
+    *,
     width: int = 80,
     indent: int = 2,
     short_arrays: bool = True,
+    struct_as_array: bool = False,
     follow_wrapped: bool = True,
     truncate_leaf: Callable[[PrettyPrintAble], bool] = _false,
 ) -> None:
@@ -278,6 +291,7 @@ def tree_pprint(
         be made.
     - `indent`: The amount of indentation each nesting level.
     - `short_arrays`: Toggles the abbreviation of JAX arrays.
+    - `struct_as_array`: Whether to treat `jax.ShapeDtypeStruct`s as arrays.
     - `follow_wrapped`: Whether to unwrap `functools.partial` and `functools.wraps`.
     - `truncate_leaf`: A function `Any -> bool`. Applied to all nodes in the PyTree;
         all truthy nodes will be truncated to just `f"{type(node).__name__}(...)"`.
@@ -292,6 +306,7 @@ def tree_pprint(
             width=width,
             indent=indent,
             short_arrays=short_arrays,
+            struct_as_array=struct_as_array,
             follow_wrapped=follow_wrapped,
             truncate_leaf=truncate_leaf,
         )

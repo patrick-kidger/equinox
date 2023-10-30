@@ -1,11 +1,15 @@
 import functools as ft
+import inspect
 import weakref
 from collections.abc import Callable
 from typing import Optional, overload, TypeVar
 from typing_extensions import ParamSpec
 
 from .._custom_types import sentinel
+from .._eval_shape import filter_eval_shape
 from .._module import field, Module, module_update_wrapper
+from .._pretty_print import tree_pformat
+from .._tree import tree_equal
 
 
 _T = TypeVar("_T")
@@ -19,6 +23,7 @@ _P = ParamSpec("_P")
 # In practice we do it this way to make it abundantly clear that this counter is shared
 # across cloned (flattened+unflattened) instances.
 _traces = weakref.WeakKeyDictionary()
+_seen_args = weakref.WeakKeyDictionary()
 
 
 class _Weakrefable:
@@ -35,6 +40,7 @@ class _AssertMaxTraces(Module):
         self.max_traces = max_traces
         self.tag = _Weakrefable()
         _traces[self.tag] = 0
+        _seen_args[self.tag] = {}
 
     @property
     def __wrapped__(self):
@@ -42,11 +48,37 @@ class _AssertMaxTraces(Module):
 
     def __call__(self, *args, **kwargs):
         num_traces = _traces[self.tag] = _traces[self.tag] + 1
+        arguments = inspect.signature(self.fn).bind(*args, **kwargs).arguments
         if self.max_traces is not None and num_traces > self.max_traces:
+            for name, value in arguments.items():
+                struct = filter_eval_shape(lambda: value)
+                seen_structs = _seen_args[self.tag].get(name, [])
+                for seen_struct in seen_structs:
+                    if tree_equal(struct, seen_struct) is True:
+                        break
+                else:
+                    struct_str = tree_pformat(struct, struct_as_array=True)
+                    seen_struct_str = "\n".join(
+                        tree_pformat(seen_struct, struct_as_array=True)
+                        for seen_struct in seen_structs
+                    )
+                    raise RuntimeError(
+                        f"{self.fn} can only be traced {self.max_traces} times. "
+                        f"However, it is has now been traced {num_traces} times. It "
+                        f"appears that the '{name}' argument is responsible: it "
+                        f"currently has the value:\n{struct_str}\nPrevious values are:"
+                        f"\n{seen_struct_str}"
+                    )
             raise RuntimeError(
                 f"{self.fn} can only be traced {self.max_traces} times. However, "
-                f"it is has now been traced {num_traces} times."
+                f"it is has now been traced {num_traces} times. Could not determine "
+                "argument was responsible for re-tracing."
             )
+        for name, value in arguments.items():
+            struct = filter_eval_shape(lambda: value)
+            if name not in _seen_args[self.tag]:
+                _seen_args[self.tag][name] = []
+            _seen_args[self.tag][name].append(struct)
         return self.fn(*args, **kwargs)
 
 
