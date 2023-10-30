@@ -292,6 +292,7 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
 
             @ft.wraps(init)  # pyright: ignore
             def __init__(self, *args, **kwargs):
+                __tracebackhide__ = True
                 init(self, *args, **kwargs)
                 # Same `if` trick as with `__post_init__`.
                 if self.__class__.__init__ is cls.__init__:
@@ -865,6 +866,7 @@ class BoundMethod(Module):
     __self__: Module
 
     def __call__(self, *args, **kwargs):
+        __tracebackhide__ = True
         return self.__func__(self.__self__, *args, **kwargs)
 
     @property
