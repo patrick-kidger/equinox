@@ -96,7 +96,7 @@ class _EnumerationMeta(type):
         if "__doc__" not in cls.__dict__ or cls.__doc__ is None:
             doc_pieces = [
                 """An
-[enumeration](https://docs.kidger.site/equinox/api/utilities/enumerations/), with the
+[enumeration](https://docs.kidger.site/equinox/api/enumerations/), with the
 following entries:
 """
             ]
