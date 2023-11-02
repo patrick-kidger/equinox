@@ -8,10 +8,13 @@ from typing import (
 import jax
 import jax.nn as jnn
 import jax.random as jrandom
+import jax.tree_util as jtu
 from jaxtyping import Array, PRNGKeyArray
 
 from .._doc_utils import doc_repr
+from .._filters import is_array
 from .._module import field, Module
+from .._vmap_pmap import filter_vmap
 from ._linear import Linear
 
 
@@ -95,8 +98,17 @@ class MLP(Module):
         self.out_size = out_size
         self.width_size = width_size
         self.depth = depth
-        self.activation = activation
-        self.final_activation = final_activation
+        # In case `activation` or `final_activation` are learnt, then make a separate
+        # copy of their weights for every neuron.
+        self.activation = filter_vmap(
+            filter_vmap(lambda: activation, axis_size=width_size), axis_size=depth
+        )()
+        if out_size == "scalar":
+            self.final_activation = final_activation
+        else:
+            self.final_activation = filter_vmap(
+                lambda: final_activation, axis_size=out_size
+            )()
         self.use_bias = use_bias
         self.use_final_bias = use_final_bias
 
@@ -113,9 +125,15 @@ class MLP(Module):
 
         A JAX array with shape `(out_size,)`. (Or shape `()` if `out_size="scalar"`.)
         """
-        for layer in self.layers[:-1]:
+        for i, layer in enumerate(self.layers[:-1]):
             x = layer(x)
-            x = self.activation(x)
+            layer_activation = jtu.tree_map(
+                lambda x: x[i] if is_array(x) else x, self.activation
+            )
+            x = filter_vmap(lambda a, b: a(b))(layer_activation, x)
         x = self.layers[-1](x)
-        x = self.final_activation(x)
+        if self.out_size == "scalar":
+            x = self.final_activation(x)
+        else:
+            x = filter_vmap(lambda a, b: a(b))(self.final_activation, x)
         return x

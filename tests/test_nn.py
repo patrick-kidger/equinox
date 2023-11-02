@@ -220,6 +220,30 @@ def test_mlp(getkey):
     assert [mlp.layers[i].use_bias for i in range(0, 3)] == [True, True, False]
 
 
+def test_mlp_learnt_activation():
+    mlp = eqx.nn.MLP(
+        2,
+        5,
+        8,
+        2,
+        activation=eqx.nn.PReLU(),
+        final_activation=eqx.nn.PReLU(),
+        key=jrandom.PRNGKey(5678),
+    )
+    x = jnp.array([0.5, 0.7])
+    assert mlp.activation.negative_slope.shape == (2, 8)
+    assert mlp.final_activation.negative_slope.shape == (5,)
+
+    @eqx.filter_jit
+    @eqx.filter_grad
+    def grad(mlp, x):
+        return jnp.sum(mlp(x))
+
+    grads = grad(mlp, x)
+    assert grads.activation.negative_slope.shape == (2, 8)
+    assert grads.final_activation.negative_slope.shape == (5,)
+
+
 def test_conv1d(getkey):
     # Positional arguments
     conv = eqx.nn.Conv1d(1, 3, 3, key=getkey())
