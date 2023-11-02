@@ -11,6 +11,7 @@ from jaxtyping import Array, Bool, Float, PRNGKeyArray
 
 from .._module import field, Module
 from ._dropout import Dropout
+from ._embedding import RotaryPositionalEmbedding
 from ._linear import Linear
 
 
@@ -122,6 +123,7 @@ class MultiheadAttention(Module, strict=True):
     output_proj: Linear
     dropout: Dropout
 
+    rope_embeddings: Optional[RotaryPositionalEmbedding] = field(static=True)
     num_heads: int = field(static=True)
     query_size: int = field(static=True)
     key_size: int = field(static=True)
@@ -133,6 +135,8 @@ class MultiheadAttention(Module, strict=True):
     use_key_bias: bool = field(static=True)
     use_value_bias: bool = field(static=True)
     use_output_bias: bool = field(static=True)
+    use_rope_embeddings: bool = field(static=True)
+    state_length: Optional[int] = field(static=True)
 
     def __init__(
         self,
@@ -147,6 +151,8 @@ class MultiheadAttention(Module, strict=True):
         use_key_bias: bool = False,
         use_value_bias: bool = False,
         use_output_bias: bool = False,
+        use_rope_embeddings: bool = False,
+        state_length: Optional[int] = None,
         dropout_p: float = 0.0,
         inference: bool = False,
         *,
@@ -168,6 +174,8 @@ class MultiheadAttention(Module, strict=True):
         - `use_key_bias`: Whether to use a bias term in the key projections.
         - `use_value_bias`: Whether to use a bias term in the value projections.
         - `use_output_bias`: Whether to use a bias term in the output projection.
+        - `state_length`: Used when RoPE embeddings should be applied. This is the size
+            of the key and value buffers that are updated each time the module is called
         - `dropout_p`: Dropout probability on attention weights.
         - `inference`: Whether to actually apply dropout at all. If `True` then dropout
             is not applied. If `False` then dropout is applied. This may be toggled
@@ -203,6 +211,17 @@ class MultiheadAttention(Module, strict=True):
         )
         self.dropout = Dropout(dropout_p, inference=inference)
 
+        if use_rope_embeddings:
+            if state_length is None:
+                raise ValueError(
+                    "state_length must be specified when use_rope_embeddings is True"
+                )
+            else:
+                self.state_length = state_length
+            self.rope_embeddings = RotaryPositionalEmbedding(qk_size, self.state_length)
+        else:
+            self.rope_embeddings = None
+
         self.num_heads = num_heads
         self.query_size = query_size
         self.key_size = key_size
@@ -214,6 +233,7 @@ class MultiheadAttention(Module, strict=True):
         self.use_key_bias = use_key_bias
         self.use_value_bias = use_value_bias
         self.use_output_bias = use_output_bias
+        self.use_rope_embeddings = use_rope_embeddings
 
     @jax.named_scope("eqx.nn.MultiheadAttention")
     def __call__(
@@ -268,6 +288,11 @@ class MultiheadAttention(Module, strict=True):
 
         query_heads = self._project(self.query_proj, query)
         key_heads = self._project(self.key_proj, key_)
+        if self.use_rope_embeddings and self.rope_embeddings is not None:
+            query_heads = jax.vmap(self.rope_embeddings, in_axes=1, out_axes=1)(
+                query_heads
+            )
+            key_heads = jax.vmap(self.rope_embeddings, in_axes=1, out_axes=1)(key_heads)
         value_heads = self._project(self.value_proj, value)
 
         attn_fn = partial(
