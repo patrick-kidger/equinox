@@ -232,15 +232,19 @@ def test_duplicate_fields():
     class D(A):  # pyright: ignore
         a = "hi"
 
-    with pytest.raises(ValueError):
+    with pytest.warns():
 
         class E(A):  # pyright: ignore
             a = "not hi"
 
-    with pytest.raises(ValueError):
+        assert E[E.a] == "not hi"
+
+    with pytest.warns():
 
         class F(A, B):  # pyright: ignore
             a = "not hi"
+
+        assert F[F.a] == "not hi"
 
 
 def test_error_if():
