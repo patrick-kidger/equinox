@@ -493,6 +493,11 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
         else:
             return value
 
+    def __setattr__(cls, item, value):
+        if _not_magic(item) and inspect.isfunction(value):
+            value = _wrap_method(value)
+        super().__setattr__(item, value)
+
 
 if TYPE_CHECKING:
 

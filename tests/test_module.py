@@ -1036,3 +1036,22 @@ def signature_test_cases():
 def test_signature(dataclass, module):
     # Check module signature matches dataclass signatures.
     assert inspect.signature(dataclass) == inspect.signature(module)
+
+
+def test_module_setattr():
+    class Foo(eqx.Module):
+        def f(self):
+            pass
+
+    def f2(self):
+        pass
+
+    def g(self):
+        pass
+
+    Foo.f = f2
+    Foo.g = g  # pyright: ignore
+    assert Foo.f is f2
+    assert Foo.g is g  # pyright: ignore
+    assert type(Foo.__dict__["f"]).__name__ == "_wrap_method"
+    assert type(Foo.__dict__["g"]).__name__ == "_wrap_method"
