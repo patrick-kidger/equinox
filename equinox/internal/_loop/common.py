@@ -252,7 +252,7 @@ if TYPE_CHECKING:
     from typing_extensions import TypeAlias
 
     _T = TypeVar("_T")
-    MayberBuffer: TypeAlias = Annotated[_T, "AbstractVar"]
+    MaybeBuffer: TypeAlias = Annotated[_T, "MaybeBuffer"]
 else:
 
     class _MetaBufferItem(type):
