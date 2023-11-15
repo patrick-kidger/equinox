@@ -6,6 +6,7 @@ import jax.lax as lax
 import jax.numpy as jnp
 from jaxtyping import Array, Bool, Float
 
+from .._misc import default_floating_dtype
 from .._module import field
 from ._sequential import StatefulLayer
 from ._stateful import State, StateIndex
@@ -62,7 +63,7 @@ class BatchNorm(StatefulLayer):
         channelwise_affine: bool = True,
         momentum: float = 0.99,
         inference: bool = False,
-        dtype=jnp.float32,
+        dtype=None,
         **kwargs,
     ):
         """**Arguments:**
@@ -81,7 +82,9 @@ class BatchNorm(StatefulLayer):
             statistics are directly used for normalisation. This may be toggled with
             [`equinox.nn.inference_mode`][] or overridden during
             [`equinox.nn.BatchNorm.__call__`][].
-        - `dtype`: The dtype of the input array.
+        - `dtype`: The dtype to use for the running statistics. Defaults to either
+            `jax.numpy.float32` or `jax.numpy.float64` depending on whether JAX is in
+            64-bit mode.
         """
 
         super().__init__(**kwargs)
@@ -93,6 +96,8 @@ class BatchNorm(StatefulLayer):
             self.weight = None
             self.bias = None
         self.first_time_index = StateIndex(jnp.array(True))
+        if dtype is None:
+            dtype = default_floating_dtype()
         init_buffers = (
             jnp.empty((input_size,), dtype=dtype),
             jnp.empty((input_size,), dtype=dtype),
