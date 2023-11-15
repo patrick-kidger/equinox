@@ -62,11 +62,18 @@ class _ValueAndGradWrapper(Module):
             return self._fun(_x, *_args, **_kwargs)
 
         if len(args) == 0:
-            raise TypeError(
-                "Functions wrapped with `equinox.filter_{grad, value_and_grad}` must "
-                "have their first argument passed by position, not keyword. (This is "
-                "the argument that is differentiated.)"
-            )
+            if len(kwargs) == 0:
+                raise TypeError(
+                    "Functions wrapped with `equinox.filter_{grad, value_and_grad}` "
+                    "must have at least one positional argument. (This is the "
+                    "argument that is differentiated.)"
+                )
+            else:
+                raise TypeError(
+                    "Functions wrapped with `equinox.filter_{grad, value_and_grad}` "
+                    "must have their first argument passed by position, not keyword. "
+                    "(This is the argument that is differentiated.)"
+                )
         x, *args = args
         diff_x, nondiff_x = partition(x, is_inexact_array)
         return fun_value_and_grad(diff_x, nondiff_x, *args, **kwargs)
