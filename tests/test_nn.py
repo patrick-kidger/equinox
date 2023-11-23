@@ -642,6 +642,18 @@ def test_dot_product_attention_weights(getkey):
     weights = eqx.nn._attention.dot_product_attention_weights(q, k, mask)
     assert jnp.allclose(weights, jnp.array([[1.0, 0.0]]))
 
+    q = jnp.array([[1.0]], dtype="float16")
+    k = jnp.array([[9.0], [1.0]], dtype="float16")
+    weights = eqx.nn._attention.dot_product_attention_weights(q, k)
+    assert weights.dtype == q.dtype
+    assert weights.max() == 1
+
+    weights = eqx.nn._attention.dot_product_attention_weights(
+        q, k, softmax_dtype="float32"
+    )
+    assert weights.dtype == q.dtype
+    assert weights.max() < 1
+
 
 def test_dot_product_attention(getkey):
     q = jnp.array([[0.0, 2**0.5]])
