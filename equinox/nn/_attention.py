@@ -2,7 +2,7 @@ import functools as ft
 import math
 import warnings
 from functools import partial
-from typing import Optional, Union
+from typing import cast, Optional, Union
 
 import jax
 import jax.numpy as jnp
@@ -29,10 +29,11 @@ def dot_product_attention_weights(
                 f"{key.shape[0]}). Got {mask.shape}."
             )
         logits = jnp.where(mask, logits, jnp.finfo(logits.dtype).min)
+        logits = cast(Array, logits)
 
-    dtype = jnp.result_type(logits.dtype, jnp.float32)  # pyright: ignore
-    weights = jax.nn.softmax(logits.astype(dtype))  # pyright: ignore
-    return weights.astype(logits.dtype)  # pyright: ignore
+    dtype = jnp.result_type(logits.dtype, jnp.float32)
+    weights = jax.nn.softmax(logits.astype(dtype)).astype(logits.dtype)
+    return weights
 
 
 def dot_product_attention(
