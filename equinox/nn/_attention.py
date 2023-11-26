@@ -18,7 +18,6 @@ def dot_product_attention_weights(
     query: Float[Array, "q_seq qk_size"],
     key: Float[Array, "kv_seq qk_size"],
     mask: Optional[Bool[Array, "q_seq kv_seq"]] = None,
-    softmax_dtype: Optional[str] = None,
 ) -> Float[Array, "q_seq kv_seq"]:
     query = query / math.sqrt(query.shape[-1])
     logits = jnp.einsum("sd,Sd->sS", query, key)
@@ -31,10 +30,8 @@ def dot_product_attention_weights(
             )
         logits = jnp.where(mask, logits, jnp.finfo(logits.dtype).min)
 
-    if softmax_dtype is None:
-        softmax_dtype = logits.dtype  # pyright: ignore
-
-    weights = jax.nn.softmax(logits.astype(softmax_dtype), axis=-1)  # pyright: ignore
+    dtype = jnp.result_type(logits.dtype, jnp.float32)  # pyright: ignore
+    weights = jax.nn.softmax(logits.astype(dtype))  # pyright: ignore
     return weights.astype(logits.dtype)  # pyright: ignore
 
 
@@ -44,12 +41,11 @@ def dot_product_attention(
     value: Float[Array, "kv_seq v_size"],
     mask: Optional[Bool[Array, "q_seq kv_seq"]] = None,
     dropout: Optional[Dropout] = None,
-    softmax_dtype: Optional[str] = None,
     *,
     key: Optional[PRNGKeyArray] = None,
     inference: Optional[bool] = None,
 ) -> Float[Array, "q_seq v_size"]:
-    weights = dot_product_attention_weights(query, key_, mask, softmax_dtype)
+    weights = dot_product_attention_weights(query, key_, mask)
     if dropout is not None:
         weights = dropout(weights, key=key, inference=inference)
     attn = jnp.einsum("sS,Sd->sd", weights, value)
@@ -228,7 +224,6 @@ class MultiheadAttention(Module):
         mask: Union[
             None, Bool[Array, "q_seq kv_seq"], Bool[Array, "num_heads q_seq kv_seq"]
         ] = None,
-        softmax_dtype: Optional[str] = None,
         *,
         key: Optional[PRNGKeyArray] = None,
         inference: Optional[bool] = None,
@@ -246,8 +241,6 @@ class MultiheadAttention(Module):
             be a JAX array of shape `(query_seq_length, kv_seq_length)`, or (for custom
             per-head masking) `(num_heads, query_seq_length, kv_seq_length)`. A value of
             `False` at a position indicates that position should be ignored.
-        - `softmax_dtype`: Optional type to which weight logits will be cast before
-            applying softmax
         - `key`: A `jax.random.PRNGKey` used for dropout. Unused if `dropout = 0`.
             (Keyword only argument.)
         - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
@@ -278,10 +271,7 @@ class MultiheadAttention(Module):
         value_heads = self._project(self.value_proj, value)
 
         attn_fn = partial(
-            dot_product_attention,
-            dropout=self.dropout,
-            softmax_dtype=softmax_dtype,
-            inference=inference,
+            dot_product_attention, dropout=self.dropout, inference=inference
         )
         keys = None if key is None else jax.random.split(key, query_heads.shape[1])
         if mask is not None and mask.ndim == 3:
