@@ -4,7 +4,7 @@ from typing import Optional, Union
 import jax
 import jax.lax as lax
 import jax.numpy as jnp
-from jaxtyping import Array, Bool, Float
+from jaxtyping import Array, Bool, Float, PRNGKeyArray
 
 from .._module import field
 from ._sequential import StatefulLayer
@@ -111,7 +111,7 @@ class BatchNorm(StatefulLayer):
         x: Array,
         state: State,
         *,
-        key: Optional["jax.random.PRNGKey"] = None,  # pyright: ignore
+        key: Optional[PRNGKeyArray] = None,
         inference: Optional[bool] = None,
     ) -> tuple[Array, State]:
         """**Arguments:**
