@@ -6,7 +6,7 @@ import pytest
 import equinox as eqx
 import equinox.internal as eqxi
 
-from .helpers import shaped_allclose
+from .helpers import tree_allclose
 
 
 def test_equality():
@@ -38,10 +38,10 @@ def test_equality():
         assert a.is_traced()
         return a == A.x
 
-    assert shaped_allclose(run1(), jnp.array(False))
-    assert shaped_allclose(run2(), jnp.array(True))
-    assert shaped_allclose(run3(A.x), jnp.array(True))
-    assert shaped_allclose(run3(A.y), jnp.array(False))
+    assert tree_allclose(run1(), jnp.array(False))
+    assert tree_allclose(run2(), jnp.array(True))
+    assert tree_allclose(run3(A.x), jnp.array(True))
+    assert tree_allclose(run3(A.y), jnp.array(False))
 
 
 def test_where():
@@ -232,15 +232,19 @@ def test_duplicate_fields():
     class D(A):  # pyright: ignore
         a = "hi"
 
-    with pytest.raises(ValueError):
+    with pytest.warns():
 
         class E(A):  # pyright: ignore
             a = "not hi"
 
-    with pytest.raises(ValueError):
+        assert E[E.a] == "not hi"
+
+    with pytest.warns():
 
         class F(A, B):  # pyright: ignore
             a = "not hi"
+
+        assert F[F.a] == "not hi"
 
 
 def test_error_if():

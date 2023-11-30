@@ -248,7 +248,11 @@ def _maybe_set(pred, xs, x, i, *, kwargs, makes_false_steps):
 
 
 if TYPE_CHECKING:
-    from typing_extensions import Annotated as MaybeBuffer
+    from typing import Annotated, TypeVar
+    from typing_extensions import TypeAlias
+
+    _T = TypeVar("_T")
+    MaybeBuffer: TypeAlias = Annotated[_T, "MaybeBuffer"]
 else:
 
     class _MetaBufferItem(type):

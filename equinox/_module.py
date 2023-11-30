@@ -292,6 +292,7 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
 
             @ft.wraps(init)  # pyright: ignore
             def __init__(self, *args, **kwargs):
+                __tracebackhide__ = True
                 init(self, *args, **kwargs)
                 # Same `if` trick as with `__post_init__`.
                 if self.__class__.__init__ is cls.__init__:
@@ -431,6 +432,13 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
         # Done!
         return cls
 
+    @property
+    def __signature__(cls):
+        # Use signature of __init__ method for non-callable equinox modules
+        sig = inspect.signature(cls.__init__)
+        params = list(sig.parameters.values())[1:]  # Remove self parameter
+        return sig.replace(parameters=params)
+
     # This method is called whenever you initialise a module: `MyModule(...)`
     def __call__(cls, *args, **kwargs):
         if _is_force_abstract[cls]:
@@ -484,6 +492,11 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
             raise AttributeError
         else:
             return value
+
+    def __setattr__(cls, item, value):
+        if _not_magic(item) and inspect.isfunction(value):
+            value = _wrap_method(value)
+        super().__setattr__(item, value)
 
 
 if TYPE_CHECKING:
@@ -858,6 +871,7 @@ class BoundMethod(Module):
     __self__: Module
 
     def __call__(self, *args, **kwargs):
+        __tracebackhide__ = True
         return self.__func__(self.__self__, *args, **kwargs)
 
     @property

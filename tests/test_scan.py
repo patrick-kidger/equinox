@@ -7,7 +7,7 @@ import pytest
 
 import equinox.internal as eqxi
 
-from .helpers import shaped_allclose
+from .helpers import tree_allclose
 
 
 @pytest.mark.parametrize("kind", ("lax", "checkpointed"))
@@ -55,9 +55,9 @@ def test_scan(kind, length, vjp, getkey):
 
         lax_out, lax_grad, ct_out = vjp_lax_run(init, xs)
         out, grad = vjp_run(init, xs, ct_out)
-        assert shaped_allclose(grad, lax_grad)
+        assert tree_allclose(grad, lax_grad)
     else:
         lax_out = jax.jit(lax_run)(init, xs)
         out = jax.jit(run)(init, xs)
 
-    assert shaped_allclose(out, lax_out)
+    assert tree_allclose(out, lax_out)

@@ -62,11 +62,18 @@ class _ValueAndGradWrapper(Module):
             return self._fun(_x, *_args, **_kwargs)
 
         if len(args) == 0:
-            raise TypeError(
-                "Functions wrapped with `equinox.filter_{grad, value_and_grad}` must "
-                "have their first argument passed by position, not keyword. (This is "
-                "the argument that is differentiated.)"
-            )
+            if len(kwargs) == 0:
+                raise TypeError(
+                    "Functions wrapped with `equinox.filter_{grad, value_and_grad}` "
+                    "must have at least one positional argument. (This is the "
+                    "argument that is differentiated.)"
+                )
+            else:
+                raise TypeError(
+                    "Functions wrapped with `equinox.filter_{grad, value_and_grad}` "
+                    "must have their first argument passed by position, not keyword. "
+                    "(This is the argument that is differentiated.)"
+                )
         x, *args = args
         diff_x, nondiff_x = partition(x, is_inexact_array)
         return fun_value_and_grad(diff_x, nondiff_x, *args, **kwargs)
@@ -633,7 +640,8 @@ class filter_custom_jvp:
             "previously passed to indicate a symbolic zero tangent for all objects "
             "that weren't inexact arrays, but all inexact arrays always had an "
             "array-valued tangent. Now, `None` may also be passed to indicate that an "
-            "inexact array has a symbolic zero tangent."
+            "inexact array has a symbolic zero tangent.",
+            stacklevel=2,
         )
 
         def _fn_jvp(args, t_args, **kwargs):
@@ -812,7 +820,8 @@ class filter_custom_vjp:
             "- `None` was previously passed to indicate a symbolic zero gradient for "
             "    all objects that weren't inexact arrays, but all inexact arrays "
             "    always had an array-valued gradient. Now, `None` may also be passed "
-            "    to indicate that an inexact array has a symbolic zero gradient."
+            "    to indicate that an inexact array has a symbolic zero gradient.",
+            stacklevel=2,
         )
 
         def _fn_fwd(perturbed, vjp_arg, *args, **kwargs):

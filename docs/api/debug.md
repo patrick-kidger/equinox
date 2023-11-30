@@ -8,6 +8,12 @@ A common source of NaNs on the forward pass is calling `jnp.log` or `jnp.sqrt` o
 
 A common source of NaNs when backpropagating is when using one of the above operations with a `jnp.where`, for example `y = jnp.where(x > 0, jnp.log(x), 0)`. In this case the NaN is created on the forward pass, but is then masked by the `jnp.where`. Unfortunately, when backpropagating, the order of the `log` and the `where` is flipped -- and the NaN is no longer masked! The solution is to use the "double where" trick: bracket your computation by a `where` on both sides. For this example, `safe_x = jnp.where(x > 0, x, 1); y = jnp.where(x > 0, jnp.log(safe_x), 0)`. This ensures that the NaN is never created in the first place at all.
 
+## Debugging runtime errors
+
+If you are getting a runtime error from [`equinox.error_if`][], then you can control the on-error behaviour via the environment variable `EQX_ON_ERROR`. In particular, setting `EQX_ON_ERROR=breakpoint` will open a `jax.debug.breakpoint` where the error arises. See the [runtime errors](./errors.md) for more information and for other values of this environment variable.
+
+If ran from `jax.jit`, then the [`equinox.error_if`][] error will be a long error message starting `INTERNAL: Generated function failed: CpuCallback error: RuntimeError: ...`. You may prefer to use `eqx.filter_jit`, which will remove some of the extra boilerplate from the error message.
+
 ## JAX tools
 
 JAX itself provides the following tools:
@@ -36,8 +42,8 @@ JAX itself provides the following tools:
 
 ::: equinox.debug.inspect_dce
 
-## Runtime errors
+---
 
-If you are getting a runtime error from [`equinox.error_if`][], then you can control the on-error behaviour via the environment variable `EQX_ON_ERROR`. If ran from `jax.jit` then this will be a long error message starting `jaxlib.xla_extension.XlaRuntimeError: INTERNAL: Generated function failed: CpuCallback error: RuntimeError: ...`; if ran from `eqx.filter_jit` then some of the extra boilerplate will be removed from the error message, and it will simply start with `jaxlib.xla_extension.XlaRuntimeError: ...`.
+::: equinox.debug.assert_max_traces
 
-In particular, setting `EQX_ON_ERROR=breakpoint` will open a `jax.debug.breakpoint` where the error arises. See the [runtime errors](./errors.md) for more information and for other values of this environment variable.
+::: equinox.debug.get_num_traces

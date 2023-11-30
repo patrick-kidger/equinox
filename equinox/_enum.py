@@ -1,3 +1,4 @@
+import warnings
 from typing import Any, cast, TYPE_CHECKING, Union
 
 import jax._src.traceback_util as traceback_util
@@ -36,9 +37,11 @@ def _store(
         our_index = our_item._value.item()
         existing_message = index_to_message[our_index]
         if message != existing_message:
-            raise ValueError(
-                f"Enumeration has duplicate incompatible values for {name}"
+            warnings.warn(
+                f"Enumeration has duplicate incompatible values for {name}. Using the "
+                f"latest, which is '{message}'."
             )
+        index_to_message[our_index] = message
         return our_index
 
 
@@ -96,7 +99,7 @@ class _EnumerationMeta(type):
         if "__doc__" not in cls.__dict__ or cls.__doc__ is None:
             doc_pieces = [
                 """An
-[enumeration](https://docs.kidger.site/equinox/api/utilities/enumerations/), with the
+[enumeration](https://docs.kidger.site/equinox/api/enumerations/), with the
 following entries:
 """
             ]

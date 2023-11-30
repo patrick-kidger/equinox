@@ -216,6 +216,7 @@ class ABCMeta(abc.ABCMeta):
         return cls
 
     def __call__(cls, *args, **kwargs):
+        __tracebackhide__ = True
         if len(cls.__abstractclassvars__) > 0:  # pyright: ignore
             abstract_class_vars = set(cls.__abstractclassvars__)  # pyright: ignore
             raise TypeError(
