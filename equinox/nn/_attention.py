@@ -2,7 +2,7 @@ import functools as ft
 import math
 import warnings
 from functools import partial
-from typing import cast, Optional, Union
+from typing import Callable, cast, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -11,7 +11,6 @@ from jaxtyping import Array, Bool, Float, PRNGKeyArray
 
 from .._module import field, Module
 from ._dropout import Dropout
-from ._embedding import RotaryPositionalEmbedding
 from ._linear import Linear
 
 
@@ -122,7 +121,6 @@ class MultiheadAttention(Module):
     output_proj: Linear
     dropout: Dropout
 
-    rope_embeddings: Optional[RotaryPositionalEmbedding] = field(static=True)
     num_heads: int = field(static=True)
     query_size: int = field(static=True)
     key_size: int = field(static=True)
@@ -134,8 +132,6 @@ class MultiheadAttention(Module):
     use_key_bias: bool = field(static=True)
     use_value_bias: bool = field(static=True)
     use_output_bias: bool = field(static=True)
-    use_rope_embeddings: bool = field(static=True)
-    state_length: Optional[int] = field(static=True)
 
     def __init__(
         self,
@@ -151,7 +147,6 @@ class MultiheadAttention(Module):
         use_value_bias: bool = False,
         use_output_bias: bool = False,
         use_rope_embeddings: bool = False,
-        state_length: Optional[int] = None,
         dropout_p: float = 0.0,
         inference: bool = False,
         *,
@@ -174,8 +169,6 @@ class MultiheadAttention(Module):
         - `use_key_bias`: Whether to use a bias term in the key projections.
         - `use_value_bias`: Whether to use a bias term in the value projections.
         - `use_output_bias`: Whether to use a bias term in the output projection.
-        - `state_length`: Used when RoPE embeddings should be applied. This is the size
-            of the key and value buffers that are updated each time the module is called
         - `dropout_p`: Dropout probability on attention weights.
         - `inference`: Whether to actually apply dropout at all. If `True` then dropout
             is not applied. If `False` then dropout is applied. This may be toggled
@@ -212,17 +205,6 @@ class MultiheadAttention(Module):
         )
         self.dropout = Dropout(dropout_p, inference=inference)
 
-        if use_rope_embeddings:
-            if state_length is None:
-                raise ValueError(
-                    "state_length must be specified when use_rope_embeddings is True"
-                )
-            else:
-                self.state_length = state_length
-            self.rope_embeddings = RotaryPositionalEmbedding(qk_size, self.state_length)
-        else:
-            self.rope_embeddings = None
-
         self.num_heads = num_heads
         self.query_size = query_size
         self.key_size = key_size
@@ -249,6 +231,20 @@ class MultiheadAttention(Module):
         key: Optional[PRNGKeyArray] = None,
         inference: Optional[bool] = None,
         deterministic: Optional[bool] = None,
+        process_heads: Optional[
+            Callable[
+                [
+                    Float[Array, "query_size num_heads qk_size"],
+                    Float[Array, "key_size num_heads qk_size"],
+                    Float[Array, "value_size num_heads vo_size"],
+                ],
+                Tuple[
+                    Float[Array, "query_size num_heads qk_size"],
+                    Float[Array, "key_size num_heads qk_size"],
+                    Float[Array, "value_size num_heads vo_size"],
+                ],
+            ]
+        ] = None,
     ) -> Float[Array, "q_seq o_size"]:
         """**Arguments:**
 
@@ -267,6 +263,9 @@ class MultiheadAttention(Module):
         - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
             argument.)
         - `deterministic`: (Deprecated in favour of `inference`.)
+        - `process_heads`: A function that takes in the query, key, and value heads and
+            returns new query, key, and value heads. For example, this can be
+            used to implement relative positional embeddings. (Keyword only argument.)
 
         **Returns:**
 
@@ -289,12 +288,25 @@ class MultiheadAttention(Module):
 
         query_heads = self._project(self.query_proj, query)
         key_heads = self._project(self.key_proj, key_)
-        if self.use_rope_embeddings and self.rope_embeddings is not None:
-            query_heads = jax.vmap(self.rope_embeddings, in_axes=1, out_axes=1)(
-                query_heads
-            )
-            key_heads = jax.vmap(self.rope_embeddings, in_axes=1, out_axes=1)(key_heads)
         value_heads = self._project(self.value_proj, value)
+
+        q_shape, k_shape, v_shape = (
+            query_heads.shape,
+            key_heads.shape,
+            value_heads.shape,
+        )
+
+        if process_heads is not None:
+            query_heads, key_heads, value_heads = process_heads(
+                query_heads, key_heads, value_heads
+            )
+
+        if (
+            query_heads.shape != q_shape
+            or key_heads.shape != k_shape
+            or value_heads.shape != v_shape
+        ):
+            raise ValueError("process_heads must not change the shape of the heads.")
 
         attn_fn = partial(
             dot_product_attention, dropout=self.dropout, inference=inference
