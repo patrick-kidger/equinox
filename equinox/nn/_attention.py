@@ -146,7 +146,6 @@ class MultiheadAttention(Module):
         use_key_bias: bool = False,
         use_value_bias: bool = False,
         use_output_bias: bool = False,
-        use_rope_embeddings: bool = False,
         dropout_p: float = 0.0,
         inference: bool = False,
         *,
@@ -216,7 +215,6 @@ class MultiheadAttention(Module):
         self.use_key_bias = use_key_bias
         self.use_value_bias = use_value_bias
         self.use_output_bias = use_output_bias
-        self.use_rope_embeddings = use_rope_embeddings
 
     @jax.named_scope("eqx.nn.MultiheadAttention")
     def __call__(
