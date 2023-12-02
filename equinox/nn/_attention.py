@@ -289,23 +289,24 @@ class MultiheadAttention(Module, strict=True):
         key_heads = self._project(self.key_proj, key_)
         value_heads = self._project(self.value_proj, value)
 
-        q_shape, k_shape, v_shape = (
-            query_heads.shape,
-            key_heads.shape,
-            value_heads.shape,
-        )
-
         if process_heads is not None:
+            q_shape, k_shape, v_shape = (
+                query_heads.shape,
+                key_heads.shape,
+                value_heads.shape,
+            )
             query_heads, key_heads, value_heads = process_heads(
                 query_heads, key_heads, value_heads
             )
 
-        if (
-            query_heads.shape != q_shape
-            or key_heads.shape != k_shape
-            or value_heads.shape != v_shape
-        ):
-            raise ValueError("process_heads must not change the shape of the heads.")
+            if (
+                query_heads.shape != q_shape
+                or key_heads.shape != k_shape
+                or value_heads.shape != v_shape
+            ):
+                raise ValueError(
+                    "process_heads must not change the shape of the heads."
+                )
 
         attn_fn = partial(
             dot_product_attention, dropout=self.dropout, inference=inference
