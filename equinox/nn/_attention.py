@@ -2,7 +2,7 @@ import functools as ft
 import math
 import warnings
 from functools import partial
-from typing import cast, Optional, Union
+from typing import Callable, cast, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -249,6 +249,20 @@ class MultiheadAttention(Module):
         key: Optional[PRNGKeyArray] = None,
         inference: Optional[bool] = None,
         deterministic: Optional[bool] = None,
+        process_heads: Optional[
+            Callable[
+                [
+                    Float[Array, "query_size num_heads qk_size"],
+                    Float[Array, "key_size num_heads qk_size"],
+                    Float[Array, "value_size num_heads vo_size"],
+                ],
+                Tuple[
+                    Float[Array, "query_size num_heads qk_size"],
+                    Float[Array, "key_size num_heads qk_size"],
+                    Float[Array, "value_size num_heads vo_size"],
+                ],
+            ]
+        ] = None,
     ) -> Float[Array, "q_seq o_size"]:
         """**Arguments:**
 
@@ -267,6 +281,9 @@ class MultiheadAttention(Module):
         - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
             argument.)
         - `deterministic`: (Deprecated in favour of `inference`.)
+        - `process_heads`: A function that takes in the query, key, and value heads and
+            returns new query, key, and value heads. For example, this can be
+            used to implement relative positional embeddings. (Keyword only argument.)
 
         **Returns:**
 
@@ -295,6 +312,24 @@ class MultiheadAttention(Module):
             )
             key_heads = jax.vmap(self.rope_embeddings, in_axes=1, out_axes=1)(key_heads)
         value_heads = self._project(self.value_proj, value)
+
+        q_shape, k_shape, v_shape = (
+            query_heads.shape,
+            key_heads.shape,
+            value_heads.shape,
+        )
+
+        if process_heads is not None:
+            query_heads, key_heads, value_heads = process_heads(
+                query_heads, key_heads, value_heads
+            )
+
+        if (
+            query_heads.shape != q_shape
+            or key_heads.shape != k_shape
+            or value_heads.shape != v_shape
+        ):
+            raise ValueError("process_heads must not change the shape of the heads.")
 
         attn_fn = partial(
             dot_product_attention, dropout=self.dropout, inference=inference
