@@ -133,6 +133,8 @@ class MultiheadAttention(Module, strict=True):
     use_key_bias: bool = field(static=True)
     use_value_bias: bool = field(static=True)
     use_output_bias: bool = field(static=True)
+    use_rope_embeddings: bool = field(static=True)
+    state_length: Optional[int] = field(static=True)
 
     def __init__(
         self,
