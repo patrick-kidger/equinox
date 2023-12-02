@@ -111,7 +111,7 @@ class SpectralNorm(StatefulLayer, Generic[_Layer]):
         x: Array,
         state: State,
         *,
-        key: Optional["jax.random.PRNGKey"] = None,  # pyright: ignore
+        key: Optional[PRNGKeyArray] = None,
         inference: Optional[bool] = None
     ) -> tuple[Array, State]:
         """**Arguments:**

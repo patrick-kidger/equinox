@@ -1,11 +1,12 @@
 import jax
 import jax.numpy as jnp
+import jax.tree_util as jtu
 import pytest
 
 import equinox as eqx
 import equinox.internal as eqxi
 
-from .helpers import shaped_allclose
+from .helpers import tree_allclose
 
 
 def test_equality():
@@ -22,6 +23,7 @@ def test_equality():
         A.x == 0  # pyright: ignore
     with pytest.raises(ValueError):
         A.x == B.z  # pyright: ignore
+    assert not A.x.is_traced()
 
     @jax.jit
     def run1():
@@ -33,12 +35,13 @@ def test_equality():
 
     @jax.jit
     def run3(a):
+        assert a.is_traced()
         return a == A.x
 
-    assert shaped_allclose(run1(), jnp.array(False))
-    assert shaped_allclose(run2(), jnp.array(True))
-    assert shaped_allclose(run3(A.x), jnp.array(True))
-    assert shaped_allclose(run3(A.y), jnp.array(False))
+    assert tree_allclose(run1(), jnp.array(False))
+    assert tree_allclose(run2(), jnp.array(True))
+    assert tree_allclose(run3(A.x), jnp.array(True))
+    assert tree_allclose(run3(A.y), jnp.array(False))
 
 
 def test_where():
@@ -229,15 +232,19 @@ def test_duplicate_fields():
     class D(A):  # pyright: ignore
         a = "hi"
 
-    with pytest.raises(ValueError):
+    with pytest.warns():
 
         class E(A):  # pyright: ignore
             a = "not hi"
 
-    with pytest.raises(ValueError):
+        assert E[E.a] == "not hi"
+
+    with pytest.warns():
 
         class F(A, B):  # pyright: ignore
             a = "not hi"
+
+        assert F[F.a] == "not hi"
 
 
 def test_error_if():
@@ -259,9 +266,27 @@ def test_compile_time_eval():
         b = "bye"
 
     @jax.jit
-    def f():
+    def f(pred):
         x = A.where(True, A.a, A.b)
+        assert not x.is_traced()
         y = x == A.a
         assert y
+        z = A.where(pred, A.a, A.b)
+        assert z.is_traced()
 
-    f()
+    f(True)
+
+
+def test_where_traced_bool_same_branches():
+    class A(eqxi.Enumeration):
+        a = "hi"
+        b = "bye"
+
+    @jax.jit
+    def f(pred, foo):
+        leaves, treedef = jtu.tree_flatten(foo)
+        bar = jtu.tree_unflatten(treedef, leaves)
+        out = A.where(pred, foo, bar)
+        assert out is foo
+
+    f(True, A.a)

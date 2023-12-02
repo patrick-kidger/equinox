@@ -12,6 +12,7 @@ from jaxtyping import PyTree
 
 from ._compile_utils import (
     compile_cache,
+    get_fn_names,
     hashable_combine,
     hashable_filter,
     hashable_partition,
@@ -21,7 +22,7 @@ from ._custom_types import sentinel
 from ._deprecate import deprecated_0_10
 from ._doc_utils import doc_remove_args
 from ._filters import combine, is_array, partition
-from ._module import Module, module_update_wrapper, Partial, Static
+from ._module import field, Module, module_update_wrapper, Partial, Static
 
 
 traceback_util.register_exclusion(__file__)
@@ -33,11 +34,18 @@ _T = TypeVar("_T")
 
 @compile_cache
 def _filter_jit_cache(fun_names, jitkwargs):
-    def fun_wrapped(dynamic, static):
-        dynamic_fun, dynamic_spec = dynamic
-        static_fun, static_spec = static
+    def fun_wrapped(dynamic_donate, dynamic_nodonate, static):
+        dynamic_dict = dict(**dynamic_donate, **dynamic_nodonate)
+        dynamic_fun = dynamic_dict.pop("fun")
+        dynamic_first = dynamic_dict.pop("first")
+        dynamic_rest = dynamic_dict.pop("rest")
+        static_fun, static_first, static_rest = static
         fun = hashable_combine(dynamic_fun, static_fun)
-        args, kwargs = hashable_combine(dynamic_spec, static_spec)
+        first_arg = hashable_combine(dynamic_first, static_first)
+        rest_args, kwargs = hashable_combine(dynamic_rest, static_rest)
+        assert type(rest_args) is tuple
+        *args, dummy_arg = (first_arg,) + rest_args
+        assert dummy_arg is None
         out = fun(*args, **kwargs)
         dynamic_out, static_out = partition(out, is_array)
         return dynamic_out, Static(static_out)
@@ -45,7 +53,7 @@ def _filter_jit_cache(fun_names, jitkwargs):
     fun_name, fun_qualname = fun_names
     fun_wrapped.__name__ = fun_name
     fun_wrapped.__qualname__ = fun_qualname
-    return jax.jit(fun_wrapped, static_argnums=1, **jitkwargs)
+    return jax.jit(fun_wrapped, donate_argnums=0, static_argnums=2, **jitkwargs)
 
 
 def _bind(signature, args, kwargs):
@@ -56,12 +64,37 @@ def _bind(signature, args, kwargs):
     return args, kwargs
 
 
-def _preprocess(info, args, kwargs):
-    signature, dynamic_fun, static_fun = info
+def _preprocess(info, args, kwargs, return_static: bool = False):
+    signature, dynamic_fun, static_fun, donate_first, donate_rest = info
     args, kwargs = _bind(signature, args, kwargs)
-    dynamic_spec = hashable_filter((args, kwargs), is_array)
-    dynamic = (dynamic_fun, dynamic_spec)
-    return dynamic
+    # add dummy to avoid special casing `len(args) == 0`.
+    args = args + (None,)
+    first_arg = args[0]
+    rest_args = args[1:]
+    if return_static:
+        dynamic_first, static_first = hashable_partition(first_arg, is_array)
+        dynamic_rest, static_rest = hashable_partition((rest_args, kwargs), is_array)
+    else:
+        dynamic_first = hashable_filter(first_arg, is_array)
+        dynamic_rest = hashable_filter(rest_args, is_array)
+    dynamic_donate = dict()
+    dynamic_nodonate = dict()
+    if donate_first:
+        dynamic_donate["first"] = dynamic_first
+    else:
+        dynamic_nodonate["first"] = dynamic_first
+    if donate_rest:
+        dynamic_donate["fun"] = dynamic_fun
+        dynamic_donate["rest"] = dynamic_rest
+    else:
+        dynamic_nodonate["fun"] = dynamic_fun
+        dynamic_nodonate["rest"] = dynamic_rest
+
+    if return_static:
+        static = (static_fun, static_first, static_rest)  # pyright: ignore
+        return dynamic_donate, dynamic_nodonate, static
+    else:
+        return dynamic_donate, dynamic_nodonate
 
 
 def _postprocess(out):
@@ -124,40 +157,51 @@ def _modify_traceback(e: Exception):
 
 
 class _JitWrapper(Module):
-    _signature: inspect.Signature
-    _dynamic_fun: PyTree
-    _static_fun: Any
-    _cached: Any
-    _filter_warning: bool
+    fn: str  # this attribute exists solely to give a nice repr
+    _signature: inspect.Signature = field(static=True, repr=False)
+    _dynamic_fun: PyTree = field(repr=False)
+    _static_fun: Any = field(static=True, repr=False)
+    _cached: Any = field(static=True, repr=False)
+    filter_warning: bool = field(static=True)
+    donate_first: bool = field(static=True)
+    donate_rest: bool = field(static=True)
 
     @property
     def __wrapped__(self):
         return hashable_combine(self._dynamic_fun, self._static_fun)
 
     def _call(self, is_lower, args, kwargs):
-        args, kwargs = _bind(self._signature, args, kwargs)
-        dynamic_spec, static_spec = hashable_partition((args, kwargs), is_array)
-        dynamic = (self._dynamic_fun, dynamic_spec)
-        static = (self._static_fun, static_spec)
+        __tracebackhide__ = True
+        info = (
+            self._signature,
+            self._dynamic_fun,
+            self._static_fun,
+            self.donate_first,
+            self.donate_rest,
+        )
+        dynamic_donate, dynamic_nodonate, static = _preprocess(  # pyright: ignore
+            info, args, kwargs, return_static=True
+        )
         if is_lower:
             return Lowered(
-                self._cached.lower(dynamic, static),
-                (self._signature, self._dynamic_fun, self._static_fun),
+                self._cached.lower(dynamic_donate, dynamic_nodonate, static),
+                info,
                 _preprocess,  # pyright: ignore
                 _postprocess,  # pyright: ignore
             )
         else:
-            if self._filter_warning is True:
+            if self.filter_warning:
                 with warnings.catch_warnings():
                     warnings.filterwarnings(
                         "ignore", message="Some donated buffers were not usable*"
                     )
-                    out = self._cached(dynamic, static)
+                    out = self._cached(dynamic_donate, dynamic_nodonate, static)
             else:
-                out = self._cached(dynamic, static)
+                out = self._cached(dynamic_donate, dynamic_nodonate, static)
             return _postprocess(out)
 
     def __call__(self, /, *args, **kwargs):
+        __tracebackhide__ = True
         try:
             return self._call(False, args, kwargs)
         except XlaRuntimeError as e:
@@ -197,21 +241,33 @@ class _JitWrapper(Module):
 
 @overload
 def filter_jit(
-    *, donate: Literal["all", "warn", "none"] = "none"
+    *,
+    donate: Literal[
+        "all", "all-except-first", "warn", "warn-except-first", "none"
+    ] = "none",
 ) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]:
     ...
 
 
 @overload
 def filter_jit(
-    fun: Callable[_P, _T], *, donate: Literal["all", "warn", "none"] = "none"
+    fun: Callable[_P, _T],
+    *,
+    donate: Literal[
+        "all", "all-except-first", "warn", "warn-except-first", "none"
+    ] = "none",
 ) -> Callable[_P, _T]:
     ...
 
 
 @doc_remove_args("jitkwargs")
 def filter_jit(
-    fun=sentinel, *, donate: Literal["all", "warn", "none"] = "none", **jitkwargs
+    fun=sentinel,
+    *,
+    donate: Literal[
+        "all", "all-except-first", "warn", "warn-except-first", "none"
+    ] = "none",
+    **jitkwargs,
 ):
     """An easier-to-use version of `jax.jit`. All JAX and NumPy arrays are traced, and
     all other types are held static.
@@ -222,7 +278,10 @@ def filter_jit(
     - `donate` indicates whether the buffers of JAX arrays are donated or not. It
         should either be:
         - `'all'`: donate all arrays and suppress all warnings about unused buffers;
+        - `'all-except-first'`: donate all arrays except for those in the first
+            argument, and suppress all warnings about unused buffers;
         - `'warn'`: as above, but don't suppress unused buffer warnings;
+        - `'warn-except-first'`: as above, but don't suppress unused buffer warnings;
         - `'none'`: no buffer donation. (This the default.)
 
     **Returns:**
@@ -255,8 +314,9 @@ def filter_jit(
         can do this by wrapping them into a JAX array: `jnp.asarray(x)`.
 
         If you want to donate only some arguments then this can be done by setting
-        `filter_jit(donate="all")` and then  `jnp.copy`ing any arguments you do not want
-        to donate before passing them in.
+        `filter_jit(donate="all-except-first")` and then passing all arguments that you
+        don't want to donate through the first argument. (Packing multiple values into
+        a tuple if necessary.)
     """
 
     if fun is sentinel:
@@ -276,22 +336,44 @@ def filter_jit(
         )
     signature = inspect.signature(fun)
 
-    if donate not in {"all", "warn", "none"}:
+    if donate == "all":
+        filter_warning = True
+        donate_first = True
+        donate_rest = True
+    elif donate == "all-except-first":
+        filter_warning = True
+        donate_first = False
+        donate_rest = True
+    elif donate == "warn":
+        filter_warning = False
+        donate_first = True
+        donate_rest = True
+    elif donate == "warn-except-first":
+        filter_warning = False
+        donate_first = False
+        donate_rest = True
+    elif donate == "none":
+        filter_warning = False
+        donate_first = False
+        donate_rest = False
+    else:
         raise ValueError(
-            "`filter_jit(..., donate=...)` must be one of 'all', 'warn', or 'none'"
+            "`filter_jit(..., donate=...)` must be one of 'all', 'all-except-first', "
+            "'warn', 'warn-except-first', or 'none'."
         )
-    filter_warning = True if donate == "all" else False
-    if donate != "none":
-        jitkwargs["donate_argnums"] = (0,)
 
+    _, name = get_fn_names(fun)
     dynamic_fun, static_fun = hashable_partition(fun, is_array)
     cached = _filter_jit_cache(fun, jitkwargs)
 
     jit_wrapper = _JitWrapper(
+        fn=name,
         _signature=signature,
         _dynamic_fun=dynamic_fun,
         _static_fun=static_fun,
         _cached=cached,
-        _filter_warning=filter_warning,
+        filter_warning=filter_warning,
+        donate_first=donate_first,
+        donate_rest=donate_rest,
     )
     return module_update_wrapper(jit_wrapper)

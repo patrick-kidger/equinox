@@ -9,7 +9,7 @@ import pytest
 
 import equinox as eqx
 
-from .helpers import shaped_allclose as _shaped_allclose
+from .helpers import tree_allclose as _shaped_allclose
 
 
 (cpu,) = jax.devices("cpu")
@@ -258,12 +258,15 @@ def test_keyword_default(getkey):
 
 
 # Issue 325
-def test_aot_compilation():
+
+
+@pytest.mark.parametrize("donate", ("all", "none"))
+def test_aot_compilation(donate):
     def f(x, y):
         return 2 * x + y
 
     x, y = jnp.array([3]), 4
-    lowered = filter_pmap(f).lower(x, y)
+    lowered = filter_pmap(f, donate=donate).lower(x, y)
     lowered.as_text()
     compiled = lowered.compile()
     compiled(x, y)

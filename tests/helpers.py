@@ -1,11 +1,7 @@
-import functools as ft
-import operator
-
-import jax
-import jax.numpy as jnp
 import jax.random as jr
 import jax.tree_util as jtu
-import numpy as np
+
+import equinox as eqx
 
 
 def random_pytree(key, treedef):
@@ -30,43 +26,5 @@ treedefs = [
 ]
 
 
-def _shaped_allclose(x, y, *, match_weak, **kwargs):
-    if match_weak:
-        x = jnp.asarray(x)
-        y = jnp.asarray(y)
-    if type(x) is not type(y):
-        return False
-    if isinstance(x, jax.Array):
-        if jnp.issubdtype(x.dtype, jnp.inexact):
-            return (
-                x.shape == y.shape
-                and x.dtype == y.dtype
-                and jnp.allclose(x, y, **kwargs)
-            )
-        else:
-            return x.shape == y.shape and x.dtype == y.dtype and jnp.all(x == y)
-    elif isinstance(x, np.ndarray):
-        if np.issubdtype(x.dtype, np.inexact):
-            return (
-                x.shape == y.shape
-                and x.dtype == y.dtype
-                and np.allclose(x, y, **kwargs)
-            )
-        else:
-            return x.shape == y.shape and x.dtype == y.dtype and np.all(x == y)
-    elif isinstance(x, jax.ShapeDtypeStruct):
-        assert x.shape == y.shape and x.dtype == y.dtype
-    else:
-        return x == y
-
-
-def shaped_allclose(x, y, *, match_weak=False, **kwargs):
-    """As `jnp.allclose`, except:
-    - It also supports PyTree arguments.
-    - It mandates that shapes match as well (no broadcasting)
-    """
-    same_structure = jtu.tree_structure(x) == jtu.tree_structure(y)
-    allclose = ft.partial(_shaped_allclose, match_weak=match_weak, **kwargs)
-    return same_structure and jtu.tree_reduce(
-        operator.and_, jtu.tree_map(allclose, x, y), True
-    )
+def tree_allclose(x, y, *, rtol=1e-5, atol=1e-8):
+    return eqx.tree_equal(x, y, typematch=True, rtol=rtol, atol=atol)

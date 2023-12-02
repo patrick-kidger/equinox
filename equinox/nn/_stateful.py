@@ -10,7 +10,7 @@ from jaxtyping import PyTree
 
 from .._module import field, Module
 from .._pretty_print import bracketed, named_objs, text, tree_pformat
-from .._tree import tree_at
+from .._tree import tree_at, tree_equal
 
 
 _Value = TypeVar("_Value")
@@ -30,12 +30,12 @@ class StateIndex(Module, Generic[_Value]):
 
             def __init__(self):
                 init_state = jnp.array(0)
-                self.index = StateIndex(init_state)
+                self.index = eqx.nn.StateIndex(init_state)
 
             def __call__(self, x: Array, state: eqx.nn.State) -> tuple[Array, eqx.nn.State]:
                 current_state = state.get(self.index)
                 new_x = x + current_state
-                new_state = state.set(current_state + 1)
+                new_state = state.set(self.index, current_state + 1)
                 return new_x, new_state
         ```
 
@@ -165,8 +165,15 @@ class State:
             raise ValueError("Can only use `eqx.nn.StateIndex`s as state keys.")
         old_value = self._state[item.marker]  # pyright: ignore
         value = jtu.tree_map(jnp.asarray, value)
-        if jax.eval_shape(lambda: old_value) != jax.eval_shape(lambda: value):
-            raise ValueError("Old and new values have different structures.")
+        old_struct = jax.eval_shape(lambda: old_value)
+        new_struct = jax.eval_shape(lambda: value)
+        if tree_equal(old_struct, new_struct) is not True:
+            old_repr = tree_pformat(old_struct, struct_as_array=True)
+            new_repr = tree_pformat(new_struct, struct_as_array=True)
+            raise ValueError(
+                "Old and new values have different structures/shapes/dtypes. The old "
+                f"value is {old_repr} and the new value is {new_repr}."
+            )
         state = self._state.copy()  # pyright: ignore
         state[item.marker] = value
         new_self = object.__new__(State)

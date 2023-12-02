@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, TYPE_CHECKING, Union
 
 import jax
 import jax.core
@@ -247,6 +247,29 @@ def _maybe_set(pred, xs, x, i, *, kwargs, makes_false_steps):
     return out
 
 
+if TYPE_CHECKING:
+    from typing import Annotated, TypeVar
+    from typing_extensions import TypeAlias
+
+    _T = TypeVar("_T")
+    MaybeBuffer: TypeAlias = Annotated[_T, "MaybeBuffer"]
+else:
+
+    class _MetaBufferItem(type):
+        def __instancecheck__(cls, instance):
+            annotation = cls.annotation
+            while type(instance) is _Buffer:
+                instance = instance._array
+            return isinstance(instance, annotation)
+
+    class MaybeBuffer:
+        def __class_getitem__(cls, item):
+            class _BufferItem(metaclass=_MetaBufferItem):
+                annotation = item
+
+            return _BufferItem
+
+
 class _Buffer(Module):
     # annotation removed because beartype can't handle the forward reference.
     _array: Any  # Union[Shaped[Array, "..."], _Buffer]
@@ -310,6 +333,21 @@ class _BufferItem(Module):
         return self._buffer._op(
             pred, self._item, x, _maybe_set, kwargs, makes_false_steps
         )
+
+
+def buffer_at_set(buffer: Union[Array, _Buffer], item, x, *, pred=True, **kwargs):
+    """As `buffer.at[...].set(...)`, and supports the `pred` argument even if it is an
+    array.
+
+    This is primarily useful when calling a buffer-using cond or body function outside
+    of a while loop, for any reason.
+    """
+    if isinstance(buffer, _Buffer):
+        return buffer.at[item].set(x, pred=pred, **kwargs)
+    else:
+        if pred is not True:
+            x = jnp.where(pred, x, buffer.at[item].get(**kwargs))
+        return buffer.at[item].set(x)
 
 
 def _is_buffer(x):

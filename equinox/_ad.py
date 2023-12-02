@@ -62,11 +62,18 @@ class _ValueAndGradWrapper(Module):
             return self._fun(_x, *_args, **_kwargs)
 
         if len(args) == 0:
-            raise TypeError(
-                "Functions wrapped with `equinox.filter_{grad, value_and_grad}` must "
-                "have their first argument passed by position, not keyword. (This is "
-                "the argument that is differentiated.)"
-            )
+            if len(kwargs) == 0:
+                raise TypeError(
+                    "Functions wrapped with `equinox.filter_{grad, value_and_grad}` "
+                    "must have at least one positional argument. (This is the "
+                    "argument that is differentiated.)"
+                )
+            else:
+                raise TypeError(
+                    "Functions wrapped with `equinox.filter_{grad, value_and_grad}` "
+                    "must have their first argument passed by position, not keyword. "
+                    "(This is the argument that is differentiated.)"
+                )
         x, *args = args
         diff_x, nondiff_x = partition(x, is_inexact_array)
         return fun_value_and_grad(diff_x, nondiff_x, *args, **kwargs)
@@ -100,19 +107,20 @@ class _GradWrapper(Module):
 
 
 _Scalar = Union[float, complex, Float[ArrayLike, ""], Complex[ArrayLike, ""]]
+_ScalarTy = TypeVar("_ScalarTy", bound=_Scalar)
 
 
 @overload
 def filter_value_and_grad(
     *, has_aux: Literal[False] = False
-) -> Callable[[Callable[_P, _Scalar]], Callable[_P, tuple[_Scalar, PyTree]]]:
+) -> Callable[[Callable[_P, _ScalarTy]], Callable[_P, tuple[_ScalarTy, PyTree]]]:
     ...
 
 
 @overload
 def filter_value_and_grad(
-    fun: Callable[_P, _Scalar], *, has_aux: Literal[False] = False
-) -> Callable[_P, tuple[_Scalar, PyTree]]:
+    fun: Callable[_P, _ScalarTy], *, has_aux: Literal[False] = False
+) -> Callable[_P, tuple[_ScalarTy, PyTree]]:
     ...
 
 
@@ -120,15 +128,16 @@ def filter_value_and_grad(
 def filter_value_and_grad(
     *, has_aux: Literal[True] = True
 ) -> Callable[
-    [Callable[_P, tuple[_Scalar, _T]]], Callable[_P, tuple[tuple[_Scalar, _T], PyTree]]
+    [Callable[_P, tuple[_ScalarTy, _T]]],
+    Callable[_P, tuple[tuple[_ScalarTy, _T], PyTree]],
 ]:
     ...
 
 
 @overload
 def filter_value_and_grad(
-    fun: Callable[_P, tuple[_Scalar, _T]], *, has_aux: Literal[True] = True
-) -> Callable[_P, tuple[tuple[_Scalar, _T], PyTree]]:
+    fun: Callable[_P, tuple[_ScalarTy, _T]], *, has_aux: Literal[True] = True
+) -> Callable[_P, tuple[tuple[_ScalarTy, _T], PyTree]]:
     ...
 
 
@@ -631,7 +640,8 @@ class filter_custom_jvp:
             "previously passed to indicate a symbolic zero tangent for all objects "
             "that weren't inexact arrays, but all inexact arrays always had an "
             "array-valued tangent. Now, `None` may also be passed to indicate that an "
-            "inexact array has a symbolic zero tangent."
+            "inexact array has a symbolic zero tangent.",
+            stacklevel=2,
         )
 
         def _fn_jvp(args, t_args, **kwargs):
@@ -810,7 +820,8 @@ class filter_custom_vjp:
             "- `None` was previously passed to indicate a symbolic zero gradient for "
             "    all objects that weren't inexact arrays, but all inexact arrays "
             "    always had an array-valued gradient. Now, `None` may also be passed "
-            "    to indicate that an inexact array has a symbolic zero gradient."
+            "    to indicate that an inexact array has a symbolic zero gradient.",
+            stacklevel=2,
         )
 
         def _fn_fwd(perturbed, vjp_arg, *args, **kwargs):

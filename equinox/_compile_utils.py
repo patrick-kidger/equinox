@@ -44,6 +44,14 @@ def _default_cache_key():
     assert False
 
 
+def get_fn_names(user_fn):
+    user_fn = _strip_wrapped_partial(user_fn)
+    try:
+        return user_fn.__name__, user_fn.__qualname__
+    except AttributeError:
+        return type(user_fn).__name__, type(user_fn).__qualname__
+
+
 def compile_cache(cacheable_fn):
     cache = weakref.WeakKeyDictionary()
     internal_caches.append(cache)
@@ -54,19 +62,15 @@ def compile_cache(cacheable_fn):
 
     @ft.wraps(cacheable_fn)
     def wrapped_cacheable_fn(user_fn, *args, **kwargs):
-        user_fn = _strip_wrapped_partial(user_fn)
+        user_fn_names = get_fn_names(user_fn)
+        leaves, treedef = jtu.tree_flatten((user_fn_names, args, kwargs))
+        leaves = tuple(leaves)
+
         # Best-effort attempt to clear the cache of old and unused entries.
         if type(user_fn) is types.FunctionType:
             cache_key = user_fn
         else:
             cache_key = _default_cache_key
-
-        try:
-            user_fn_names = user_fn.__name__, user_fn.__qualname__
-        except AttributeError:
-            user_fn_names = type(user_fn).__name__, type(user_fn).__qualname__
-        leaves, treedef = jtu.tree_flatten((user_fn_names, args, kwargs))
-        leaves = tuple(leaves)
 
         try:
             cached_fn = cache[cache_key]
@@ -117,5 +121,5 @@ class Compiled(Module):
 
     def __call__(self, *args, **kwargs):
         dynamic = self.preprocess(self.info, args, kwargs)
-        out = self.compiled(dynamic)
+        out = self.compiled(*dynamic)
         return self.postprocess(out)

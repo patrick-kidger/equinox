@@ -13,7 +13,7 @@ import pytest
 import equinox as eqx
 import equinox.internal as eqxi
 
-from .helpers import shaped_allclose
+from .helpers import tree_allclose
 
 
 def _get_problem(key, *, num_steps: Optional[int]):
@@ -89,7 +89,7 @@ def test_notangent_forward(buffer, kind, getkey):
         buffers=buffer_fn,
         checkpoints=1,
     )
-    assert shaped_allclose(final_carry, true_final_carry, rtol=1e-5, atol=1e-5)
+    assert tree_allclose(final_carry, true_final_carry, rtol=1e-5, atol=1e-5)
 
 
 @pytest.mark.parametrize("buffer", (False, True))
@@ -118,7 +118,7 @@ def test_forward(buffer, kind, getkey):
         )
 
     final_carry, _ = jax.linearize(run, init_val1, init_val2)
-    assert shaped_allclose(final_carry, true_final_carry, atol=1e-4, rtol=1e-4)
+    assert tree_allclose(final_carry, true_final_carry, atol=1e-4, rtol=1e-4)
 
 
 @pytest.mark.parametrize(
@@ -202,8 +202,8 @@ def test_backward_checkpointed(
     )
     if buffer:
         grad[1] = grad[1].at[:num_steps].set(0)
-    assert shaped_allclose(value, true_value, rtol=1e-4, atol=1e-4)
-    assert shaped_allclose(grad, true_grad, rtol=1e-4, atol=1e-4)
+    assert tree_allclose(value, true_value, rtol=1e-4, atol=1e-4)
+    assert tree_allclose(grad, true_grad, rtol=1e-4, atol=1e-4)
     assert true_text in text.strip()
 
 
@@ -246,8 +246,8 @@ def test_backward_bounded(buffer, getkey):
     value, grad = run([init_val1, init_val2, mlp])
     if buffer:
         grad[1] = grad[1].at[:14].set(0)
-    assert shaped_allclose(value, true_value, rtol=1e-4, atol=1e-4)
-    assert shaped_allclose(grad, true_grad, rtol=1e-4, atol=1e-4)
+    assert tree_allclose(value, true_value, rtol=1e-4, atol=1e-4)
+    assert tree_allclose(grad, true_grad, rtol=1e-4, atol=1e-4)
 
 
 def _maybe_value_and_grad(kind):
@@ -312,8 +312,8 @@ def test_vmap_primal_unbatched_cond(buffer, kind, getkey):
     value, grad = run([init_val1, init_val2, mlp])
     if buffer and kind != "lax":
         grad[1] = grad[1].at[:, :14].set(0)
-    assert shaped_allclose(value, true_value, atol=1e-4)
-    assert shaped_allclose(grad, true_grad, atol=1e-4)
+    assert tree_allclose(value, true_value, atol=1e-4)
+    assert tree_allclose(grad, true_grad, atol=1e-4)
 
 
 @pytest.mark.parametrize("buffer", (False, True))
@@ -366,8 +366,8 @@ def test_vmap_primal_batched_cond(buffer, kind, getkey):
     if buffer and kind != "lax":
         for i, j in enumerate(init_step):
             grad[1] = grad[1].at[i, j.item() : 14].set(0)
-    assert shaped_allclose(value, true_value, rtol=1e-4, atol=1e-4)
-    assert shaped_allclose(grad, true_grad, rtol=1e-4, atol=1e-4)
+    assert tree_allclose(value, true_value, rtol=1e-4, atol=1e-4)
+    assert tree_allclose(grad, true_grad, rtol=1e-4, atol=1e-4)
 
 
 @pytest.mark.parametrize("buffer", (False, True))
@@ -409,7 +409,7 @@ def test_vmap_cotangent(buffer, kind, getkey):
 
     true_jac = true_run((init_val1, mlp), init_val2)
     jac = run((init_val1, mlp), init_val2)
-    assert shaped_allclose(jac, true_jac, rtol=1e-4, atol=1e-4)
+    assert tree_allclose(jac, true_jac, rtol=1e-4, atol=1e-4)
 
 
 # This test might be superfluous?
@@ -662,8 +662,8 @@ def test_nested_loops(read, getkey):
         step, (val1, val2, val3, val4), ts, final_step, cotangents, True
     )
 
-    assert shaped_allclose(value, true_value)
-    assert shaped_allclose(grads, true_grads, rtol=1e-4, atol=1e-5)
+    assert tree_allclose(value, true_value)
+    assert tree_allclose(grads, true_grads, rtol=1e-4, atol=1e-5)
 
 
 def test_zero_buffer():
@@ -770,7 +770,7 @@ def test_nondifferentiable_body1():
     z_in = jnp.array([-5.0, -5.0, -5.0])
     true = run((x_in, z_in), y_in, true=True)
     outs = run((x_in, z_in), y_in, true=False)
-    assert shaped_allclose(true, outs)
+    assert tree_allclose(true, outs)
 
 
 def test_nondifferentiable_body2(capfd):
@@ -838,7 +838,7 @@ def test_body_fun_grads(capfd):
     assert "symbolic_zero_gradient (True, True, True, (False, False))" in text
 
     true = run(x__y, true=True)
-    assert shaped_allclose(true, outs)
+    assert tree_allclose(true, outs)
 
 
 def test_trivial_vjp(capfd):
@@ -861,3 +861,32 @@ def test_trivial_vjp(capfd):
     text, _ = capfd.readouterr()
     assert "perturb_val (False, False, False, (True, False))" in text
     assert "symbolic_zero_gradient" not in text
+
+
+def test_buffer_at_set():
+    array = jnp.array([0])
+    assert eqx.tree_equal(eqxi.buffer_at_set(array, 0, 1), jnp.array([1]))
+    assert eqx.tree_equal(eqxi.buffer_at_set(array, 0, 1, pred=False), jnp.array([0]))
+
+    @jax.jit
+    def f(pred):
+        return eqxi.buffer_at_set(array, 0, 1, pred=pred)
+
+    assert eqx.tree_equal(f(True), jnp.array([1]))
+    assert eqx.tree_equal(f(False), jnp.array([0]))
+
+    @jax.jit
+    def g(pred):
+        def cond(_):
+            return True
+
+        def body(carry):
+            assert not eqx.is_array(carry)
+            return eqxi.buffer_at_set(carry, 0, 1, pred=pred)
+
+        return eqxi.while_loop(
+            cond, body, array, max_steps=1, kind="checkpointed", buffers=lambda x: x
+        )
+
+    assert eqx.tree_equal(g(True), jnp.array([1]))
+    assert eqx.tree_equal(g(False), jnp.array([0]))

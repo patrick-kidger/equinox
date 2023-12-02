@@ -10,7 +10,7 @@ import pytest
 
 import equinox as eqx
 
-from .helpers import shaped_allclose
+from .helpers import tree_allclose
 
 
 def test_filter_grad(getkey):
@@ -26,14 +26,14 @@ def test_filter_grad(getkey):
         return sum
 
     ga, gb = f([a, b])
-    assert shaped_allclose(ga, jnp.ones((2, 3)))
-    assert shaped_allclose(gb, jnp.ones((2, 3)))
+    assert tree_allclose(ga, jnp.ones((2, 3)))
+    assert tree_allclose(gb, jnp.ones((2, 3)))
 
     gtrue, ghi, gobject, ga = f([True, "hi", object(), a])
     assert gtrue is None
     assert ghi is None
     assert gobject is None
-    assert shaped_allclose(ga, jnp.ones((2, 3)))
+    assert tree_allclose(ga, jnp.ones((2, 3)))
 
     gtrue, gdict, (g5, g1), gnp = f(
         [
@@ -46,11 +46,11 @@ def test_filter_grad(getkey):
     assert gtrue is None
     assert list(gdict.keys()) == ["hi"]
     assert isinstance(gdict["hi"], eqx.nn.Linear)
-    assert shaped_allclose(gdict["hi"].weight, jnp.ones((1, 1)))
-    assert shaped_allclose(gdict["hi"].bias, jnp.ones(1))
+    assert tree_allclose(gdict["hi"].weight, jnp.ones((1, 1)))
+    assert tree_allclose(gdict["hi"].bias, jnp.ones(1))
     assert g5 is None
     assert g1 is None
-    assert shaped_allclose(gnp, jnp.ones(2))
+    assert tree_allclose(gnp, jnp.ones(2))
 
 
 # TODO: more comprehensive tests on this.
@@ -62,8 +62,8 @@ def test_filter_value_and_grad(getkey):
         return jnp.sum(x)
 
     val, grad = f(a)
-    assert shaped_allclose(val, jnp.sum(a))
-    assert shaped_allclose(grad, jnp.ones((2, 3)))
+    assert tree_allclose(val, jnp.sum(a))
+    assert tree_allclose(grad, jnp.ones((2, 3)))
 
 
 def test_aux(getkey):
@@ -217,8 +217,8 @@ def test_filter_jvp():
                 return x + 1
 
             primals, tangents = after_jit(eqx.filter_jvp)(f, (1.0,), (1.0,))
-            assert shaped_allclose(primals, jnp.array(2.0))
-            assert shaped_allclose(tangents, jnp.array(1.0))
+            assert tree_allclose(primals, jnp.array(2.0))
+            assert tree_allclose(tangents, jnp.array(1.0))
 
             another_object = object()
 
@@ -281,7 +281,7 @@ def test_filter_jvp():
                     g, primals_in, tangents_in
                 )
                 assert primals_out == true_primals_out
-                assert shaped_allclose(tangents_out, true_tangents_out)
+                assert tree_allclose(tangents_out, true_tangents_out)
 
             bad_tangents_in1 = (jnp.array(5), None, None, None, None, None)
             bad_tangents_in2 = (None, None, None, None, None, object())
@@ -316,7 +316,7 @@ def test_filter_vjp(getkey):
         out_array, out_float, out_sentinel = out
         assert out_array.shape == (3,)
         assert out_array.dtype == jnp.float32
-        assert shaped_allclose(out_float, 2.0)
+        assert tree_allclose(out_float, 2.0)
         assert out_sentinel is sentinel2
         ct_mlp, ct_x, ct_y, ct_sentinel = vjpfun(
             (jnp.array([1.0, 2.0, 3.0]), None, None)
@@ -370,7 +370,7 @@ def test_closure_convert_custom_jvp():
         f = eqx.filter_closure_convert(f, 3.0)
         return call(f, 3.0)
 
-    assert shaped_allclose(run((2.0, 4.0)), (jnp.array(1.0), jnp.array(1.0)))
+    assert tree_allclose(run((2.0, 4.0)), (jnp.array(1.0), jnp.array(1.0)))
 
 
 def test_filter_custom_jvp_no_kwargs():
@@ -392,10 +392,10 @@ def test_filter_custom_jvp_no_kwargs():
         return primal_out, tangent_out
 
     f = lambda a: a**2 + 1
-    assert shaped_allclose(call(f, 1), 2)
-    assert shaped_allclose(call(f, 1.0), 2.0)
-    assert shaped_allclose(call(f, jnp.array(1)), jnp.array(2))
-    assert shaped_allclose(call(f, jnp.array(1.0)), jnp.array(2.0))
+    assert tree_allclose(call(f, 1), 2)
+    assert tree_allclose(call(f, 1.0), 2.0)
+    assert tree_allclose(call(f, jnp.array(1)), jnp.array(2))
+    assert tree_allclose(call(f, jnp.array(1.0)), jnp.array(2.0))
 
     def jvpcall(x, tx):
         def _jvpcall(_x):
@@ -405,8 +405,8 @@ def test_filter_custom_jvp_no_kwargs():
 
     primal_out, tangent_out = jvpcall(2.0, 3.0)
     assert was_called
-    assert shaped_allclose(primal_out, 5.0)
-    assert shaped_allclose(tangent_out, 9.0)
+    assert tree_allclose(primal_out, 5.0)
+    assert tree_allclose(tangent_out, 9.0)
 
 
 def test_filter_custom_jvp_kwargs():
@@ -427,10 +427,10 @@ def test_filter_custom_jvp_kwargs():
         return primal_out, tangent_out
 
     f = lambda a, b: a**2 + b
-    assert shaped_allclose(call(1, 2, fn=f), 3)
-    assert shaped_allclose(call(1.0, 2.0, fn=f), 3.0)
-    assert shaped_allclose(call(jnp.array(1), 2, fn=f), jnp.array(3))
-    assert shaped_allclose(call(jnp.array(1.0), 2, fn=f), jnp.array(3.0))
+    assert tree_allclose(call(1, 2, fn=f), 3)
+    assert tree_allclose(call(1.0, 2.0, fn=f), 3.0)
+    assert tree_allclose(call(jnp.array(1), 2, fn=f), jnp.array(3))
+    assert tree_allclose(call(jnp.array(1.0), 2, fn=f), jnp.array(3.0))
 
     def jvpcall(x, y, tx, ty):
         def _jvpcall(_x, _y):
@@ -440,8 +440,8 @@ def test_filter_custom_jvp_kwargs():
 
     primal_out, tangent_out = jvpcall(2.0, 1.5, 3.0, 4.0)
     assert was_called
-    assert shaped_allclose(primal_out, 5.5)
-    assert shaped_allclose(tangent_out, 13.0)
+    assert tree_allclose(primal_out, 5.5)
+    assert tree_allclose(tangent_out, 13.0)
 
 
 # Checks that we don't get a leaked tracer error from passing an array through
@@ -550,7 +550,8 @@ def test_filter_custom_vjp_defvjp():
         g0, g1, g2 = g
         return g0 + g1, g2
 
-    f.defvjp(f_fwd, f_bwd)
+    with pytest.warns():
+        f.defvjp(f_fwd, f_bwd)
     jax.grad(lambda x: sum(f(x)))((jnp.array(1.0), jnp.array(1.0)))
 
 

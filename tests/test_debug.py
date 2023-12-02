@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+import jax.tree_util as jtu
 import pytest
 
 import equinox as eqx
@@ -42,11 +43,41 @@ def test_backward_nan(capfd):
 def test_check_dce(capfd):
     @jax.jit
     def f(x):
-        a, _ = eqx.debug.store_dce((x**2, x + 1))
+        a, _, _ = eqx.debug.store_dce((x**2, x + 1, "foobar"))
         return a
 
     f(1)
     capfd.readouterr()
     eqx.debug.inspect_dce()
     text, _ = capfd.readouterr()
-    assert "(i32[], <DCE'd>)" in text
+    assert "(i32[], <DCE'd>, 'foobar')" in text
+
+
+def test_max_traces():
+    @jax.jit
+    @eqx.debug.assert_max_traces(max_traces=1)
+    def f(x):
+        return x + 1
+
+    f(1)
+    f(2)
+
+    with pytest.raises(RuntimeError, match="can only be traced 1 times"):
+        f(3.0)
+
+
+def test_max_traces_clone(getkey):
+    lin = eqx.nn.Linear(3, 4, key=getkey())
+    lin = eqx.filter_jit(eqx.debug.assert_max_traces(lin, max_traces=2))
+    leaves, treedef = jtu.tree_flatten(lin)
+    lin2 = jtu.tree_unflatten(treedef, leaves)
+
+    lin(jnp.array([1.0, 2.0, 3.0]))
+    assert eqx.debug.get_num_traces(lin) == 1
+    assert eqx.debug.get_num_traces(lin2) == 1
+    lin2(jnp.array([1, 2, 3]))
+    assert eqx.debug.get_num_traces(lin) == 2
+    assert eqx.debug.get_num_traces(lin2) == 2
+
+    with pytest.raises(RuntimeError, match="can only be traced 2 times"):
+        lin(jnp.array([False, False, False]))
