@@ -152,6 +152,9 @@ class Lambda(Module):
 
     fn: Callable[[Any], Any]
 
+    def __init__(self, fn: Callable[[Any], Any]):
+        self.fn = fn
+
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
