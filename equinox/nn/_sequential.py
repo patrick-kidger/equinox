@@ -1,10 +1,11 @@
 from collections.abc import Callable, Sequence
-from typing import Any, ClassVar, Optional, overload, Union
+from typing import Any, Optional, overload, Union
 
 import jax
 import jax.random as jr
 from jaxtyping import Array, PRNGKeyArray
 
+from .._better_abstract import AbstractClassVar
 from .._custom_types import sentinel
 from .._module import Module
 from ._stateful import State
@@ -36,7 +37,7 @@ class StatefulLayer(Module):
         """
         return True
 
-    __call__: ClassVar[Callable]
+    __call__: AbstractClassVar[Callable]
 
 
 class Sequential(StatefulLayer):
@@ -50,6 +51,11 @@ class Sequential(StatefulLayer):
     layers: tuple
 
     def __init__(self, layers: Sequence[Callable]):
+        """**Arguments:**
+
+        - `layers`: A sequence of [`equinox.Module`][]s.
+        """
+
         self.layers = tuple(layers)
 
     def is_stateful(self) -> bool:
@@ -117,12 +123,6 @@ class Sequential(StatefulLayer):
 
     def __len__(self):
         return len(self.layers)
-
-
-Sequential.__init__.__doc__ = """**Arguments:**
-
-- `layers`: A sequence of [`equinox.Module`][]s.
-"""
 
 
 class Lambda(Module):
