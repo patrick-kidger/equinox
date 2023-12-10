@@ -5,6 +5,8 @@ from typing import Optional
 import jax.random as jr
 from jaxtyping import PRNGKeyArray
 
+from .._config import EQX_GETKEY_SEED
+
 
 # This offers reproducability -- the initial seed is printed in the repr so we can see
 # it when a test fails.
@@ -32,7 +34,7 @@ class GetKey:
     call: int
     key: PRNGKeyArray
 
-    def __init__(self, seed: Optional[int] = None):
+    def __init__(self, seed: Optional[int] = EQX_GETKEY_SEED):
         if seed is None:
             seed = random.randint(0, 2**31 - 1)
         self.seed = seed
