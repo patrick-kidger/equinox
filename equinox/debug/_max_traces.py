@@ -92,7 +92,8 @@ def assert_max_traces(
 
 @overload
 def assert_max_traces(
-    *, max_traces: Optional[int]
+    *,
+    max_traces: Optional[int],
 ) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]:
     ...
 

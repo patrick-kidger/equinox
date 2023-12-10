@@ -1,9 +1,8 @@
+import equinox.internal as eqxi
 import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import pytest
-
-import equinox.internal as eqxi
 
 from .helpers import random_pytree, tree_allclose, treedefs
 

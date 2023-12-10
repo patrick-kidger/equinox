@@ -47,7 +47,7 @@ class GRUCell(Module):
         use_bias: bool = True,
         *,
         key: PRNGKeyArray,
-        **kwargs
+        **kwargs,
     ):
         """**Arguments:**
 
@@ -151,7 +151,7 @@ class LSTMCell(Module):
         use_bias: bool = True,
         *,
         key: PRNGKeyArray,
-        **kwargs
+        **kwargs,
     ):
         """**Arguments:**
 

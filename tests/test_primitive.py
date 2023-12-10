@@ -1,5 +1,7 @@
 import functools as ft
 
+import equinox as eqx
+import equinox.internal as eqxi
 import jax
 import jax.core
 import jax.interpreters.ad as ad
@@ -7,9 +9,6 @@ import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
 import jax.numpy as jnp
 import jax.tree_util as jtu
-
-import equinox as eqx
-import equinox.internal as eqxi
 
 from .helpers import tree_allclose
 

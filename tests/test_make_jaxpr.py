@@ -1,12 +1,11 @@
 import collections as co
 
+import equinox as eqx
 import jax
 import jax.custom_derivatives as custom_derivatives
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.tree_util as jtu
-
-import equinox as eqx
 
 
 def test_basic(getkey):

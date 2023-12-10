@@ -1,13 +1,12 @@
 from typing import cast
 
+import equinox as eqx
+import equinox.internal as eqxi
 import jax
 import jax.core
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import pytest
-
-import equinox as eqx
-import equinox.internal as eqxi
 
 from .helpers import tree_allclose
 

@@ -36,15 +36,17 @@ include = ["equinox/*"]
 addopts = "--jaxtyping-packages=equinox,beartype.beartype(conf=beartype.BeartypeConf(strategy=beartype.BeartypeStrategy.On))"
 
 [tool.ruff]
-select = ["E", "F", "I001"]
+extend-include = ["*.ipynb"]
+fixable = ["I001", "F401"]
 ignore = ["E402", "E721", "E731", "E741", "F722"]
 ignore-init-module-imports = true
-fixable = ["I001", "F401"]
+select = ["E", "F", "I001"]
+src = []
 
 [tool.ruff.isort]
 combine-as-imports = true
-lines-after-imports = 2
 extra-standard-library = ["typing_extensions"]
+lines-after-imports = 2
 order-by-type = false
 
 [tool.pyright]

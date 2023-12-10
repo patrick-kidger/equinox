@@ -1,6 +1,5 @@
-import jax.numpy as jnp
-
 import equinox as eqx
+import jax.numpy as jnp
 
 
 def test_clear_caches():

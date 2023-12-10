@@ -1,9 +1,8 @@
 from functools import partial
 
+import equinox as eqx
 import jax.numpy as jnp
 import jax.tree_util as jtu
-
-import equinox as eqx
 
 
 def test_checkpoint(getkey):
