@@ -1,11 +1,10 @@
 from typing import Union
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.random as jr
 import pytest
-
-import equinox as eqx
 
 from .helpers import tree_allclose
 

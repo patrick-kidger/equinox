@@ -169,7 +169,7 @@ def _maybe_set_transpose(
     i_static,
     i_treedef,
     kwargs,
-    makes_false_steps
+    makes_false_steps,
 ):
     assert not ad.is_undefined_primal(pred)
     for z in i_dynamic_leaves:
@@ -242,7 +242,7 @@ def _maybe_set(pred, xs, x, i, *, kwargs, makes_false_steps):
         i_static=i_static,
         i_treedef=i_treedef,
         kwargs=kwargs,
-        makes_false_steps=makes_false_steps
+        makes_false_steps=makes_false_steps,
     )
     return out
 

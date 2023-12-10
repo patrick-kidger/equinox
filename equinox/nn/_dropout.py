@@ -28,7 +28,7 @@ class Dropout(Module):
         p: float = 0.5,
         inference: bool = False,
         *,
-        deterministic: Optional[bool] = None
+        deterministic: Optional[bool] = None,
     ):
         """**Arguments:**
 
@@ -61,7 +61,7 @@ class Dropout(Module):
         *,
         key: Optional[PRNGKeyArray] = None,
         inference: Optional[bool] = None,
-        deterministic: Optional[bool] = None
+        deterministic: Optional[bool] = None,
     ) -> Array:
         """**Arguments:**
 

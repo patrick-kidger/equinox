@@ -1,12 +1,11 @@
 import os
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 from jax.dtypes import bfloat16
-
-import equinox as eqx
 
 
 def _example_trees():
@@ -85,10 +84,13 @@ def test_helpful_errors(getkey, tmp_path):
     # Test that we get a helpful error message when the loading itself fails
     tree = jnp.array(1), {}
     eqx.tree_serialise_leaves(tmp_path, tree)
-    bad_like_tree = jnp.array(2), {
-        "a": jnp.array(2),
-        "b": jnp.array(2),
-    }
+    bad_like_tree = (
+        jnp.array(2),
+        {
+            "a": jnp.array(2),
+            "b": jnp.array(2),
+        },
+    )
     with pytest.raises(
         RuntimeError,
         match=r"Error at leaf with path \(SequenceKey\(idx=1\), DictKey\(key='a'\)\)",
@@ -96,15 +98,21 @@ def test_helpful_errors(getkey, tmp_path):
         _ = eqx.tree_deserialise_leaves(tmp_path, bad_like_tree)
 
     # Test that we get a helpful error message when the types don't match
-    tree = jnp.array(1), {
-        "a": jnp.array(1),
-        "b": jnp.array(1),
-    }
+    tree = (
+        jnp.array(1),
+        {
+            "a": jnp.array(1),
+            "b": jnp.array(1),
+        },
+    )
     eqx.tree_serialise_leaves(tmp_path, tree)
-    bad_like_tree = jnp.array(2), {
-        "a": jnp.array(2, dtype=jnp.float32),
-        "b": jnp.array(2),
-    }
+    bad_like_tree = (
+        jnp.array(2),
+        {
+            "a": jnp.array(2, dtype=jnp.float32),
+            "b": jnp.array(2),
+        },
+    )
     with pytest.raises(
         RuntimeError,
         match=r"Deserialised leaf at path \(SequenceKey\(idx=1\), DictKey\(key='a'\)\)",

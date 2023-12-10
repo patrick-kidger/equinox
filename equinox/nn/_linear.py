@@ -24,7 +24,7 @@ class Linear(Module):
         out_features: Union[int, Literal["scalar"]],
         use_bias: bool = True,
         *,
-        key: PRNGKeyArray
+        key: PRNGKeyArray,
     ):
         """**Arguments:**
 

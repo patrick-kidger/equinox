@@ -403,9 +403,7 @@ class _NoInlineWrapper(Module):
         )
 
 
-def noinline(
-    fn: Callable, abstract_fn: Optional[Callable] = None  # pyright: ignore
-) -> Callable:
+def noinline(fn: Callable, abstract_fn: Optional[Callable] = None) -> Callable:  # pyright: ignore
     """Marks a function as not being inlined into a larger computation.
     This can help to reduce compile time at the expense of increased runtime.
 

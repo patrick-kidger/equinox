@@ -2,6 +2,8 @@ import functools as ft
 import timeit
 from typing import Optional
 
+import equinox as eqx
+import equinox.internal as eqxi
 import jax
 import jax.lax as lax
 import jax.lib
@@ -9,9 +11,6 @@ import jax.numpy as jnp
 import jax.random as jr
 import jax.tree_util as jtu
 import pytest
-
-import equinox as eqx
-import equinox.internal as eqxi
 
 from .helpers import tree_allclose
 

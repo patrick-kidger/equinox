@@ -1,9 +1,8 @@
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import pytest
-
-import equinox as eqx
 
 
 def test_backward_nan(capfd):

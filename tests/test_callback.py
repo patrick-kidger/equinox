@@ -1,9 +1,8 @@
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-
-import equinox as eqx
 
 from .helpers import tree_allclose
 

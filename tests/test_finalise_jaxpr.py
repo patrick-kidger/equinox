@@ -1,11 +1,10 @@
 from typing import cast
 
+import equinox.internal as eqxi
 import jax
 import jax.core
 import jax.lax as lax
 import jax.numpy as jnp
-
-import equinox.internal as eqxi
 
 from .helpers import tree_allclose
 

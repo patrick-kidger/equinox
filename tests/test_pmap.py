@@ -1,13 +1,12 @@
 import functools as ft
 from typing import Any, Union
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.random as jr
 import jax.tree_util as jtu
 import pytest
-
-import equinox as eqx
 
 from .helpers import tree_allclose as _shaped_allclose
 

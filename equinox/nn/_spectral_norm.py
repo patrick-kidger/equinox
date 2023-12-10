@@ -68,7 +68,7 @@ class SpectralNorm(StatefulLayer, Generic[_Layer]):
         inference: bool = False,
         *,
         key: PRNGKeyArray,
-        **kwargs
+        **kwargs,
     ):
         """**Arguments:**
 
@@ -112,7 +112,7 @@ class SpectralNorm(StatefulLayer, Generic[_Layer]):
         state: State,
         *,
         key: Optional[PRNGKeyArray] = None,
-        inference: Optional[bool] = None
+        inference: Optional[bool] = None,
     ) -> tuple[Array, State]:
         """**Arguments:**
 

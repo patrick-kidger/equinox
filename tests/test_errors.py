@@ -1,9 +1,8 @@
+import equinox as eqx
+import equinox.internal as eqxi
 import jax
 import jax.numpy as jnp
 import pytest
-
-import equinox as eqx
-import equinox.internal as eqxi
 
 
 def _f(x):

@@ -1,9 +1,8 @@
+import equinox as eqx
+import equinox.internal as eqxi
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import optax
-
-import equinox as eqx
-import equinox.internal as eqxi
 
 
 def test_fixup_optax():
