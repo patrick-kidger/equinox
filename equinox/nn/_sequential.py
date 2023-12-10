@@ -23,7 +23,7 @@ class StatefulLayer(Module):
 
         The default implementation just returns True, but subclasses may override this
         to provide custom logic if the layer is only "maybe stateful". (E.g. if they
-        optioanlly use stateful sublayers themselves.)
+        optionally use stateful sublayers themselves.)
 
         **Arguments:**
 
