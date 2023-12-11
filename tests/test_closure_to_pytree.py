@@ -1,5 +1,6 @@
 import equinox as eqx
 import equinox.internal as eqxi
+import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import optax
@@ -22,7 +23,8 @@ def test_fixup_optax():
     # Check that we can still init and update as normal.
     grads = params = {"foo": jnp.array(1.0)}
     state = optim.init(params)
-    optim.update(grads, state)
+    with jax.numpy_dtype_promotion("standard"):
+        optim.update(grads, state)
 
     lr = jnp.array(1e-2)
     optim2 = optax.chain(

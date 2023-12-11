@@ -1,3 +1,4 @@
+import math
 from collections.abc import Callable, Sequence
 from typing import Optional, Union
 
@@ -5,7 +6,6 @@ import jax
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.random
-import numpy as np
 from jaxtyping import Array, PRNGKeyArray
 
 from .._module import field, Module
@@ -203,7 +203,7 @@ class AvgPool1d(Pool):
         A JAX array of shape `(channels, new_dim)`.
         """
 
-        return super().__call__(x) / np.prod(self.kernel_size)
+        return super().__call__(x) / math.prod(self.kernel_size)
 
 
 class MaxPool1d(Pool):
@@ -302,7 +302,7 @@ class AvgPool2d(Pool):
         A JAX array of shape `(channels, new_dim_1, new_dim_2)`.
         """
 
-        return super().__call__(x) / np.prod(self.kernel_size)
+        return super().__call__(x) / math.prod(self.kernel_size)
 
 
 class MaxPool2d(Pool):
@@ -402,7 +402,7 @@ class AvgPool3d(Pool):
         A JAX array of shape `(channels, new_dim_1, new_dim_2, new_dim_3)`.
         """
 
-        return super().__call__(x) / np.prod(self.kernel_size)
+        return super().__call__(x) / math.prod(self.kernel_size)
 
 
 class MaxPool3d(Pool):
