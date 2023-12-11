@@ -8,17 +8,17 @@ Most users find that this is a simpler API when working with complicated PyTrees
 
 Likewise, `eqx.filter_grad` will automatically differentiate all floating-point JAX arrays and treat the rest nondifferentiably, etc. Each transformation here just combines [`equinox.partition`][], `jax.{jit, ...}` and [`equinox.combine`][] together.
 
-## Just-in-time compilation
+## Compilation
 
 ::: equinox.filter_jit
 
 ---
 
-::: equinox.filter_make_jaxpr
+::: equinox.filter_device_put
 
 ---
 
-::: equinox.filter_eval_shape
+::: equinox.filter_with_sharding_constraint
 
 ## Automatic differentiation
 
@@ -48,10 +48,6 @@ Likewise, `eqx.filter_grad` will automatically differentiate all floating-point 
 
 ::: equinox.filter_custom_vjp
 
----
-
-::: equinox.filter_closure_convert
-
 ## Vectorisation and parallelisation
 
 ::: equinox.filter_vmap
@@ -63,3 +59,17 @@ Likewise, `eqx.filter_grad` will automatically differentiate all floating-point 
 ## Callbacks
 
 ::: equinox.filter_pure_callback
+
+# Tracing
+
+---
+
+::: equinox.filter_make_jaxpr
+
+---
+
+::: equinox.filter_eval_shape
+
+---
+
+::: equinox.filter_closure_convert

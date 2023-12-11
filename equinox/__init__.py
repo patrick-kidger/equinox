@@ -49,6 +49,10 @@ from ._serialisation import (
     tree_deserialise_leaves as tree_deserialise_leaves,
     tree_serialise_leaves as tree_serialise_leaves,
 )
+from ._sharding import (
+    filter_device_put as filter_device_put,
+    filter_with_sharding_constraint as filter_with_sharding_constraint,
+)
 from ._tree import (
     tree_at as tree_at,
     tree_check as tree_check,
