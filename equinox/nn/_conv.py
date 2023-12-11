@@ -1,4 +1,5 @@
 import itertools as it
+import math
 from collections.abc import Callable, Sequence
 from typing import Optional, TypeVar, Union
 
@@ -113,7 +114,7 @@ class Conv(Module):
             )
 
         grouped_in_channels = in_channels // groups
-        lim = 1 / np.sqrt(grouped_in_channels * np.prod(kernel_size))
+        lim = 1 / np.sqrt(grouped_in_channels * math.prod(kernel_size))
         self.weight = jrandom.uniform(
             wkey,
             (out_channels, grouped_in_channels) + kernel_size,
@@ -385,7 +386,7 @@ class ConvTranspose(Module):
                 raise ValueError("Must have `output_padding < stride` (elementwise).")
 
         grouped_in_channels = in_channels // groups
-        lim = 1 / np.sqrt(grouped_in_channels * np.prod(kernel_size))
+        lim = 1 / np.sqrt(grouped_in_channels * math.prod(kernel_size))
         self.weight = jrandom.uniform(
             wkey,
             (out_channels, grouped_in_channels) + kernel_size,

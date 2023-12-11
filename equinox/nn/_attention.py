@@ -31,7 +31,8 @@ def dot_product_attention_weights(
         logits = jnp.where(mask, logits, jnp.finfo(logits.dtype).min)
         logits = cast(Array, logits)
 
-    dtype = jnp.result_type(logits.dtype, jnp.float32)
+    with jax.numpy_dtype_promotion("standard"):
+        dtype = jnp.result_type(logits.dtype, jnp.float32)
     weights = jax.nn.softmax(logits.astype(dtype)).astype(logits.dtype)
     return weights
 

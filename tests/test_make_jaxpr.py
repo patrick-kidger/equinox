@@ -25,7 +25,8 @@ def test_basic(getkey):
             x = self.mlp_pytree(x)
             x = mlp_arg(x)
             x = mlp_closure(x)
-            x = x + self.int_pytree + int_closure
+            with jax.numpy_dtype_promotion("standard"):
+                x = x + self.int_pytree + int_closure
             return x, sentinel
 
     m = _M(mlp_pytree, int_pytree)
