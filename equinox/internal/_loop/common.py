@@ -1,3 +1,4 @@
+import itertools as it
 from typing import Any, TYPE_CHECKING, Union
 
 import jax
@@ -12,6 +13,7 @@ from jaxtyping import Array, Bool
 
 from ..._filters import combine, is_array, partition
 from ..._module import field, Module
+from ..._pretty_print import tree_pformat
 from ..._tree import tree_at, tree_equal
 from ..._unvmap import unvmap_any
 from .._nontraceable import nonbatchable
@@ -456,10 +458,27 @@ def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers, makes_false
         # Strip `.named_shape`; c.f. Diffrax issue #246
         struct = jax.eval_shape(lambda: buffer_val)
         struct2 = jax.eval_shape(lambda: buffer_val2)
-        struct = jtu.tree_map(lambda x: (x.shape, x.dtype), struct)
-        struct2 = jtu.tree_map(lambda x: (x.shape, x.dtype), struct2)
+        struct = jtu.tree_map(lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype), struct)
+        struct2 = jtu.tree_map(
+            lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype), struct2
+        )
         if not tree_equal(struct, struct2):
-            raise ValueError("`body_fun` must have the same input and output structure")
+            string = tree_pformat(struct, struct_as_array=True)
+            string2 = tree_pformat(struct2, struct_as_array=True)
+            out = []
+            for line, line2 in it.zip_longest(
+                string.split("\n"), string2.split("\n"), fillvalue=""
+            ):
+                if line == line2:
+                    out.append("  " + line)
+                else:
+                    out.append("- " + line)
+                    out.append("+ " + line2)
+            out = "\n".join(out)
+            raise ValueError(
+                "`body_fun` must have the same input and output structure. Difference "
+                "is:\n" + out
+            )
         val2 = jtu.tree_map(
             unwrap_and_select, buffer_val, buffer_val2, is_leaf=is_our_buffer
         )
