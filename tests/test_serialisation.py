@@ -248,3 +248,13 @@ def test_stateful(tmp_path):
     state2 = eqx.nn.State(model2)
 
     eqx.tree_deserialise_leaves(tmp_path, (model2, state2))
+
+
+def test_eval_shape(getkey, tmp_path):
+    model = eqx.nn.MLP(2, 2, 2, 2, key=getkey())
+    eqx.tree_serialise_leaves(tmp_path, model)
+
+    model2 = eqx.filter_eval_shape(eqx.nn.MLP, 2, 2, 2, 2, key=getkey())
+    model3 = eqx.tree_deserialise_leaves(tmp_path, model2)
+
+    assert eqx.tree_equal(model, model3, typematch=True)
