@@ -47,3 +47,4 @@ from ._stateful import (
     State as State,
     StateIndex as StateIndex,
 )
+from ._weight_norm import WeightNorm as WeightNorm
