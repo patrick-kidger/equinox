@@ -1,10 +1,9 @@
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.random as jr
 import jax.tree_util as jtu
 import pytest
-
-import equinox as eqx
 
 
 def test_delete_init_state():

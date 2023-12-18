@@ -1,13 +1,12 @@
 import warnings
 from typing import Union
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 import jax.tree_util as jtu
 import pytest
-
-import equinox as eqx
 
 from .helpers import tree_allclose
 

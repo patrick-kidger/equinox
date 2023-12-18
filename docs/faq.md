@@ -218,6 +218,6 @@ Julia is often a small amount faster on microbenchmarks on CPUs. JAX+Equinox sup
 
 **You're obviously biased! Are the above comparisons fair?**
 
-Seriously, we think they're fair! Nonetheless all of the above approaches have their adherents, so it seems like all of these approaches are doing something right. So if you're already happily using one of them for your current project... then keep using them. (Don't rewrite things for no reason.) But conversely, we'd invite you to try Equinox for your next project. :)
+Seriously, we think they're fair! Nonetheless all of the above approaches have their adherents, so it seems like all of these approaches are doing something right. So if you're already happily using one of them for your current project... then keep using them. (Don't rewrite things for no reason.) But conversely, we'd invite you to try Equinox for your next project.
 
-For what it's worth, if you have the time to learn (e.g. you're a grad student), then we'd strongly recommend trying all of the above. All of these libraries have made substantial innovations, and have all made substantially moved the numerical computing space forward. Equinox deliberately takes inspiration from them!
+For what it's worth, if you have the time to learn (e.g. you're a grad student), then we'd strongly recommend trying all of the above. All of these libraries introduced substantial innovations, and in doing so moved the numerical computing space forward. :)

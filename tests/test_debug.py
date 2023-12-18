@@ -1,9 +1,8 @@
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import pytest
-
-import equinox as eqx
 
 
 def test_backward_nan(capfd):
@@ -75,9 +74,10 @@ def test_max_traces_clone(getkey):
     lin(jnp.array([1.0, 2.0, 3.0]))
     assert eqx.debug.get_num_traces(lin) == 1
     assert eqx.debug.get_num_traces(lin2) == 1
-    lin2(jnp.array([1, 2, 3]))
-    assert eqx.debug.get_num_traces(lin) == 2
-    assert eqx.debug.get_num_traces(lin2) == 2
+    with jax.numpy_dtype_promotion("standard"):
+        lin2(jnp.array([1, 2, 3]))
+        assert eqx.debug.get_num_traces(lin) == 2
+        assert eqx.debug.get_num_traces(lin2) == 2
 
-    with pytest.raises(RuntimeError, match="can only be traced 2 times"):
-        lin(jnp.array([False, False, False]))
+        with pytest.raises(RuntimeError, match="can only be traced 2 times"):
+            lin(jnp.array([False, False, False]))

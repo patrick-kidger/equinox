@@ -1,9 +1,8 @@
 import abc
 from typing import ClassVar, TYPE_CHECKING
 
-import pytest
-
 import equinox as eqx
+import pytest
 
 
 if TYPE_CHECKING:

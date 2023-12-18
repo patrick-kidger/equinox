@@ -1,10 +1,9 @@
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.random as jr
 import pytest
 from jaxtyping import Array, Float, Int
-
-import equinox as eqx
 
 
 def test_shared_array(getkey):

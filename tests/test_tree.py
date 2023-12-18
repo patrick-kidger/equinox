@@ -1,3 +1,4 @@
+import equinox as eqx
 import jax
 import jax.core
 import jax.nn as jnn
@@ -6,8 +7,6 @@ import jax.random as jrandom
 import jax.tree_util as jtu
 import numpy as np
 import pytest
-
-import equinox as eqx
 
 
 def test_tree_at_replace(getkey):

@@ -2,6 +2,8 @@ import functools as ft
 import timeit
 from typing import Optional
 
+import equinox as eqx
+import equinox.internal as eqxi
 import jax
 import jax.lax as lax
 import jax.lib
@@ -9,9 +11,6 @@ import jax.numpy as jnp
 import jax.random as jr
 import jax.tree_util as jtu
 import pytest
-
-import equinox as eqx
-import equinox.internal as eqxi
 
 from .helpers import tree_allclose
 
@@ -37,8 +36,8 @@ def _get_problem(key, *, num_steps: Optional[int]):
             step, val1, val2 = carry
             (theta,) = mlp(val1)
             real, imag = val1
-            z = real + imag * 1j
-            z = z * jnp.exp(1j * theta)
+            z = real.astype(jnp.complex64) + imag.astype(jnp.complex64) * 1j
+            z = z * jnp.exp(1j * theta.astype(jnp.complex64))
             real = jnp.real(z)
             imag = jnp.imag(z)
             jax.debug.print("{}", step)  # pyright: ignore
@@ -536,8 +535,8 @@ def test_speed_grad_checkpointed_while(getkey):
             step, val = carry
             (theta,) = mlp(val)
             real, imag = val
-            z = real + imag * 1j
-            z = z * jnp.exp(1j * theta)
+            z = real.astype(jnp.complex64) + imag.astype(jnp.complex64) * 1j
+            z = z * jnp.exp(1j * theta.astype(jnp.complex64))
             real = jnp.real(z)
             imag = jnp.imag(z)
             return step + 1, jnp.stack([real, imag])

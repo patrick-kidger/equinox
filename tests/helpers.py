@@ -1,7 +1,6 @@
+import equinox as eqx
 import jax.random as jr
 import jax.tree_util as jtu
-
-import equinox as eqx
 
 
 def random_pytree(key, treedef):

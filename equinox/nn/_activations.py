@@ -40,4 +40,5 @@ class PReLU(Module):
 
         A JAX array of the same shape as the input.
         """
-        return jnp.where(x >= 0, x, self.negative_slope * x)
+        with jax.numpy_dtype_promotion("standard"), jax.numpy_rank_promotion("allow"):
+            return jnp.where(x >= 0, x, self.negative_slope * x)

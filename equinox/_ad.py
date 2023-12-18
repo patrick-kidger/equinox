@@ -112,7 +112,8 @@ _ScalarTy = TypeVar("_ScalarTy", bound=_Scalar)
 
 @overload
 def filter_value_and_grad(
-    *, has_aux: Literal[False] = False
+    *,
+    has_aux: Literal[False] = False,
 ) -> Callable[[Callable[_P, _ScalarTy]], Callable[_P, tuple[_ScalarTy, PyTree]]]:
     ...
 
@@ -126,7 +127,8 @@ def filter_value_and_grad(
 
 @overload
 def filter_value_and_grad(
-    *, has_aux: Literal[True] = True
+    *,
+    has_aux: Literal[True] = True,
 ) -> Callable[
     [Callable[_P, tuple[_ScalarTy, _T]]],
     Callable[_P, tuple[tuple[_ScalarTy, _T], PyTree]],
@@ -193,7 +195,8 @@ def filter_value_and_grad(
 
 @overload
 def filter_grad(
-    *, has_aux: Literal[False] = False
+    *,
+    has_aux: Literal[False] = False,
 ) -> Callable[[Callable[_P, _Scalar]], Callable[_P, PyTree[Float[Array, "..."]]]]:
     ...
 
@@ -207,7 +210,8 @@ def filter_grad(
 
 @overload
 def filter_grad(
-    *, has_aux: Literal[True] = True
+    *,
+    has_aux: Literal[True] = True,
 ) -> Callable[
     [Callable[_P, tuple[_Scalar, _T]]],
     Callable[_P, tuple[PyTree[Float[Array, "..."]], _T]],

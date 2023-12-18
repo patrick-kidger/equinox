@@ -1,14 +1,13 @@
 import warnings
 from typing import Union
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 import jax.tree_util as jtu
 import numpy as np
 import pytest
-
-import equinox as eqx
 
 from .helpers import tree_allclose
 
@@ -19,10 +18,10 @@ def test_filter_grad(getkey):
 
     @eqx.filter_grad
     def f(x):
-        sum = 0.0
+        sum = jnp.array(0.0)
         for arg in jtu.tree_leaves(x):
             if eqx.is_array_like(arg):
-                sum = sum + jnp.sum(arg)
+                sum = sum + jnp.sum(arg).astype(sum.dtype)
         return sum
 
     ga, gb = f([a, b])

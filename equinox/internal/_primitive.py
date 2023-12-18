@@ -302,7 +302,7 @@ def create_vprim(name: str, impl, abstract_eval, jvp, transpose):
             __axis_size=axis_size,
             __axis_name=axis_name,
             __batch_axes=batch_axes,
-            params=params
+            params=params,
         )
         batch_axes_out = jtu.tree_map(lambda _: 0, out)
         return out, batch_axes_out

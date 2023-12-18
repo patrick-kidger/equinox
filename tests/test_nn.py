@@ -1,13 +1,12 @@
 import warnings
 from typing import Union
 
+import equinox as eqx
 import jax
 import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
 import pytest
-
-import equinox as eqx
 
 
 def test_custom_init():
@@ -686,7 +685,7 @@ def test_multihead_attention(getkey):
             x.output_proj.weight,
         ),
         attn,
-        [jnp.arange(16).reshape(4, 4) for _ in range(4)],
+        [jnp.arange(16.0).reshape(4, 4) for _ in range(4)],
     )
     x = jnp.array([[1.0, 2.0, 3.0, 4.0]])
     assert jnp.allclose(attn(x, x, x), jnp.array([[680.0, 1960.0, 3240.0, 4520.0]]))
@@ -881,8 +880,8 @@ def test_batch_norm(getkey):
     state = eqx.nn.State(bn)
     vbn = jax.vmap(bn, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
     out, state = vbn(x1alt, state)
-    true_out = (x1alt - jnp.mean(x1alt, axis=0)) / jnp.sqrt(
-        jnp.var(x1alt, axis=0) + 1e-5
+    true_out = (x1alt - jnp.mean(x1alt, axis=0, keepdims=True)) / jnp.sqrt(
+        jnp.var(x1alt, axis=0, keepdims=True) + 1e-5
     )
     assert jnp.allclose(out, true_out)
 
@@ -962,12 +961,12 @@ def test_maxpool1d():
     x = jnp.arange(14).reshape(1, 14)
     max_pool = eqx.nn.MaxPool1d(2, 3)
     output = max_pool(x)
-    answer = jnp.array([1, 4, 7, 10, 13])
+    answer = jnp.array([[1, 4, 7, 10, 13]])
 
     assert jnp.all(output == answer)
 
     max_pool = eqx.nn.MaxPool1d(kernel_size=3, stride=3, padding=0, use_ceil=True)
-    answer = jnp.array([2, 5, 8, 11, 13])
+    answer = jnp.array([[2, 5, 8, 11, 13]])
     output = max_pool(x)
     assert jnp.all(output == answer)
 
@@ -976,13 +975,13 @@ def test_avgpool1d():
     x = jnp.arange(14).reshape(1, 14)
     avg_pool = eqx.nn.AvgPool1d(2, 3)
     output = avg_pool(x)
-    answer = jnp.array([0.5, 3.5, 6.5, 9.5, 12.5])
+    answer = jnp.array([[0.5, 3.5, 6.5, 9.5, 12.5]])
 
     assert jnp.all(output == answer)
 
 
 def test_adaptive_avgpool1d():
-    x = jnp.arange(14).reshape(1, 14)
+    x = jnp.arange(14.0).reshape(1, 14)
     adaptive_pool = eqx.nn.AdaptiveAvgPool1d(4)
     output = adaptive_pool(x)
     answer = jnp.array([[1.5, 5.5, 9.0, 12.0]])
@@ -994,10 +993,10 @@ def test_adaptive_avgpool1d():
 
 
 def test_adaptive_maxpool1d():
-    x = jnp.arange(14).reshape(1, 14)
+    x = jnp.arange(14.0).reshape(1, 14)
     adaptive_pool = eqx.nn.AdaptiveMaxPool1d(4)
     output = adaptive_pool(x)
-    answer = jnp.array([[3, 7, 10, 13]])
+    answer = jnp.array([[3.0, 7.0, 10.0, 13.0]])
     assert jnp.all(output == answer)
 
     adaptive_pool = eqx.nn.AdaptiveMaxPool1d(14)
@@ -1009,7 +1008,7 @@ def test_maxpool2d():
     x = jnp.arange(36).reshape(1, 6, 6)
     max_pool = eqx.nn.MaxPool2d(2, (3, 2))
     output = max_pool(x)
-    answer = jnp.array([[7, 9, 11], [25, 27, 29]])
+    answer = jnp.array([[[7, 9, 11], [25, 27, 29]]])
 
     assert jnp.all(output == answer)
 
@@ -1026,13 +1025,13 @@ def test_avgpool2d():
     x = jnp.arange(36).reshape(1, 6, 6)
     avg_pool = eqx.nn.AvgPool2d((1, 3), 2)
     output = avg_pool(x)
-    answer = jnp.array([[1, 3], [13, 15], [25, 27]])
+    answer = jnp.array([[[1.0, 3.0], [13.0, 15.0], [25.0, 27.0]]])
 
     assert jnp.all(output == answer)
 
 
 def test_adaptive_avgpool2d():
-    x = jnp.arange(12).reshape(1, 3, 4)
+    x = jnp.arange(12.0).reshape(1, 3, 4)
     adaptive_pool = eqx.nn.AdaptiveAvgPool2d((2, 3))
     output = adaptive_pool(x)
     answer = jnp.array([[[2.5, 4.0, 5.0], [8.5, 10.0, 11.0]]])
@@ -1044,10 +1043,10 @@ def test_adaptive_avgpool2d():
 
 
 def test_adaptive_maxpool2d():
-    x = jnp.arange(12).reshape(1, 3, 4)
+    x = jnp.arange(12.0).reshape(1, 3, 4)
     adaptive_pool = eqx.nn.AdaptiveMaxPool2d((2, 3))
     output = adaptive_pool(x)
-    answer = jnp.array([[[5, 6, 7], [9, 10, 11]]])
+    answer = jnp.array([[[5.0, 6.0, 7.0], [9.0, 10.0, 11.0]]])
     assert jnp.all(output == answer)
 
     adaptive_pool = eqx.nn.AdaptiveMaxPool2d((3, 4))
@@ -1056,10 +1055,10 @@ def test_adaptive_maxpool2d():
 
 
 def test_maxpool3d():
-    x = jnp.arange(64).reshape(1, 4, 4, 4)
+    x = jnp.arange(64.0).reshape(1, 4, 4, 4)
     max_pool = eqx.nn.MaxPool3d(2, (3, 2, 1))
     output = max_pool(x)
-    answer = jnp.array([[[21, 22, 23], [29, 30, 31]]])
+    answer = jnp.array([[[[21.0, 22.0, 23.0], [29.0, 30.0, 31.0]]]])
 
     assert jnp.all(output == answer)
 
@@ -1068,8 +1067,10 @@ def test_maxpool3d():
     )
     answer = jnp.asarray(
         [
-            [[37, 39, 39], [45, 47, 47], [45, 47, 47]],
-            [[53, 55, 55], [61, 63, 63], [61, 63, 63]],
+            [
+                [[37.0, 39.0, 39.0], [45.0, 47.0, 47.0], [45.0, 47.0, 47.0]],
+                [[53.0, 55.0, 55.0], [61.0, 63.0, 63.0], [61.0, 63.0, 63.0]],
+            ]
         ]
     )
     output = max_pool(x)
@@ -1077,16 +1078,16 @@ def test_maxpool3d():
 
 
 def test_avgpool3d():
-    x = jnp.arange(64).reshape(1, 4, 4, 4)
+    x = jnp.arange(64.0).reshape(1, 4, 4, 4)
     avg_pool = eqx.nn.AvgPool3d((1, 3, 1), 2)
     output = avg_pool(x)
-    answer = jnp.array([[[4, 6]], [[36, 38]]])
+    answer = jnp.array([[[[4.0, 6.0]], [[36.0, 38.0]]]])
 
     assert jnp.all(output == answer)
 
 
 def test_adaptive_avgpool3d():
-    x = jnp.arange(18).reshape(1, 3, 2, 3)
+    x = jnp.arange(18.0).reshape(1, 3, 2, 3)
     adaptive_pool = eqx.nn.AdaptiveAvgPool3d((2, 1, 3))
     output = adaptive_pool(x)
     answer = jnp.array([[[[4.5, 5.5, 6.5]], [[13.5, 14.5, 15.5]]]])
@@ -1098,10 +1099,10 @@ def test_adaptive_avgpool3d():
 
 
 def test_adaptive_maxpool3d():
-    x = jnp.arange(18).reshape(1, 3, 2, 3)
+    x = jnp.arange(18.0).reshape(1, 3, 2, 3)
     adaptive_pool = eqx.nn.AdaptiveMaxPool3d((2, 1, 3))
     output = adaptive_pool(x)
-    answer = jnp.array([[[[9, 10, 11]], [[15, 16, 17]]]])
+    answer = jnp.array([[[[9.0, 10.0, 11.0]], [[15.0, 16.0, 17.0]]]])
     assert jnp.all(output == answer)
 
     adaptive_pool = eqx.nn.AdaptiveMaxPool3d((3, 2, 3))
@@ -1110,7 +1111,7 @@ def test_adaptive_maxpool3d():
 
 
 def test_poolpadding():
-    x = jnp.arange(64).reshape(1, 4, 4, 4)
+    x = jnp.arange(64.0).reshape(1, 4, 4, 4)
     max_pool = eqx.nn.MaxPool3d(2, 1, ((0, 1), (0, 1), (0, 1)))
     output = max_pool(x)
 
@@ -1122,7 +1123,7 @@ def test_poolbackprop():
         max_pool = eqx.nn.MaxPool3d((2, 2, 2), (1, 1, 1), ((0, 1), (0, 1), (0, 1)))
         return jnp.mean(max_pool(x))
 
-    x = jnp.arange(64, dtype=jnp.float32).reshape(1, 4, 4, 4)
+    x = jnp.arange(64.0, dtype=jnp.float32).reshape(1, 4, 4, 4)
     grad_fn = jax.value_and_grad(max_pool_mean)
 
     grad_fn(x)

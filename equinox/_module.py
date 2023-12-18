@@ -421,12 +421,8 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
         # [Step 6] Register as a pytree.
         jtu.register_pytree_with_keys(
             cls,
-            flatten_with_keys=ft.partial(
-                _flatten_module, with_keys=True
-            ),  # pyright: ignore
-            flatten_func=ft.partial(
-                _flatten_module, with_keys=False
-            ),  # pyright: ignore
+            flatten_with_keys=ft.partial(_flatten_module, with_keys=True),  # pyright: ignore
+            flatten_func=ft.partial(_flatten_module, with_keys=False),  # pyright: ignore
             unflatten_func=ft.partial(_unflatten_module, cls),  # pyright: ignore
         )
         # Done!
@@ -584,9 +580,7 @@ def _make_initable(cls: _ModuleMeta, init, post_init, wraps: bool) -> _ModuleMet
     if wraps:
         field_names = _wrapper_field_names
     else:
-        field_names = {
-            field.name for field in dataclasses.fields(cls)  # pyright: ignore
-        }
+        field_names = {field.name for field in dataclasses.fields(cls)}  # pyright: ignore
 
     class _InitableModule(cls, _Initable):  # pyright: ignore
         pass

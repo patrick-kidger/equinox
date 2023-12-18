@@ -23,9 +23,7 @@ def _unvmap_all_impl(x):
 
 
 def _unvmap_all_abstract_eval(x):
-    return jax.core.ShapedArray(
-        shape=(), dtype=jax.numpy.bool_.dtype  # pyright: ignore
-    )
+    return jax.core.ShapedArray(shape=(), dtype=jax.numpy.bool_.dtype)  # pyright: ignore
 
 
 def _unvmap_all_batch(x, batch_axes):
@@ -56,9 +54,7 @@ def _unvmap_any_impl(x):
 
 
 def _unvmap_any_abstract_eval(x):
-    return jax.core.ShapedArray(
-        shape=(), dtype=jax.numpy.bool_.dtype  # pyright: ignore
-    )
+    return jax.core.ShapedArray(shape=(), dtype=jax.numpy.bool_.dtype)  # pyright: ignore
 
 
 def _unvmap_any_batch(x, batch_axes):

@@ -1,13 +1,12 @@
 import functools as ft
 from typing import Any, Union
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.random as jr
 import jax.tree_util as jtu
 import pytest
-
-import equinox as eqx
 
 from .helpers import tree_allclose as _shaped_allclose
 
@@ -40,7 +39,8 @@ def test_args():
 def test_default():
     @filter_pmap(in_axes=_zero_if_inexact_array_else_none)
     def f(a, b):
-        return a + b
+        with jax.numpy_dtype_promotion("standard"):
+            return a + b
 
     assert shaped_allclose(f(jnp.array(3), jnp.array([3.0])), jnp.array([6.0]))
 
