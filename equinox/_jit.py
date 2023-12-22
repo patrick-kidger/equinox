@@ -76,7 +76,7 @@ def _preprocess(info, args, kwargs, return_static: bool = False):
         dynamic_rest, static_rest = hashable_partition((rest_args, kwargs), is_array)
     else:
         dynamic_first = hashable_filter(first_arg, is_array)
-        dynamic_rest = hashable_filter(rest_args, is_array)
+        dynamic_rest = hashable_filter((rest_args, kwargs), is_array)
     dynamic_donate = dict()
     dynamic_nodonate = dict()
     if donate_first:
