@@ -81,6 +81,9 @@ plugins:
                     - pytkdocs_tweaks.main()
                     - import jaxtyping
                     - jaxtyping.set_array_name_format("array")
+                    - import jax
+                    - jax.ShapeDtypeStruct.__module__ = "jax"
+                    - jax.core.ClosedJaxpr.__module__ = "jax.core"
 
                 selection:
                     inherited_members: true  # Allow looking up inherited methods
@@ -131,9 +134,7 @@ nav:
             - 'api/nn/inference.md'
             - 'api/nn/shared.md'
             - 'api/nn/stateful.md'
-        - Filtering:
-            - 'api/filtering/partition-combine.md'
-            - 'api/filtering/transformations.md'
+        - 'api/transformations.md'
         - 'api/manipulation.md'
     - Advanced API:
         - 'api/caches.md'
