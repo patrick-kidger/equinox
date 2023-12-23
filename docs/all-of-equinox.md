@@ -146,8 +146,8 @@ Equinox is all just regular JAX: PyTrees and transformations. Together, these tw
 
 - For building models: [`equinox.Module`][].
 - Prebuilt neural network layers: [`equinox.nn.Linear`][], [`equinox.nn.Conv2d`][], etc.
-- Filtering, and filtered transformations: [`equinox.partition`][], [`equinox.filter_jit`][] etc.
-- Tools for PyTree manipulation: [`equinox.tree_at`][], etc.
+- Filtering, and filtered transformations: [`quinox.filter_jit`][] etc.
+- Tools for PyTree manipulation: [`equinox.partition`][], etc.
 - Advanced goodies: serialisation, debugging tools, runtime errors, etc. 
 
 See the API reference on the left.
