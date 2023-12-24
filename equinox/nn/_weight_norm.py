@@ -14,10 +14,16 @@ _Layer = TypeVar("_Layer")
 def _norm_except_axis(
     v: Array, pow: Optional[Union[int, str]] = None, axis: Optional[int] = 0
 ) -> Array:
-    for ax in range(len(v.shape)):
-        if ax != axis:
-            v = jnp.linalg.norm(v, ord=pow, axis=ax, keepdims=True)
-    return v if axis is not None else v.reshape([])
+    norm_func = lambda x: jnp.linalg.norm(x, ord=pow, keepdims=True)
+    vmapped_norm_func = lambda axis: jax.vmap(
+        norm_func,
+        in_axes=axis,
+        out_axes=axis,
+    )(v)
+    if axis is not None:
+        return vmapped_norm_func(axis)
+    else:
+        return norm_func(vmapped_norm_func(0)).reshape([])
 
 
 class WeightNorm(Module, Generic[_Layer]):
@@ -28,7 +34,8 @@ class WeightNorm(Module, Generic[_Layer]):
 
     $\mathbf{W} = g \frac{\mathbf{v}}{\lVert \mathbf{v} \rVert}$
 
-    where $g$ is initially chosen to equal $\lVert \mathbf{v} \rVert$.
+    where $g$ is initially chosen to equal $\lVert \mathbf{v} \rVert$
+    , and $\mathbf{v}$ is initially chosen as $\mathbf{W}$ .
 
     ??? cite
         [Weight Normalisation](https://arxiv.org/abs/1602.07868)
@@ -70,11 +77,11 @@ class WeightNorm(Module, Generic[_Layer]):
         """**Arguments:**
 
         - `layer`: The layer to wrap. Usually a [`equinox.nn.Linear`][] or
-            a convolutional layer (e.g. [`equinox.nn.Conv2d`][]).
+        a convolutional layer (e.g. [`equinox.nn.Conv2d`][]).
         - `weight_name`: The name of the layer's parameter (a JAX array) to apply
-            weight normalisation to.
+        weight normalisation to.
         - `axis`: The norm is computed across every axis except this one.
-                  If `None`, compute across every axis.
+        If `None`, compute across every axis.
         """
         self.layer = layer
         self.weight_name = weight_name
@@ -93,7 +100,7 @@ class WeightNorm(Module, Generic[_Layer]):
         **Returns:**
 
         - The JAX array from calling `self.layer(x)` (with weight normalisation
-            applied).
+        applied).
         """
         weight = self.v * self.g / _norm_except_axis(self.v, axis=self.axis)
         layer = tree_at(lambda l: getattr(l, self.weight_name), self.layer, weight)
