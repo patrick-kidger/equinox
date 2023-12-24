@@ -1,8 +1,10 @@
-from typing import Generic, Optional, TypeVar, Union
+from collections.abc import Callable
+from functools import partial
+from typing import Generic, Optional, TypeVar
 
 import jax
 import jax.numpy as jnp
-from jaxtyping import Array, PRNGKeyArray
+from jaxtyping import Array, PRNGKeyArray, PyTree
 
 from .._module import field, Module
 from .._tree import tree_at
@@ -12,18 +14,12 @@ _Layer = TypeVar("_Layer")
 
 
 def _norm_except_axis(
-    v: Array, pow: Optional[Union[int, str]] = None, axis: Optional[int] = 0
-) -> Array:
-    norm_func = lambda x: jnp.linalg.norm(x, ord=pow, keepdims=True)
-    vmapped_norm_func = lambda axis: jax.vmap(
-        norm_func,
-        in_axes=axis,
-        out_axes=axis,
-    )(v)
-    if axis is not None:
-        return vmapped_norm_func(axis)
+    v: Array, norm: Callable[[PyTree[Array]], Array], axis: Optional[int]
+):
+    if axis is None:
+        return norm(v)
     else:
-        return norm_func(vmapped_norm_func(0)).reshape([])
+        return jax.vmap(norm, in_axes=axis, out_axes=axis)(v)
 
 
 class WeightNorm(Module, Generic[_Layer]):
@@ -58,8 +54,6 @@ class WeightNorm(Module, Generic[_Layer]):
         bibsource    = {dblp computer science bibliography, https://dblp.org}
         }
         ```
-
-
     """
 
     layer: _Layer
@@ -67,6 +61,7 @@ class WeightNorm(Module, Generic[_Layer]):
     g: Array
     weight_name: str = field(static=True)
     axis: Optional[int] = field(static=True)
+    _norm: Callable[[Array], Array]
 
     def __init__(
         self,
@@ -88,7 +83,10 @@ class WeightNorm(Module, Generic[_Layer]):
         self.axis = axis
 
         self.v = getattr(layer, weight_name)
-        self.g = _norm_except_axis(self.v, axis=axis)
+        self._norm = partial(
+            _norm_except_axis, norm=partial(jnp.linalg.norm, keepdims=True), axis=axis
+        )
+        self.g = self._norm(self.v)
 
     @jax.named_scope("eqx.nn.WeightNorm")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
@@ -102,6 +100,6 @@ class WeightNorm(Module, Generic[_Layer]):
         - The JAX array from calling `self.layer(x)` (with weight normalisation
         applied).
         """
-        weight = self.v * self.g / _norm_except_axis(self.v, axis=self.axis)
+        weight = self.v * self.g / self._norm(self.v)
         layer = tree_at(lambda l: getattr(l, self.weight_name), self.layer, weight)
         return layer(x)
