@@ -57,7 +57,6 @@ class WeightNorm(Module, Generic[_Layer]):
     """
 
     layer: _Layer
-    v: Array
     g: Array
     weight_name: str = field(static=True)
     axis: Optional[int] = field(static=True)
@@ -82,11 +81,10 @@ class WeightNorm(Module, Generic[_Layer]):
         self.weight_name = weight_name
         self.axis = axis
 
-        self.v = getattr(layer, weight_name)
         self._norm = partial(
             _norm_except_axis, norm=partial(jnp.linalg.norm, keepdims=True), axis=axis
         )
-        self.g = self._norm(self.v)
+        self.g = self._norm(getattr(layer, weight_name))
 
     @jax.named_scope("eqx.nn.WeightNorm")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
@@ -100,6 +98,8 @@ class WeightNorm(Module, Generic[_Layer]):
         - The JAX array from calling `self.layer(x)` (with weight normalisation
         applied).
         """
-        weight = self.v * self.g / self._norm(self.v)
+
+        v = getattr(self.layer, self.weight_name)
+        weight = v * self.g / self._norm(v)
         layer = tree_at(lambda l: getattr(l, self.weight_name), self.layer, weight)
         return layer(x)

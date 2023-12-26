@@ -993,8 +993,8 @@ def test_weight_norm(getkey):
     grads = eqx.filter_grad(lambda model, x: jnp.mean(model(x)))(
         weight_norm_linear, jrandom.normal(getkey(), (4,))
     )
-    assert jnp.count_nonzero(grads.layer.weight) == 0
-    assert jnp.any(grads.v)
+
+    assert jnp.any(grads.layer.weight)
     assert jnp.any(grads.g)
 
 
