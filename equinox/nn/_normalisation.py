@@ -285,6 +285,7 @@ class RMSNorm(Module):
     term.
 
     ??? cite
+
         [Root Mean Square Layer Normalization](https://browse.arxiv.org/abs/1910.07467)
 
         ```bibtex
@@ -308,8 +309,8 @@ class RMSNorm(Module):
         self,
         shape: Union[int, Sequence[int]],
         eps: float = 1e-5,
-        use_weight: bool = False,
-        use_bias: bool = False,
+        use_weight: bool = True,
+        use_bias: bool = True,
         **kwargs,
     ):
         """**Arguments:**
