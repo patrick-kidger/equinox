@@ -58,7 +58,11 @@ def tree_at(
     replace_fn: Callable[[_Node], Any] = sentinel,
     is_leaf: Optional[Callable[[Any], bool]] = None,
 ):
-    """Modifies a PyTree out-of-place. (A bit like using `.at[].set()` on a JAX array.)
+    """Modifies a leaf or subtree of a PyTree. (A bit like using `.at[].set()` on a JAX
+    array.)
+
+    The modified PyTree is returned and the original input is left unchanged. Make sure
+    to use the return value from this function!
 
     **Arguments:**
 

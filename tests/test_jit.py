@@ -402,3 +402,16 @@ def test_aot_compilation(donate):
     lowered.as_text()
     compiled = lowered.compile()
     compiled(x, y)
+
+
+# Issue 625
+@pytest.mark.parametrize("donate", ("all", "all-except-first", "none"))
+def test_aot_compilation_kwargs(donate):
+    def f(x, y, **kwargs):
+        return 2 * x + y
+
+    x, y = jnp.array(3), 4
+    lowered = eqx.filter_jit(f, donate=donate).lower(x, y, test=123)
+    lowered.as_text()
+    compiled = lowered.compile()
+    compiled(x, y, test=123)
