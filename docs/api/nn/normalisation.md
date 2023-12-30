@@ -6,7 +6,7 @@
             - __init__
             - __call__
 
----            
+---
 
 ::: equinox.nn.RMSNorm
     selection:
