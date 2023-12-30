@@ -6,6 +6,14 @@
             - __init__
             - __call__
 
+---            
+
+::: equinox.nn.RMSNorm
+    selection:
+        members:
+            - __init__
+            - __call__
+
 ---
 
 ::: equinox.nn.GroupNorm
@@ -32,7 +40,7 @@
 
 ---
 
-::: equinox.nn.RMSNorm
+::: equinox.nn.WeightNorm
     selection:
         members:
             - __init__
