@@ -54,7 +54,7 @@ def dot_product_attention(
     return attn
 
 
-class MultiheadAttention(Module):
+class MultiheadAttention(Module, strict=True):
     r"""
     Computes
 

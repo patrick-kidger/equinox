@@ -12,7 +12,7 @@ from .._module import field, Module
 from ._misc import all_sequences
 
 
-class Pool(Module):
+class Pool(Module, strict=True):
     """General N-dimensional downsampling over a sliding window."""
 
     init: Union[int, float, Array]
@@ -485,7 +485,7 @@ def _adaptive_pool1d(
     return outputs
 
 
-class AdaptivePool(Module):
+class AdaptivePool(Module, strict=True):
     """General N dimensional adaptive downsampling to a target shape."""
 
     target_shape: Sequence[int] = field(static=True)

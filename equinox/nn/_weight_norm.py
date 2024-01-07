@@ -20,7 +20,7 @@ def _norm_except_axis(v: Array, norm: Callable[[Array], Scalar], axis: Optional[
         return jax.vmap(norm, in_axes=axis, out_axes=axis)(v)
 
 
-class WeightNorm(Module, Generic[_Layer]):
+class WeightNorm(Module, Generic[_Layer], strict=True):
     r"""Applies weight normalisation to a given parameter.
 
     Given the 2D weight matrix

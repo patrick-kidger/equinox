@@ -32,7 +32,7 @@ def _ntuple(n: int) -> Callable[[Union[_T, Sequence[_T]]], tuple[_T, ...]]:
     return parse
 
 
-class Conv(Module):
+class Conv(Module, strict=True):
     """General N-dimensional convolution."""
 
     num_spatial_dims: int = field(static=True)
@@ -279,11 +279,10 @@ class Conv3d(Conv):
             groups=groups,
             use_bias=use_bias,
             key=key,
-            **kwargs,
         )
 
 
-class ConvTranspose(Module):
+class ConvTranspose(Module, strict=True):
     """General N-dimensional transposed convolution."""
 
     num_spatial_dims: int = field(static=True)

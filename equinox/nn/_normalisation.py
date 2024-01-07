@@ -13,7 +13,7 @@ from .._module import field, Module
 from ._stateful import State
 
 
-class LayerNorm(Module):
+class LayerNorm(Module, strict=True):
     r"""
     Computes a mean and standard deviation over the whole input array, and uses these
     to normalise the whole array. Optionally applies an elementwise affine
@@ -154,7 +154,7 @@ class LayerNorm(Module):
             return out, state
 
 
-class GroupNorm(Module):
+class GroupNorm(Module, strict=True):
     r"""
     Splits the first dimension ("channels") into groups of fixed size. Computes a mean
     and standard deviation over the contents of each group, and uses these to normalise
@@ -269,7 +269,7 @@ class GroupNorm(Module):
             return out, state
 
 
-class RMSNorm(Module):
+class RMSNorm(Module, strict=True):
     r"""
     A simplified version of LayerNorm which rescales the inputs, but does not center
     them. Optionally applies a learned reweighting of the transformed array afterward.

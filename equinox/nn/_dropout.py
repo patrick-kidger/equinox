@@ -10,7 +10,7 @@ from jaxtyping import Array, PRNGKeyArray
 from .._module import Module
 
 
-class Dropout(Module):
+class Dropout(Module, strict=True):
     """Applies dropout.
 
     Note that this layer behaves differently during training and inference. During

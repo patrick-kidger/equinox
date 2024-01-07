@@ -10,7 +10,7 @@ from jaxtyping import Array, PRNGKeyArray
 from .._module import field, Module
 
 
-class GRUCell(Module):
+class GRUCell(Module, strict=True):
     """A single step of a Gated Recurrent Unit (GRU).
 
     !!! example
@@ -114,7 +114,7 @@ class GRUCell(Module):
         return new + inp * (hidden - new)
 
 
-class LSTMCell(Module):
+class LSTMCell(Module, strict=True):
     """A single step of a Long-Short Term Memory unit (LSTM).
 
     !!! example

@@ -9,7 +9,7 @@ from jaxtyping import Array, PRNGKeyArray
 from .._module import field, Module
 
 
-class Linear(Module):
+class Linear(Module, strict=True):
     """Performs a linear transformation."""
 
     weight: Array
@@ -101,7 +101,7 @@ class Linear(Module):
 _T = TypeVar("_T")
 
 
-class Identity(Module):
+class Identity(Module, strict=True):
     """Identity operation that does nothing. Sometimes useful as a placeholder for
     another Module.
     """

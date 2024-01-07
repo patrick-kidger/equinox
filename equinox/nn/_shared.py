@@ -14,7 +14,7 @@ class SharedNode:
         return "SharedNode"
 
 
-class Shared(Module):
+class Shared(Module, strict=True):
     """Used to tie together multiple nodes across a PyTree.
 
     Note that Equinox modules are Py**Trees** -- so the same layer, appearing in two
