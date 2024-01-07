@@ -65,7 +65,6 @@ class LayerNorm(Module, strict=True):
         use_bias: bool = True,
         *,
         elementwise_affine: Optional[bool] = None,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -75,7 +74,6 @@ class LayerNorm(Module, strict=True):
         - `use_bias`: Whether the module has learnable affine biases.
         - `elementwise_affine`: Deprecated alternative to `use_weight` and `use_bias`.
         """
-        super().__init__(**kwargs)
         if isinstance(shape, int):
             shape = (shape,)
         else:
@@ -196,7 +194,6 @@ class GroupNorm(Module, strict=True):
         channels: Optional[int] = None,
         eps: float = 1e-5,
         channelwise_affine: bool = True,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -213,7 +210,6 @@ class GroupNorm(Module, strict=True):
                 "The number of channels should be specified if "
                 "`channelwise_affine=True`"
             )
-        super().__init__(**kwargs)
         self.groups = groups
         self.channels = channels
         self.eps = eps
@@ -311,7 +307,6 @@ class RMSNorm(Module, strict=True):
         eps: float = 1e-5,
         use_weight: bool = True,
         use_bias: bool = True,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -320,7 +315,6 @@ class RMSNorm(Module, strict=True):
         - `use_weight`: Whether the module has learnable affine weights.
         - `use_bias`: Whether the module has learnable affine shift.
         """
-        super().__init__(**kwargs)
         if isinstance(shape, int):
             shape = (shape,)
         else:

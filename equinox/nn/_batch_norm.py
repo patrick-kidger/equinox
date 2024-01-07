@@ -64,7 +64,6 @@ class BatchNorm(StatefulLayer):
         momentum: float = 0.99,
         inference: bool = False,
         dtype=None,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -86,8 +85,6 @@ class BatchNorm(StatefulLayer):
             `jax.numpy.float32` or `jax.numpy.float64` depending on whether JAX is in
             64-bit mode.
         """
-
-        super().__init__(**kwargs)
 
         if channelwise_affine:
             self.weight = jnp.ones((input_size,))

@@ -23,7 +23,6 @@ class Embedding(Module, strict=True):
         weight: Optional[Float[Array, "num_embeddings embedding_size"]] = None,
         *,
         key: Optional[PRNGKeyArray] = None,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -39,7 +38,6 @@ class Embedding(Module, strict=True):
         - `weight`: The embedding lookup table, of shape
             `(num_embeddings, embedding_size)`.
         """
-        super().__init__(**kwargs)
         if weight is None:
             if num_embeddings is None or embedding_size is None or key is None:
                 raise ValueError(
