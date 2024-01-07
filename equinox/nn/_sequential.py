@@ -125,7 +125,7 @@ class Sequential(StatefulLayer):
         return len(self.layers)
 
 
-class Lambda(Module):
+class Lambda(Module, strict=True):
     """Wraps a callable (e.g. an activation function) for use with
     [`equinox.nn.Sequential`][].
 

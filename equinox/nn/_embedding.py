@@ -9,7 +9,7 @@ from .._filters import is_array_like
 from .._module import field, Module
 
 
-class Embedding(Module):
+class Embedding(Module, strict=True):
     """A simple lookup table that stores embeddings of a fixed size."""
 
     num_embeddings: int = field(static=True)

@@ -7,7 +7,7 @@ from jaxtyping import Array
 from .._module import Module
 
 
-class PReLU(Module):
+class PReLU(Module, strict=True):
     """PReLU activation function.
 
     This is the elementwise function `x -> max(x, 0) + α * min(x, 0)`.

@@ -18,7 +18,7 @@ _P = ParamSpec("_P")
 _T = TypeVar("_T")
 
 
-class StateIndex(Module, Generic[_Value]):
+class StateIndex(Module, Generic[_Value], strict=True):
     """This wraps together (a) a unique dictionary key used for looking up a stateful
     value, and (b) how that stateful value should be initialised.
 
