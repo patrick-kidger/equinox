@@ -151,7 +151,6 @@ class MultiheadAttention(Module, strict=True):
         inference: bool = False,
         *,
         key: PRNGKeyArray,
-        **kwargs,
     ):
         r"""**Arguments:**
 
@@ -177,7 +176,6 @@ class MultiheadAttention(Module, strict=True):
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
         """
-        super().__init__(**kwargs)
         qkey, kkey, vkey, okey = jrandom.split(key, 4)
 
         if key_size is None:

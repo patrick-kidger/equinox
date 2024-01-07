@@ -52,7 +52,6 @@ class MLP(Module, strict=True):
         use_final_bias: bool = True,
         *,
         key: PRNGKeyArray,
-        **kwargs,
     ):
         """**Arguments**:
 
@@ -83,7 +82,6 @@ class MLP(Module, strict=True):
         output from the module will have shape `()`.
         """
 
-        super().__init__(**kwargs)
         keys = jrandom.split(key, depth + 1)
         layers = []
         if depth == 0:

@@ -47,7 +47,6 @@ class GRUCell(Module, strict=True):
         use_bias: bool = True,
         *,
         key: PRNGKeyArray,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -58,7 +57,6 @@ class GRUCell(Module, strict=True):
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
         """
-        super().__init__(**kwargs)
 
         ihkey, hhkey, bkey, bkey2 = jrandom.split(key, 4)
         lim = math.sqrt(1 / hidden_size)
@@ -151,7 +149,6 @@ class LSTMCell(Module, strict=True):
         use_bias: bool = True,
         *,
         key: PRNGKeyArray,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -162,7 +159,6 @@ class LSTMCell(Module, strict=True):
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
         """
-        super().__init__(**kwargs)
 
         ihkey, hhkey, bkey = jrandom.split(key, 3)
         lim = math.sqrt(1 / hidden_size)

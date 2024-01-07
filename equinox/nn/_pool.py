@@ -32,7 +32,6 @@ class Pool(Module, strict=True):
         stride: Union[int, Sequence[int]] = 1,
         padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         use_ceil: bool = False,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -54,7 +53,6 @@ class Pool(Module, strict=True):
             [https://www.tensorflow.org/xla/operation_semantics#reducewindow](https://www.tensorflow.org/xla/operation_semantics#reducewindow)
             and [https://github.com/google/jax/issues/7718](https://github.com/google/jax/issues/7718).
         """  # noqa: E501
-        super().__init__(**kwargs)
 
         self.operation = operation
         self.init = init
@@ -166,7 +164,6 @@ class AvgPool1d(Pool):
         stride: Union[int, Sequence[int]] = 1,
         padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         use_ceil: bool = False,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -187,7 +184,6 @@ class AvgPool1d(Pool):
             stride=stride,
             padding=padding,
             use_ceil=use_ceil,
-            **kwargs,
         )
 
     @jax.named_scope("eqx.nn.AvgPool1d")
@@ -215,7 +211,6 @@ class MaxPool1d(Pool):
         stride: Union[int, Sequence[int]] = 1,
         padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         use_ceil: bool = False,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -236,7 +231,6 @@ class MaxPool1d(Pool):
             stride=stride,
             padding=padding,
             use_ceil=use_ceil,
-            **kwargs,
         )
 
     # Redefined to get them in the right order in docs
@@ -265,7 +259,6 @@ class AvgPool2d(Pool):
         stride: Union[int, Sequence[int]] = 1,
         padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         use_ceil: bool = False,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -286,7 +279,6 @@ class AvgPool2d(Pool):
             stride=stride,
             padding=padding,
             use_ceil=use_ceil,
-            **kwargs,
         )
 
     @jax.named_scope("eqx.nn.AvgPool2d")
@@ -314,7 +306,6 @@ class MaxPool2d(Pool):
         stride: Union[int, Sequence[int]] = 1,
         padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         use_ceil: bool = False,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -335,7 +326,6 @@ class MaxPool2d(Pool):
             stride=stride,
             padding=padding,
             use_ceil=use_ceil,
-            **kwargs,
         )
 
     # Redefined to get them in the right order in docs
@@ -364,7 +354,6 @@ class AvgPool3d(Pool):
         stride: Union[int, Sequence[int]] = 1,
         padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         use_ceil: bool = False,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -385,7 +374,6 @@ class AvgPool3d(Pool):
             stride=stride,
             padding=padding,
             use_ceil=use_ceil,
-            **kwargs,
         )
 
     @jax.named_scope("eqx.nn.AvgPool3d")
@@ -414,7 +402,6 @@ class MaxPool3d(Pool):
         stride: Union[int, Sequence[int]] = 1,
         padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         use_ceil: bool = False,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -435,7 +422,6 @@ class MaxPool3d(Pool):
             stride=stride,
             padding=padding,
             use_ceil=use_ceil,
-            **kwargs,
         )
 
     @jax.named_scope("eqx.nn.MaxPool3d")
@@ -496,7 +482,6 @@ class AdaptivePool(Module, strict=True):
         target_shape: Union[int, Sequence[int]],
         num_spatial_dims: int,
         operation: Callable,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -504,7 +489,6 @@ class AdaptivePool(Module, strict=True):
         - `num_spatial_dims`: The number of spatial dimensions.
         - `operation`: The operation applied for downsample.
         """
-        super().__init__(**kwargs)
         self.operation = operation
         if isinstance(target_shape, int):
             self.target_shape = (target_shape,) * num_spatial_dims
@@ -551,64 +535,64 @@ class AdaptivePool(Module, strict=True):
 class AdaptiveAvgPool1d(AdaptivePool):
     """Adaptive one-dimensional downsampling using average for the target shape."""
 
-    def __init__(self, target_shape: Union[int, Sequence[int]], **kwargs):
+    def __init__(self, target_shape: Union[int, Sequence[int]]):
         """**Arguments:**
 
         - `target_shape`: The target output shape.
         """
-        super().__init__(target_shape, num_spatial_dims=1, operation=jnp.mean, **kwargs)
+        super().__init__(target_shape, num_spatial_dims=1, operation=jnp.mean)
 
 
 class AdaptiveAvgPool2d(AdaptivePool):
     """Adaptive two-dimensional downsampling using average for the target shape."""
 
-    def __init__(self, target_shape: Union[int, Sequence[int]], **kwargs):
+    def __init__(self, target_shape: Union[int, Sequence[int]]):
         """**Arguments:**
 
         - `target_shape`: The target output shape.
         """
-        super().__init__(target_shape, num_spatial_dims=2, operation=jnp.mean, **kwargs)
+        super().__init__(target_shape, num_spatial_dims=2, operation=jnp.mean)
 
 
 class AdaptiveAvgPool3d(AdaptivePool):
     """Adaptive three-dimensional downsampling using average for the target shape."""
 
-    def __init__(self, target_shape: Union[int, Sequence[int]], **kwargs):
+    def __init__(self, target_shape: Union[int, Sequence[int]]):
         """**Arguments:**
 
         - `target_shape`: The target output shape.
         """
-        super().__init__(target_shape, num_spatial_dims=3, operation=jnp.mean, **kwargs)
+        super().__init__(target_shape, num_spatial_dims=3, operation=jnp.mean)
 
 
 class AdaptiveMaxPool1d(AdaptivePool):
     """Adaptive one-dimensional downsampling using maximum for the target shape."""
 
-    def __init__(self, target_shape: Union[int, Sequence[int]], **kwargs):
+    def __init__(self, target_shape: Union[int, Sequence[int]]):
         """**Arguments:**
 
         - `target_shape`: The target output shape.
         """
-        super().__init__(target_shape, num_spatial_dims=1, operation=jnp.max, **kwargs)
+        super().__init__(target_shape, num_spatial_dims=1, operation=jnp.max)
 
 
 class AdaptiveMaxPool2d(AdaptivePool):
     """Adaptive two-dimensional downsampling using maximum for the target shape."""
 
-    def __init__(self, target_shape: Union[int, Sequence[int]], **kwargs):
+    def __init__(self, target_shape: Union[int, Sequence[int]]):
         """**Arguments:**
 
         - `target_shape`: The target output shape.
         """
-        super().__init__(target_shape, num_spatial_dims=2, operation=jnp.max, **kwargs)
+        super().__init__(target_shape, num_spatial_dims=2, operation=jnp.max)
 
 
 class AdaptiveMaxPool3d(AdaptivePool):
     """Adaptive three-dimensional downsampling using maximum for the target shape."""
 
-    def __init__(self, target_shape: Union[int, Sequence[int]], **kwargs):
+    def __init__(self, target_shape: Union[int, Sequence[int]]):
         """**Arguments:**
 
         - `target_shape`: The target output shape.
         """
-        super().__init__(target_shape, num_spatial_dims=3, operation=jnp.max, **kwargs)
+        super().__init__(target_shape, num_spatial_dims=3, operation=jnp.max)
