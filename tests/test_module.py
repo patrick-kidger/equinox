@@ -783,6 +783,12 @@ def test_strict_init_transitive():
 
 
 def test_strict_abstract_name():
+    class Abstract(eqx.Module, strict=True):
+        pass
+
+    class _Abstract(eqx.Module, strict=True):
+        pass
+
     with pytest.raises(
         TypeError, match="Abstract strict `eqx.Module`s must be named starting with"
     ):

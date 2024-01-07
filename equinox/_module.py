@@ -389,10 +389,13 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
                         )
             if _is_abstract(cls):
                 # Invariant: abstract classes have names beginning with `Abstract`.
-                if not cls.__name__.startswith("Abstract"):
+                if not (
+                    cls.__name__.startswith("Abstract")
+                    or cls.__name__.startswith("_Abstract")
+                ):
                     raise TypeError(
                         "Abstract strict `eqx.Module`s must be named starting with "
-                        f"`Abstract`. Got {name} when defining "
+                        f"'Abstract' or '_Abstract'. Got {name} when defining "
                         f"{cls.__module__}.{cls.__qualname__}."
                     )
             for k, v in cls.__dict__.items():
