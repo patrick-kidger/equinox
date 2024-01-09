@@ -711,7 +711,7 @@ def test_strict_concrete_is_final():
 @pytest.mark.parametrize("sub_init_or_attr", ("init", "attr"))
 @pytest.mark.parametrize("abstract_flag", (False, True))
 def test_strict_init(super_init_or_attr, sub_init_or_attr, abstract_flag):
-    class Abstract(eqx.Module, strict=True, abstract=abstract_flag):
+    class Abstract(eqx.Module, strict=eqx.StrictConfig(force_abstract=abstract_flag)):
         if super_init_or_attr == "init":
 
             def __init__(self):
@@ -768,10 +768,10 @@ def test_strict_init_in_abstract():
 
 
 def test_strict_init_transitive():
-    class AbstractA(eqx.Module, strict=True, abstract=True):
+    class AbstractA(eqx.Module, strict=eqx.StrictConfig(force_abstract=True)):
         x: int
 
-    class AbstractB(AbstractA, strict=True, abstract=True):
+    class AbstractB(AbstractA, strict=eqx.StrictConfig(force_abstract=True)):
         pass
 
     with pytest.raises(
@@ -783,17 +783,17 @@ def test_strict_init_transitive():
 
 
 def test_strict_abstract_name():
-    class Abstract(eqx.Module, strict=True):
+    class Abstract(eqx.Module, strict=eqx.StrictConfig(force_abstract=True)):
         pass
 
-    class _Abstract(eqx.Module, strict=True):
+    class _Abstract(eqx.Module, strict=eqx.StrictConfig(force_abstract=True)):
         pass
 
     with pytest.raises(
         TypeError, match="Abstract strict `eqx.Module`s must be named starting with"
     ):
 
-        class NotAbstract(eqx.Module, strict=True, abstract=True):
+        class NotAbstract(eqx.Module, strict=eqx.StrictConfig(force_abstract=True)):
             pass
 
 
@@ -822,10 +822,10 @@ def test_strict_method_reoverride():
             def bar(self, x):
                 pass
 
-    class AbstractD(eqx.Module, strict=True, abstract=True):
+    class AbstractD(eqx.Module, strict=eqx.StrictConfig(force_abstract=True)):
         foo = 4
 
-    class AbstractD2(AbstractD, strict=True, abstract=True):
+    class AbstractD2(AbstractD, strict=eqx.StrictConfig(force_abstract=True)):
         pass
 
     with pytest.raises(
@@ -846,17 +846,14 @@ def test_strict_method_reoverride():
 
 
 def test_strict_default():
-    class AbstractA(eqx.Module, strict=True, abstract=True):
-        @eqx.strict_default_method
+    class AbstractA(eqx.Module, strict=eqx.StrictConfig(force_abstract=True)):
         def foo(self) -> int:
             return 4
 
-    class AbstractB1(AbstractA, strict=True, abstract=True):
-        def foo(self) -> int:
-            return 5
-
-    class AbstractB2(AbstractA, strict=True, abstract=True):
-        @eqx.strict_default_method
+    class AbstractB(
+        AbstractA,
+        strict=eqx.StrictConfig(force_abstract=True, allow_method_override=True),
+    ):
         def foo(self) -> int:
             return 5
 
@@ -864,11 +861,11 @@ def test_strict_default():
         TypeError, match="Strict `eqx.Module`s cannot override concrete"
     ):
 
-        class C1(AbstractB1, strict=True):
+        class C1(AbstractB, strict=True):
             def foo(self):
                 return 6
 
-    class C2(AbstractB2, strict=True):
+    class C2(AbstractB, strict=eqx.StrictConfig(allow_method_override=True)):
         def foo(self):
             return 7
 
