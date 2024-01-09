@@ -131,6 +131,46 @@ def field(
 #
 
 
+@dataclass(frozen=True)
+class StrictConfig:
+    """Used to configure strict Equinox modules.
+
+    Passing this as the `strict` parameter of a `Module` marks that the `Module` is
+    strict, and additionally provides some extra custom behaviour.
+
+    Example usage is:
+    ```python
+    class Foo(eqx.Module, strict=StrictConfig(force_abstract=True)):
+        pass
+    ```
+    """
+
+    force_abstract: bool = False
+    allow_abstract_name: bool = False
+    allow_method_override: bool = False
+
+
+StrictConfig.__init__.__doc__ = """**Arguments:**
+
+- `force_abstract`: marks that a class without abstract methods or attributes should
+    still be treated as abstract. Useful for e.g.
+    ```python
+    class AbstractFoo(eqx.Module, strict=True):
+        pass
+    ```
+    which would otherwise be treated as concrete.
+- `allow_abstract_name`: grants this class an exemption from the rule that abstract
+    classes must begin their names with 'Abstract' or '_Abstract', and that concrete
+    classes must not begin their names with 'Abstract' or '_Abstract'.
+- `allow_method_override`: grants this class an exemption from the rule that it cannot
+    override concrete methods.
+
+Both `allow_*` options should be used with care! They exist only to make it easier to
+transition a codebase from non-strict to strict `Module`s in a backward-compatible
+manner. If you are starting a new codebase you should not have need of them.
+"""
+
+
 # Inherits from ABCMeta to support `eqx.{AbstractVar, AbstractClassVar}` and
 # `abc.abstractmethod`.
 class _ModuleMeta(ABCMeta):  # pyright: ignore
@@ -141,10 +181,20 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
         bases,
         dict_,
         /,
-        strict: bool = False,
-        abstract: bool = False,
+        strict: Union[bool, StrictConfig] = False,
         **kwargs,
     ):
+        if isinstance(strict, bool):
+            strict_config = StrictConfig()
+        elif isinstance(strict, StrictConfig):
+            strict_config = strict
+            strict = True
+        else:
+            raise TypeError(
+                "The `strict` parameter in `class Foo(equinox.Module, strict=...)` "
+                "must either be a `bool` or `equinox.StrictConfig` object."
+            )
+
         # [Step 1] Create the class as normal.
         cls = super().__new__(mcs, name, bases, dict_, **kwargs)
         # [Step 2] Arrange for bound methods to be treated as PyTrees as well. This
@@ -322,7 +372,7 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
         # type checking.
         # In practice this is probably too much for your average user, but it's a great
         # way to build robust libraries.
-        _is_force_abstract[cls] = abstract
+        _is_force_abstract[cls] = strict_config.force_abstract
         _is_strict[cls] = strict
         if strict:
             for base in bases:
@@ -371,7 +421,7 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
                     if len(dataclasses.fields(cls)) != base_num_fields:
                         raise TypeError(
                             "For readability, any custom `__init__` method, and all "
-                            "fields, must all be defined on the same strict Module."
+                            "fields, must all be defined on the same strict Module. "
                             f"{cls.__module__}.{cls.__qualname__} is a strict Module "
                             "that is attempting to add fields, and inherit from "
                             f"{base.__module__}.{base.__qualname__}. However the "
@@ -380,25 +430,35 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
                     if added_custom_init:
                         raise TypeError(
                             "For readability, any custom `__init__` method, and all "
-                            "fields, must all be defined on the same strict Module."
+                            "fields, must all be defined on the same strict Module. "
                             f"{cls.__module__}.{cls.__qualname__} is a strict Module "
                             "that is attempting to define a custom `__init__` method, "
                             f"and inherit from {base.__module__}.{base.__qualname__}. "
                             "However the latter already has fields "
                             "or a custom `__init__` defined."
                         )
-            if _is_abstract(cls):
-                # Invariant: abstract classes have names beginning with `Abstract`.
-                if not (
-                    cls.__name__.startswith("Abstract")
-                    or cls.__name__.startswith("_Abstract")
-                ):
-                    warnings.warn(
-                        "Abstract strict `eqx.Module`s should be named starting with "
-                        f"'Abstract' or '_Abstract'. Got {name} when defining "
-                        f"{cls.__module__}.{cls.__qualname__}.",
-                        stacklevel=2,
-                    )
+            if not strict_config.allow_abstract_name:
+                has_abstract_name = cls.__name__.startswith(
+                    "Abstract"
+                ) or cls.__name__.startswith("_Abstract")
+                if _is_abstract(cls):
+                    if not has_abstract_name:
+                        # Invariant: abstract classes have names beginning with
+                        # `Abstract`.
+                        raise TypeError(
+                            "Abstract strict `eqx.Module`s must be named starting "
+                            f"with 'Abstract' or '_Abstract'. Got {name} when defining "
+                            f"{cls.__module__}.{cls.__qualname__}.",
+                        )
+                else:
+                    if has_abstract_name:
+                        # Invariant: concrete classes do not have names beginning with
+                        # `Abstract`.
+                        raise TypeError(
+                            "Concrete strict `eqx.Module`s should not have names "
+                            f"starting with 'Abstract' or '_Abstract'. Got '{name}' "
+                            f"when defining {cls.__module__}.{cls.__qualname__}.",
+                        )
             for k, v in cls.__dict__.items():
                 if isinstance(v, _wrap_method):
                     v = v.method
@@ -414,9 +474,8 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
                                     "attempting to override "
                                     f"`{base.__module__}.{base.__qualname__}.{k}`."
                                 )
-                            if not (
-                                getattr(old_v, "__isabstractmethod__", False)
-                                or getattr(old_v, "__equinox_isdefaultmethod__", False)
+                            if not strict_config.allow_method_override and not getattr(
+                                old_v, "__isabstractmethod__", False
                             ):
                                 raise TypeError(
                                     "Strict `eqx.Module`s cannot override concrete "
@@ -500,17 +559,6 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
         if _not_magic(item) and inspect.isfunction(value):
             value = _wrap_method(value)
         super().__setattr__(item, value)
-
-
-def strict_default_method(fn):
-    """Marks that a concrete method *can* be overriden by strict Module subclasses.
-
-    Use with care -- this is really only intended to make it easier to upgrade old
-    codebases to using strict Modules in a backward-compatible way. New codebases should
-    probably factor out the default implementation to a different class.
-    """
-    fn.__equinox_isdefaultmethod__ = True
-    return fn
 
 
 if TYPE_CHECKING:
