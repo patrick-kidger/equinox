@@ -845,6 +845,34 @@ def test_strict_method_reoverride():
                 pass
 
 
+def test_strict_default():
+    class AbstractA(eqx.Module, strict=True, abstract=True):
+        @eqx.strict_default_method
+        def foo(self) -> int:
+            return 4
+
+    class AbstractB1(AbstractA, strict=True, abstract=True):
+        def foo(self) -> int:
+            return 5
+
+    class AbstractB2(AbstractA, strict=True, abstract=True):
+        @eqx.strict_default_method
+        def foo(self) -> int:
+            return 5
+
+    with pytest.raises(
+        TypeError, match="Strict `eqx.Module`s cannot override concrete"
+    ):
+
+        class C1(AbstractB1, strict=True):
+            def foo(self):
+                return 6
+
+    class C2(AbstractB2, strict=True):
+        def foo(self):
+            return 7
+
+
 def test_post_init_warning():
     class A(eqx.Module):
         called = False
