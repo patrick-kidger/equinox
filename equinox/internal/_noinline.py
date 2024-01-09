@@ -385,7 +385,7 @@ _index_to_fn = []
 
 
 class _NoInlineWrapper(Module):
-    dynamic_index: Int[Array, ""]
+    dynamic_index: Int[Union[Array, np.ndarray], ""]
     abstract_fn: Callable = field(static=True)
     dynamic_fn: Any
 
@@ -502,6 +502,6 @@ def noinline(fn: Callable, abstract_fn: Optional[Callable] = None) -> Callable: 
         dynamic_index = len(_index_to_fn)
         _fn_to_index[static_fn] = dynamic_index
         _index_to_fn.append(static_fn)
-    dynamic_index = jnp.array(dynamic_index)
+    dynamic_index = np.array(dynamic_index)
     noinline_fn = _NoInlineWrapper(dynamic_index, abstract_fn, dynamic_fn)
     return module_update_wrapper(noinline_fn)
