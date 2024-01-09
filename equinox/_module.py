@@ -393,10 +393,11 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
                     cls.__name__.startswith("Abstract")
                     or cls.__name__.startswith("_Abstract")
                 ):
-                    raise TypeError(
-                        "Abstract strict `eqx.Module`s must be named starting with "
+                    warnings.warn(
+                        "Abstract strict `eqx.Module`s should be named starting with "
                         f"'Abstract' or '_Abstract'. Got {name} when defining "
-                        f"{cls.__module__}.{cls.__qualname__}."
+                        f"{cls.__module__}.{cls.__qualname__}.",
+                        stacklevel=2,
                     )
             for k, v in cls.__dict__.items():
                 if isinstance(v, _wrap_method):
