@@ -1,3 +1,4 @@
+import warnings
 from collections.abc import Callable, Sequence
 from typing import Any, Optional, overload, Union
 
@@ -11,33 +12,36 @@ from .._module import Module
 from ._stateful import State
 
 
-class StatefulLayer(Module):
-    """An abstract base class, used by [`equinox.nn.Sequential`][], to mark that a layer
-    might be stateful. If `Sequential` sees that a layer inherits from `StatefulLayer`,
-    then it will call `layer.is_stateful()` to check whether to call the layer as
-    `new_x = layer(x)` or `(new_x, new_state) = layer(x, state)`.
-    """
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", message="Abstract")
 
-    def is_stateful(self) -> bool:
-        """Indicates whether this layer should be considered stateful.
-
-        The default implementation just returns True, but subclasses may override this
-        to provide custom logic if the layer is only "maybe stateful". (E.g. if they
-        optionally use stateful sublayers themselves.)
-
-        **Arguments:**
-
-        None
-
-        **Returns:**
-
-        A boolean. `True` indicates that the layer should be called as
-        `(new_x, new_state) = layer(x, state)`. `False` indicates that the layer should
-        be called as `new_x = layer(x)`.
+    class StatefulLayer(Module, strict=True):
+        """An abstract base class, used by [`equinox.nn.Sequential`][], to mark that a
+        layer might be stateful. If `Sequential` sees that a layer inherits from
+        `StatefulLayer`, then it will call `layer.is_stateful()` to check whether to
+        call the layer as `new_x = layer(x)` or `(new_x, new_state) = layer(x, state)`.
         """
-        return True
 
-    __call__: AbstractClassVar[Callable]
+        def is_stateful(self) -> bool:
+            """Indicates whether this layer should be considered stateful.
+
+            The default implementation just returns True, but subclasses may override
+            this to provide custom logic if the layer is only "maybe stateful". (E.g. if
+            they optionally use stateful sublayers themselves.)
+
+            **Arguments:**
+
+            None
+
+            **Returns:**
+
+            A boolean. `True` indicates that the layer should be called as
+            `(new_x, new_state) = layer(x, state)`. `False` indicates that the layer
+            should be called as `new_x = layer(x)`.
+            """
+            return True
+
+        __call__: AbstractClassVar[Callable]
 
 
 class Sequential(StatefulLayer):
