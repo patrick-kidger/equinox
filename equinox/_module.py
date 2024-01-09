@@ -414,7 +414,10 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
                                     "attempting to override "
                                     f"`{base.__module__}.{base.__qualname__}.{k}`."
                                 )
-                            if not getattr(old_v, "__isabstractmethod__", False):
+                            if not (
+                                getattr(old_v, "__isabstractmethod__", False)
+                                or getattr(old_v, "__equinox_isdefaultmethod__", False)
+                            ):
                                 raise TypeError(
                                     "Strict `eqx.Module`s cannot override concrete "
                                     "methods. "
@@ -497,6 +500,17 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
         if _not_magic(item) and inspect.isfunction(value):
             value = _wrap_method(value)
         super().__setattr__(item, value)
+
+
+def strict_default_method(fn):
+    """Marks that a concrete method *can* be overriden by strict Module subclasses.
+
+    Use with care -- this is really only intended to make it easier to upgrade old
+    codebases to using strict Modules in a backward-compatible way. New codebases should
+    probably factor out the default implementation to a different class.
+    """
+    fn.__equinox_isdefaultmethod__ = True
+    return fn
 
 
 if TYPE_CHECKING:
