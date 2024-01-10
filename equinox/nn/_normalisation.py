@@ -290,7 +290,7 @@ class RMSNorm(Module, strict=True):
             author={Biao Zhang and Rico Sennrich},
             year={2019},
             journal={arXiv:1910.07467}
-    }
+        }
         ```
     """
 
