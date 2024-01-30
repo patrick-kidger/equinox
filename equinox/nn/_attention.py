@@ -2,11 +2,12 @@ import functools as ft
 import math
 import warnings
 from functools import partial
-from typing import Callable, cast, Optional, Tuple, Union
+from typing import cast, Optional, Tuple, Union
 
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
+from beartype.typing import Callable
 from jaxtyping import Array, Bool, Float, PRNGKeyArray
 
 from .._module import field, Module
