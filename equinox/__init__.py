@@ -41,6 +41,7 @@ from ._module import (
     module_update_wrapper as module_update_wrapper,
     Partial as Partial,
     static_field as static_field,
+    StrictConfig as StrictConfig,
 )
 from ._pretty_print import tree_pformat as tree_pformat, tree_pprint as tree_pprint
 from ._serialisation import (

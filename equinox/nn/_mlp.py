@@ -22,7 +22,7 @@ _identity = doc_repr(lambda x: x, "lambda x: x")
 _relu = doc_repr(jnn.relu, "<function relu>")
 
 
-class MLP(Module):
+class MLP(Module, strict=True):
     """Standard Multi-Layer Perceptron; also known as a feed-forward network.
 
     !!! faq
@@ -52,7 +52,6 @@ class MLP(Module):
         use_final_bias: bool = True,
         *,
         key: PRNGKeyArray,
-        **kwargs,
     ):
         """**Arguments**:
 
@@ -83,7 +82,6 @@ class MLP(Module):
         output from the module will have shape `()`.
         """
 
-        super().__init__(**kwargs)
         keys = jrandom.split(key, depth + 1)
         layers = []
         if depth == 0:

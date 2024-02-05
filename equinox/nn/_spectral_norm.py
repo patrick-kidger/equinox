@@ -27,7 +27,7 @@ def _power_iteration(weight, u, v, eps):
 _Layer = TypeVar("_Layer")
 
 
-class SpectralNorm(StatefulLayer, Generic[_Layer]):
+class SpectralNorm(StatefulLayer, Generic[_Layer], strict=True):
     """Applies spectral normalisation to a given parameter.
 
     Given a weight matrix $W$, and letting $σ(W)$ denote (an approximation to) its
@@ -68,7 +68,6 @@ class SpectralNorm(StatefulLayer, Generic[_Layer]):
         inference: bool = False,
         *,
         key: PRNGKeyArray,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -85,7 +84,6 @@ class SpectralNorm(StatefulLayer, Generic[_Layer]):
         - `key`: A `jax.random.PRNGKey` used to provide randomness for initialisation.
             (Keyword only argument.)
         """
-        super().__init__(**kwargs)
 
         self.layer = layer
         self.weight_name = weight_name

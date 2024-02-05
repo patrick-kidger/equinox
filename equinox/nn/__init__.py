@@ -16,7 +16,11 @@ from ._embedding import Embedding as Embedding
 from ._inference import inference_mode as inference_mode
 from ._linear import Identity as Identity, Linear as Linear
 from ._mlp import MLP as MLP
-from ._normalisation import GroupNorm as GroupNorm, LayerNorm as LayerNorm
+from ._normalisation import (
+    GroupNorm as GroupNorm,
+    LayerNorm as LayerNorm,
+    RMSNorm as RMSNorm,
+)
 from ._pool import (
     AdaptiveAvgPool1d as AdaptiveAvgPool1d,
     AdaptiveAvgPool2d as AdaptiveAvgPool2d,
@@ -47,3 +51,4 @@ from ._stateful import (
     State as State,
     StateIndex as StateIndex,
 )
+from ._weight_norm import WeightNorm as WeightNorm

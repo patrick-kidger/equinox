@@ -12,7 +12,7 @@ from ._sequential import StatefulLayer
 from ._stateful import State, StateIndex
 
 
-class BatchNorm(StatefulLayer):
+class BatchNorm(StatefulLayer, strict=True):
     r"""Computes a mean and standard deviation over the batch and spatial
     dimensions of an array, and uses these to normalise the whole array. Optionally
     applies a channelwise affine transformation afterwards.
@@ -64,7 +64,6 @@ class BatchNorm(StatefulLayer):
         momentum: float = 0.99,
         inference: bool = False,
         dtype=None,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -86,8 +85,6 @@ class BatchNorm(StatefulLayer):
             `jax.numpy.float32` or `jax.numpy.float64` depending on whether JAX is in
             64-bit mode.
         """
-
-        super().__init__(**kwargs)
 
         if channelwise_affine:
             self.weight = jnp.ones((input_size,))

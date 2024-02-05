@@ -13,7 +13,7 @@ from .._filters import is_array_like
 from .._module import field, Module
 
 
-class Embedding(Module):
+class Embedding(Module, strict=True):
     """A simple lookup table that stores embeddings of a fixed size."""
 
     num_embeddings: int = field(static=True)
@@ -27,7 +27,6 @@ class Embedding(Module):
         weight: Optional[Float[Array, "num_embeddings embedding_size"]] = None,
         *,
         key: Optional[PRNGKeyArray] = None,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -43,7 +42,6 @@ class Embedding(Module):
         - `weight`: The embedding lookup table, of shape
             `(num_embeddings, embedding_size)`.
         """
-        super().__init__(**kwargs)
         if weight is None:
             if num_embeddings is None or embedding_size is None or key is None:
                 raise ValueError(

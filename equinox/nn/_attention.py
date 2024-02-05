@@ -54,7 +54,7 @@ def dot_product_attention(
     return attn
 
 
-class MultiheadAttention(Module):
+class MultiheadAttention(Module, strict=True):
     r"""
     Computes
 
@@ -151,7 +151,6 @@ class MultiheadAttention(Module):
         inference: bool = False,
         *,
         key: PRNGKeyArray,
-        **kwargs,
     ):
         r"""**Arguments:**
 
@@ -177,7 +176,6 @@ class MultiheadAttention(Module):
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
         """
-        super().__init__(**kwargs)
         qkey, kkey, vkey, okey = jrandom.split(key, 4)
 
         if key_size is None:

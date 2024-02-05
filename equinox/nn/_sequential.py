@@ -7,23 +7,23 @@ from jaxtyping import Array, PRNGKeyArray
 
 from .._better_abstract import AbstractClassVar
 from .._custom_types import sentinel
-from .._module import Module
+from .._module import Module, StrictConfig
 from ._stateful import State
 
 
-class StatefulLayer(Module):
-    """An abstract base class, used by [`equinox.nn.Sequential`][], to mark that a layer
-    might be stateful. If `Sequential` sees that a layer inherits from `StatefulLayer`,
-    then it will call `layer.is_stateful()` to check whether to call the layer as
-    `new_x = layer(x)` or `(new_x, new_state) = layer(x, state)`.
+class StatefulLayer(Module, strict=StrictConfig(allow_abstract_name=True)):
+    """An abstract base class, used by [`equinox.nn.Sequential`][], to mark that a
+    layer might be stateful. If `Sequential` sees that a layer inherits from
+    `StatefulLayer`, then it will call `layer.is_stateful()` to check whether to
+    call the layer as `new_x = layer(x)` or `(new_x, new_state) = layer(x, state)`.
     """
 
     def is_stateful(self) -> bool:
         """Indicates whether this layer should be considered stateful.
 
-        The default implementation just returns True, but subclasses may override this
-        to provide custom logic if the layer is only "maybe stateful". (E.g. if they
-        optionally use stateful sublayers themselves.)
+        The default implementation just returns True, but subclasses may override
+        this to provide custom logic if the layer is only "maybe stateful". (E.g. if
+        they optionally use stateful sublayers themselves.)
 
         **Arguments:**
 
@@ -32,15 +32,15 @@ class StatefulLayer(Module):
         **Returns:**
 
         A boolean. `True` indicates that the layer should be called as
-        `(new_x, new_state) = layer(x, state)`. `False` indicates that the layer should
-        be called as `new_x = layer(x)`.
+        `(new_x, new_state) = layer(x, state)`. `False` indicates that the layer
+        should be called as `new_x = layer(x)`.
         """
         return True
 
     __call__: AbstractClassVar[Callable]
 
 
-class Sequential(StatefulLayer):
+class Sequential(StatefulLayer, strict=StrictConfig(allow_method_override=True)):
     """A sequence of [`equinox.Module`][]s applied in order.
 
     !!! note
@@ -125,7 +125,7 @@ class Sequential(StatefulLayer):
         return len(self.layers)
 
 
-class Lambda(Module):
+class Lambda(Module, strict=True):
     """Wraps a callable (e.g. an activation function) for use with
     [`equinox.nn.Sequential`][].
 

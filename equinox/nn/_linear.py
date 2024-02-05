@@ -9,7 +9,7 @@ from jaxtyping import Array, PRNGKeyArray
 from .._module import field, Module
 
 
-class Linear(Module):
+class Linear(Module, strict=True):
     """Performs a linear transformation."""
 
     weight: Array
@@ -42,7 +42,6 @@ class Linear(Module):
         Likewise `out_features` can also be a string `"scalar"`, in which case the
         output from the layer will have shape `()`.
         """
-        super().__init__()
         wkey, bkey = jrandom.split(key, 2)
         in_features_ = 1 if in_features == "scalar" else in_features
         out_features_ = 1 if out_features == "scalar" else out_features
@@ -101,15 +100,13 @@ class Linear(Module):
 _T = TypeVar("_T")
 
 
-class Identity(Module):
+class Identity(Module, strict=True):
     """Identity operation that does nothing. Sometimes useful as a placeholder for
     another Module.
     """
 
     def __init__(self, *args: Any, **kwargs: Any):
         """Consumes arbitrary `*args` and `**kwargs` but ignores them."""
-        # Ignores args and kwargs
-        super().__init__()
 
     @jax.named_scope("eqx.nn.Identity")
     def __call__(self, x: _T, *, key: Optional[PRNGKeyArray] = None) -> _T:

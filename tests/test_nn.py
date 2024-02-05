@@ -957,6 +957,47 @@ def test_spectral_norm(getkey):
     assert out.shape == (4, 6, 6, 6)
 
 
+def test_weight_norm(getkey):
+    # Linear
+    linear = eqx.nn.Linear(4, 4, key=getkey())
+    weight_norm_linear = eqx.nn.WeightNorm(layer=linear, weight_name="weight")
+
+    x = jrandom.normal(getkey(), (4,))
+    out_weight_norm = weight_norm_linear(x)
+    out_linear = linear(x)
+
+    assert jnp.allclose(out_weight_norm, out_linear)
+
+    # Axis == None
+    linear = eqx.nn.Linear(4, 4, key=getkey())
+    weight_norm_linear = eqx.nn.WeightNorm(
+        layer=linear, weight_name="weight", axis=None
+    )
+
+    x = jrandom.normal(getkey(), (4,))
+    out_weight_norm = weight_norm_linear(x)
+    out_linear = linear(x)
+
+    assert jnp.allclose(out_weight_norm, out_linear)
+
+    # Conv3d (ndim weight matrices > 2)
+    conv = eqx.nn.Conv3d(2, 3, 3, key=getkey())
+    weight_norm_conv = eqx.nn.WeightNorm(layer=conv, weight_name="weight")
+    x = jrandom.normal(getkey(), (2, 3, 3, 3))
+    out_weight_norm = weight_norm_conv(x)
+    out_conv = conv(x)
+
+    assert jnp.allclose(out_weight_norm, out_conv)
+
+    # Grads get generated for reparametrized weights, not original
+    grads = eqx.filter_grad(lambda model, x: jnp.mean(model(x)))(
+        weight_norm_linear, jrandom.normal(getkey(), (4,))
+    )
+
+    assert jnp.any(grads.layer.weight)
+    assert jnp.any(grads.g)
+
+
 def test_maxpool1d():
     x = jnp.arange(14).reshape(1, 14)
     max_pool = eqx.nn.MaxPool1d(2, 3)

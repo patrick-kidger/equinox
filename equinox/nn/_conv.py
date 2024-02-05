@@ -32,7 +32,7 @@ def _ntuple(n: int) -> Callable[[Union[_T, Sequence[_T]]], tuple[_T, ...]]:
     return parse
 
 
-class Conv(Module):
+class Conv(Module, strict=True):
     """General N-dimensional convolution."""
 
     num_spatial_dims: int = field(static=True)
@@ -60,7 +60,6 @@ class Conv(Module):
         use_bias: bool = True,
         *,
         key: PRNGKeyArray,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -99,7 +98,6 @@ class Conv(Module):
             dimension.
 
         """
-        super().__init__(**kwargs)
         wkey, bkey = jrandom.split(key, 2)
 
         parse = _ntuple(num_spatial_dims)
@@ -202,7 +200,6 @@ class Conv1d(Conv):
         use_bias: bool = True,
         *,
         key: PRNGKeyArray,
-        **kwargs,
     ):
         super().__init__(
             num_spatial_dims=1,
@@ -215,7 +212,6 @@ class Conv1d(Conv):
             groups=groups,
             use_bias=use_bias,
             key=key,
-            **kwargs,
         )
 
 
@@ -234,7 +230,6 @@ class Conv2d(Conv):
         use_bias: bool = True,
         *,
         key: PRNGKeyArray,
-        **kwargs,
     ):
         super().__init__(
             num_spatial_dims=2,
@@ -247,7 +242,6 @@ class Conv2d(Conv):
             groups=groups,
             use_bias=use_bias,
             key=key,
-            **kwargs,
         )
 
 
@@ -266,7 +260,6 @@ class Conv3d(Conv):
         use_bias: bool = True,
         *,
         key: PRNGKeyArray,
-        **kwargs,
     ):
         super().__init__(
             num_spatial_dims=3,
@@ -279,11 +272,10 @@ class Conv3d(Conv):
             groups=groups,
             use_bias=use_bias,
             key=key,
-            **kwargs,
         )
 
 
-class ConvTranspose(Module):
+class ConvTranspose(Module, strict=True):
     """General N-dimensional transposed convolution."""
 
     num_spatial_dims: int = field(static=True)
@@ -313,7 +305,6 @@ class ConvTranspose(Module):
         use_bias: bool = True,
         *,
         key: PRNGKeyArray,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -372,7 +363,6 @@ class ConvTranspose(Module):
             and [this report](https://arxiv.org/abs/1603.07285) for a nice reference.
         """  # noqa: E501
 
-        super().__init__(**kwargs)
         wkey, bkey = jrandom.split(key, 2)
 
         parse = _ntuple(num_spatial_dims)
@@ -483,7 +473,6 @@ class ConvTranspose1d(ConvTranspose):
         use_bias: bool = True,
         *,
         key: PRNGKeyArray,
-        **kwargs,
     ):
         super().__init__(
             num_spatial_dims=1,
@@ -497,7 +486,6 @@ class ConvTranspose1d(ConvTranspose):
             groups=groups,
             use_bias=use_bias,
             key=key,
-            **kwargs,
         )
 
 
@@ -517,7 +505,6 @@ class ConvTranspose2d(ConvTranspose):
         use_bias: bool = True,
         *,
         key: PRNGKeyArray,
-        **kwargs,
     ):
         super().__init__(
             num_spatial_dims=2,
@@ -531,7 +518,6 @@ class ConvTranspose2d(ConvTranspose):
             groups=groups,
             use_bias=use_bias,
             key=key,
-            **kwargs,
         )
 
 
@@ -551,7 +537,6 @@ class ConvTranspose3d(ConvTranspose):
         use_bias: bool = True,
         *,
         key: PRNGKeyArray,
-        **kwargs,
     ):
         super().__init__(
             num_spatial_dims=3,
@@ -565,5 +550,4 @@ class ConvTranspose3d(ConvTranspose):
             groups=groups,
             use_bias=use_bias,
             key=key,
-            **kwargs,
         )
