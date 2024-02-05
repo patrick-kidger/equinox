@@ -80,6 +80,7 @@ class Sequential(StatefulLayer, strict=StrictConfig(allow_method_override=True))
         state: State = sentinel,
         *,
         key: Optional[PRNGKeyArray] = None,
+        **kwargs,
     ) -> Union[Array, tuple[Array, State]]:
         """**Arguments:**
 
@@ -88,6 +89,7 @@ class Sequential(StatefulLayer, strict=StrictConfig(allow_method_override=True))
             which subclasses [`equinox.nn.StatefulLayer`][].
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
+        - `**kwargs`: Passed to each layer in the sequence.
 
         **Returns:**
         The output of the last member of the sequence.
@@ -102,9 +104,9 @@ class Sequential(StatefulLayer, strict=StrictConfig(allow_method_override=True))
             keys = jr.split(key, len(self.layers))
         for layer, key in zip(self.layers, keys):
             if isinstance(layer, StatefulLayer) and layer.is_stateful():
-                x, state = layer(x, state=state, key=key)
+                x, state = layer(x, state=state, key=key, kwargs=kwargs)
             else:
-                x = layer(x, key=key)
+                x = layer(x, key=key, kwargs=kwargs)
         if state is sentinel:
             return x
         else:
