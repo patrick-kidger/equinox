@@ -8,7 +8,7 @@ import jax
 import jax.tree_util as jtu
 from jaxtyping import PyTree
 
-from ._caches import internal_caches
+from ._caches import cache_clears
 from ._module import Module
 
 
@@ -54,7 +54,7 @@ def get_fn_names(user_fn):
 
 def compile_cache(cacheable_fn):
     cache = weakref.WeakKeyDictionary()
-    internal_caches.append(cache)
+    cache_clears.append(cache.clear)
 
     def cached_fn_impl(leaves, treedef):
         user_fn_names, args, kwargs = jtu.tree_unflatten(treedef, leaves)
