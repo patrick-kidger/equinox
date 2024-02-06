@@ -7,7 +7,7 @@ import jax._src.traceback_util as traceback_util
 import jax.tree_util as jtu
 from jaxtyping import PyTree
 
-from ._caches import internal_lru_caches
+from ._caches import cache_clears
 from ._filters import combine, is_array, partition
 from ._module import Static
 
@@ -52,7 +52,7 @@ def _cached_filter_eval_shape(leaves, treedef):
     return filter_eval_shape(fn, *args, **kwargs)
 
 
-internal_lru_caches.append(_cached_filter_eval_shape)
+cache_clears.append(_cached_filter_eval_shape.cache_clear)
 
 
 def cached_filter_eval_shape(fn, *args, **kwargs):

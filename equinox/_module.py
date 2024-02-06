@@ -20,7 +20,7 @@ import numpy as np
 from jaxtyping import Array, Bool, PyTreeDef
 
 from ._better_abstract import ABCMeta, dataclass
-from ._caches import internal_lru_caches
+from ._caches import cache_clears
 from ._doc_utils import doc_repr
 from ._pretty_print import tree_pformat
 from ._tree import tree_equal
@@ -706,7 +706,7 @@ went uncaught, possibly leading to silently wrong behaviour.
     return _InitableModule
 
 
-internal_lru_caches.append(_make_initable)
+cache_clears.append(_make_initable.cache_clear)
 
 
 def _convert_fields(module, init: bool):
