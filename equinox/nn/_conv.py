@@ -32,6 +32,41 @@ def _ntuple(n: int) -> Callable[[Union[_T, Sequence[_T]]], tuple[_T, ...]]:
     return parse
 
 
+def _padding_init(
+    padding: Union[str, int, Sequence[int], Sequence[tuple[int, int]]],
+    num_spatial_dims: int,
+) -> Union[str, tuple[tuple[int, int], ...]]:
+    if isinstance(padding, str):
+        padding = padding.upper()
+        if padding not in ("SAME", "SAME_LOWER", "VALID"):
+            raise ValueError(
+                "`padding` string must be `'SAME'`, `'SAME_LOWER'`, or `'VALID'`."
+            )
+    elif isinstance(padding, int):
+        padding = tuple((padding, padding) for _ in range(num_spatial_dims))
+    elif isinstance(padding, Sequence) and len(padding) == num_spatial_dims:
+        if all_sequences(padding):
+            padding = tuple(padding)
+        else:
+            padding = tuple((p, p) for p in padding)
+    else:
+        raise ValueError(
+            "`padding` must either be a string, an int, or tuple of length "
+            f"{num_spatial_dims} containing ints or tuples of length 2."
+        )
+    return padding
+
+
+def _padding_mode_init(padding_mode: str) -> str:
+    padding_mode = padding_mode.upper()
+    if padding_mode not in ("ZEROS", "REFLECT", "REPLICATE", "CIRCULAR"):
+        raise ValueError(
+            "`padding_mode` must be `'ZEROS'`, `'REFLECT'`, `'REPLICATE'`, or "
+            "`'CIRCULAR'`."
+        )
+    return padding_mode
+
+
 class Conv(Module, strict=True):
     """General N-dimensional convolution."""
 
@@ -42,10 +77,11 @@ class Conv(Module, strict=True):
     out_channels: int = field(static=True)
     kernel_size: tuple[int, ...] = field(static=True)
     stride: tuple[int, ...] = field(static=True)
-    padding: tuple[tuple[int, int], ...] = field(static=True)
+    padding: Union[str, tuple[tuple[int, int], ...]] = field(static=True)
     dilation: tuple[int, ...] = field(static=True)
     groups: int = field(static=True)
     use_bias: bool = field(static=True)
+    padding_mode: str = field(static=True)
 
     def __init__(
         self,
@@ -54,10 +90,11 @@ class Conv(Module, strict=True):
         out_channels: int,
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
+        padding: Union[str, int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         dilation: Union[int, Sequence[int]] = 1,
         groups: int = 1,
         use_bias: bool = True,
+        padding_mode: str = "ZEROS",
         *,
         key: PRNGKeyArray,
     ):
@@ -69,8 +106,7 @@ class Conv(Module, strict=True):
         - `out_channels`: The number of output channels.
         - `kernel_size`: The size of the convolutional kernel.
         - `stride`: The stride of the convolution.
-        - `padding`: The amount of padding to apply before and after each spatial
-            dimension.
+        - `padding`: The padding of the convolution.
         - `dilation`: The dilation of the convolution.
         - `groups`: The number of input channel groups. At `groups=1`,
             all input channels contribute to all output channels. Values
@@ -80,6 +116,8 @@ class Conv(Module, strict=True):
             concatenating the results along the output channel dimension.
             `in_channels` must be divisible by `groups`.
         - `use_bias`: Whether to add on a bias after the convolution.
+        - `padding_mode`: One of the following strings specifying the padding values.
+            `'ZEROS'` (default), `'REFLECT'`, `'REPLICATE'`, or `'CIRCULAR'`.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
 
@@ -93,9 +131,11 @@ class Conv(Module, strict=True):
             If they are an integer then the same kernel size / stride / padding /
             dilation will be used along every spatial dimension.
 
-            `padding` can alternatively also be a sequence of 2-element tuples,
-            each representing the padding to apply before and after each spatial
-            dimension.
+            `padding` can alternatively be a sequence of 2-element tuples, each
+            representing the padding to apply before and after each spatial dimension.
+            `padding` can also be a string `'SAME'`, `'SAME_LOWER'`, or `'VALID'` (see
+            [jax.lax.conv_general_dilated](https://jax.readthedocs.io/en/latest/_autosummary/jax.lax.conv_general_dilated.html)
+            for details).
 
         """
         wkey, bkey = jrandom.split(key, 2)
@@ -134,21 +174,34 @@ class Conv(Module, strict=True):
         self.out_channels = out_channels
         self.kernel_size = kernel_size
         self.stride = stride
-        if isinstance(padding, int):
-            self.padding = tuple((padding, padding) for _ in range(num_spatial_dims))
-        elif isinstance(padding, Sequence) and len(padding) == num_spatial_dims:
-            if all_sequences(padding):
-                self.padding = tuple(padding)
-            else:
-                self.padding = tuple((p, p) for p in padding)
-        else:
-            raise ValueError(
-                "`padding` must either be an int or tuple of length "
-                f"{num_spatial_dims} containing ints or tuples of length 2."
-            )
+        self.padding = _padding_init(padding, num_spatial_dims)
         self.dilation = dilation
         self.groups = groups
         self.use_bias = use_bias
+        self.padding_mode = _padding_mode_init(padding_mode)
+
+    def _nonzero_pad(self, x: Array) -> Array:
+        if isinstance(self.padding, str):
+            rhs_shape = tuple(
+                d * (k - 1) + 1 for k, d in zip(self.kernel_size, self.dilation)
+            )
+            padding = lax.padtype_to_pads(
+                x.shape[2:], rhs_shape, self.stride, self.padding
+            )
+        else:
+            padding = list(self.padding)
+
+        if self.padding_mode == "REFLECT":
+            mode = "reflect"
+        elif self.padding_mode == "REPLICATE":
+            mode = "edge"
+        elif self.padding_mode == "CIRCULAR":
+            mode = "wrap"
+        else:
+            raise ValueError("Invalid padding mode")
+        
+        x = jnp.pad(x, [(0, 0), (0, 0)] + padding, mode)
+        return x
 
     @jax.named_scope("eqx.nn.Conv")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
@@ -171,11 +224,17 @@ class Conv(Module, strict=True):
                 f" but input has shape {x.shape}.",
             )
         x = jnp.expand_dims(x, axis=0)
+        if self.padding_mode != "ZEROS":
+            x = self._nonzero_pad(x)
+            padding = "VALID"
+        else:
+            padding = self.padding
+
         x = lax.conv_general_dilated(
             lhs=x,
             rhs=self.weight,
             window_strides=self.stride,
-            padding=self.padding,
+            padding=padding,
             rhs_dilation=self.dilation,
             feature_group_count=self.groups,
         )
@@ -194,10 +253,11 @@ class Conv1d(Conv):
         out_channels: int,
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
+        padding: Union[str, int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         dilation: Union[int, Sequence[int]] = 1,
         groups: int = 1,
         use_bias: bool = True,
+        padding_mode: str = "ZEROS",
         *,
         key: PRNGKeyArray,
     ):
@@ -211,6 +271,7 @@ class Conv1d(Conv):
             dilation=dilation,
             groups=groups,
             use_bias=use_bias,
+            padding_mode=padding_mode,
             key=key,
         )
 
@@ -224,10 +285,11 @@ class Conv2d(Conv):
         out_channels: int,
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = (1, 1),
-        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = (0, 0),
+        padding: Union[str, int, Sequence[int], Sequence[tuple[int, int]]] = (0, 0),
         dilation: Union[int, Sequence[int]] = (1, 1),
         groups: int = 1,
         use_bias: bool = True,
+        padding_mode: str = "ZEROS",
         *,
         key: PRNGKeyArray,
     ):
@@ -241,6 +303,7 @@ class Conv2d(Conv):
             dilation=dilation,
             groups=groups,
             use_bias=use_bias,
+            padding_mode=padding_mode,
             key=key,
         )
 
@@ -254,10 +317,11 @@ class Conv3d(Conv):
         out_channels: int,
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = (1, 1, 1),
-        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = (0, 0, 0),
+        padding: Union[str, int, Sequence[int], Sequence[tuple[int, int]]] = (0, 0, 0),
         dilation: Union[int, Sequence[int]] = (1, 1, 1),
         groups: int = 1,
         use_bias: bool = True,
+        padding_mode: str = "ZEROS",
         *,
         key: PRNGKeyArray,
     ):
@@ -271,6 +335,7 @@ class Conv3d(Conv):
             dilation=dilation,
             groups=groups,
             use_bias=use_bias,
+            padding_mode=padding_mode,
             key=key,
         )
 
@@ -285,11 +350,12 @@ class ConvTranspose(Module, strict=True):
     out_channels: int = field(static=True)
     kernel_size: tuple[int, ...] = field(static=True)
     stride: tuple[int, ...] = field(static=True)
-    padding: tuple[tuple[int, int], ...] = field(static=True)
+    padding: Union[str, tuple[tuple[int, int], ...]] = field(static=True)
     output_padding: tuple[int, ...] = field(static=True)
     dilation: tuple[int, ...] = field(static=True)
     groups: int = field(static=True)
     use_bias: bool = field(static=True)
+    padding_mode: str = field(static=True)
 
     def __init__(
         self,
@@ -298,11 +364,12 @@ class ConvTranspose(Module, strict=True):
         out_channels: int,
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
+        padding: Union[str, int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         output_padding: Union[int, Sequence[int]] = 0,
         dilation: Union[int, Sequence[int]] = 1,
         groups: int = 1,
         use_bias: bool = True,
+        padding_mode: str = "ZEROS",
         *,
         key: PRNGKeyArray,
     ):
@@ -314,7 +381,7 @@ class ConvTranspose(Module, strict=True):
         - `out_channels`: The number of output channels.
         - `kernel_size`: The size of the transposed convolutional kernel.
         - `stride`: The stride used on the equivalent [`equinox.nn.Conv`][].
-        - `padding`: The amount of padding used on the equivalent [`equinox.nn.Conv`][].
+        - `padding`: The padding used on the equivalent [`equinox.nn.Conv`][].
         - `output_padding`: Additional padding for the output shape.
         - `dilation`: The spacing between kernel points.
         - `groups`: The number of input channel groups. At `groups=1`,
@@ -325,6 +392,9 @@ class ConvTranspose(Module, strict=True):
             concatenating the results along the output channel dimension.
             `in_channels` must be divisible by `groups`.
         - `use_bias`: Whether to add on a bias after the transposed convolution.
+        - `padding_mode`: One of the following strings specifying the padding values
+            used on the equivalent [`equinox.nn.Conv`][].
+            `'ZEROS'` (default) or `'CIRCULAR'`.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
 
@@ -338,9 +408,11 @@ class ConvTranspose(Module, strict=True):
             If they are an integer then the same kernel size / stride / padding /
             dilation will be used along every spatial dimension.
 
-            `padding` can alternatively also be a sequence of 2-element tuples,
-            each representing the padding to apply before and after each spatial
-            dimension.
+            `padding` can alternatively be a sequence of 2-element tuples, each
+            representing the padding to apply before and after each spatial dimension.
+            `padding` can also be a string `'SAME'`, `'SAME_LOWER'`, or `'VALID'` (see
+            [jax.lax.conv_general_dilated](https://jax.readthedocs.io/en/latest/_autosummary/jax.lax.conv_general_dilated.html)
+            for details).
 
         !!! tip
 
@@ -355,9 +427,10 @@ class ConvTranspose(Module, strict=True):
             `kernel_size`, `stride`, `padding`, `dilation`, and `groups` the same.
 
             When `stride > 1` then [`equinox.nn.Conv`][] maps multiple input shapes to the
-            same output shape. `output_padding` is provided to resolve this ambiguity,
-            by adding a little extra padding to just the bottom/right edges of the
-            input.
+            same output shape. `output_padding` is provided to resolve this ambiguity.
+            For `'SAME'` or `'SAME_LOWER'` padding, it reduces the calculated input shape.
+            In other cases, it adds a little extra padding to just the bottom/right 
+            edges of the input.
 
             See [these animations](https://github.com/vdumoulin/conv_arithmetic/blob/af6f818b0bb396c26da79899554682a8a499101d/README.md#transposed-convolution-animations)
             and [this report](https://arxiv.org/abs/1603.07285) for a nice reference.
@@ -393,27 +466,72 @@ class ConvTranspose(Module, strict=True):
         else:
             self.bias = None
 
+        padding = _padding_init(padding, num_spatial_dims)
+        padding_mode = _padding_mode_init(padding_mode)
+        if padding_mode in ("REFLECT", "REPLICATE"):
+            raise NotImplementedError(
+                "'REFLECT' or 'REPLICATE' padding mode is not implemented"
+            )
+        elif padding_mode == "CIRCULAR":
+            if np.any(output_padding):
+                raise NotImplementedError(
+                    "`padding_mode == 'CIRCULAR'` with non-zero `output_padding` is not"
+                    "implemented."
+                )
+            if padding not in ("SAME", "SAME_LOWER"):
+                raise NotImplementedError(
+                    "`padding_mode == 'CIRCULAR'` is only implemented for 'SAME' or"
+                    "'SAME_LOWER' padding."
+                )
+
         self.num_spatial_dims = num_spatial_dims
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
         self.stride = stride
-        if isinstance(padding, int):
-            self.padding = tuple((padding, padding) for _ in range(num_spatial_dims))
-        elif isinstance(padding, Sequence) and len(padding) == num_spatial_dims:
-            if all_sequences(padding):
-                self.padding = tuple(padding)
-            else:
-                self.padding = tuple((p, p) for p in padding)
-        else:
-            raise ValueError(
-                "`padding` must either be an int or tuple of length "
-                f"{num_spatial_dims} containing ints or tuples of length 2."
-            )
+        self.padding = padding
         self.output_padding = output_padding
         self.dilation = dilation
         self.groups = groups
         self.use_bias = use_bias
+        self.padding_mode = padding_mode
+
+    def _padding_transpose(self) -> tuple[Array, np.ndarray]:
+        # Notations follow https://arxiv.org/abs/1603.07285
+        k = np.asarray(self.kernel_size)
+        s = np.asarray(self.stride)
+        a = np.asarray(self.output_padding)
+        d = np.asarray(self.dilation)
+
+        if isinstance(self.padding, str):
+            if self.padding == "VALID":
+                p0 = np.zeros(self.num_spatial_dims, np.int64)
+                p1 = np.zeros(self.num_spatial_dims, np.int64)
+            else:
+                p_sum = d * (k - 1) - s + a + 1
+                a = np.where(p_sum < 0, -p_sum, 0)
+                p_sum = np.where(p_sum < 0, 0, p_sum)
+                lower = 1 if self.padding == "SAME_LOWER" else 0
+                p0 = (p_sum + lower) // 2
+                p1 = p_sum - p0
+        else:
+            p0 = np.asarray(self.padding)[:, 0]
+            p1 = np.asarray(self.padding)[:, 1]
+
+        # Given by Relationship 14 of https://arxiv.org/abs/1603.07285
+        p0t = d * (k - 1) - p0
+        p1t = d * (k - 1) - p1 + a
+        padding_t = np.stack([p0t, p1t], axis=1)
+        return padding_t
+
+    def _circular_pad(
+        self, x: Array, padding_t: np.ndarray
+    ) -> tuple[Array, np.ndarray]:
+        stride = np.expand_dims(self.stride, axis=1)
+        pad_width = np.insert(padding_t // stride, (0, 0), 0, axis=0)
+        x = jnp.pad(x, pad_width, mode="wrap")
+        padding_t = padding_t % stride
+        return x, padding_t
 
     @jax.named_scope("eqx.nn.ConvTranspose")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
@@ -435,22 +553,20 @@ class ConvTranspose(Module, strict=True):
                 f" but input has shape {x.shape}.",
             )
         x = jnp.expand_dims(x, axis=0)
-        # Given by Relationship 14 of https://arxiv.org/abs/1603.07285
-        padding = tuple(
-            (d * (k - 1) - p0, d * (k - 1) - p1 + o)
-            for k, (p0, p1), o, d in zip(
-                self.kernel_size, self.padding, self.output_padding, self.dilation
-            )
-        )
+
+        padding_t = self._padding_transpose()
+        if self.padding_mode == "CIRCULAR":
+            x, padding_t = self._circular_pad(x, padding_t)
         x = lax.conv_general_dilated(
             lhs=x,
             rhs=self.weight,
             window_strides=(1,) * self.num_spatial_dims,
-            padding=padding,
+            padding=padding_t,
             lhs_dilation=self.stride,
             rhs_dilation=self.dilation,
             feature_group_count=self.groups,
         )
+
         x = jnp.squeeze(x, axis=0)
         if self.use_bias:
             x = x + self.bias
@@ -471,6 +587,7 @@ class ConvTranspose1d(ConvTranspose):
         dilation: Union[int, Sequence[int]] = 1,
         groups: int = 1,
         use_bias: bool = True,
+        padding_mode: str = "ZEROS",
         *,
         key: PRNGKeyArray,
     ):
@@ -485,6 +602,7 @@ class ConvTranspose1d(ConvTranspose):
             dilation=dilation,
             groups=groups,
             use_bias=use_bias,
+            padding_mode=padding_mode,
             key=key,
         )
 
@@ -503,6 +621,7 @@ class ConvTranspose2d(ConvTranspose):
         dilation: Union[int, Sequence[int]] = (1, 1),
         groups: int = 1,
         use_bias: bool = True,
+        padding_mode: str = "ZEROS",
         *,
         key: PRNGKeyArray,
     ):
@@ -517,6 +636,7 @@ class ConvTranspose2d(ConvTranspose):
             dilation=dilation,
             groups=groups,
             use_bias=use_bias,
+            padding_mode=padding_mode,
             key=key,
         )
 
@@ -535,6 +655,7 @@ class ConvTranspose3d(ConvTranspose):
         dilation: Union[int, Sequence[int]] = (1, 1, 1),
         groups: int = 1,
         use_bias: bool = True,
+        padding_mode: str = "ZEROS",
         *,
         key: PRNGKeyArray,
     ):
@@ -549,5 +670,6 @@ class ConvTranspose3d(ConvTranspose):
             dilation=dilation,
             groups=groups,
             use_bias=use_bias,
+            padding_mode=padding_mode,
             key=key,
         )
