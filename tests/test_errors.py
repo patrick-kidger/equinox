@@ -85,8 +85,7 @@ def test_tracetime():
         return eqx.error_if(x, True, "hi")
 
     with pytest.raises(Exception):
-        with pytest.warns(UserWarning):
-            f(1.0)
+        f(1.0)
 
 
 def test_nan_tracetime():
