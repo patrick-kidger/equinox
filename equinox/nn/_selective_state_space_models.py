@@ -92,6 +92,10 @@ class SelectiveStateSpaceModel(Module, strict=True):
             dt_rank: The rank of delta. If "auto", it will be
                 set to ceil(n_input_dims / state_space_dims).
             pad_vocab_size_multiple: The multiple of the vocabulary size
+            use_bias_in_proj: Whether to use bias in the input projection layer.
+            use_bias_conv1d: Whether to use bias in the convolutional layer.
+            use_bias_out_proj: Whether to use bias in the output projection layer.
+            key: The PRNG key.
 
         """
         self.n_input_dims = n_input_dims
@@ -156,7 +160,7 @@ class SelectiveStateSpaceModel(Module, strict=True):
             key=x_proj_key,
         )
 
-    @jax.named_scope("eqx.nn.StateSpaceModel")
+    @jax.named_scope("eqx.nn.SelectiveStateSpaceModel")
     def __call__(self, x: Float[Array, "seq_len n_input_dims"]) -> Array:
         seq_len, d = x.shape
         if d != self.n_input_dims:
