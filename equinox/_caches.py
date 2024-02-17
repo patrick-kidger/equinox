@@ -1,7 +1,4 @@
-internal_caches = []
-internal_lru_caches = []
-internal_rope_embedding_cache = {}
-internal_sinusoidal_positional_encoding_cache = {}
+cache_clears = []
 
 
 def clear_caches():
@@ -17,9 +14,5 @@ def clear_caches():
 
     None.
     """
-    for cache in internal_caches:
-        cache.clear()
-    for cache in internal_lru_caches:
-        cache.cache_clear()
-    internal_rope_embedding_cache.clear()
-    internal_sinusoidal_positional_encoding_cache.clear()
+    for cache_clear in cache_clears:
+        cache_clear()
