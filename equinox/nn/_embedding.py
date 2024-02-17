@@ -5,12 +5,15 @@ import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array, ArrayLike, Complex, Float, Int, PRNGKeyArray
 
-from .._caches import (
-    internal_rope_embedding_cache,
-    internal_sinusoidal_positional_encoding_cache,
-)
+from .._caches import cache_clears
 from .._filters import is_array_like
 from .._module import field, Module
+
+
+internal_rope_embedding_cache = {}
+internal_sinusoidal_positional_encoding_cache = {}
+cache_clears.append(internal_rope_embedding_cache.clear)
+cache_clears.append(internal_sinusoidal_positional_encoding_cache.clear)
 
 
 class Embedding(Module, strict=True):
@@ -95,10 +98,72 @@ class Embedding(Module, strict=True):
             )
 
 
-class RotaryPositionalEmbedding(Module):
+class RotaryPositionalEmbedding(Module, strict=True):
+    """
+    A rotary positional encoding module, as described in the paper
+    "RoFormer: Enhanced Transformer with Rotary Position Embedding". While
+    this module can be used in any context, it is particularly useful for
+    providing positional information to transformer models.
+
+    !!! example
+        The following example demonstrates how to use `RotaryPositionalEmbedding` in
+        a simple transformer model.
+        ```python
+
+        class TransformerBlock(eqx.nn.StatefulLayer):
+            ...
+            key_rope_embeddings: RotaryPositionalEmbedding
+            query_rope_embeddings: RotaryPositionalEmbedding
+
+            def __init__(...):
+                ...
+                self.query_rope_embeddings = RotaryPositionalEmbedding(
+                    embedding_size=n_embd, max_seq_len=max_seq_len
+                )
+                self.key_rope_embeddings = RotaryPositionalEmbedding(
+                    embedding_size=n_embd, max_seq_len=max_seq_len
+                )
+                ...
+
+            def __call__(...):
+                def process_heads(query_heads, key_heads, value_heads):
+                    query_heads = jax.vmap(self.query_rope_embeddings,
+                                           in_axes=1,
+                                           out_axes=1)(query_heads)
+                    key_heads = jax.vmap(self.key_rope_embeddings,
+                                         in_axes=1,
+                                         out_axes=1)(key_heads)
+
+                    return query_heads, key_heads, value_heads
+
+                mha_output = self.mha_attention(
+                    process_heads=process_heads,
+                    query=jax.vmap(self.rms_norm)(x),
+                    key_=jax.vmap(self.rms_norm)(x),
+                    value=jax.vmap(self.rms_norm)(x),
+                    mask=mask,
+                )
+        ```
+
+    ??? cite
+
+        [RoFormer: Enhanced Transformer with Rotary Position Embedding](https://arxiv.org/pdf/2104.09864)
+
+        ```bibtex
+            @misc{su2023roformer,
+              title={RoFormer: Enhanced Transformer with Rotary Position Embedding},
+              author={Jianlin Su and Yu Lu and Shengfeng Pan and Ahmed Murtadha and
+              Bo Wen and Yunfeng Liu},
+              year={2023},
+              eprint={2104.09864},
+              archivePrefix={arXiv},
+              primaryClass={cs.CL}
+            }
+        ```
+    """
+
     embedding_size: int = field(static=True)
     max_seq_len: Optional[int] = field(static=True)
-    freqs_cis: Optional[Complex[Array, "embedding_size/2"]] = field(static=True)
 
     def __init__(
         self,
@@ -109,7 +174,6 @@ class RotaryPositionalEmbedding(Module):
         **kwargs,
     ):
         """**Arguments:**
-
         `RotaryPositionalEmbedding` requires:
 
         - `embedding_size`: Size of the token embeddings. Must be non-negative.
@@ -117,28 +181,12 @@ class RotaryPositionalEmbedding(Module):
         - `key`: Not used; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
         """
-        super().__init__(**kwargs)
         if embedding_size < 0:
             raise ValueError("embedding_size must not be negative.")
         if max_seq_len is not None and max_seq_len < 0:
             raise ValueError("max_seq_len must not be negative.")
         self.embedding_size = embedding_size
         self.max_seq_len = max_seq_len
-
-        if self.max_seq_len is not None:
-            if (self.embedding_size, self.max_seq_len) in internal_rope_embedding_cache:
-                self.freqs_cis = internal_rope_embedding_cache[
-                    (self.embedding_size, self.max_seq_len)
-                ]
-            else:
-                self.freqs_cis = self.precompute_freqs_cis(
-                    embedding_size, self.max_seq_len
-                )
-                internal_rope_embedding_cache[
-                    (self.embedding_size, self.max_seq_len)
-                ] = self.freqs_cis
-        else:
-            self.freqs_cis = None
 
     @staticmethod
     def negate_half(x: Float[Array, "max_seq_len embedding_size"]):
@@ -149,17 +197,12 @@ class RotaryPositionalEmbedding(Module):
     def precompute_freqs_cis(
         embedding_size: int, end: int, theta: float = 10000.0
     ) -> Complex[Array, "end embedding_size/2"]:
-        def polar(abs, angle):
-            return jnp.array(
-                abs * jnp.cos(angle) + abs * jnp.sin(angle) * 1j, dtype=jnp.complex64
-            )
-
         freqs = 1.0 / (
             theta ** (jnp.arange(0, embedding_size, 2)[jnp.newaxis, :] / embedding_size)
         )
         t = jnp.arange(end)
         freqs_outer = jnp.outer(t, freqs)
-        freqs_cis = polar(jnp.ones_like(freqs_outer), freqs_outer)
+        freqs_cis = jnp.cos(freqs_outer) + jnp.sin(freqs_outer) * 1j
         return freqs_cis
 
     @jax.named_scope("eqx.nn.RotaryPositionalEmbedding")
@@ -182,32 +225,31 @@ class RotaryPositionalEmbedding(Module):
         """
 
         seq_len, embedding_size = x.shape
-        assert embedding_size == self.embedding_size, (
-            f"x.shape[-1] must match self.embedding_size, "
-            f"but {x.shape[-1]} != {self.embedding_size}"
-        )
-        assert (
-            embedding_size % 2 == 0
-        ), f"x.shape[-1] must be even, but {x.shape[-1]} is not even."
+        if embedding_size != self.embedding_size:
+            raise ValueError(
+                f"x.shape[-1] must match self.embedding_size, "
+                f"but {x.shape[-1]} != {self.embedding_size}"
+            )
+        if embedding_size % 2 != 0:
+            raise ValueError(
+                f"x.shape[-1] must be even, but {x.shape[-1]} is not even."
+            )
 
-        if self.max_seq_len is not None:
-            assert seq_len <= self.max_seq_len, (
+        if self.max_seq_len is not None and seq_len > self.max_seq_len:
+            raise ValueError(
                 f"x.shape[0] must be <= self.max_seq_len, "
                 f"but {x.shape[0]} > {self.max_seq_len}"
             )
 
         neg_half_x = self.negate_half(x)
 
-        if self.max_seq_len is not None:
-            freqs_cis = self.freqs_cis
+        if (embedding_size, seq_len) in internal_rope_embedding_cache:
+            freqs_cis = internal_rope_embedding_cache[(embedding_size, seq_len)]
         else:
-            if (embedding_size, seq_len) in internal_rope_embedding_cache:
-                freqs_cis = internal_rope_embedding_cache[(embedding_size, seq_len)]
-            else:
-                freqs_cis = self.precompute_freqs_cis(embedding_size, seq_len)
-                internal_rope_embedding_cache[(embedding_size, seq_len)] = freqs_cis
+            freqs_cis = self.precompute_freqs_cis(embedding_size, seq_len)
+            internal_rope_embedding_cache[(embedding_size, seq_len)] = freqs_cis
 
-        assert freqs_cis is not None
+        assert freqs_cis is not None, "freqs_cis must not be None."
         freqs_cis = jax.lax.stop_gradient(freqs_cis)
         freqs_real = jnp.tile(freqs_cis.real, (1, 2))
         freqs_imag = jnp.tile(freqs_cis.imag, (1, 2))
@@ -217,10 +259,32 @@ class RotaryPositionalEmbedding(Module):
 
 
 class SinusoidalPositionalEmbedding(Module):
+    r"""
+    A sinusoidal positional encoding module, as described in the paper
+    "Attention is All You Need". While this module can be used in any context, it is
+    particularly useful for providing positional information to transformer models.
+
+    ??? cite
+
+        [Attention is All You Need](https://arxiv.org/abs/1706.03762)
+
+        ```bibtex
+        @inproceedings{vaswani2017attention,
+            author={Vaswani, Ashish and Shazeer, Noam and Parmar, Niki and
+                    Uszkoreit, Jakob and Jones, Llion and Gomez, Aidan N and
+                    Kaiser, {\L}ukasz and Polosukhin, Illia},
+            booktitle={Advances in Neural Information Processing Systems},
+            publisher={Curran Associates, Inc.},
+            title={Attention is All You Need},
+            volume={30},
+            year={2017}
+        }
+        ```
+    """
+
     embedding_size: int = field(static=True)
     max_seq_len: Optional[int] = field(static=True)
     theta: float = field(static=True)
-    freqs_cis: Optional[Float[Array, "max_seq_len embedding_size"]] = field(static=True)
 
     def __init__(
         self,
@@ -232,7 +296,6 @@ class SinusoidalPositionalEmbedding(Module):
         **kwargs,
     ):
         """**Arguments:**
-
         `SinusoidalPositionalEmbedding` requires:
 
         - `embedding_size`: Size of the token embeddings. Must be non-negative.
@@ -242,36 +305,19 @@ class SinusoidalPositionalEmbedding(Module):
         - `key`: Not used; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
         """
-        super().__init__(**kwargs)
-        assert (
-            embedding_size % 2 == 0
-        ), f"embedding_size must be even, but {embedding_size} is not even."
-        if max_seq_len is not None:
-            assert (
-                max_seq_len > 0
-            ), f"max_seq_len must be positive, but {max_seq_len} <= 0."
-        assert (
-            embedding_size > 0
-        ), f"embedding_size must be positive, but {embedding_size} <= 0."
 
-        if max_seq_len is not None:
-            if (
-                embedding_size,
-                max_seq_len,
-                theta,
-            ) in internal_sinusoidal_positional_encoding_cache:
-                self.freqs_cis = internal_sinusoidal_positional_encoding_cache[
-                    (embedding_size, max_seq_len, theta)
-                ]
-            else:
-                self.freqs_cis = self.get_positional_encoding(
-                    embedding_size=embedding_size, max_seq_len=max_seq_len, theta=theta
-                )
-                internal_sinusoidal_positional_encoding_cache[
-                    (embedding_size, max_seq_len, theta)
-                ] = self.freqs_cis
-        else:
-            self.freqs_cis = None
+        if embedding_size % 2 != 0:
+            raise ValueError(
+                f"embedding_size must be even, but {embedding_size} is not even."
+            )
+
+        if max_seq_len is not None and max_seq_len <= 0:
+            raise ValueError(f"max_seq_len must be positive, but {max_seq_len} <= 0.")
+
+        if embedding_size <= 0:
+            raise ValueError(
+                f"embedding_size must be positive, but {embedding_size} <= 0."
+            )
 
         self.embedding_size = embedding_size
         self.max_seq_len = max_seq_len
@@ -311,35 +357,35 @@ class SinusoidalPositionalEmbedding(Module):
         positional encoding applied to the input.
         """
         seq_len, embedding_size = x.shape
-        assert embedding_size == self.embedding_size, (
-            f"x.shape[-1] must match self.embedding_size, "
-            f"but {x.shape[-1]} != {self.embedding_size}"
-        )
-        freqs_cis = None
-        if self.max_seq_len is not None:
-            assert seq_len == self.max_seq_len, (
-                f"x.shape[0] must be == self.max_seq_len, "
-                f"but {x.shape[0]} != {self.max_seq_len}"
+
+        if embedding_size != self.embedding_size:
+            raise ValueError(
+                f"x.shape[-1] must match self.embedding_size, "
+                f"but {x.shape[-1]} != {self.embedding_size}"
             )
-            freqs_cis = self.freqs_cis
+
+        freqs_cis = None
+        if (
+            embedding_size,
+            seq_len,
+            self.theta,
+        ) in internal_sinusoidal_positional_encoding_cache:
+            freqs_cis = internal_sinusoidal_positional_encoding_cache[
+                (embedding_size, seq_len, self.theta)
+            ]
         else:
-            if (
-                embedding_size,
-                seq_len,
-                self.theta,
-            ) in internal_sinusoidal_positional_encoding_cache:
-                freqs_cis = internal_sinusoidal_positional_encoding_cache[
-                    (embedding_size, seq_len, self.theta)
-                ]
-            else:
-                freqs_cis = self.get_positional_encoding(
-                    embedding_size, seq_len, self.theta
-                )
-                internal_rope_embedding_cache[
-                    (embedding_size, seq_len, self.theta)
-                ] = freqs_cis
+            freqs_cis = self.get_positional_encoding(
+                embedding_size, seq_len, self.theta
+            )
+            internal_rope_embedding_cache[
+                (embedding_size, seq_len, self.theta)
+            ] = freqs_cis
+
         assert freqs_cis is not None, "freqs_cis must not be None."
-        assert (
-            x.shape == freqs_cis.shape
-        ), f"x.shape must be freq_cis.shape, but {x.shape} != {freqs_cis.shape}"
+
+        if x.shape != freqs_cis.shape:
+            raise ValueError(
+                f"x.shape must be freq_cis.shape, but {x.shape} != {freqs_cis.shape}"
+            )
+
         return x + freqs_cis

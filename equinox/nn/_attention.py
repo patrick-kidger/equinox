@@ -1,8 +1,9 @@
 import functools as ft
 import math
 import warnings
+from collections.abc import Callable
 from functools import partial
-from typing import Callable, cast, Optional, Tuple, Union
+from typing import cast, Optional, Union
 
 import jax
 import jax.numpy as jnp
@@ -133,7 +134,6 @@ class MultiheadAttention(Module, strict=True):
     use_key_bias: bool = field(static=True)
     use_value_bias: bool = field(static=True)
     use_output_bias: bool = field(static=True)
-    use_rope_embeddings: bool = field(static=True)
     state_length: Optional[int] = field(static=True)
 
     def __init__(
@@ -237,7 +237,7 @@ class MultiheadAttention(Module, strict=True):
                     Float[Array, "key_size num_heads qk_size"],
                     Float[Array, "value_size num_heads vo_size"],
                 ],
-                Tuple[
+                tuple[
                     Float[Array, "query_size num_heads qk_size"],
                     Float[Array, "key_size num_heads qk_size"],
                     Float[Array, "value_size num_heads vo_size"],
@@ -264,7 +264,8 @@ class MultiheadAttention(Module, strict=True):
         - `deterministic`: (Deprecated in favour of `inference`.)
         - `process_heads`: A function that takes in the query, key, and value heads and
             returns new query, key, and value heads. For example, this can be
-            used to implement relative positional embeddings. (Keyword only argument.)
+            used to implement relative positional embeddings -
+            see e.g. `RotaryPositionalEmbedding`for an example. (Keyword only argument.)
 
         **Returns:**
 
