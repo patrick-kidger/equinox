@@ -243,11 +243,12 @@ class RotaryPositionalEmbedding(Module, strict=True):
 
         neg_half_x = self.negate_half(x)
 
-        if (embedding_size, seq_len) in internal_rope_embedding_cache:
-            freqs_cis = internal_rope_embedding_cache[(embedding_size, seq_len)]
-        else:
-            freqs_cis = self.precompute_freqs_cis(embedding_size, seq_len)
-            internal_rope_embedding_cache[(embedding_size, seq_len)] = freqs_cis
+        with jax.ensure_compile_time_eval():
+            if (embedding_size, seq_len) in internal_rope_embedding_cache:
+                freqs_cis = internal_rope_embedding_cache[(embedding_size, seq_len)]
+            else:
+                freqs_cis = self.precompute_freqs_cis(embedding_size, seq_len)
+                internal_rope_embedding_cache[(embedding_size, seq_len)] = freqs_cis
 
         assert freqs_cis is not None, "freqs_cis must not be None."
         freqs_cis = jax.lax.stop_gradient(freqs_cis)
@@ -365,21 +366,23 @@ class SinusoidalPositionalEmbedding(Module):
             )
 
         freqs_cis = None
-        if (
-            embedding_size,
-            seq_len,
-            self.theta,
-        ) in internal_sinusoidal_positional_encoding_cache:
-            freqs_cis = internal_sinusoidal_positional_encoding_cache[
-                (embedding_size, seq_len, self.theta)
-            ]
-        else:
-            freqs_cis = self.get_positional_encoding(
-                embedding_size, seq_len, self.theta
-            )
-            internal_rope_embedding_cache[
-                (embedding_size, seq_len, self.theta)
-            ] = freqs_cis
+
+        with jax.ensure_compile_time_eval():
+            if (
+                embedding_size,
+                seq_len,
+                self.theta,
+            ) in internal_sinusoidal_positional_encoding_cache:
+                freqs_cis = internal_sinusoidal_positional_encoding_cache[
+                    (embedding_size, seq_len, self.theta)
+                ]
+            else:
+                freqs_cis = self.get_positional_encoding(
+                    embedding_size, seq_len, self.theta
+                )
+                internal_rope_embedding_cache[
+                    (embedding_size, seq_len, self.theta)
+                ] = freqs_cis
 
         assert freqs_cis is not None, "freqs_cis must not be None."
 
