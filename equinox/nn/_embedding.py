@@ -118,10 +118,10 @@ class RotaryPositionalEmbedding(Module, strict=True):
             def __init__(...):
                 ...
                 self.query_rope_embeddings = RotaryPositionalEmbedding(
-                    embedding_size=n_embd, max_seq_len=max_seq_len
+                    embedding_size=n_embd
                 )
                 self.key_rope_embeddings = RotaryPositionalEmbedding(
-                    embedding_size=n_embd, max_seq_len=max_seq_len
+                    embedding_size=n_embd
                 )
                 ...
 
@@ -163,12 +163,10 @@ class RotaryPositionalEmbedding(Module, strict=True):
     """
 
     embedding_size: int = field(static=True)
-    max_seq_len: Optional[int] = field(static=True)
 
     def __init__(
         self,
         embedding_size: int,
-        max_seq_len: Optional[int] = None,
         *,
         key: Optional[PRNGKeyArray] = None,
         **kwargs,
@@ -177,19 +175,15 @@ class RotaryPositionalEmbedding(Module, strict=True):
         `RotaryPositionalEmbedding` requires:
 
         - `embedding_size`: Size of the token embeddings. Must be non-negative.
-        - `max_seq_len`: The maximum sequence length. Must be non-negative if provided.
         - `key`: Not used; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
         """
         if embedding_size < 0:
             raise ValueError("embedding_size must not be negative.")
-        if max_seq_len is not None and max_seq_len < 0:
-            raise ValueError("max_seq_len must not be negative.")
         self.embedding_size = embedding_size
-        self.max_seq_len = max_seq_len
 
     @staticmethod
-    def negate_half(x: Float[Array, "max_seq_len embedding_size"]):
+    def negate_half(x: Float[Array, "seq_len embedding_size"]):
         d_2 = x.shape[-1] // 2
         return jnp.concatenate([x[..., :d_2], -x[..., d_2:]], axis=-1)
 
@@ -211,7 +205,7 @@ class RotaryPositionalEmbedding(Module, strict=True):
         x: Float[Array, "seq_len embedding_size"],
         *,
         key: Optional[PRNGKeyArray] = None,
-    ) -> Float[Array, "max_seq_len embedding_size"]:
+    ) -> Float[Array, "seq_len embedding_size"]:
         """**Arguments:**
 
         - `x`: A JAX array of shape `(seq_len, embedding_size)`.
@@ -233,12 +227,6 @@ class RotaryPositionalEmbedding(Module, strict=True):
         if embedding_size % 2 != 0:
             raise ValueError(
                 f"x.shape[-1] must be even, but {x.shape[-1]} is not even."
-            )
-
-        if self.max_seq_len is not None and seq_len > self.max_seq_len:
-            raise ValueError(
-                f"x.shape[0] must be <= self.max_seq_len, "
-                f"but {x.shape[0]} > {self.max_seq_len}"
             )
 
         neg_half_x = self.negate_half(x)
@@ -265,6 +253,46 @@ class SinusoidalPositionalEmbedding(Module):
     "Attention is All You Need". While this module can be used in any context, it is
     particularly useful for providing positional information to transformer models.
 
+    !!! example
+        The following example demonstrates how to use `SinusoidalPositionalEmbedding` in
+        a simple transformer model.
+        ```python
+
+        class TransformerBlock(eqx.nn.StatefulLayer):
+            ...
+            key_embeddings: SinusoidalPositionalEmbedding
+            query_embeddings: SinusoidalPositionalEmbedding
+
+            def __init__(...):
+                ...
+                self.query_embeddings = SinusoidalPositionalEmbedding(
+                    embedding_size=n_embd
+                )
+                self.key_embeddings = SinusoidalPositionalEmbedding(
+                    embedding_size=n_embd
+                )
+                ...
+
+            def __call__(...):
+                def process_heads(query_heads, key_heads, value_heads):
+                    query_heads = jax.vmap(self.query_embeddings,
+                                           in_axes=1,
+                                           out_axes=1)(query_heads)
+                    key_heads = jax.vmap(self.key_embeddings,
+                                         in_axes=1,
+                                         out_axes=1)(key_heads)
+
+                    return query_heads, key_heads, value_heads
+
+                mha_output = self.mha_attention(
+                    process_heads=process_heads,
+                    query=jax.vmap(self.rms_norm)(x),
+                    key_=jax.vmap(self.rms_norm)(x),
+                    value=jax.vmap(self.rms_norm)(x),
+                    mask=mask,
+                )
+        ```
+
     ??? cite
 
         [Attention is All You Need](https://arxiv.org/abs/1706.03762)
@@ -284,13 +312,11 @@ class SinusoidalPositionalEmbedding(Module):
     """
 
     embedding_size: int = field(static=True)
-    max_seq_len: Optional[int] = field(static=True)
     theta: float = field(static=True)
 
     def __init__(
         self,
         embedding_size: int,
-        max_seq_len: Optional[int] = None,
         *,
         theta: float = 10000.0,
         key: Optional[PRNGKeyArray] = None,
@@ -300,7 +326,6 @@ class SinusoidalPositionalEmbedding(Module):
         `SinusoidalPositionalEmbedding` requires:
 
         - `embedding_size`: Size of the token embeddings. Must be non-negative.
-        - `max_seq_len`: The maximum sequence length. Must be non-negative if provided.
         - `theta`: The frequency of the sinusoidal positional encoding.
             Must be positive. Defaults to 10000.0.
         - `key`: Not used; provided for compatibility with the rest of the Equinox API.
@@ -312,29 +337,25 @@ class SinusoidalPositionalEmbedding(Module):
                 f"embedding_size must be even, but {embedding_size} is not even."
             )
 
-        if max_seq_len is not None and max_seq_len <= 0:
-            raise ValueError(f"max_seq_len must be positive, but {max_seq_len} <= 0.")
-
         if embedding_size <= 0:
             raise ValueError(
                 f"embedding_size must be positive, but {embedding_size} <= 0."
             )
 
         self.embedding_size = embedding_size
-        self.max_seq_len = max_seq_len
         self.theta = theta
 
     @staticmethod
     def get_positional_encoding(
-        embedding_size: int, max_seq_len: int, theta: float = 10000.0
-    ) -> Float[Array, "max_seq_len embedding_size"]:
-        pos = jnp.arange(max_seq_len)[:, jnp.newaxis]
+        embedding_size: int, seq_len: int, theta: float = 10000.0
+    ) -> Float[Array, "seq_len embedding_size"]:
+        pos = jnp.arange(seq_len)[:, jnp.newaxis]
         div_term = jnp.exp(
             jnp.arange(0, embedding_size, 2) * -(jnp.log(theta) / embedding_size)
         )
         # the following expression is closer to the actual notation they used.
         # div_term = 1 / 10000 ** (jnp.arange(0, embedding_size, 2) / embedding_size)
-        pos_enc = jnp.zeros((max_seq_len, embedding_size))
+        pos_enc = jnp.zeros((seq_len, embedding_size))
         pos_enc = pos_enc.at[:, 0::2].set(jnp.sin(pos * div_term))
         pos_enc = pos_enc.at[:, 1::2].set(jnp.cos(pos * div_term))
         return pos_enc
@@ -342,19 +363,19 @@ class SinusoidalPositionalEmbedding(Module):
     @jax.named_scope("eqx.nn.SinusoidalPositionalEmbedding")
     def __call__(
         self,
-        x: Float[Array, "max_seq_len embedding_size"],
+        x: Float[Array, "seq_len embedding_size"],
         *,
         key: Optional[PRNGKeyArray] = None,
-    ) -> Float[Array, "max_seq_len embedding_size"]:
+    ) -> Float[Array, "seq_len embedding_size"]:
         """**Arguments:**
 
-        - `x`: A JAX array of shape `(max_seq_len, embedding_size)`.
+        - `x`: A JAX array of shape `(seq_len, embedding_size)`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
 
         **Returns:**
 
-        A JAX array of shape `(max_seq_len, embedding_size)`, with the sinusoidal
+        A JAX array of shape `(seq_len, embedding_size)`, with the sinusoidal
         positional encoding applied to the input.
         """
         seq_len, embedding_size = x.shape
