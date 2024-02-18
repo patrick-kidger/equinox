@@ -117,7 +117,10 @@ class Conv(Module, strict=True):
             `in_channels` must be divisible by `groups`.
         - `use_bias`: Whether to add on a bias after the convolution.
         - `padding_mode`: One of the following strings specifying the padding values.
-            `'ZEROS'` (default), `'REFLECT'`, `'REPLICATE'`, or `'CIRCULAR'`.
+            `'ZEROS'` (default): pads with zeros, 1234 -> 00123400.
+            `'REFLECT'`: pads with the reflection on boundary, 1234 -> 32123432.
+            `'REPLICATE'`: pads with the replication of edge values, 1234 -> 11123444.
+            `'CIRCULAR'`: pads with circular values, 1234 -> 34123412.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
 
@@ -199,7 +202,7 @@ class Conv(Module, strict=True):
             mode = "wrap"
         else:
             raise ValueError("Invalid padding mode")
-        
+
         x = jnp.pad(x, [(0, 0), (0, 0)] + padding, mode)
         return x
 
@@ -394,7 +397,8 @@ class ConvTranspose(Module, strict=True):
         - `use_bias`: Whether to add on a bias after the transposed convolution.
         - `padding_mode`: One of the following strings specifying the padding values
             used on the equivalent [`equinox.nn.Conv`][].
-            `'ZEROS'` (default) or `'CIRCULAR'`.
+            `'ZEROS'` (default): pads with zeros, no extra connectivity.
+            `'CIRCULAR'`: pads with circular values, extra connectivity (see Tip).
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
 
@@ -414,6 +418,8 @@ class ConvTranspose(Module, strict=True):
             [jax.lax.conv_general_dilated](https://jax.readthedocs.io/en/latest/_autosummary/jax.lax.conv_general_dilated.html)
             for details).
 
+
+
         !!! tip
 
             Transposed convolutions are often used to go in the "opposite direction" to
@@ -428,9 +434,19 @@ class ConvTranspose(Module, strict=True):
 
             When `stride > 1` then [`equinox.nn.Conv`][] maps multiple input shapes to the
             same output shape. `output_padding` is provided to resolve this ambiguity.
-            For `'SAME'` or `'SAME_LOWER'` padding, it reduces the calculated input shape.
-            In other cases, it adds a little extra padding to just the bottom/right 
-            edges of the input.
+            For `'SAME'` or `'SAME_LOWER'` padding, it reduces the calculated input shape
+            In other cases, it adds a little extra padding to just the bottom/right
+            edges of the input. See [this discussion](https://github.com/patrick-kidger/equinox/issues/638)
+            for details.
+
+            `padding_mode = 'CIRCULAR'` is only implemented for `output_padding = 0` and
+            `padding = 'SAME'` or `'SMAE_LOWER'`. Extra connectivity created in 'CIRCULAR'
+            padding is taken into account. For instance, consider the equivalent
+            [`equinox.nn.Conv`][] with kernel size 3,\n
+                Input 1234 --(zero padding)--> 012340 --(conv)--> Output abcd \n
+                Input 1234 --(circular padding)--> 412341 --(conv)--> Output abcd \n
+            then a is connected with 1, 2 for zero padding, while connected with 1, 2, 4
+            for circular padding.
 
             See [these animations](https://github.com/vdumoulin/conv_arithmetic/blob/af6f818b0bb396c26da79899554682a8a499101d/README.md#transposed-convolution-animations)
             and [this report](https://arxiv.org/abs/1603.07285) for a nice reference.
@@ -473,7 +489,7 @@ class ConvTranspose(Module, strict=True):
                 "'REFLECT' or 'REPLICATE' padding mode is not implemented"
             )
         elif padding_mode == "CIRCULAR":
-            if np.any(output_padding):
+            if any(o != 0 for o in output_padding):
                 raise NotImplementedError(
                     "`padding_mode == 'CIRCULAR'` with non-zero `output_padding` is not"
                     "implemented."
