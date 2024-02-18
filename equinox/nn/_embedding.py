@@ -239,12 +239,11 @@ class RotaryPositionalEmbedding(Module, strict=True):
                 internal_rope_embedding_cache[(embedding_size, seq_len)] = freqs_cis
 
         assert freqs_cis is not None, "freqs_cis must not be None."
-        freqs_cis = jax.lax.stop_gradient(freqs_cis)
         freqs_real = jnp.tile(freqs_cis.real, (1, 2))
         freqs_imag = jnp.tile(freqs_cis.imag, (1, 2))
 
         x_rope = (x * freqs_real) + (neg_half_x * freqs_imag)
-        return x_rope
+        return jax.lax.stop_gradient(x_rope)
 
 
 class SinusoidalPositionalEmbedding(Module):
@@ -406,10 +405,4 @@ class SinusoidalPositionalEmbedding(Module):
                 ] = freqs_cis
 
         assert freqs_cis is not None, "freqs_cis must not be None."
-
-        if x.shape != freqs_cis.shape:
-            raise ValueError(
-                f"x.shape must be freq_cis.shape, but {x.shape} != {freqs_cis.shape}"
-            )
-
         return x + freqs_cis
