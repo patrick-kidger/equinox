@@ -106,42 +106,46 @@ class RotaryPositionalEmbedding(Module, strict=True):
     providing positional information to transformer models.
 
     !!! example
+
         The following example demonstrates how to use `RotaryPositionalEmbedding` in
         a simple transformer model.
+
         ```python
 
-        class TransformerBlock(eqx.nn.StatefulLayer):
+        class TransformerBlock(eqx.Module):
             ...
-            key_rope_embeddings: RotaryPositionalEmbedding
-            query_rope_embeddings: RotaryPositionalEmbedding
+            rope_embeddings: RotaryPositionalEmbedding
+
 
             def __init__(...):
                 ...
-                self.query_rope_embeddings = RotaryPositionalEmbedding(
-                    embedding_size=n_embd
-                )
-                self.key_rope_embeddings = RotaryPositionalEmbedding(
+                self.rope_embeddings = RotaryPositionalEmbedding(
                     embedding_size=n_embd
                 )
                 ...
 
             def __call__(...):
-                def process_heads(query_heads, key_heads, value_heads):
-                    query_heads = jax.vmap(self.query_rope_embeddings,
+                def process_heads(
+                    query_heads: Float[Array, "query_size num_heads qk_size"],
+                    key_heads: Float[Array, "key_size num_heads qk_size"],
+                    value_heads: Float[Array, "value_size num_heads vo_size"]
+                ) -> tuple[
+                    Float[Array, "query_size num_heads qk_size"],
+                    Float[Array, "key_size num_heads qk_size"],
+                    Float[Array, "value_size num_heads vo_size"]
+                ]:
+                    query_heads = jax.vmap(self.rope_embeddings,
                                            in_axes=1,
                                            out_axes=1)(query_heads)
-                    key_heads = jax.vmap(self.key_rope_embeddings,
+                    key_heads = jax.vmap(self.rope_embeddings,
                                          in_axes=1,
                                          out_axes=1)(key_heads)
 
                     return query_heads, key_heads, value_heads
 
                 mha_output = self.mha_attention(
+                    ...
                     process_heads=process_heads,
-                    query=jax.vmap(self.rms_norm)(x),
-                    key_=jax.vmap(self.rms_norm)(x),
-                    value=jax.vmap(self.rms_norm)(x),
-                    mask=mask,
                 )
         ```
 
@@ -253,11 +257,12 @@ class SinusoidalPositionalEmbedding(Module):
     particularly useful for providing positional information to transformer models.
 
     !!! example
+
         The following example demonstrates how to use `SinusoidalPositionalEmbedding` in
         a simple transformer model.
         ```python
 
-        class TransformerBlock(eqx.nn.StatefulLayer):
+        class TransformerBlock(eqx.Module):
             ...
             key_embeddings: SinusoidalPositionalEmbedding
             query_embeddings: SinusoidalPositionalEmbedding
