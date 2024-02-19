@@ -512,7 +512,7 @@ class ConvTranspose(Module, strict=True):
         self.use_bias = use_bias
         self.padding_mode = padding_mode
 
-    def _padding_transpose(self) -> tuple[Array, np.ndarray]:
+    def _padding_transpose(self) -> np.ndarray:
         # Notations follow https://arxiv.org/abs/1603.07285
         k = np.asarray(self.kernel_size)
         s = np.asarray(self.stride)
@@ -599,7 +599,7 @@ class ConvTranspose1d(ConvTranspose):
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = 1,
         output_padding: Union[int, Sequence[int]] = 0,
-        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
+        padding: Union[str, int, Sequence[int], Sequence[tuple[int, int]]] = 0,
         dilation: Union[int, Sequence[int]] = 1,
         groups: int = 1,
         use_bias: bool = True,
@@ -633,7 +633,7 @@ class ConvTranspose2d(ConvTranspose):
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = (1, 1),
         output_padding: Union[int, Sequence[int]] = (0, 0),
-        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = (0, 0),
+        padding: Union[str, int, Sequence[int], Sequence[tuple[int, int]]] = (0, 0),
         dilation: Union[int, Sequence[int]] = (1, 1),
         groups: int = 1,
         use_bias: bool = True,
@@ -667,7 +667,7 @@ class ConvTranspose3d(ConvTranspose):
         kernel_size: Union[int, Sequence[int]],
         stride: Union[int, Sequence[int]] = (1, 1, 1),
         output_padding: Union[int, Sequence[int]] = (0, 0, 0),
-        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = (0, 0, 0),
+        padding: Union[str, int, Sequence[int], Sequence[tuple[int, int]]] = (0, 0, 0),
         dilation: Union[int, Sequence[int]] = (1, 1, 1),
         groups: int = 1,
         use_bias: bool = True,
