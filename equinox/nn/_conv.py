@@ -512,7 +512,7 @@ class ConvTranspose(Module, strict=True):
         self.use_bias = use_bias
         self.padding_mode = padding_mode
 
-    def _padding_transpose(self) -> np.ndarray:
+    def _padding_transpose(self) -> tuple[tuple[int, int], ...]:
         # Notations follow https://arxiv.org/abs/1603.07285
         k = np.asarray(self.kernel_size)
         s = np.asarray(self.stride)
@@ -537,16 +537,16 @@ class ConvTranspose(Module, strict=True):
         # Given by Relationship 14 of https://arxiv.org/abs/1603.07285
         p0t = d * (k - 1) - p0
         p1t = d * (k - 1) - p1 + a
-        padding_t = np.stack([p0t, p1t], axis=1)
+        padding_t = tuple((x.item(), y.item()) for x, y in zip(p0t, p1t))
         return padding_t
 
     def _circular_pad(
-        self, x: Array, padding_t: np.ndarray
-    ) -> tuple[Array, np.ndarray]:
+        self, x: Array, padding_t: tuple[tuple[int, int], ...]
+    ) -> tuple[Array, tuple[tuple[int, int], ...]]:
         stride = np.expand_dims(self.stride, axis=1)
         pad_width = np.insert(padding_t // stride, (0, 0), 0, axis=0)
         x = jnp.pad(x, pad_width, mode="wrap")
-        padding_t = padding_t % stride
+        padding_t = tuple((p[0].item(), p[1].item()) for p in padding_t % stride)
         return x, padding_t
 
     @jax.named_scope("eqx.nn.ConvTranspose")
