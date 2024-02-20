@@ -233,7 +233,6 @@ class Conv(Module, strict=True):
                 f"Input to `Conv` needs to have rank {unbatched_rank},",
                 f" but input has shape {x.shape}.",
             )
-        _, *input_shape = x.shape
 
         if self.padding_mode != "ZEROS":
             x = self._nonzero_pad(x)
@@ -592,7 +591,6 @@ class ConvTranspose(Module, strict=True):
                 f"Input to `ConvTranspose` needs to have rank {unbatched_rank},",
                 f" but input has shape {x.shape}.",
             )
-        _, *input_shape = x.shape
 
         padding_t = self._padding_transpose()
         if self.padding_mode == "CIRCULAR":
