@@ -198,12 +198,10 @@ class RotaryPositionalEmbedding(Module, strict=True):
             theta ** (jnp.arange(0, embedding_size, 2)[jnp.newaxis, :] / embedding_size)
         )
 
-        t = jnp.arange(end, dtype=float)
+        t = jnp.arange(float(end))
         freqs_outer = jnp.outer(t, freqs)
-        freqs_cis = (
-            jnp.array(jnp.cos(freqs_outer), dtype=jnp.complex64)
-            + jnp.array(jnp.sin(freqs_outer), dtype=jnp.complex64) * 1j
-        )
+        with jax.numpy_dtype_promotion("standard"):
+            freqs_cis = jnp.cos(freqs_outer) + jnp.sin(freqs_outer) * 1j
 
         return freqs_cis
 
@@ -354,8 +352,7 @@ class SinusoidalPositionalEmbedding(Module):
         pos = jnp.arange(seq_len, dtype=float)[:, jnp.newaxis]
 
         div_term = jnp.exp(
-            jnp.arange(0, embedding_size, 2, dtype=float)
-            * -(jnp.log(theta) / embedding_size)
+            jnp.arange(0.0, embedding_size, 2) * -(jnp.log(theta) / embedding_size)
         )
 
         mult = pos * div_term.reshape(1, -1)
