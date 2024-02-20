@@ -430,6 +430,23 @@ def test_conv_padding(getkey):
     assert output.shape == (8, 17, 18)
 
 
+def test_conv_circular(getkey):
+    conv = eqx.nn.Conv1d(
+        in_channels=1,
+        out_channels=1,
+        kernel_size=3,
+        padding="SAME",
+        padding_mode="CIRCULAR",
+        key=getkey(),
+    )
+
+    x = jrandom.normal(getkey(), (1, 6))
+    y1 = conv(x)
+    y2 = conv(jnp.roll(x, 2))
+    y2 = jnp.roll(y2, -2)
+    assert jnp.allclose(y1, y2)
+
+
 def test_convtranspose1d(getkey):
     # Positional arguments
     conv = eqx.nn.ConvTranspose1d(1, 3, 3, key=getkey())
@@ -629,6 +646,81 @@ def test_convtranspose_padding(getkey):
     conv = eqx.nn.ConvTranspose2d(8, 3, 1, 2, padding=((0, 1), (0, 3)), key=getkey())
     output = conv(x)
     assert output.shape == (3, 32, 32)
+
+
+def test_convtranspose_same_padding(getkey):
+    conv = eqx.nn.Conv1d(
+        in_channels=1,
+        out_channels=1,
+        kernel_size=3,
+        stride=2,
+        padding="SAME",
+        dilation=2,
+        use_bias=False,
+        key=getkey(),
+    )
+
+    convt = eqx.nn.ConvTranspose1d(
+        in_channels=1,
+        out_channels=1,
+        kernel_size=3,
+        stride=2,
+        padding="SAME",
+        output_padding=1,
+        dilation=2,
+        use_bias=False,
+        key=getkey(),
+    )
+
+    conv = jax.tree_util.tree_map(lambda x: jnp.ones_like(x), conv)
+    convt = jax.tree_util.tree_map(lambda x: jnp.ones_like(x), convt)
+
+    x = jrandom.normal(getkey(), (1, 5))
+    y = conv(x)
+
+    jac1 = jax.jacobian(conv)(x).reshape(-1, x.size)
+    jac2 = jax.jacobian(convt)(y).reshape(x.size, -1)
+
+    # connectivity should be the same
+    assert jnp.allclose(jac1, jac2.T)
+
+
+def test_convtranspose_circular(getkey):
+    conv = eqx.nn.Conv1d(
+        in_channels=1,
+        out_channels=1,
+        kernel_size=3,
+        stride=2,
+        dilation=2,
+        padding="SAME",
+        use_bias=False,
+        padding_mode="CIRCULAR",
+        key=getkey(),
+    )
+
+    convt = eqx.nn.ConvTranspose1d(
+        in_channels=1,
+        out_channels=1,
+        kernel_size=3,
+        stride=2,
+        dilation=2,
+        padding="SAME",
+        use_bias=False,
+        padding_mode="CIRCULAR",
+        key=getkey(),
+    )
+
+    conv = jax.tree_util.tree_map(lambda x: jnp.ones_like(x), conv)
+    convt = jax.tree_util.tree_map(lambda x: jnp.ones_like(x), convt)
+
+    x = jrandom.normal(getkey(), (1, 6))
+    y = conv(x)
+
+    jac1 = jax.jacobian(conv)(x).reshape(-1, x.size)
+    jac2 = jax.jacobian(convt)(y).reshape(x.size, -1)
+
+    # connectivity should be the same
+    assert jnp.allclose(jac1, jac2.T)
 
 
 def test_dot_product_attention_weights(getkey):
