@@ -14,6 +14,7 @@ from collections.abc import Callable
 from typing import Any, cast, Optional, Protocol, TYPE_CHECKING, TypeVar, Union
 from typing_extensions import dataclass_transform, ParamSpec
 
+import jax
 import jax._src.traceback_util as traceback_util
 import jax.tree_util as jtu
 import numpy as np
@@ -22,6 +23,7 @@ from jaxtyping import Array, Bool, PyTreeDef
 from ._better_abstract import ABCMeta, dataclass
 from ._caches import cache_clears
 from ._doc_utils import doc_repr
+from ._filters import is_array_like
 from ._pretty_print import tree_pformat
 from ._tree import tree_equal
 
@@ -506,6 +508,10 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
         if _is_force_abstract[cls]:
             # Any other is-abstract checks will be handled in super().__call__.
             raise TypeError("Cannot instantiate abstract `equinox.Module`.")
+        if _has_dataclass_init[cls]:
+            for x in jtu.tree_leaves((args, kwargs)):
+                _warn_jax_transformed_function(cls, x)
+            # else it's handled in __setattr__, but that isn't called here.
         # [Step 1] Modules are immutable -- except during construction. So defreeze
         # before init.
         post_init = getattr(cls, "__post_init__", None)
@@ -635,6 +641,89 @@ class _Initable:
     pass
 
 
+_transform_types = {
+    type(transform(lambda x: x))
+    for transform in (
+        jax.jit,
+        jax.grad,
+        jax.vmap,
+        jax.value_and_grad,
+        jax.jacfwd,
+        jax.jacrev,
+        jax.hessian,
+        jax.custom_jvp,
+        jax.custom_vjp,
+        jax.checkpoint,  # pyright: ignore
+        jax.pmap,
+    )
+}
+
+
+def _warn_jax_transformed_function(cls, x):
+    # not `isinstance`, just in case JAX every tries to override `__instancecheck__`.
+    if type(x) in _transform_types:
+
+        class _JaxTransformException(Exception):
+            pass
+
+        def _is_array_like(x):
+            if is_array_like(x):
+                raise _JaxTransformException
+
+        while True:
+            try:
+                x = x.__wrapped__
+            except AttributeError:
+                break
+            try:
+                jtu.tree_map(_is_array_like, x)
+            except _JaxTransformException:
+                warnings.warn(
+                    f"""
+Possibly assigning a JAX-transformed callable as an attribute on
+{cls.__module__}.{cls.__qualname__}. This will not have any of its parameters updated.
+
+For example, the following code is buggy:
+```python
+class MyModule(eqx.Module):
+vmap_linear: Callable
+
+def __init__(self, ...):
+    self.vmap_linear = jax.vmap(eqx.nn.Linear(...))
+
+def __call__(self, ...):
+    ... = self.vmap_linear(...)
+```
+This is because the callable returned from `jax.vmap` is *not* a PyTree. This means that
+the parameters inside the `eqx.nn.Linear` layer will not receive gradient updates.
+
+You can most easily fix this either by applying the wrapper at `__call__` time:
+```python
+class MyModule(eqx.Module):
+linear: Callable
+
+def __init__(self, ...):
+    self.linear = eqx.nn.Linear(...)
+
+def __call__(self, ...):
+    ... = jax.vmap(self.linear)(...)
+```
+or by using `eqx.filter_vmap` instead (which *does* return a PyTree):
+```python
+class MyModule(eqx.Module):
+vmap_linear: Callable
+
+def __init__(self, ...):
+    self.vmap_linear = eqx.filter_vmap(eqx.nn.Linear(...))
+
+def __call__(self, ...):
+    ... = self.vmap_linear(...)
+```
+"""
+                )
+                break
+
+
 @ft.lru_cache(maxsize=128)
 def _make_initable(cls: _ModuleMeta, init, post_init, wraps: bool) -> _ModuleMeta:
     # Used as part of the key. Don't cache if these have changed.
@@ -688,6 +777,7 @@ went uncaught, possibly leading to silently wrong behaviour.
 """
                 )
             else:
+                _warn_jax_transformed_function(type(self), value)
                 object.__setattr__(self, name, value)
         else:
             raise AttributeError(f"Cannot set attribute {name}")
