@@ -349,7 +349,7 @@ class SinusoidalPositionalEmbedding(Module):
     def get_positional_encoding(
         embedding_size: int, seq_len: int, theta: float = 10000.0
     ) -> Float[Array, "seq_len embedding_size"]:
-        pos = jnp.arange(seq_len, dtype=float)[:, jnp.newaxis]
+        pos = jnp.arange(float(seq_len))[:, jnp.newaxis]
 
         div_term = jnp.exp(
             jnp.arange(0.0, embedding_size, 2) * -(jnp.log(theta) / embedding_size)
