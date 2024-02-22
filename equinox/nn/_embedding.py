@@ -195,7 +195,8 @@ class RotaryPositionalEmbedding(Module, strict=True):
         embedding_size: int, end: int, theta: float = 10000.0
     ) -> Complex[Array, "end embedding_size/2"]:
         freqs = 1.0 / (
-            theta ** (jnp.arange(0, embedding_size, 2)[jnp.newaxis, :] / embedding_size)
+            theta
+            ** (jnp.arange(0.0, embedding_size, 2)[jnp.newaxis, :] / embedding_size)
         )
 
         t = jnp.arange(float(end))
