@@ -51,4 +51,5 @@ order-by-type = false
 
 [tool.pyright]
 reportIncompatibleMethodOverride = true
+reportIncompatibleVariableOverride = false  # Incompatible with eqx.AbstractVar
 include = ["equinox", "tests"]

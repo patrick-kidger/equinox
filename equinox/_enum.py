@@ -30,7 +30,7 @@ def _store(
         our_item = name_to_item[name]
     except KeyError:
         our_index = len(index_to_message)
-        name_to_item[name] = EnumerationItem(np.array(our_index, dtype=np.int32), cls)
+        name_to_item[name] = EnumerationItem(np.array(our_index, dtype=np.int32), cls)  # pyright: ignore
         index_to_message.append(message)
         return our_index
     else:
@@ -144,6 +144,11 @@ class EnumerationItem(Module):
     # Should have annotation `"type[Enumeration]"`, but this fails due to beartype bug
     # #289.
     _enumeration: Any = field(static=True)
+
+    if TYPE_CHECKING:
+
+        def __init__(self, x):
+            pass
 
     def __eq__(self, other) -> Bool[Array, ""]:  # pyright: ignore
         if isinstance(other, EnumerationItem):
