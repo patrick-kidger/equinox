@@ -566,9 +566,11 @@ def filter_closure_convert(fn: Callable[_P, _T], *args, **kwargs) -> Callable[_P
         # Skip jaxpr tracing for efficiency.
         closure_converted = _TrivialClosureConvert(fn, in_dynamic_struct, in_static)
     else:
+        fn = cast(Callable[_P, _T], fn)
         closed_jaxpr, out_dynamic_struct, out_static = filter_make_jaxpr(fn)(
-            *args, **kwargs
-        )  # pyright: ignore
+            *args,  # pyright: ignore
+            **kwargs,
+        )
         jaxpr = closed_jaxpr.jaxpr
         consts = closed_jaxpr.consts
         out_dynamic_struct = jtu.tree_flatten(out_dynamic_struct)
