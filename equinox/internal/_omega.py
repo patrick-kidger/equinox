@@ -69,7 +69,7 @@ class _ω(metaclass=_Metaω):
 
 
 if TYPE_CHECKING:
-    ω: Any
+    ω: Any = ...
 else:
     ω = _ω
 
