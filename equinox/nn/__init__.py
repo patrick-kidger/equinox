@@ -15,7 +15,6 @@ from ._dropout import Dropout as Dropout
 from ._embedding import (
     Embedding as Embedding,
     RotaryPositionalEmbedding as RotaryPositionalEmbedding,
-    SinusoidalPositionalEmbedding as SinusoidalPositionalEmbedding,
 )
 from ._inference import inference_mode as inference_mode
 from ._linear import Identity as Identity, Linear as Linear
