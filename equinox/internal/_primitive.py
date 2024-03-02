@@ -267,8 +267,11 @@ def filter_primitive_bind(prim: jax.core.Primitive, *args) -> PyTree:
 
 
 # Useful helper for JVP rules of higher-order primitives.
-def materialise_zeros(primal, tangent):
-    if tangent is None and is_array_like(primal):
+def materialise_zeros(primal, tangent, allow_struct=False):
+    arraylike = is_array_like(primal)
+    if allow_struct:
+        arraylike = arraylike or isinstance(primal, jax.ShapeDtypeStruct)
+    if tangent is None and arraylike:
         tangent = _zero_from_primal(primal)
         return ad.instantiate_zeros(tangent)
     else:
@@ -410,6 +413,10 @@ def _vprim_transpose(
         axis_size=__axis_size,
         axis_name=__axis_name,
     )
+    if prim.multiple_results:
+        cts = tuple(None if type(c) is ad.Zero else c for c in cts)
+    else:
+        cts = None if type(cts) is ad.Zero else cts
     return transpose(cts, *inputs)
 
 
