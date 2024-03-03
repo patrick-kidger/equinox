@@ -1238,7 +1238,7 @@ def test_prelu(getkey):
     assert jnp.all(output == expected_multi_output)
 
 
-def test_rope_embeddings_shapes(get_key):
+def test_rope_embeddings_shapes(getkey):
     embedding_size = 32
     rope_embeddings = eqx.nn.RotaryPositionalEmbedding(embedding_size)
 
@@ -1248,9 +1248,9 @@ def test_rope_embeddings_shapes(get_key):
     key_size = 32
 
     query_heads = jax.random.normal(
-        key=get_key(), shape=(seq_length, n_heads, query_size)
+        key=getkey(), shape=(seq_length, n_heads, query_size)
     )
-    key_heads = jax.random.normal(key=get_key(), shape=(seq_length, n_heads, key_size))
+    key_heads = jax.random.normal(key=getkey(), shape=(seq_length, n_heads, key_size))
     query_heads = jax.vmap(rope_embeddings, in_axes=1, out_axes=1)(query_heads)
     key_heads = jax.vmap(rope_embeddings, in_axes=1, out_axes=1)(key_heads)
 
