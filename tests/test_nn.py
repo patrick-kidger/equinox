@@ -1236,3 +1236,91 @@ def test_prelu(getkey):
 
     assert activation.negative_slope.shape == (x.shape[-1],)
     assert jnp.all(output == expected_multi_output)
+
+
+def test_rope_embeddings_shapes(get_key):
+    embedding_size = 32
+    rope_embeddings = eqx.nn.RotaryPositionalEmbedding(embedding_size)
+
+    n_heads = 4
+    seq_length = 8
+    query_size = 32
+    key_size = 32
+
+    query_heads = jax.random.normal(
+        key=get_key(), shape=(seq_length, n_heads, query_size)
+    )
+    key_heads = jax.random.normal(key=get_key(), shape=(seq_length, n_heads, key_size))
+    query_heads = jax.vmap(rope_embeddings, in_axes=1, out_axes=1)(query_heads)
+    key_heads = jax.vmap(rope_embeddings, in_axes=1, out_axes=1)(key_heads)
+
+    assert query_heads.shape == (seq_length, n_heads, query_size)
+    assert key_heads.shape == (seq_length, n_heads, key_size)
+
+
+def test_rope_embeddings_freqs_cis():
+    # values are generated using
+    # Metas Rope embedding code. See this gist which generates these
+    # expected values: https://gist.github.com/Artur-Galstyan/8d0bb5743f00650aa6c0d7427595a0ff
+    expected_freqs_cis = jnp.array(
+        [
+            [1.0000 + 0.0000j, 1.0000 + 0.0000j, 1.0000 + 0.0000j, 1.0000 + 0.0000j],
+            [0.5403 + 0.8415j, 0.9950 + 0.0998j, 0.9999 + 0.0100j, 1.0000 + 0.0010j],
+            [-0.4161 + 0.9093j, 0.9801 + 0.1987j, 0.9998 + 0.0200j, 1.0000 + 0.0020j],
+            [-0.9900 + 0.1411j, 0.9553 + 0.2955j, 0.9996 + 0.0300j, 1.0000 + 0.0030j],
+            [-0.6536 - 0.7568j, 0.9211 + 0.3894j, 0.9992 + 0.0400j, 1.0000 + 0.0040j],
+            [0.2837 - 0.9589j, 0.8776 + 0.4794j, 0.9988 + 0.0500j, 1.0000 + 0.0050j],
+            [0.9602 - 0.2794j, 0.8253 + 0.5646j, 0.9982 + 0.0600j, 1.0000 + 0.0060j],
+            [0.7539 + 0.6570j, 0.7648 + 0.6442j, 0.9976 + 0.0699j, 1.0000 + 0.0070j],
+            [-0.1455 + 0.9894j, 0.6967 + 0.7174j, 0.9968 + 0.0799j, 1.0000 + 0.0080j],
+            [-0.9111 + 0.4121j, 0.6216 + 0.7833j, 0.9960 + 0.0899j, 1.0000 + 0.0090j],
+            [-0.8391 - 0.5440j, 0.5403 + 0.8415j, 0.9950 + 0.0998j, 0.9999 + 0.0100j],
+            [0.0044 - 1.0000j, 0.4536 + 0.8912j, 0.9940 + 0.1098j, 0.9999 + 0.0110j],
+            [0.8439 - 0.5366j, 0.3624 + 0.9320j, 0.9928 + 0.1197j, 0.9999 + 0.0120j],
+            [0.9074 + 0.4202j, 0.2675 + 0.9636j, 0.9916 + 0.1296j, 0.9999 + 0.0130j],
+            [0.1367 + 0.9906j, 0.1700 + 0.9854j, 0.9902 + 0.1395j, 0.9999 + 0.0140j],
+            [-0.7597 + 0.6503j, 0.0707 + 0.9975j, 0.9888 + 0.1494j, 0.9999 + 0.0150j],
+        ]
+    )
+    embedding_size = 8
+    seq_length = 16
+    freqs_cis = eqx.nn.RotaryPositionalEmbedding.precompute_freqs_cis(
+        embedding_size, seq_length
+    )
+    assert jnp.allclose(freqs_cis, expected_freqs_cis, atol=1e-4)
+
+
+def test_rope_embeddings_values():
+    # values are generated using
+    # the script in this gist:
+    # https://gist.github.com/Artur-Galstyan/d33eda74072fea61545127adb90197b5
+    # Those values are generated based on the HuggingFace implementation
+    # of the Rope embeddings
+    # (see here: https://github.com/huggingface/transformers/blob/main/src/transformers/models/llama/modeling_flax_llama.py#L169)
+    expected_values = jnp.array(
+        [
+            [
+                0.0,
+                1.0,
+                2.0,
+                3.0,
+            ],
+            [-2.887617, 4.9297514, 6.6076975, 7.0496492],
+            [-12.422148, 8.778215, 3.1129112, 11.177788],
+            [-13.85559, 12.544218, -12.166454, 15.383192],
+            [3.1641474, 16.226604, -23.874424, 19.664621],
+            [26.769577, 19.824234, -12.937918, 24.020819],
+            [30.30889, 23.335985, 18.258457, 28.450514],
+            [1.3996639, 26.760752, 41.01269, 32.952423],
+        ]
+    )
+
+    seq_len = 8
+    embedding_size = 4
+
+    x = jnp.arange(seq_len * embedding_size).reshape(seq_len, embedding_size)
+
+    rope_embeddings = eqx.nn.RotaryPositionalEmbedding(embedding_size)
+    res = rope_embeddings(x)
+
+    assert jnp.allclose(res, expected_values, atol=1e-6)
