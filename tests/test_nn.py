@@ -1315,10 +1315,12 @@ def test_rope_embeddings_values():
         ]
     )
 
-    seq_len = 8
+    seq_length = 8
     embedding_size = 4
 
-    x = jnp.arange(seq_len * embedding_size).reshape(seq_len, embedding_size)
+    x = jnp.arange(seq_length * embedding_size * 1.0).reshape(
+        seq_length, embedding_size
+    )
 
     rope_embeddings = eqx.nn.RotaryPositionalEmbedding(embedding_size)
     res = rope_embeddings(x)

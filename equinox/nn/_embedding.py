@@ -163,14 +163,14 @@ class RotaryPositionalEmbedding(Module, strict=True):
             raise ValueError("`embedding_size` must be even.")
 
     @staticmethod
-    def rotate_half(x: Float[Array, "seq_len embedding_size"]):
+    def rotate_half(x: Float[Array, "seq_length embedding_size"]):
         d_2 = x.shape[-1] // 2
         return jnp.concatenate([-x[..., d_2:], x[..., :d_2]], axis=-1)
 
     @staticmethod
     def precompute_freqs_cis(
         embedding_size: int, end: int, theta: float = 10000.0
-    ) -> Complex[Array, "end embedding_size/2"]:
+    ) -> Complex[Array, "end half_of_embedding_size"]:
         freqs = 1.0 / (
             theta
             ** (jnp.arange(0.0, embedding_size, 2)[jnp.newaxis, :] / embedding_size)
@@ -192,13 +192,13 @@ class RotaryPositionalEmbedding(Module, strict=True):
     ) -> Float[Array, "seq_length embedding_size"]:
         """**Arguments:**
 
-        - `x`: A JAX array of shape `(seq_len, embedding_size)`.
+        - `x`: A JAX array of shape `(seq_length, embedding_size)`.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
 
         **Returns:**
 
-        A JAX array of shape `(seq_len, embedding_size)`, with the rotary positional
+        A JAX array of shape `(seq_length, embedding_size)`, with the rotary positional
         encoding applied to the input.
         """
 
