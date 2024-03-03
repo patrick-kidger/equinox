@@ -99,40 +99,32 @@ class Embedding(Module, strict=True):
 
 
 class RotaryPositionalEmbedding(Module, strict=True):
-    """
-    A rotary positional encoding module, as described in the paper
-    "RoFormer: Enhanced Transformer with Rotary Position Embedding". While
-    this module can be used in any context, it is particularly useful for
-    providing positional information to transformer models.
+    """A rotary positional encoding module, as described in the paper
+    "RoFormer: Enhanced Transformer with Rotary Position Embedding". While this module
+    can be used in any context, it is particularly useful for providing positional
+    information to transformer models.
 
-    !!! example
+    !!! Example
 
         The following example demonstrates how to use `RotaryPositionalEmbedding` in
         a simple transformer model.
 
         ```python
-
         class TransformerBlock(eqx.Module):
-            ...
             rope_embeddings: RotaryPositionalEmbedding
 
-
             def __init__(...):
-                ...
-                self.rope_embeddings = RotaryPositionalEmbedding(
-                    embedding_size=n_embd
-                )
-                ...
+                self.rope_embeddings = RotaryPositionalEmbedding(...)
 
             def __call__(...):
                 def process_heads(
-                    query_heads: Float[Array, "query_size num_heads qk_size"],
-                    key_heads: Float[Array, "key_size num_heads qk_size"],
-                    value_heads: Float[Array, "value_size num_heads vo_size"]
+                    query_heads: Float[Array, "seq_length num_heads qk_size"],
+                    key_heads: Float[Array, "seq_length num_heads qk_size"],
+                    value_heads: Float[Array, "seq_length num_heads vo_size"]
                 ) -> tuple[
-                    Float[Array, "query_size num_heads qk_size"],
-                    Float[Array, "key_size num_heads qk_size"],
-                    Float[Array, "value_size num_heads vo_size"]
+                    Float[Array, "seq_length num_heads qk_size"],
+                    Float[Array, "seq_length num_heads qk_size"],
+                    Float[Array, "seq_length num_heads vo_size"]
                 ]:
                     query_heads = jax.vmap(self.rope_embeddings,
                                            in_axes=1,
@@ -143,10 +135,8 @@ class RotaryPositionalEmbedding(Module, strict=True):
 
                     return query_heads, key_heads, value_heads
 
-                mha_output = self.mha_attention(
-                    ...
-                    process_heads=process_heads,
-                )
+                x = self.mha_attention(... process_heads=process_heads)
+                ...
         ```
 
     ??? cite
@@ -154,41 +144,28 @@ class RotaryPositionalEmbedding(Module, strict=True):
         [RoFormer: Enhanced Transformer with Rotary Position Embedding](https://arxiv.org/pdf/2104.09864)
 
         ```bibtex
-            @misc{su2023roformer,
-              title={RoFormer: Enhanced Transformer with Rotary Position Embedding},
-              author={Jianlin Su and Yu Lu and Shengfeng Pan and Ahmed Murtadha and
+        @misc{su2023roformer,
+          title={RoFormer: Enhanced Transformer with Rotary Position Embedding},
+          author={Jianlin Su and Yu Lu and Shengfeng Pan and Ahmed Murtadha and
               Bo Wen and Yunfeng Liu},
-              year={2023},
-              eprint={2104.09864},
-              archivePrefix={arXiv},
-              primaryClass={cs.CL}
-            }
+          year={2023},
+          eprint={arXiv:2104.09864},
+        }
         ```
     """
 
     embedding_size: int = field(static=True)
 
-    def __init__(
-        self,
-        embedding_size: int,
-        *,
-        key: Optional[PRNGKeyArray] = None,
-        **kwargs,
-    ):
-        """**Arguments:**
-
-        - `embedding_size`: Size of the token embeddings. Must be non-negative.
-        - `key`: Not used; provided for compatibility with the rest of the Equinox API.
-            (Keyword only argument.)
-        """
-        if embedding_size < 0:
-            raise ValueError("embedding_size must not be negative.")
-        self.embedding_size = embedding_size
+    def __check_init__(self):
+        if self.embedding_size < 0:
+            raise ValueError("`embedding_size` must not be negative.")
+        if (self.embedding_size % 2) != 0:
+            raise ValueError("`embedding_size` must be even.")
 
     @staticmethod
-    def negate_half(x: Float[Array, "seq_len embedding_size"]):
+    def rotate_half(x: Float[Array, "seq_len embedding_size"]):
         d_2 = x.shape[-1] // 2
-        return jnp.concatenate([x[..., :d_2], -x[..., d_2:]], axis=-1)
+        return jnp.concatenate([-x[..., d_2:], x[..., :d_2]], axis=-1)
 
     @staticmethod
     def precompute_freqs_cis(
@@ -209,10 +186,10 @@ class RotaryPositionalEmbedding(Module, strict=True):
     @jax.named_scope("eqx.nn.RotaryPositionalEmbedding")
     def __call__(
         self,
-        x: Float[Array, "seq_len embedding_size"],
+        x: Float[Array, "seq_length embedding_size"],
         *,
         key: Optional[PRNGKeyArray] = None,
-    ) -> Float[Array, "seq_len embedding_size"]:
+    ) -> Float[Array, "seq_length embedding_size"]:
         """**Arguments:**
 
         - `x`: A JAX array of shape `(seq_len, embedding_size)`.
@@ -231,12 +208,6 @@ class RotaryPositionalEmbedding(Module, strict=True):
                 f"x.shape[-1] must match self.embedding_size, "
                 f"but {x.shape[-1]} != {self.embedding_size}"
             )
-        if embedding_size % 2 != 0:
-            raise ValueError(
-                f"x.shape[-1] must be even, but {x.shape[-1]} is not even."
-            )
-
-        neg_half_x = self.negate_half(x)
 
         with jax.ensure_compile_time_eval():
             if embedding_size in internal_rope_embedding_cache:
@@ -251,169 +222,15 @@ class RotaryPositionalEmbedding(Module, strict=True):
                 freqs_cis = self.precompute_freqs_cis(embedding_size, seq_len)
                 internal_rope_embedding_cache[embedding_size] = freqs_cis
 
-        assert freqs_cis is not None, "freqs_cis must not be None."
         freqs_real = jnp.tile(freqs_cis.real, (1, 2))
         freqs_imag = jnp.tile(freqs_cis.imag, (1, 2))
 
-        x_rope = (x * freqs_real) + (neg_half_x * freqs_imag)
+        rotate_x = self.rotate_half(x)
+        x_rope = (x * freqs_real) + (rotate_x * freqs_imag)
         return x_rope
 
 
-class SinusoidalPositionalEmbedding(Module):
-    r"""
-    A sinusoidal positional encoding module, as described in the paper
-    "Attention is All You Need". While this module can be used in any context, it is
-    particularly useful for providing positional information to transformer models.
+RotaryPositionalEmbedding.__init__.__doc__ = """**Arguments:**
 
-    !!! example
-
-        The following example demonstrates how to use `SinusoidalPositionalEmbedding` in
-        a simple transformer model. Note that you should apply the positional encoding
-        on the input directly - before applying any projections (as opposed to RoPE
-        embeddings, which should be applied after the projections).
-
-
-        ```python
-
-        class Transformer(eqx.Module):
-            ...
-            sinusoidal_embeddings: SinusoidalPositionalEmbedding
-
-            def __init__(...):
-                ...
-                self.sinusoidal_embeddings = SinusoidalPositionalEmbedding(
-                    embedding_size=n_embd
-                )
-                ...
-
-            def __call__(x: Float[Array, "seq_len n_input_dims"]):
-                x = self.embedding(x) # Apply the input embedding first
-                # this maps x to shape (seq_len, n_embd)
-                x = self.sinusoidal_embeddings(x) # Apply the positional encoding
-
-                # x = self.mha_attention(...) # Apply the attention mechanism
-
-        ```
-
-    ??? cite
-
-        [Attention is All You Need](https://arxiv.org/abs/1706.03762)
-
-        ```bibtex
-        @inproceedings{vaswani2017attention,
-            author={Vaswani, Ashish and Shazeer, Noam and Parmar, Niki and
-                    Uszkoreit, Jakob and Jones, Llion and Gomez, Aidan N and
-                    Kaiser, {\L}ukasz and Polosukhin, Illia},
-            booktitle={Advances in Neural Information Processing Systems},
-            publisher={Curran Associates, Inc.},
-            title={Attention is All You Need},
-            volume={30},
-            year={2017}
-        }
-        ```
-    """
-
-    embedding_size: int = field(static=True)
-    theta: float = field(static=True)
-
-    def __init__(
-        self,
-        embedding_size: int,
-        *,
-        theta: float = 10000.0,
-        key: Optional[PRNGKeyArray] = None,
-        **kwargs,
-    ):
-        """**Arguments:**
-
-        - `embedding_size`: Size of the token embeddings. Must be non-negative.
-        - `theta`: The frequency of the sinusoidal positional encoding.
-            Must be positive. Defaults to 10000.0.
-        - `key`: Not used; provided for compatibility with the rest of the Equinox API.
-            (Keyword only argument.)
-        """
-
-        if embedding_size % 2 != 0:
-            raise ValueError(
-                f"embedding_size must be even, but {embedding_size} is not even."
-            )
-
-        if embedding_size <= 0:
-            raise ValueError(
-                f"embedding_size must be positive, but {embedding_size} <= 0."
-            )
-
-        self.embedding_size = embedding_size
-        self.theta = theta
-
-    @staticmethod
-    def get_positional_encoding(
-        embedding_size: int, seq_len: int, theta: float = 10000.0
-    ) -> Float[Array, "seq_len embedding_size"]:
-        pos = jnp.arange(float(seq_len))[:, jnp.newaxis]
-
-        div_term = jnp.exp(
-            jnp.arange(0.0, embedding_size, 2) * -(jnp.log(theta) / embedding_size)
-        )
-
-        mult = pos * div_term.reshape(1, -1)
-        sines = jnp.sin(mult)
-        cosines = jnp.cos(mult)
-        return jnp.stack([sines, cosines], axis=2).reshape((seq_len, embedding_size))
-
-    @jax.named_scope("eqx.nn.SinusoidalPositionalEmbedding")
-    def __call__(
-        self,
-        x: Float[Array, "seq_len embedding_size"],
-        *,
-        key: Optional[PRNGKeyArray] = None,
-    ) -> Float[Array, "seq_len embedding_size"]:
-        """**Arguments:**
-
-        - `x`: A JAX array of shape `(seq_len, embedding_size)`.
-        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
-            (Keyword only argument.)
-
-        **Returns:**
-
-        A JAX array of shape `(seq_len, embedding_size)`, with the sinusoidal
-        positional encoding applied to the input.
-        """
-        seq_len, embedding_size = x.shape
-
-        if embedding_size != self.embedding_size:
-            raise ValueError(
-                f"x.shape[-1] must match self.embedding_size, "
-                f"but {x.shape[-1]} != {self.embedding_size}"
-            )
-
-        freqs_cis = None
-
-        with jax.ensure_compile_time_eval():
-            if (
-                embedding_size,
-                self.theta,
-            ) in internal_sinusoidal_positional_encoding_cache:
-                freqs_cis = internal_sinusoidal_positional_encoding_cache[
-                    (embedding_size, self.theta)
-                ]
-                freqs_cis_seq_len, _ = freqs_cis.shape
-                if seq_len > freqs_cis_seq_len:
-                    freqs_cis = self.get_positional_encoding(
-                        embedding_size, seq_len, self.theta
-                    )
-                    internal_sinusoidal_positional_encoding_cache[
-                        (embedding_size, self.theta)
-                    ] = freqs_cis
-                else:
-                    freqs_cis = freqs_cis[:seq_len]
-            else:
-                freqs_cis = self.get_positional_encoding(
-                    embedding_size, seq_len, self.theta
-                )
-                internal_sinusoidal_positional_encoding_cache[
-                    (embedding_size, self.theta)
-                ] = freqs_cis
-
-        assert freqs_cis is not None, "freqs_cis must not be None."
-        return x + freqs_cis
+- `embedding_size`: Size of the token embeddings. Must be non-negative and even.
+"""

@@ -232,14 +232,14 @@ class MultiheadAttention(Module, strict=True):
         process_heads: Optional[
             Callable[
                 [
-                    Float[Array, "query_size num_heads qk_size"],
-                    Float[Array, "key_size num_heads qk_size"],
-                    Float[Array, "value_size num_heads vo_size"],
+                    Float[Array, "seq_length num_heads qk_size"],
+                    Float[Array, "seq_length num_heads qk_size"],
+                    Float[Array, "seq_length num_heads vo_size"],
                 ],
                 tuple[
-                    Float[Array, "query_size num_heads qk_size"],
-                    Float[Array, "key_size num_heads qk_size"],
-                    Float[Array, "value_size num_heads vo_size"],
+                    Float[Array, "seq_length num_heads qk_size"],
+                    Float[Array, "seq_length num_heads qk_size"],
+                    Float[Array, "seq_length num_heads vo_size"],
                 ],
             ]
         ] = None,
