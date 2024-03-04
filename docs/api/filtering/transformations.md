@@ -20,10 +20,6 @@ Likewise, `eqx.filter_grad` will automatically differentiate all floating-point 
 
 ::: equinox.filter_eval_shape
 
----
-
-::: equinox.filter_dce
-
 ## Automatic differentiation
 
 ::: equinox.filter_grad
