@@ -598,25 +598,6 @@ class _ClosureConvert(Module):
         return out
 
 
-def _fn_to_jaxpr(fn, args, kwargs, dce: bool) -> _ClosureConvert:
-    closed_jaxpr, out_dynamic_struct, out_static = filter_make_jaxpr(fn)(
-        *args, **kwargs
-    )  # pyright: ignore
-    in_dynamic, in_static = partition((args, kwargs), _is_struct)
-    in_dynamic_struct = jax.eval_shape(lambda: in_dynamic)
-    jaxpr = closed_jaxpr.jaxpr
-    consts = closed_jaxpr.consts
-    if dce:
-        jaxpr, _ = pe.dce_jaxpr(jaxpr, [True] * len(jaxpr.outvars), instantiate=True)
-    in_dynamic_struct = jtu.tree_flatten(in_dynamic_struct)
-    out_dynamic_struct = jtu.tree_flatten(out_dynamic_struct)
-    in_static = jtu.tree_flatten(in_static)
-    out_static = jtu.tree_flatten(out_static)
-    return _ClosureConvert(
-        jaxpr, consts, in_dynamic_struct, out_dynamic_struct, in_static, out_static
-    )
-
-
 def filter_closure_convert(fn: Callable[_P, _T], *args, **kwargs) -> Callable[_P, _T]:
     """As `jax.closure_convert`, but works on functions accepting and returning
     arbitrary PyTree objects. In addition, all JAX arrays are hoisted into constants
