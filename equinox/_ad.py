@@ -19,7 +19,6 @@ import jax
 import jax._src.traceback_util as traceback_util
 import jax.core
 import jax.interpreters.ad as ad
-import jax.interpreters.partial_eval as pe
 import jax.numpy as jnp
 import jax.tree_util as jtu
 from jaxtyping import Array, ArrayLike, Complex, Float, PyTree, PyTreeDef
@@ -499,6 +498,20 @@ def filter_jacrev(fun, has_aux: bool = False):
     auxiliary data returned from `fun`.
     """
     return _Jac(fun, has_aux, rev=True)
+
+
+def filter_hessian(fun, has_aux: bool = False):
+    """Computes the Hessian of `fun`. The inputs and outputs may be arbitrary PyTrees.
+    **Arguments:**
+    - `fun`: The function to be differentiated.
+    **Returns:**
+    A function with the same arguments as `fun`.
+    If `has_aux is False` then this function returns just the Hessian of `fun` with
+    respect to its first argument.
+    If `has_aux is True` then it returns a pair `(hessian, aux)`, where `aux` is the
+    auxiliary data returned from `fun`.
+    """
+    return filter_jacfwd(filter_jacrev(fun, has_aux=has_aux), has_aux=has_aux)
 
 
 def _is_struct(x):
