@@ -2,15 +2,14 @@ import functools as ft
 import math
 import warnings
 from functools import partial
-from typing import Optional, Union
+from typing import cast, Optional, Union
 
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
-from jaxtyping import Array, Bool, Float
+from jaxtyping import Array, Bool, Float, PRNGKeyArray
 
-from .._custom_types import PRNGKey
-from .._module import Module, static_field
+from .._module import field, Module
 from ._dropout import Dropout
 from ._linear import Linear
 
@@ -30,8 +29,12 @@ def dot_product_attention_weights(
                 f"{key.shape[0]}). Got {mask.shape}."
             )
         logits = jnp.where(mask, logits, jnp.finfo(logits.dtype).min)
+        logits = cast(Array, logits)
 
-    return jax.nn.softmax(logits, axis=-1)
+    with jax.numpy_dtype_promotion("standard"):
+        dtype = jnp.result_type(logits.dtype, jnp.float32)
+    weights = jax.nn.softmax(logits.astype(dtype)).astype(logits.dtype)
+    return weights
 
 
 def dot_product_attention(
@@ -41,7 +44,7 @@ def dot_product_attention(
     mask: Optional[Bool[Array, "q_seq kv_seq"]] = None,
     dropout: Optional[Dropout] = None,
     *,
-    key: Optional[PRNGKey] = None,
+    key: Optional[PRNGKeyArray] = None,
     inference: Optional[bool] = None,
 ) -> Float[Array, "q_seq v_size"]:
     weights = dot_product_attention_weights(query, key_, mask)
@@ -51,7 +54,7 @@ def dot_product_attention(
     return attn
 
 
-class MultiheadAttention(Module):
+class MultiheadAttention(Module, strict=True):
     r"""
     Computes
 
@@ -119,17 +122,17 @@ class MultiheadAttention(Module):
     output_proj: Linear
     dropout: Dropout
 
-    num_heads: int = static_field()
-    query_size: int = static_field()
-    key_size: int = static_field()
-    value_size: int = static_field()
-    output_size: int = static_field()
-    qk_size: int = static_field()
-    vo_size: int = static_field()
-    use_query_bias: bool = static_field()
-    use_key_bias: bool = static_field()
-    use_value_bias: bool = static_field()
-    use_output_bias: bool = static_field()
+    num_heads: int = field(static=True)
+    query_size: int = field(static=True)
+    key_size: int = field(static=True)
+    value_size: int = field(static=True)
+    output_size: int = field(static=True)
+    qk_size: int = field(static=True)
+    vo_size: int = field(static=True)
+    use_query_bias: bool = field(static=True)
+    use_key_bias: bool = field(static=True)
+    use_value_bias: bool = field(static=True)
+    use_output_bias: bool = field(static=True)
 
     def __init__(
         self,
@@ -147,8 +150,7 @@ class MultiheadAttention(Module):
         dropout_p: float = 0.0,
         inference: bool = False,
         *,
-        key: PRNGKey,
-        **kwargs,
+        key: PRNGKeyArray,
     ):
         r"""**Arguments:**
 
@@ -169,12 +171,11 @@ class MultiheadAttention(Module):
         - `dropout_p`: Dropout probability on attention weights.
         - `inference`: Whether to actually apply dropout at all. If `True` then dropout
             is not applied. If `False` then dropout is applied. This may be toggled
-            with [`equinox.tree_inference`][] or overridden during
+            with [`equinox.nn.inference_mode`][] or overridden during
             [`equinox.nn.MultiheadAttention.__call__`][].
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
         """
-        super().__init__(**kwargs)
         qkey, kkey, vkey, okey = jrandom.split(key, 4)
 
         if key_size is None:
@@ -214,6 +215,7 @@ class MultiheadAttention(Module):
         self.use_value_bias = use_value_bias
         self.use_output_bias = use_output_bias
 
+    @jax.named_scope("eqx.nn.MultiheadAttention")
     def __call__(
         self,
         query: Float[Array, "q_seq q_size"],
@@ -223,7 +225,7 @@ class MultiheadAttention(Module):
             None, Bool[Array, "q_seq kv_seq"], Bool[Array, "num_heads q_seq kv_seq"]
         ] = None,
         *,
-        key: Optional[PRNGKey] = None,
+        key: Optional[PRNGKeyArray] = None,
         inference: Optional[bool] = None,
         deterministic: Optional[bool] = None,
     ) -> Float[Array, "q_seq o_size"]:
@@ -237,7 +239,8 @@ class MultiheadAttention(Module):
             `(kv_seq_length, value_size)`.
         - `mask`: Optional mask preventing attention to certain positions. Should either
             be a JAX array of shape `(query_seq_length, kv_seq_length)`, or (for custom
-            per-head masking) `(num_heads, query_seq_length, kv_seq_length)`.
+            per-head masking) `(num_heads, query_seq_length, kv_seq_length)`. A value of
+            `False` at a position indicates that position should be ignored.
         - `key`: A `jax.random.PRNGKey` used for dropout. Unused if `dropout = 0`.
             (Keyword only argument.)
         - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only

@@ -1,13 +1,12 @@
 import warnings
-from typing import List, Union
+from typing import Union
 
+import equinox as eqx
 import jax
 import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
 import pytest
-
-import equinox as eqx
 
 
 def test_custom_init():
@@ -125,18 +124,70 @@ def test_sequential(getkey):
         [
             eqx.nn.Linear(2, 4, key=getkey()),
             eqx.nn.Linear(4, 1, key=getkey()),
+            eqx.nn.BatchNorm(1, axis_name="batch"),
             eqx.nn.Linear(1, 3, key=getkey()),
         ]
     )
-    x = jrandom.normal(getkey(), (2,))
-    assert seq(x).shape == (3,)
+    x = jrandom.normal(getkey(), (1, 2))
+    batch_seq = jax.vmap(seq, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
+    state = eqx.nn.State(seq)
+
+    output, state = batch_seq(x, state)
+    assert output[0].shape == (3,)
     # Test indexing
     assert isinstance(seq[0], eqx.nn.Linear)
     assert isinstance(seq[1:], eqx.nn.Sequential)
-    x = jrandom.normal(getkey(), (4,))
-    assert seq[1:](x).shape == (3,)
-    assert len(seq) == 3
+
+    x = jrandom.normal(getkey(), (1, 4))
+    batch_seq = jax.vmap(
+        seq[1:],
+        axis_name="batch",
+        in_axes=(0, None),
+        out_axes=(0, None),
+    )
+    output, state = batch_seq(x, state)
+    assert output[0].shape == (3,)
+    assert len(seq) == 4
     assert eqx.nn.Sequential(list(seq)) == seq
+
+
+@pytest.mark.parametrize("inner_stateful", (False, True))
+@pytest.mark.parametrize("outer_stateful", (False, True))
+def test_nested_sequential(inner_stateful, outer_stateful, getkey):
+    def make():
+        inner_seq = eqx.nn.Sequential(
+            [
+                eqx.nn.Linear(2, 4, key=getkey()),
+                eqx.nn.BatchNorm(4, axis_name="batch")
+                if inner_stateful
+                else eqx.nn.Identity(),
+                eqx.nn.Linear(4, 3, key=getkey()),
+            ]
+        )
+        outer_seq = eqx.nn.Sequential(
+            [
+                eqx.nn.Linear(5, 2, key=getkey()),
+                inner_seq,
+                eqx.nn.BatchNorm(3, axis_name="batch")
+                if outer_stateful
+                else eqx.nn.Identity(),
+                eqx.nn.Linear(3, 6, key=getkey()),
+            ]
+        )
+        return outer_seq
+
+    x = jrandom.normal(getkey(), (1, 5))
+    if inner_stateful or outer_stateful:
+        model, state = eqx.nn.make_with_state(make)()
+        out, state = jax.vmap(
+            model, axis_name="batch", in_axes=(0, None), out_axes=(0, None)
+        )(x, state)
+        assert isinstance(state, eqx.nn.State)
+    else:
+        model = make()
+        out = jax.vmap(model, axis_name="batch")(x)
+    assert isinstance(out, jax.Array)
+    assert out.shape == (1, 6)
 
 
 def test_mlp(getkey):
@@ -166,6 +217,30 @@ def test_mlp(getkey):
     x = jrandom.normal(getkey(), (2,))
     assert mlp(x).shape == (3,)
     assert [mlp.layers[i].use_bias for i in range(0, 3)] == [True, True, False]
+
+
+def test_mlp_learnt_activation():
+    mlp = eqx.nn.MLP(
+        2,
+        5,
+        8,
+        2,
+        activation=eqx.nn.PReLU(),
+        final_activation=eqx.nn.PReLU(),
+        key=jrandom.PRNGKey(5678),
+    )
+    x = jnp.array([0.5, 0.7])
+    assert mlp.activation.negative_slope.shape == (2, 8)
+    assert mlp.final_activation.negative_slope.shape == (5,)
+
+    @eqx.filter_jit
+    @eqx.filter_grad
+    def grad(mlp, x):
+        return jnp.sum(mlp(x))
+
+    grads = grad(mlp, x)
+    assert grads.activation.negative_slope.shape == (2, 8)
+    assert grads.final_activation.negative_slope.shape == (5,)
 
 
 def test_conv1d(getkey):
@@ -566,6 +641,12 @@ def test_dot_product_attention_weights(getkey):
     weights = eqx.nn._attention.dot_product_attention_weights(q, k, mask)
     assert jnp.allclose(weights, jnp.array([[1.0, 0.0]]))
 
+    q = jnp.array([[1.0]], dtype="float16")
+    k = jnp.array([[9.0], [1.0]], dtype="float16")
+    weights = eqx.nn._attention.dot_product_attention_weights(q, k)
+    assert weights.dtype == q.dtype
+    assert weights.max() < 1
+
 
 def test_dot_product_attention(getkey):
     q = jnp.array([[0.0, 2**0.5]])
@@ -604,7 +685,7 @@ def test_multihead_attention(getkey):
             x.output_proj.weight,
         ),
         attn,
-        [jnp.arange(16).reshape(4, 4) for _ in range(4)],
+        [jnp.arange(16.0).reshape(4, 4) for _ in range(4)],
     )
     x = jnp.array([[1.0, 2.0, 3.0, 4.0]])
     assert jnp.allclose(attn(x, x, x), jnp.array([[680.0, 1960.0, 3240.0, 4520.0]]))
@@ -658,17 +739,21 @@ def test_multihead_attention_deterministic(getkey):
 
 def test_embedding(getkey):
     emb = eqx.nn.Embedding(100, 512, key=getkey())
-    x = jnp.array([1])
-    assert emb(x).shape == (1, 512)
+    x = jnp.array(1)
+    assert emb(x).shape == (512,)
 
     emb = eqx.nn.Embedding(num_embeddings=10, embedding_size=20, key=getkey())
-    x = jnp.array([0])
-    assert emb(x).shape == (1, 20)
+    x = jnp.array(0)
+    assert emb(x).shape == (20,)
 
     emb = eqx.nn.Embedding(
         10, 10, weight=jnp.linspace(0.1, 10, 100).reshape(10, 10), key=getkey()
     )
-    x = jnp.array([-1])
+    x = jnp.array(-1)
+    assert jnp.allclose(emb(x), jnp.linspace(9.1, 10.0, 10))
+
+    emb = eqx.nn.Embedding(weight=jnp.linspace(0.1, 10, 100).reshape(10, 10))
+    x = jnp.array(-1)
     assert jnp.allclose(emb(x), jnp.linspace(9.1, 10.0, 10))
 
 
@@ -795,8 +880,8 @@ def test_batch_norm(getkey):
     state = eqx.nn.State(bn)
     vbn = jax.vmap(bn, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
     out, state = vbn(x1alt, state)
-    true_out = (x1alt - jnp.mean(x1alt, axis=0)) / jnp.sqrt(
-        jnp.var(x1alt, axis=0) + 1e-5
+    true_out = (x1alt - jnp.mean(x1alt, axis=0, keepdims=True)) / jnp.sqrt(
+        jnp.var(x1alt, axis=0, keepdims=True) + 1e-5
     )
     assert jnp.allclose(out, true_out)
 
@@ -810,7 +895,7 @@ def test_batch_norm(getkey):
 
     # Test that the statistics don't update at inference
 
-    ibn = eqx.tree_inference(bn, value=True)
+    ibn = eqx.nn.inference_mode(bn, value=True)
     vibn = jax.vmap(ibn, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
     out, state = vibn(4 * x1 + 20, state)
     running_mean3, running_var3 = state.get(bn.state_index)
@@ -831,7 +916,7 @@ def test_spectral_norm(getkey):
     def λ1():
         u, v = state.get(spectral.uv_index)
         σ = jnp.einsum("i,ij,j->", u, spectral.layer.weight, v)
-        _, s, _ = jnp.linalg.svd(spectral.layer.weight / σ)
+        _, s, _ = jnp.linalg.svd(spectral.layer.weight / σ)  # pyright: ignore
         return s[0]
 
     x = jrandom.normal(getkey(), (5,))
@@ -856,7 +941,7 @@ def test_spectral_norm(getkey):
     spectral = eqx.tree_at(
         lambda s: s.layer.weight, spectral, spectral.layer.weight + 1
     )
-    spectral = eqx.tree_inference(spectral, value=True)
+    spectral = eqx.nn.inference_mode(spectral, value=True)
     assert not jnp.allclose(λ1(), 1)
     for _ in range(100):
         _, state = spectral(x, state)
@@ -872,16 +957,57 @@ def test_spectral_norm(getkey):
     assert out.shape == (4, 6, 6, 6)
 
 
+def test_weight_norm(getkey):
+    # Linear
+    linear = eqx.nn.Linear(4, 4, key=getkey())
+    weight_norm_linear = eqx.nn.WeightNorm(layer=linear, weight_name="weight")
+
+    x = jrandom.normal(getkey(), (4,))
+    out_weight_norm = weight_norm_linear(x)
+    out_linear = linear(x)
+
+    assert jnp.allclose(out_weight_norm, out_linear)
+
+    # Axis == None
+    linear = eqx.nn.Linear(4, 4, key=getkey())
+    weight_norm_linear = eqx.nn.WeightNorm(
+        layer=linear, weight_name="weight", axis=None
+    )
+
+    x = jrandom.normal(getkey(), (4,))
+    out_weight_norm = weight_norm_linear(x)
+    out_linear = linear(x)
+
+    assert jnp.allclose(out_weight_norm, out_linear)
+
+    # Conv3d (ndim weight matrices > 2)
+    conv = eqx.nn.Conv3d(2, 3, 3, key=getkey())
+    weight_norm_conv = eqx.nn.WeightNorm(layer=conv, weight_name="weight")
+    x = jrandom.normal(getkey(), (2, 3, 3, 3))
+    out_weight_norm = weight_norm_conv(x)
+    out_conv = conv(x)
+
+    assert jnp.allclose(out_weight_norm, out_conv)
+
+    # Grads get generated for reparametrized weights, not original
+    grads = eqx.filter_grad(lambda model, x: jnp.mean(model(x)))(
+        weight_norm_linear, jrandom.normal(getkey(), (4,))
+    )
+
+    assert jnp.any(grads.layer.weight)
+    assert jnp.any(grads.g)
+
+
 def test_maxpool1d():
     x = jnp.arange(14).reshape(1, 14)
     max_pool = eqx.nn.MaxPool1d(2, 3)
     output = max_pool(x)
-    answer = jnp.array([1, 4, 7, 10, 13])
+    answer = jnp.array([[1, 4, 7, 10, 13]])
 
     assert jnp.all(output == answer)
 
     max_pool = eqx.nn.MaxPool1d(kernel_size=3, stride=3, padding=0, use_ceil=True)
-    answer = jnp.array([2, 5, 8, 11, 13])
+    answer = jnp.array([[2, 5, 8, 11, 13]])
     output = max_pool(x)
     assert jnp.all(output == answer)
 
@@ -890,13 +1016,13 @@ def test_avgpool1d():
     x = jnp.arange(14).reshape(1, 14)
     avg_pool = eqx.nn.AvgPool1d(2, 3)
     output = avg_pool(x)
-    answer = jnp.array([0.5, 3.5, 6.5, 9.5, 12.5])
+    answer = jnp.array([[0.5, 3.5, 6.5, 9.5, 12.5]])
 
     assert jnp.all(output == answer)
 
 
 def test_adaptive_avgpool1d():
-    x = jnp.arange(14).reshape(1, 14)
+    x = jnp.arange(14.0).reshape(1, 14)
     adaptive_pool = eqx.nn.AdaptiveAvgPool1d(4)
     output = adaptive_pool(x)
     answer = jnp.array([[1.5, 5.5, 9.0, 12.0]])
@@ -908,10 +1034,10 @@ def test_adaptive_avgpool1d():
 
 
 def test_adaptive_maxpool1d():
-    x = jnp.arange(14).reshape(1, 14)
+    x = jnp.arange(14.0).reshape(1, 14)
     adaptive_pool = eqx.nn.AdaptiveMaxPool1d(4)
     output = adaptive_pool(x)
-    answer = jnp.array([[3, 7, 10, 13]])
+    answer = jnp.array([[3.0, 7.0, 10.0, 13.0]])
     assert jnp.all(output == answer)
 
     adaptive_pool = eqx.nn.AdaptiveMaxPool1d(14)
@@ -923,7 +1049,7 @@ def test_maxpool2d():
     x = jnp.arange(36).reshape(1, 6, 6)
     max_pool = eqx.nn.MaxPool2d(2, (3, 2))
     output = max_pool(x)
-    answer = jnp.array([[7, 9, 11], [25, 27, 29]])
+    answer = jnp.array([[[7, 9, 11], [25, 27, 29]]])
 
     assert jnp.all(output == answer)
 
@@ -940,13 +1066,13 @@ def test_avgpool2d():
     x = jnp.arange(36).reshape(1, 6, 6)
     avg_pool = eqx.nn.AvgPool2d((1, 3), 2)
     output = avg_pool(x)
-    answer = jnp.array([[1, 3], [13, 15], [25, 27]])
+    answer = jnp.array([[[1.0, 3.0], [13.0, 15.0], [25.0, 27.0]]])
 
     assert jnp.all(output == answer)
 
 
 def test_adaptive_avgpool2d():
-    x = jnp.arange(12).reshape(1, 3, 4)
+    x = jnp.arange(12.0).reshape(1, 3, 4)
     adaptive_pool = eqx.nn.AdaptiveAvgPool2d((2, 3))
     output = adaptive_pool(x)
     answer = jnp.array([[[2.5, 4.0, 5.0], [8.5, 10.0, 11.0]]])
@@ -958,10 +1084,10 @@ def test_adaptive_avgpool2d():
 
 
 def test_adaptive_maxpool2d():
-    x = jnp.arange(12).reshape(1, 3, 4)
+    x = jnp.arange(12.0).reshape(1, 3, 4)
     adaptive_pool = eqx.nn.AdaptiveMaxPool2d((2, 3))
     output = adaptive_pool(x)
-    answer = jnp.array([[[5, 6, 7], [9, 10, 11]]])
+    answer = jnp.array([[[5.0, 6.0, 7.0], [9.0, 10.0, 11.0]]])
     assert jnp.all(output == answer)
 
     adaptive_pool = eqx.nn.AdaptiveMaxPool2d((3, 4))
@@ -970,10 +1096,10 @@ def test_adaptive_maxpool2d():
 
 
 def test_maxpool3d():
-    x = jnp.arange(64).reshape(1, 4, 4, 4)
+    x = jnp.arange(64.0).reshape(1, 4, 4, 4)
     max_pool = eqx.nn.MaxPool3d(2, (3, 2, 1))
     output = max_pool(x)
-    answer = jnp.array([[[21, 22, 23], [29, 30, 31]]])
+    answer = jnp.array([[[[21.0, 22.0, 23.0], [29.0, 30.0, 31.0]]]])
 
     assert jnp.all(output == answer)
 
@@ -982,8 +1108,10 @@ def test_maxpool3d():
     )
     answer = jnp.asarray(
         [
-            [[37, 39, 39], [45, 47, 47], [45, 47, 47]],
-            [[53, 55, 55], [61, 63, 63], [61, 63, 63]],
+            [
+                [[37.0, 39.0, 39.0], [45.0, 47.0, 47.0], [45.0, 47.0, 47.0]],
+                [[53.0, 55.0, 55.0], [61.0, 63.0, 63.0], [61.0, 63.0, 63.0]],
+            ]
         ]
     )
     output = max_pool(x)
@@ -991,16 +1119,16 @@ def test_maxpool3d():
 
 
 def test_avgpool3d():
-    x = jnp.arange(64).reshape(1, 4, 4, 4)
+    x = jnp.arange(64.0).reshape(1, 4, 4, 4)
     avg_pool = eqx.nn.AvgPool3d((1, 3, 1), 2)
     output = avg_pool(x)
-    answer = jnp.array([[[4, 6]], [[36, 38]]])
+    answer = jnp.array([[[[4.0, 6.0]], [[36.0, 38.0]]]])
 
     assert jnp.all(output == answer)
 
 
 def test_adaptive_avgpool3d():
-    x = jnp.arange(18).reshape(1, 3, 2, 3)
+    x = jnp.arange(18.0).reshape(1, 3, 2, 3)
     adaptive_pool = eqx.nn.AdaptiveAvgPool3d((2, 1, 3))
     output = adaptive_pool(x)
     answer = jnp.array([[[[4.5, 5.5, 6.5]], [[13.5, 14.5, 15.5]]]])
@@ -1012,10 +1140,10 @@ def test_adaptive_avgpool3d():
 
 
 def test_adaptive_maxpool3d():
-    x = jnp.arange(18).reshape(1, 3, 2, 3)
+    x = jnp.arange(18.0).reshape(1, 3, 2, 3)
     adaptive_pool = eqx.nn.AdaptiveMaxPool3d((2, 1, 3))
     output = adaptive_pool(x)
-    answer = jnp.array([[[[9, 10, 11]], [[15, 16, 17]]]])
+    answer = jnp.array([[[[9.0, 10.0, 11.0]], [[15.0, 16.0, 17.0]]]])
     assert jnp.all(output == answer)
 
     adaptive_pool = eqx.nn.AdaptiveMaxPool3d((3, 2, 3))
@@ -1024,7 +1152,7 @@ def test_adaptive_maxpool3d():
 
 
 def test_poolpadding():
-    x = jnp.arange(64).reshape(1, 4, 4, 4)
+    x = jnp.arange(64.0).reshape(1, 4, 4, 4)
     max_pool = eqx.nn.MaxPool3d(2, 1, ((0, 1), (0, 1), (0, 1)))
     output = max_pool(x)
 
@@ -1036,7 +1164,7 @@ def test_poolbackprop():
         max_pool = eqx.nn.MaxPool3d((2, 2, 2), (1, 1, 1), ((0, 1), (0, 1), (0, 1)))
         return jnp.mean(max_pool(x))
 
-    x = jnp.arange(64, dtype=jnp.float32).reshape(1, 4, 4, 4)
+    x = jnp.arange(64.0, dtype=jnp.float32).reshape(1, 4, 4, 4)
     grad_fn = jax.value_and_grad(max_pool_mean)
 
     grad_fn(x)
@@ -1044,8 +1172,8 @@ def test_poolbackprop():
 
 def test_poolnetworkbackprop(getkey):
     class CNN(eqx.Module):
-        conv_layer: List[Union[eqx.nn.Conv2d, eqx.nn.MaxPool2d]]
-        linear_layers: List[eqx.nn.Linear]
+        conv_layer: list[Union[eqx.nn.Conv2d, eqx.nn.MaxPool2d]]
+        linear_layers: list[eqx.nn.Linear]
 
         def __init__(self, key):
             key1, key2, key3 = jax.random.split(key, 3)

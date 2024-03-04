@@ -34,7 +34,7 @@ And here is how to replace the `weight` of every linear layer in some arbitrary 
 def trunc_init(weight: jax.Array, key: jax.random.PRNGKey) -> jax.Array:
   out, in_ = weight.shape
   stddev = math.sqrt(1 / in_)
-  return stddev * jax.random.truncated_normal(key, lower=-2, upper=2)
+  return stddev * jax.random.truncated_normal(key, shape=(out, in_), lower=-2, upper=2)
 
 def init_linear_weight(model, init_fn, key):
   is_linear = lambda x: isinstance(x, eqx.nn.Linear)
@@ -213,7 +213,7 @@ class TenMLPs(eqx.Module):
     
         def f(_x, _dynamic_mlp):
             mlp = eqx.combine(_dynamic_mlp, static_mlps)
-            return mlp(x), None
+            return mlp(_x), None
     
         out, _ = lax.scan(f, x, dynamic_mlps)
         return out

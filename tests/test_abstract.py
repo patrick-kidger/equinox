@@ -1,9 +1,8 @@
 import abc
 from typing import ClassVar, TYPE_CHECKING
 
-import pytest
-
 import equinox as eqx
+import pytest
 
 
 if TYPE_CHECKING:
@@ -18,151 +17,190 @@ def test_abstract_method():
         def x(self):
             ...
 
+    class B(A):
+        pass
+
     with pytest.raises(TypeError, match="abstract method"):
         A()
+
+    with pytest.raises(TypeError, match="abstract method"):
+        B()
+
+
+def test_abstract_attribute_stringified():
+    with pytest.raises(NotImplementedError):
+
+        class A(eqx.Module):
+            x: "AbstractVar[bool]"
 
 
 def test_abstract_attribute():
     class A(eqx.Module):
         x: AbstractVar[bool]
 
+    assert A.__abstractvars__ == frozenset({"x"})
+    assert A.__abstractclassvars__ == frozenset()
+
     with pytest.raises(TypeError, match="abstract attributes"):
         A()
 
-    class B(eqx.Module):
-        x: "AbstractVar[bool]"
-
-    with pytest.raises(TypeError, match="abstract attributes"):
-        B()
-
-    class C(A):
+    class B(A):
         y: int
 
-    with pytest.raises(TypeError, match="abstract attributes"):
-        C(y=2)
+    assert B.__abstractvars__ == frozenset({"x"})
+    assert B.__abstractclassvars__ == frozenset()
 
-    class D(A):
+    with pytest.raises(TypeError, match="abstract attributes"):
+        B(y=2)
+
+    class C(A):
         x: bool
         y: str
 
-    D(x=True, y="hi")
+    assert C.__abstractvars__ == frozenset()
+    assert C.__abstractclassvars__ == frozenset()
 
-    class E(A):
+    C(x=True, y="hi")
+
+    class D(A):
         y: str
         x: bool  # different order
 
-    e = E("hi", True)
-    assert e.x is True
-    assert e.y == "hi"
+    assert D.__abstractvars__ == frozenset()
+    assert D.__abstractclassvars__ == frozenset()
 
-    class F(A):
+    d = D("hi", True)
+    assert d.x is True
+    assert d.y == "hi"
+
+    class E(A):
         y: str
 
         @property
         def x(self):
             return True
 
-    f = F(y="hi")
-    assert f.x is True
-    assert f.y == "hi"
+    assert E.__abstractvars__ == frozenset()
+    assert E.__abstractclassvars__ == frozenset()
+
+    e = E(y="hi")
+    assert e.x is True
+    assert e.y == "hi"
 
     with pytest.raises(TypeError, match="unsubscripted"):
 
-        class G(eqx.Module):
+        class F(eqx.Module):
             x: AbstractVar
 
-    with pytest.raises(TypeError, match="mismatched type annotations"):
-
-        class H(A):
-            x: str
-
-    class I(A):  # noqa: E742
+    class G(A):
         x: AbstractVar[bool]
 
-    class J(A):
+    assert G.__abstractvars__ == frozenset({"x"})
+    assert G.__abstractclassvars__ == frozenset()
+
+    class H(A):
         x: AbstractClassVar[bool]
 
-    class K(A):
+    assert H.__abstractvars__ == frozenset()
+    assert H.__abstractclassvars__ == frozenset({"x"})
+
+    class I(A):  # noqa: E742
         x: bool
+
+    assert I.__abstractvars__ == frozenset()
+    assert I.__abstractclassvars__ == frozenset()
+    I(True)
 
     with pytest.raises(TypeError, match="cannot have value"):
 
-        class L(eqx.Module):
+        class J(eqx.Module):
             x: AbstractVar[bool] = True
 
-    class M1(A):
+    class K(A):
         x = True
         y: bool = False
 
-    class M2(A):
+    assert K.__abstractvars__ == frozenset()
+    assert K.__abstractclassvars__ == frozenset()
+    K()
+
+    class L(A):
         x = True
+
+    assert L.__abstractvars__ == frozenset()
+    assert L.__abstractclassvars__ == frozenset()
+    L()
 
 
 def test_abstract_class_attribute():
     class A(eqx.Module):
         x: AbstractClassVar[bool]
 
+    assert A.__abstractvars__ == frozenset()
+    assert A.__abstractclassvars__ == frozenset({"x"})
+
     with pytest.raises(TypeError, match="abstract class attributes"):
         A()
 
-    class B(eqx.Module):
-        x: "AbstractClassVar[bool]"
-
-    with pytest.raises(TypeError, match="abstract class attributes"):
-        B()
-
-    class C(A):
+    class B(A):
         y: int
 
+    assert B.__abstractvars__ == frozenset()
+    assert B.__abstractclassvars__ == frozenset({"x"})
+
     with pytest.raises(TypeError, match="abstract class attributes"):
-        C(y=2)
-
-    with pytest.raises(TypeError, match="mismatched type annotations"):
-
-        class D(A):
-            x: bool
-            y: str
-
-    with pytest.raises(TypeError, match="mismatched type annotations"):
-
-        class E(A):
-            y: str
-            x: bool  # different order
+        B(y=2)
 
     with pytest.raises(TypeError, match="unsubscripted"):
 
-        class G(eqx.Module):
+        class C(eqx.Module):
             x: AbstractClassVar
 
-    with pytest.raises(TypeError, match="mismatched type annotations"):
-
-        class H1(A):
-            x: str
-
-    with pytest.raises(TypeError, match="mismatched type annotations"):
-
-        class H2(A):
-            x: ClassVar[str]
-
-    with pytest.raises(TypeError, match="mismatched type annotations"):
-
-        class I(A):  # noqa: E742
-            x: AbstractVar[bool]
-
-    class J(A):
+    class D(A):
         x: AbstractClassVar[bool]
 
-    class K(A):
+    assert D.__abstractvars__ == frozenset()
+    assert D.__abstractclassvars__ == frozenset({"x"})
+
+    class E(A):
         x: ClassVar[bool]
+
+    assert E.__abstractvars__ == frozenset()
+    assert E.__abstractclassvars__ == frozenset()
 
     with pytest.raises(TypeError, match="cannot have value"):
 
-        class L(eqx.Module):
+        class F(eqx.Module):
             x: AbstractClassVar[bool] = True
 
-    class M1(A):
+    class G(A):
         x = True
         y: bool = False
 
-    class M2(A):
+    assert G.__abstractvars__ == frozenset()
+    assert G.__abstractclassvars__ == frozenset()
+
+    class H(A):
         x = True
+
+    assert H.__abstractvars__ == frozenset()
+    assert H.__abstractclassvars__ == frozenset()
+
+    class I(A):  # noqa: E742
+        x: AbstractVar[bool]
+
+    assert I.__abstractvars__ == frozenset()
+    assert I.__abstractclassvars__ == frozenset({"x"})
+
+
+def test_abstract_multiple_inheritance():
+    class A(eqx.Module):
+        x: AbstractVar[int]
+
+    class B(eqx.Module):
+        x: int
+
+    class C(B, A):
+        pass
+
+    C(1)

@@ -1,12 +1,13 @@
 from typing import Optional, Union
 
+import jax
 import jax.numpy as jnp
 from jaxtyping import Array
 
 from .._module import Module
 
 
-class PReLU(Module):
+class PReLU(Module, strict=True):
     """PReLU activation function.
 
     This is the elementwise function `x -> max(x, 0) + α * min(x, 0)`.
@@ -29,6 +30,7 @@ class PReLU(Module):
 
         self.negative_slope = jnp.asarray(init_alpha)
 
+    @jax.named_scope("eqx.nn.PReLU")
     def __call__(self, x: Array) -> Array:
         r"""**Arguments:**
 
@@ -38,4 +40,5 @@ class PReLU(Module):
 
         A JAX array of the same shape as the input.
         """
-        return jnp.where(x >= 0, x, self.negative_slope * x)
+        with jax.numpy_dtype_promotion("standard"), jax.numpy_rank_promotion("allow"):
+            return jnp.where(x >= 0, x, self.negative_slope * x)

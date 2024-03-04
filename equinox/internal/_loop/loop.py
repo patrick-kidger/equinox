@@ -1,4 +1,5 @@
-from typing import Any, Callable, Literal, Optional, Sequence, Tuple, TypeVar, Union
+from collections.abc import Callable, Sequence
+from typing import Any, Literal, Optional, TypeVar, Union
 
 import jax
 import jax.lax as lax
@@ -75,9 +76,15 @@ def while_loop(
 
         Note that `buffers` is subject to the following restrictions:
 
-        - You should never write to the same location twice.
+        - You should never write to the same location twice. (Even before it is passed
+            into the loop: e.g.
+            ```python
+            xs = xs.at[0].set(x).at[0].set(y)
+            while_loop(cond, body, xs, buffers=lambda xs: xs)
+            ```
+            is not allowed.)
         - You should only read from it (`buf[i]`) at locations (`i`) that you have
-          written to previously.
+          written to previously (`buf.at[i].set(...)`).
 
         These assumptions are *completely unchecked* and you will get incorrect
         gradients if you violate these assumptions.
@@ -90,10 +97,10 @@ def while_loop(
     if kind == "lax":
         del kind, checkpoints, base
         cond_fun_, body_fun_, init_val_, _ = common_rewrite(
-            cond_fun, body_fun, init_val, max_steps, buffers
+            cond_fun, body_fun, init_val, max_steps, buffers, makes_false_steps=False
         )
         del cond_fun, body_fun, init_val
-        _, _, final_val = lax.while_loop(cond_fun_, body_fun_, init_val_)
+        _, _, _, final_val = lax.while_loop(cond_fun_, body_fun_, init_val_)
         return final_val
     elif kind == "checkpointed":
         del kind, base
@@ -122,7 +129,7 @@ def while_loop(
 
 
 def scan(
-    f: Callable[[_Carry, _X], Tuple[_Carry, _Y]],
+    f: Callable[[_Carry, _X], tuple[_Carry, _Y]],
     init: _Carry,
     xs: _X,
     length: Optional[int] = None,
@@ -130,7 +137,7 @@ def scan(
     buffers: Optional[Callable[[_Carry], Union[_Node, Sequence[_Node]]]] = None,
     kind: Literal["lax", "checkpointed"],
     checkpoints: Union[None, int, Literal["all"]] = None,
-) -> Tuple[_Carry, _Y]:
+) -> tuple[_Carry, _Y]:
     """As `jax.lax.scan`, but with optional checkpointing to reduce memory usage.
 
     **Arguments:**
@@ -157,6 +164,11 @@ def scan(
     - `checkpoints`: Only used if `kind="checkpointed"`. Specifies the number of
         checkpoints to use; if `None` then this is set proportional to `sqrt(length)`.
         Can also be a string `"all"`, representing checkpointing every step.
+
+    !!! Danger
+
+        Note that `buffers` is subject to the same restrictions as
+        `equinox.internal.while_loop`.
 
     Returns:
 

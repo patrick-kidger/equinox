@@ -1,5 +1,4 @@
 jaxlib
+optax
 pytest
 beartype
-tensorflow
-tf2onnx

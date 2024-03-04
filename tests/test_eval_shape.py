@@ -1,8 +1,7 @@
+import equinox as eqx
 import jax
 import jax.nn as jnn
 import jax.numpy as jnp
-
-import equinox as eqx
 
 
 def test_eval_shape(getkey):

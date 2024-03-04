@@ -1,13 +1,18 @@
-from typing import Any, Callable, Tuple
+from collections.abc import Callable
+from typing import Any
 from typing_extensions import ParamSpec
 
 import jax
+import jax._src.traceback_util as traceback_util
 import jax.core
 import jax.tree_util as jtu
 from jaxtyping import PyTree
 
 from ._filters import combine, is_array, partition
 from ._module import Module, module_update_wrapper, Static
+
+
+traceback_util.register_exclusion(__file__)
 
 
 _P = ParamSpec("_P")
@@ -20,6 +25,10 @@ def _is_struct(x):
 class _MakeJaxpr(Module):
     fn: Callable
 
+    @property
+    def __wrapped__(self):
+        return self.fn
+
     def __call__(self, *args, **kwargs):
         dynamic, static = partition((args, kwargs), _is_struct)
         dynamic_flat, dynamic_treedef = jtu.tree_flatten(dynamic)
@@ -31,18 +40,16 @@ class _MakeJaxpr(Module):
             _out_dynamic, _out_static = partition(_out, is_array)
             return _out_dynamic, Static(_out_static)
 
-        jaxpr, out_struct = jax.make_jaxpr(_fn, return_shape=True)(
-            *dynamic_flat
-        )  # pyright: ignore
+        jaxpr, out_struct = jax.make_jaxpr(_fn, return_shape=True)(*dynamic_flat)  # pyright: ignore
         dynamic_out_struct, static_out = out_struct
         static_out = static_out.value
         return jaxpr, dynamic_out_struct, static_out
 
 
 def filter_make_jaxpr(
-    fun: Callable[_P, Any]
+    fun: Callable[_P, Any],
 ) -> Callable[
-    _P, Tuple[jax.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct], PyTree[Any]]
+    _P, tuple[jax.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct], PyTree[Any]]
 ]:
     """As `jax.make_jaxpr`, but accepts arbitrary PyTrees as input and output.
 
@@ -67,4 +74,4 @@ def filter_make_jaxpr(
     `int`, `float`, `complex`) are treated as static inputs; wrap them in JAX/NumPy
     arrays if you would like them to be traced.
     """
-    return module_update_wrapper(_MakeJaxpr(fun), fun)
+    return module_update_wrapper(_MakeJaxpr(fun))

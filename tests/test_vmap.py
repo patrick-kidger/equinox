@@ -1,13 +1,12 @@
 from typing import Union
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.random as jr
 import pytest
 
-import equinox as eqx
-
-from .helpers import shaped_allclose
+from .helpers import tree_allclose
 
 
 def _zero_if_inexact_array_else_none(x):
@@ -22,7 +21,7 @@ def test_args():
         return a + b[0]["a"] + c + d
 
     out = f(jnp.array([1]), [{"a": jnp.array([2])}], jnp.array([3]), 4)
-    assert shaped_allclose(out, jnp.array([[10]]))
+    assert tree_allclose(out, jnp.array([[10]]))
 
 
 def test_default():
@@ -30,7 +29,7 @@ def test_default():
     def f(a, b):
         return a + b
 
-    assert shaped_allclose(f(jnp.array(3), jnp.array([3.0])), jnp.array([6.0]))
+    assert tree_allclose(f(jnp.array(3), jnp.array([3.0])), jnp.array([6.0]))
 
     with pytest.raises(ValueError):
         f(jnp.array(3.0), jnp.array([3.0]))
@@ -45,10 +44,10 @@ def test_out():
     o3 = eqx.filter_vmap(f, out_axes=0, axis_size=5)(1)
     o4 = eqx.filter_vmap(f, in_axes=None, out_axes=0, axis_size=5)(jnp.array([3, 4]))
 
-    assert shaped_allclose(o1, 1)
-    assert shaped_allclose(o2, jnp.array([3, 4]))
-    assert shaped_allclose(o3, jnp.array([1, 1, 1, 1, 1]))
-    assert shaped_allclose(o4, jnp.array([[3, 4], [3, 4], [3, 4], [3, 4], [3, 4]]))
+    assert tree_allclose(o1, 1)
+    assert tree_allclose(o2, jnp.array([3, 4]))
+    assert tree_allclose(o3, jnp.array([1, 1, 1, 1, 1]))
+    assert tree_allclose(o4, jnp.array([[3, 4], [3, 4], [3, 4], [3, 4], [3, 4]]))
 
 
 def test_no_arrays():
@@ -56,7 +55,7 @@ def test_no_arrays():
     def f(x):
         return x
 
-    assert shaped_allclose(f(1), 1)
+    assert tree_allclose(f(1), 1)
 
 
 def test_ensemble(getkey):
@@ -120,7 +119,7 @@ def test_named_reduction():
         return jax.lax.psum(y, axis_name="device")
 
     output = eqx.filter_vmap(f, axis_name="device")(jnp.zeros(2))
-    assert shaped_allclose(output, jnp.array([2.0, 2.0]))
+    assert tree_allclose(output, jnp.array([2.0, 2.0]))
 
 
 def test_map_non_jax():
@@ -148,14 +147,31 @@ def test_keyword_in_axes(getkey):
     y = jr.normal(getkey(), (1, 3))
     out = eqx.filter_vmap(lambda x, y: x + y, in_axes=dict(y=1))(x, y)
     true_out = x + y.T
-    assert shaped_allclose(out, true_out)
+    assert tree_allclose(out, true_out)
 
 
 def test_keyword_default(getkey):
     x = jr.normal(getkey(), (3, 4))
     out = eqx.filter_vmap(lambda x, y=1: x + y, in_axes=dict(x=0))(x)
     true_out = x + 1
-    assert shaped_allclose(out, true_out)
+    assert tree_allclose(out, true_out)
 
     with pytest.raises(ValueError):
         eqx.filter_vmap(lambda x, y=1: x, in_axes=dict(y=0))(x)
+
+
+def test_double_if_mapped():
+    out_axes = eqx.internal.if_mapped(1)
+
+    def f(x):
+        assert x.shape == (3, 1)
+
+        def g(y):
+            assert y.shape == (1,)
+            return y + 1, x + 1
+
+        a, b = eqx.filter_vmap(g, out_axes=out_axes)(x)
+        assert a.shape == (1, 3)
+        assert b.shape == (3, 1)
+
+    eqx.filter_vmap(f)(jnp.arange(6).reshape(2, 3, 1))

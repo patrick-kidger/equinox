@@ -1,13 +1,13 @@
 import math
-from typing import Any, Callable, Optional, Sequence, TypeVar, Union
+from collections.abc import Callable, Sequence
+from typing import Any, Optional, TypeVar, Union
 
 import jax
 import jax.lax as lax
-import jax.numpy as jnp
 import jax.tree_util as jtu
 from jaxtyping import Array, Bool
 
-from .common import common_rewrite
+from .common import common_rewrite, fixed_asarray
 
 
 _T = TypeVar("_T")
@@ -48,16 +48,16 @@ def bounded_while_loop(
 
     if not isinstance(max_steps, int) or max_steps < 0:
         raise ValueError("max_steps must be a non-negative integer")
-    init_val = jtu.tree_map(jnp.asarray, init_val)
+    init_val = jtu.tree_map(fixed_asarray, init_val)
     if max_steps == 0:
         return init_val
 
     cond_fun_, body_fun_, init_val_, _ = common_rewrite(
-        cond_fun, body_fun, init_val, max_steps, buffers
+        cond_fun, body_fun, init_val, max_steps, buffers, makes_false_steps=True
     )
     del cond_fun, body_fun, init_val
     rounded_max_steps = base ** int(math.ceil(math.log(max_steps, base)))
-    _, _, val = _while_loop(cond_fun_, body_fun_, init_val_, rounded_max_steps, base)
+    _, _, _, val = _while_loop(cond_fun_, body_fun_, init_val_, rounded_max_steps, base)
     return val
 
 

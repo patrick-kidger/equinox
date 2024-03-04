@@ -1,17 +1,17 @@
 # Getting started
 
-Equinox is a JAX library for parameterised functions (e.g. neural networks) offering:
+Equinox is your one-stop [JAX](https://github.com/google/jax) library, for everything you need that isn't already in core JAX:
 
-- a PyTorch-like API...
-- ...that's fully compatible with *native* JAX transformations...
-- ...with no new concepts you have to learn.
+- neural networks (or more generally any model), with easy-to-use PyTorch-like syntax;
+- filtered APIs for transformations;
+- useful PyTree manipulation routines;
+- advanced features like runtime errors;
 
-If you're completely new to JAX, then start with this [CNN on MNIST example](https://docs.kidger.site/equinox/examples/mnist/).  
-If you're already familiar with JAX, then the main idea is to represent parameterised functions (such as neural networks) as PyTrees, so that they can pass across JIT/grad/etc. boundaries smoothly.
+and best of all, Equinox isn't a framework: everything you write in Equinox is compatible with anything else in JAX or the ecosystem.
 
-The elegance of Equinox is its selling point in a world that already has [Haiku](https://github.com/deepmind/dm-haiku), [Flax](https://github.com/google/flax) and so on.
+If you're completely new to JAX, then start with this [CNN on MNIST example](https://docs.kidger.site/equinox/examples/mnist/).
 
-_In other words, why should you care? Because Equinox is really simple to learn, and really simple to use._
+_Coming from [Flax](https://github.com/google/flax) or [Haiku](https://github.com/deepmind/haiku)? The main difference is that Equinox (a) offers a lot of advanced features not found in these libraries, like PyTree manipulation or runtime errors; (b) has a simpler way of building models: they're just PyTrees, so they can pass across JIT/grad/etc. boundaries smoothly._
 
 ## Installation
 
@@ -19,7 +19,7 @@ _In other words, why should you care? Because Equinox is really simple to learn,
 pip install equinox
 ```
 
-Requires Python 3.8+ and JAX 0.4.4+.
+Requires Python 3.9+ and JAX 0.4.13+.
 
 ## Quick example
 
@@ -67,3 +67,19 @@ If this quick start has got you interested, then have a read of [All of Equinox]
 ## Citation
 
 --8<-- ".citation.md"
+
+## See also: other libraries in the JAX ecosystem
+
+[Optax](https://github.com/deepmind/optax): first-order gradient (SGD, Adam, ...) optimisers.
+
+[Diffrax](https://github.com/patrick-kidger/diffrax): numerical differential equation solvers.
+
+[Lineax](https://github.com/google/lineax): linear solvers and linear least squares.
+
+[jaxtyping](https://github.com/google/jaxtyping): type annotations for shape/dtype of arrays.
+
+[Eqxvision](https://github.com/paganpasta/eqxvision): computer vision models.
+
+[sympy2jax](https://github.com/google/sympy2jax): SymPy<->JAX conversion; train symbolic expressions via gradient descent.
+
+[Levanter](https://github.com/stanford-crfm/levanter): scalable+reliable training of foundation models (e.g. LLMs).

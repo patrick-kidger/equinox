@@ -1,5 +1,9 @@
 # Serialisation
 
+See also the [serialisation example](../../examples/serialisation/) for a worked example combining both parameters and hyperparameters together.
+
+---
+
 ::: equinox.tree_serialise_leaves
 
 ---

@@ -8,6 +8,14 @@
 
 ---
 
+::: equinox.nn.RMSNorm
+    selection:
+        members:
+            - __init__
+            - __call__
+
+---
+
 ::: equinox.nn.GroupNorm
     selection:
         members:
@@ -25,6 +33,14 @@
 ---
 
 ::: equinox.nn.SpectralNorm
+    selection:
+        members:
+            - __init__
+            - __call__
+
+---
+
+::: equinox.nn.WeightNorm
     selection:
         members:
             - __init__

@@ -1,8 +1,10 @@
-from typing import Any, Callable, List, Optional, Sequence, Tuple, TYPE_CHECKING, Union
+from collections.abc import Callable, Sequence
+from typing import Any, Optional, TYPE_CHECKING, Union
 
+import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
-from jaxtyping import Array, Bool, PyTree
+from jaxtyping import Array, ArrayLike, Bool, Float, PyTree, PyTreeDef
 
 from ._custom_types import sentinel
 from ._doc_utils import doc_repr
@@ -21,7 +23,8 @@ class _LeafWrapper:
 
 
 def _remove_leaf_wrapper(x: _LeafWrapper) -> Any:
-    assert type(x) is _LeafWrapper
+    if not isinstance(x, _LeafWrapper):
+        raise TypeError(f"Operation undefined, {x} is not a leaf of the pytree.")
     return x.value
 
 
@@ -55,7 +58,11 @@ def tree_at(
     replace_fn: Callable[[_Node], Any] = sentinel,
     is_leaf: Optional[Callable[[Any], bool]] = None,
 ):
-    """Modifies a PyTree out-of-place. (A bit like using `.at[].set()` on a JAX array.)
+    """Modifies a leaf or subtree of a PyTree. (A bit like using `.at[].set()` on a JAX
+    array.)
+
+    The modified PyTree is returned and the original input is left unchanged. Make sure
+    to use the return value from this function!
 
     **Arguments:**
 
@@ -104,7 +111,7 @@ def tree_at(
         get_last_layer = lambda m: m.layers[-1]
         new_mlp = eqx.tree_at(get_last_layer, mlp, new_linear)
         ```
-        See also the [Tricks](../../../tricks) page.
+        See also the [Tricks](../../tricks) page.
     """  # noqa: E501
 
     # We need to specify a particular node in a PyTree.
@@ -226,37 +233,83 @@ def tree_at(
     return out
 
 
-def tree_equal(*pytrees: PyTree) -> Union[bool, np.bool_, Bool[Array, ""]]:
-    """Returns `True` if all input PyTrees are equal. Every PyTree must have the same
-    structure. Any JAX or NumPy arrays (as leaves) must have the same shape, dtype, and
-    values to be considered equal. JAX arrays and NumPy arrays are considered equal
-    to each other.
+def _array_equal(x, y, npi, rtol, atol):
+    assert x.dtype == y.dtype
+    if (
+        isinstance(rtol, (int, float))
+        and isinstance(atol, (int, float))
+        and rtol == 0
+        and atol == 0
+    ) or not npi.issubdtype(x.dtype, npi.inexact):
+        return npi.all(x == y)
+    else:
+        return npi.allclose(x, y, rtol=rtol, atol=atol)
 
-    If used under JIT then this may return a tracer.
+
+def tree_equal(
+    *pytrees: PyTree,
+    typematch: bool = False,
+    rtol: Float[ArrayLike, ""] = 0.0,
+    atol: Float[ArrayLike, ""] = 0.0,
+) -> Union[bool, Bool[Array, ""]]:
+    """Returns `True` if all input PyTrees are equal. Every PyTree must have the same
+    structure, and all leaves must be equal.
+
+    - For JAX arrays, NumPy arrays, or NumPy scalars: they must have the same shape and
+        dtype.
+        - If `rtol=0` and `atol=0` (the default) then all their values must be equal.
+            Otherwise they must satisfy
+            `{j}np.allclose(leaf1, leaf2, rtol=rtol, atol=atol)`.
+        - If `typematch=False` (the default) then JAX and NumPy arrays are considered
+            equal to each other. If `typematch=True` then JAX and NumPy are not
+            considered equal to each other.
+    - For non-arrays, if `typematch=False` (the default) then equality is determined
+        with just `leaf1 == leaf2`. If `typematch=True` then
+        `type(leaf1) == type(leaf2)` is also required.
+
+    If used under JIT, and any JAX arrays are present, then this may return a tracer.
+    Use the idiom `result = tree_equal(...) is True` if you'd like to assert that the
+    result is statically true without dependence on the value of any traced arrays.
 
     **Arguments:**
 
     - `*pytrees`: Any number of PyTrees each with any structure.
+    - `typematch:` Whether to additionally require that corresponding leaves should have
+        the same `type(...)` as each other.
+    - `rtol`: Used to determine the `rtol` of `jnp.allclose`/`np.allclose` when
+        comparing inexact (floating or complex) arrays. Defaults to zero, i.e. requires
+        exact equality.
+    - `atol`: As `rtol`.
 
     **Returns:**
 
     A boolean, or bool-typed tracer.
     """
     flat, treedef = jtu.tree_flatten(pytrees[0])
-    out = True
+    traced_out = True
     for pytree in pytrees[1:]:
         flat_, treedef_ = jtu.tree_flatten(pytree)
         if treedef_ != treedef:
             return False
+        assert len(flat) == len(flat_)
         for elem, elem_ in zip(flat, flat_):
-            if is_array(elem):
+            if typematch:
+                if type(elem) != type(elem_):
+                    return False
+            if isinstance(elem, (np.ndarray, np.generic)) and isinstance(
+                elem_, (np.ndarray, np.generic)
+            ):
+                if (
+                    (elem.shape != elem_.shape)
+                    or (elem.dtype != elem_.dtype)
+                    or not _array_equal(elem, elem_, np, rtol, atol)
+                ):
+                    return False
+            elif is_array(elem):
                 if is_array(elem_):
                     if (elem.shape != elem_.shape) or (elem.dtype != elem_.dtype):
                         return False
-                    allsame = (elem == elem_).all()
-                    if allsame is False:
-                        return False
-                    out = out & allsame
+                    traced_out = traced_out & _array_equal(elem, elem_, jnp, rtol, atol)
                 else:
                     return False
             else:
@@ -265,79 +318,12 @@ def tree_equal(*pytrees: PyTree) -> Union[bool, np.bool_, Bool[Array, ""]]:
                 else:
                     if elem != elem_:
                         return False
-    return out
+    return traced_out
 
 
-def _inferences(pytree):
-    is_leaf = lambda x: hasattr(x, "inference") and x is not pytree
-
-    out = [pytree.inference] if hasattr(pytree, "inference") else []
-
-    leaves = [x for x in jtu.tree_leaves(pytree, is_leaf=is_leaf) if is_leaf(x)]
-    # Nodes with an inference flag might have sub-nodes with an inference flag.
-
-    for x in leaves:
-        out.extend(_inferences(x))
-    return out
-
-
-def tree_inference(pytree: PyTree, value: bool) -> PyTree:
-    """Convenience function for setting all `inference` attributes on a PyTree.
-
-    `inference` flags are used to toggle the behaviour of a number of the pre-built
-    neural network layers, such as [`equinox.nn.Dropout`][] or
-    [`equinox.nn.BatchNorm`][].
-
-    !!! Example
-
-        ```python
-        class Model(eqx.Module):
-            norm: eqx.nn.BatchNorm
-            dropout: eqx.nn.Dropout
-            linear: eqx.nn.Linear
-
-            def __init__(self, key):
-                key1, key2 = jax.random.split(key)
-                self.norm = eqx.nn.BatchNorm(3, "batch", key=key1)
-                self.dropout = eqx.nn.Dropout(0.4)
-                self.linear = eqx.nn.Linear(3, 1, key=key2)
-
-            def __call__(self, x, ctx, *, key):
-                x, ctx = self.norm(x, ctx)
-                x = self.dropout(x, key=key)
-                x = self.linear(x)
-                return x, ctx
-
-        training_model = Model(jax.random.PRNGKey(0))
-        inference_model = eqx.tree_inference(training_model, value=True)
-        training_model_again = eqx.tree_inference(inference_model, value=False)
-        ```
-
-    Equivalent to:
-    ```python
-    has_inference = lambda leaf: hasattr(leaf, "inference")
-
-    def where(pytree):
-        return tuple(x.inference
-                     for x in jtu.tree_leaves(pytree, is_leaf=has_inference)
-                     if has_inference(x))
-
-    equinox.tree_at(where, pytree, replace_fn=lambda _: value)
-    ```
-
-    **Arguments:**
-
-    - `pytree`: the PyTree to modify.
-    - `value`: the value to set all `inference` attributes to.
-
-    **Returns:**
-
-    A copy of `pytree` with all `inference` flags set to `value`.
-    """
-    return tree_at(_inferences, pytree, replace_fn=lambda _: value)
-
-
-def tree_flatten_one_level(pytree: PyTree) -> Tuple[List[PyTree], jtu.PyTreeDef]:
+def tree_flatten_one_level(
+    pytree: PyTree,
+) -> tuple[list[PyTree], PyTreeDef]:  # pyright: ignore
     """Returns the immediate subnodes of a PyTree node. If called on a leaf node then it
     will return just that leaf.
 
@@ -383,7 +369,7 @@ def tree_flatten_one_level(pytree: PyTree) -> Tuple[List[PyTree], jtu.PyTreeDef]
                 # tree_subnodes(x)
                 # ```
                 # as `x` is not an immediate subnode of itself.
-                # If you want to check for that then use `tree_check_acyclic`.
+                # If you want to check for that then use `tree_check`.
                 try:
                     type_string = type(pytree).__name__
                 except AttributeError:
@@ -404,8 +390,42 @@ def tree_flatten_one_level(pytree: PyTree) -> Tuple[List[PyTree], jtu.PyTreeDef]
 
 
 def tree_check(pytree: Any) -> None:
-    """Checks if the PyTree is well-formed: does it have no repeated nodes, and does it
-    have no self-references.
+    """Checks if the PyTree is well-formed: does it have no self-references, and does
+    it have no duplicate layers.
+
+    Precisely, a "duplicate layer" is any PyTree node with at least one child node.
+
+    !!! info
+
+        This is automatically called when creating an `eqx.Module` instance, to help
+        avoid bugs from duplicating layers.
+
+    !!! Example
+
+        ```python
+        a = 1
+        eqx.tree_check([a, a])  # passes, duplicate is a leaf
+
+        b = eqx.nn.Linear(...)
+        eqx.tree_check([b, b])  # fails, duplicate is nontrivial!
+
+        c = []  # empty list
+        eqx.tree_check([c, c])  # passes, duplicate is trivial
+
+        d = eqx.Module()
+        eqx.tree_check([d, d])  # passes, duplicate is trivial
+
+        eqx.tree_check([None, None])  # passes, duplicate is trivial
+
+        e = [1]
+        eqx.tree_check([e, e])  # fails, duplicate is nontrivial!
+
+        eqx.tree_check([[1], [1]])  # passes, not actually a duplicate: each `[1]`
+                                    # has the same structure, but they're different.
+
+        # passes, not actually a duplicate: each Linear layer is a separate layer.
+        eqx.tree_check([eqx.nn.Linear(...), eqx.nn.Linear(...)])
+        ```
 
     **Arguments:**
 
@@ -423,38 +443,37 @@ def tree_check(pytree: Any) -> None:
     _tree_check(pytree, all_nodes)
 
 
-_trivial_treedef = jtu.tree_structure(0)
+_leaf_treedef = jtu.tree_structure(0)
 
 
 def _tree_check(node, all_nodes):
-    try:
-        self_referential, type_string = all_nodes[id(node)]
-    except KeyError:
-        pass
-    else:
-        if self_referential:
-            raise ValueError(
-                f"PyTree node of type `{type_string}` is self-referential; that is to "
-                "say it appears somewhere within its own PyTree structure. This is "
-                "not allowed."
-            )
-        else:
-            raise ValueError(
-                f"PyTree node of type `{type_string}` appears in the PyTree multiple "
-                "times. This is almost always an error, as these nodes will turn into "
-                "two duplicate copies after flattening/unflattening, e.g. when "
-                "crossing a JIT boundary."
-            )
-    try:
-        type_string = type(node).__name__
-    except AttributeError:
-        # AttributeError: in case we cannot get __name__ for some weird reason.
-        type_string = "<unknown type>"
-    all_nodes[id(node)] = (True, type_string)
     subnodes, treedef = tree_flatten_one_level(node)
-    if treedef != _trivial_treedef:
-        # This does mean that leaves can appear multiple times. This is valid, e.g.
-        # [4, 4].
+    # We allow duplicate leaves and empty containers, so don't raise an error with those
+    if treedef != _leaf_treedef and treedef.num_leaves > 0:
+        try:
+            self_referential, type_string = all_nodes[id(node)]
+        except KeyError:
+            pass
+        else:
+            if self_referential:
+                raise ValueError(
+                    f"PyTree node of type `{type_string}` is self-referential; that is "
+                    "to say it appears somewhere within its own PyTree structure. This "
+                    "is not allowed."
+                )
+            else:
+                raise ValueError(
+                    f"PyTree node of type `{type_string}` appears in the PyTree "
+                    "multiple times. This is almost always an error, as these nodes "
+                    "will turn into two duplicate copies after "
+                    "flattening/unflattening, e.g. when crossing a JIT boundary."
+                )
+        try:
+            type_string = type(node).__name__
+        except AttributeError:
+            # AttributeError: in case we cannot get __name__ for some weird reason.
+            type_string = "<unknown type>"
+        all_nodes[id(node)] = (True, type_string)
         for subnode in subnodes:
             _tree_check(subnode, all_nodes)
-    all_nodes[id(node)] = (False, type_string)
+        all_nodes[id(node)] = (False, type_string)

@@ -1,11 +1,14 @@
 import functools as ft
 import types
-from typing import Callable
+import warnings
+import weakref
+from collections.abc import Callable
 
 import jax
 import jax.tree_util as jtu
 from jaxtyping import PyTree
 
+from ._caches import internal_caches
 from ._module import Module
 
 
@@ -36,27 +39,60 @@ def _strip_wrapped_partial(fun):
     return fun
 
 
-def get_fun_names(fun):
-    fun = _strip_wrapped_partial(fun)
+# A sentinel weakref-able value.
+def _default_cache_key():
+    assert False
+
+
+def get_fn_names(user_fn):
+    user_fn = _strip_wrapped_partial(user_fn)
     try:
-        return fun.__name__, fun.__qualname__
+        return user_fn.__name__, user_fn.__qualname__
     except AttributeError:
-        return type(fun).__name__, type(fun).__qualname__
+        return type(user_fn).__name__, type(user_fn).__qualname__
 
 
-def compile_cache(fun):
-    @ft.lru_cache(maxsize=None)
-    def _cache(leaves, treedef):
-        args, kwargs = jtu.tree_unflatten(treedef, leaves)
-        return fun(*args, **kwargs)
+def compile_cache(cacheable_fn):
+    cache = weakref.WeakKeyDictionary()
+    internal_caches.append(cache)
 
-    @ft.wraps(fun)
-    def _fun(*args, **kwargs):
-        leaves, treedef = jtu.tree_flatten((args, kwargs))
+    def cached_fn_impl(leaves, treedef):
+        user_fn_names, args, kwargs = jtu.tree_unflatten(treedef, leaves)
+        return cacheable_fn(user_fn_names, *args, **kwargs)
+
+    @ft.wraps(cacheable_fn)
+    def wrapped_cacheable_fn(user_fn, *args, **kwargs):
+        user_fn_names = get_fn_names(user_fn)
+        leaves, treedef = jtu.tree_flatten((user_fn_names, args, kwargs))
         leaves = tuple(leaves)
-        return _cache(leaves, treedef)
 
-    return _fun
+        # Best-effort attempt to clear the cache of old and unused entries.
+        if type(user_fn) is types.FunctionType:
+            cache_key = user_fn
+        else:
+            cache_key = _default_cache_key
+
+        try:
+            cached_fn = cache[cache_key]
+        except KeyError:
+            cached_fn = cache[cache_key] = ft.lru_cache(maxsize=None)(cached_fn_impl)
+        return cached_fn(leaves, treedef)
+
+    def delete(user_fn):
+        user_fn = _strip_wrapped_partial(user_fn)
+        if type(user_fn) is types.FunctionType:
+            try:
+                del cache[user_fn]
+            except KeyError:
+                warnings.warn(
+                    f"Could not delete cache for function {user_fn}. Has it already "
+                    "been deleted?"
+                )
+        else:
+            warnings.warn("Could not delete non-function from cache.")
+
+    wrapped_cacheable_fn.delete = delete  # pyright: ignore
+    return wrapped_cacheable_fn
 
 
 class Lowered(Module):
@@ -85,5 +121,5 @@ class Compiled(Module):
 
     def __call__(self, *args, **kwargs):
         dynamic = self.preprocess(self.info, args, kwargs)
-        out = self.compiled(dynamic)
+        out = self.compiled(*dynamic)
         return self.postprocess(out)

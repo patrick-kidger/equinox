@@ -25,7 +25,7 @@ def nextafter_jvp(primals, tangents):
 @jax.custom_jvp
 def prevbefore(x: Array) -> Array:
     """Returns the floating point number before `x`."""
-    y = jnp.nextafter(x, jnp.NINF)
+    y = jnp.nextafter(x, -jnp.inf)
     return jnp.where(x == 0, -jnp.finfo(x.dtype).tiny, y)  # pyright: ignore
 
 

@@ -1,9 +1,11 @@
+import equinox.internal as eqxi
 import jax
 import jax.numpy as jnp
+import pytest
 
-import equinox.internal as eqxi
 
-
+# Currently failing due to a bug in tf2onnx
+@pytest.mark.skip
 def test_onnx_export():
     @jax.vmap
     def fn(x, y):

@@ -1,19 +1,18 @@
 import functools as ft
 from typing import Any, Union
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.random as jr
 import jax.tree_util as jtu
 import pytest
 
-import equinox as eqx
-
-from .helpers import shaped_allclose as _shaped_allclose
+from .helpers import tree_allclose as _shaped_allclose
 
 
 (cpu,) = jax.devices("cpu")
-filter_pmap: Any = ft.partial(eqx.filter_pmap, devices=[cpu])
+filter_pmap: Any = ft.partial(eqx.filter_pmap, devices=[cpu])  # pyright: ignore
 
 
 def shaped_allclose(x, y, **kwargs):
@@ -40,7 +39,8 @@ def test_args():
 def test_default():
     @filter_pmap(in_axes=_zero_if_inexact_array_else_none)
     def f(a, b):
-        return a + b
+        with jax.numpy_dtype_promotion("standard"):
+            return a + b
 
     assert shaped_allclose(f(jnp.array(3), jnp.array([3.0])), jnp.array([6.0]))
 
@@ -258,12 +258,32 @@ def test_keyword_default(getkey):
 
 
 # Issue 325
-def test_aot_compilation():
+
+
+@pytest.mark.parametrize("donate", ("all", "none"))
+def test_aot_compilation(donate):
     def f(x, y):
         return 2 * x + y
 
     x, y = jnp.array([3]), 4
-    lowered = filter_pmap(f).lower(x, y)
+    lowered = filter_pmap(f, donate=donate).lower(x, y)
     lowered.as_text()
     compiled = lowered.compile()
     compiled(x, y)
+
+
+def test_double_if_mapped():
+    out_axes = eqx.internal.if_mapped(1)
+
+    def f(x):
+        assert x.shape == (3, 1)
+
+        def g(y):
+            assert y.shape == (1,)
+            return y + 1, x + 1
+
+        a, b = eqx.filter_vmap(g, out_axes=out_axes)(x)
+        assert a.shape == (1, 3)
+        assert b.shape == (3, 1)
+
+    filter_pmap(f)(jnp.arange(3).reshape(1, 3, 1))

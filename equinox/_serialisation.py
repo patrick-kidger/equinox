@@ -1,12 +1,20 @@
+import functools as ft
 import pathlib
+from collections.abc import Callable
 from contextlib import contextmanager
-from typing import Any, BinaryIO, Callable, Optional, Union
+from typing import Any, BinaryIO, Optional, Union
 
 import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
 from jaxtyping import PyTree
+
+from ._filters import is_array_like
+
+
+class TreePathError(RuntimeError):
+    path: tuple
 
 
 def _ordered_tree_map(
@@ -19,9 +27,24 @@ def _ordered_tree_map(
     in fixed order. (Namely depth-first left-to-right.)
     """
     # Discussion: https://github.com/patrick-kidger/equinox/issues/136
-    leaves, treedef = jtu.tree_flatten(tree, is_leaf)
-    all_leaves = [leaves] + [treedef.flatten_up_to(r) for r in rest]
-    return treedef.unflatten(f(*xs) for xs in zip(*all_leaves))
+    paths_and_leaves, treedef = jtu.tree_flatten_with_path(tree, is_leaf)
+    all_leaves = list(zip(*paths_and_leaves)) + [treedef.flatten_up_to(r) for r in rest]
+
+    @ft.wraps(f)
+    def _f(path, *xs):
+        try:
+            return f(*xs)
+        except TreePathError as e:
+            combo_path = path + e.path
+            exc = TreePathError(f"Error at leaf with path {combo_path}")
+            exc.path = combo_path
+            raise exc from e
+        except Exception as e:
+            exc = TreePathError(f"Error at leaf with path {path}")
+            exc.path = path
+            raise exc from e
+
+    return treedef.unflatten(_f(*xs) for xs in zip(*all_leaves))
 
 
 def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
@@ -59,9 +82,11 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
     if isinstance(x, jax.Array):
         jnp.save(f, x)
     elif isinstance(x, np.ndarray):
+        # Important to use `np` here so that we don't cast NumPy arrays to JAX arrays.
         np.save(f, x)
-    elif isinstance(x, (bool, float, complex, int)):
-        np.save(f, x)
+    elif is_array_like(x):
+        # Important to use `jnp` here to handle `bfloat16`.
+        jnp.save(f, x)
     else:
         pass
 
@@ -98,12 +123,19 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
         new_tree = eqx.tree_deserialise_leaves("some_filename.eqx", tree, filter_spec=new_filter_spec)
         ```
     """  # noqa: E501
-    if isinstance(x, jax.Array):
+    if isinstance(x, (jax.Array, jax.ShapeDtypeStruct)):
         return jnp.load(f)
     elif isinstance(x, np.ndarray):
+        # Important to use `np` here to avoid promoting NumPy arrays to JAX.
         return np.load(f)
-    elif isinstance(x, (bool, float, complex, int)):
-        return np.load(f).item()
+    elif is_array_like(x):
+        # np.generic gets deserialised directly as an array, so convert back to a scalar
+        # type here.
+        # See also https://github.com/google/jax/issues/17858
+        out = np.load(f)
+        if isinstance(x, jax.dtypes.bfloat16):
+            out = out.view(jax.dtypes.bfloat16)
+        return type(x)(out.item())
     else:
         return x
 
@@ -130,23 +162,30 @@ def _maybe_open(path_or_file: Union[str, pathlib.Path, BinaryIO], mode: str):
         yield path_or_file
 
 
-def _assert_same(new, old):
-    if type(new) is not type(old):
-        raise RuntimeError(
-            f"Deserialised leaf has changed type from {type(old)} in `like` to "
-            f"{type(new)} on disk."
-        )
-    if isinstance(new, (np.ndarray, jax.Array)):
-        if new.shape != old.shape:
+def _assert_same(array_impl_type):
+    def _assert_same_impl(path, new, old):
+        typenew = type(new)
+        typeold = type(old)
+        if typeold is jax.ShapeDtypeStruct:
+            typeold = array_impl_type
+        if typenew is not typeold:
             raise RuntimeError(
-                f"Deserialised leaf has changed shape from {old.shape} in `like` to "
-                f"{new.shape} on disk."
+                f"Deserialised leaf at path '{jtu.keystr(path)}' has changed type from "
+                f"{type(old)} in `like` to {type(new)} on disk."
             )
-        if new.dtype != old.dtype:
-            raise RuntimeError(
-                f"Deserialised leaf has changed dtype from {old.dtype} in `like` to "
-                f"{new.dtype} on disk."
-            )
+        if isinstance(new, (np.ndarray, jax.Array)):
+            if new.shape != old.shape:
+                raise RuntimeError(
+                    f"Deserialised leaf at path {path} has changed shape from "
+                    f"{old.shape} in `like` to {new.shape} on disk."
+                )
+            if new.dtype != old.dtype:
+                raise RuntimeError(
+                    f"Deserialised leaf at path {path} has changed dtype from "
+                    f"{old.dtype} in `like` to {new.dtype} on disk."
+                )
+
+    return _assert_same_impl
 
 
 def tree_serialise_leaves(
@@ -245,9 +284,28 @@ def tree_deserialise_leaves(
         eqx.tree_serialise_leaves("some_filename.eqx", model_original)
         model_loaded = eqx.tree_deserialise_leaves("some_filename.eqx", model_original)
 
-        # To partially load weights: in this case load everything except the final layer.
+        # To partially load weights, do model surgery. In this case load everything
+        # except the final layer.
         model_partial = eqx.tree_at(lambda mlp: mlp.layers[-1], model_loaded, model_original)
         ```
+
+    !!! example
+
+        A common pattern is the following:
+
+        ```python
+        def run(..., load_path=None):
+            if load_path is None:
+                model = Model(...hyperparameters...)
+            else:
+                model = eqx.filter_eval_shape(Model, ...hyperparameters...)
+                model = eqx.tree_deserialise_leaves(load_path, model)
+        ```
+        in which either a model is created directly (e.g. at the start of training), or
+        a suitable `like` is constructed (e.g. when resuming training), where
+        [`equinox.filter_eval_shape`][] is used to avoid creating spurious short-lived
+        arrays taking up memory.
+
     !!! info
 
         `filter_spec` should typically be a function `(File, Any) -> Any`, which takes
@@ -267,5 +325,10 @@ def tree_deserialise_leaves(
             return _ordered_tree_map(__deserialise, x, is_leaf=is_leaf)
 
         out = _ordered_tree_map(_deserialise, filter_spec, like)
-    jtu.tree_map(_assert_same, out, like, is_leaf=is_leaf)
+    with jax.ensure_compile_time_eval():
+        # ArrayImpl isn't a public type, so this is how we get access to it instead.
+        # `ensure_compile_time_eval` just in case someone is doing deserialisation
+        # inside JIT. Which would be weird, but still.
+        array_impl_type = type(jnp.array(0))
+    jtu.tree_map_with_path(_assert_same(array_impl_type), out, like, is_leaf=is_leaf)
     return out

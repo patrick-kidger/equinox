@@ -2,9 +2,12 @@ import dataclasses
 import functools as ft
 import inspect
 import warnings
-from typing import Any, Callable, Dict, Hashable, Optional, overload, Union
+from collections.abc import Callable, Hashable
+from typing import Any, Literal, Optional, overload, Union
 
 import jax
+import jax._src.traceback_util as traceback_util
+import jax.core
 import jax.interpreters.batching as batching
 import jax.interpreters.pxla as pxla
 import jax.numpy as jnp
@@ -14,7 +17,6 @@ from jaxtyping import PyTree
 
 from ._compile_utils import (
     compile_cache,
-    get_fun_names,
     hashable_combine,
     hashable_partition,
     Lowered,
@@ -23,7 +25,10 @@ from ._custom_types import sentinel
 from ._deprecate import deprecated_0_10
 from ._doc_utils import doc_remove_args
 from ._filters import combine, filter, is_array, is_array_like, partition
-from ._module import Module, module_update_wrapper, Static
+from ._module import Module, module_update_wrapper, Partial, Static
+
+
+traceback_util.register_exclusion(__file__)
 
 
 ResolvedAxisSpec = Optional[int]
@@ -75,32 +80,49 @@ class if_array:
 
 @dataclasses.dataclass(frozen=True)  # not a pytree
 class if_mapped:
-    """Returns a callable that returns the specified integer if evaluated on a mapped
-    output from a vmap'd or pmap'd function. Otherwise, it returns `None`.
+    """Used with the `out_axes` argument of [`equinox.filter_vmap`][], to only add an
+    output batch axis if necessary.
 
-    !!! Example
-
-        ```python
-        fn = if_array(1)
-        # Evaluate on an array, return the integer.
-        fn(jax.numpy.array([0, 1, 2]))  # 1
-        # Evaluate on not-an-array, return None.
-        fn(True)  # None
-        ```
+    That is, `out_axes=if_mapped(i)` is equivalent to `out_axes=i` for any output that
+    is batched, and `out_axes=None` fofr any output that is not batched.
     """
 
     axis: int
 
+    def __call__(self, x: Any):
+        raise RuntimeError(
+            "`eqx.internal.if_mapped` should not be called directly; it is only valid "
+            "when passed to `out_axes` of `eqx.filter_vmap`."
+        )
+
+
+@dataclasses.dataclass(frozen=True)  # not a pytree
+class _if_mapped:
+    main: Any
+    axis: int
+
     def __call__(self, x: Any) -> Optional[int]:
-        if isinstance(x, batching.BatchTracer):
+        if isinstance(x, batching.BatchTracer) and x._trace.main is self.main:
             if x.batch_dim is batching.not_mapped:
                 return None
             else:
                 return self.axis
-        elif isinstance(x, pxla.MapTracer):
+        elif isinstance(x, pxla.MapTracer) and x._trace.main is self.main:
             return self.axis
         else:
             return None
+
+
+# The existence of this function is a complete hack: it couples together `filter_vmap`
+# with `if_mapped`. I don't see an obvious way around it though.
+def _bind_main(main, out_axes):
+    def _bind(axis):
+        if isinstance(axis, if_mapped):
+            return _if_mapped(main, axis.axis)
+        else:
+            return axis
+
+    return jtu.tree_map(_bind, out_axes)
 
 
 def _swapaxes(array, axis):
@@ -146,7 +168,11 @@ class _VmapWrapper(Module):
     _out_axes: PyTree[AxisSpec]
     _axis_name: Optional[Hashable]
     _axis_size: Optional[int]
-    _vmapkwargs: Dict[str, Any]
+    _vmapkwargs: dict[str, Any]
+
+    @property
+    def __wrapped__(self):
+        return self._fun
 
     def __call__(self, /, *args, **kwargs):
         if len(kwargs) != 0:
@@ -173,9 +199,11 @@ class _VmapWrapper(Module):
         static_args, dynamic_args = partition(args, unmapped_axis)
 
         def _fun_wrapper(_dynamic_args):
+            _main = jax.core.find_top_trace(jtu.tree_leaves(_dynamic_args)).main
             _args = combine(_dynamic_args, static_args)
             _out = self._fun(*_args)
-            _out_axes = _resolve_axes(_out, self._out_axes)
+            _out_axes = _bind_main(_main, self._out_axes)
+            _out_axes = _resolve_axes(_out, _out_axes)
             _none_axes = jtu.tree_map(_is_none, _out_axes, is_leaf=_is_none)
             _nonvmapd, _vmapd = partition(_out, _none_axes)
             return _vmapd, Static((_nonvmapd, _out_axes))
@@ -206,7 +234,7 @@ class _VmapWrapper(Module):
     def __get__(self, instance, owner):
         if instance is None:
             return self
-        return jtu.Partial(self, instance)
+        return Partial(self, instance)
 
 
 @overload
@@ -378,15 +406,13 @@ def filter_vmap(
         _axis_size=axis_size,
         _vmapkwargs=vmapkwargs,
     )
-    return module_update_wrapper(vmap_wrapper, fun)
+    return module_update_wrapper(vmap_wrapper)
 
 
 @compile_cache
 def _filter_pmap_cache(
-    fun_names, leaves, treedef, in_axes, axis_name, axis_size, pmapkwargs
+    fun_names, static, struct, in_axes, axis_name, axis_size, pmapkwargs
 ):
-    static, struct = jtu.tree_unflatten(treedef, leaves)
-
     def fun_abstract(_dynamic):
         fun, args, _, _ = combine(_dynamic, static)
         out = fun(*args)
@@ -412,8 +438,10 @@ def _filter_pmap_cache(
             )
 
     def fun_wrapped(_dynamic):
+        _main = jax.core.find_top_trace(jtu.tree_leaves(_dynamic))
         _fun, _args, _, _out_axes = combine(_dynamic, static)
         _out = _fun(*_args)
+        _out_axes = _bind_main(_main, _out_axes)
         _out_axes = _resolve_axes(_out, _out_axes)
         jtu.tree_map(_check_map_out_axis, _out_axes)
         _pmapd = []
@@ -459,7 +487,7 @@ def _preprocess(info, args, kwargs):
     maybe_dummy = _common_preprocess(axis_size, kwargs)
     del kwargs
     dynamic = filter((fun, args, maybe_dummy, out_axes), is_array)
-    return dynamic
+    return (dynamic,)
 
 
 def _postprocess(out):
@@ -475,7 +503,11 @@ class _PmapWrapper(Module):
     _axis_name: Optional[Hashable]
     _axis_size: Optional[int]
     _filter_warning: bool
-    _pmapkwargs: Dict[str, Any]
+    _pmapkwargs: dict[str, Any]
+
+    @property
+    def __wrapped__(self):
+        return self._fun
 
     def _call(self, is_lower, args, kwargs):
         maybe_dummy = _common_preprocess(self._axis_size, kwargs)
@@ -489,13 +521,11 @@ class _PmapWrapper(Module):
             (self._fun, args, maybe_dummy, self._out_axes), is_array
         )
         struct = jtu.tree_map(lambda x: jax.ShapeDtypeStruct(x.shape, x.dtype), dynamic)
-        leaves, treedef = jtu.tree_flatten((static, struct))
-        leaves = tuple(leaves)
 
         cached = _filter_pmap_cache(
-            get_fun_names(self._fun),
-            leaves,
-            treedef,
+            self._fun,
+            static,
+            struct,
             in_axes,
             self._axis_name,
             self._axis_size,
@@ -529,7 +559,7 @@ class _PmapWrapper(Module):
     def __get__(self, instance, owner):
         if instance is None:
             return self
-        return jtu.Partial(self, instance)
+        return Partial(self, instance)
 
 
 # Deliberately using `Callable[..., Any]` as `filter_pmap` does change the input and
@@ -542,7 +572,7 @@ def filter_pmap(
     out_axes: PyTree[AxisSpec] = if_array(0),
     axis_name: Hashable = None,
     axis_size: Optional[int] = None,
-    donate: str = "none",
+    donate: Literal["all", "warn", "none"] = "none",
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     ...
 
@@ -555,7 +585,7 @@ def filter_pmap(
     out_axes: PyTree[AxisSpec] = if_array(0),
     axis_name: Hashable = None,
     axis_size: Optional[int] = None,
-    donate: str = "none",
+    donate: Literal["all", "warn", "none"] = "none",
 ) -> Callable[..., Any]:
     ...
 
@@ -568,10 +598,18 @@ def filter_pmap(
     out_axes: PyTree[AxisSpec] = if_array(0),
     axis_name: Hashable = None,
     axis_size: Optional[int] = None,
-    donate: str = "none",
+    donate: Literal["all", "warn", "none"] = "none",
     **pmapkwargs,
 ):
-    """Parallelises a function. By default, all JAX/NumPy arrays are parallelised down
+    """
+    !!! warning
+
+        JAX has now added more powerful parallelism APIs directly to the JIT interface.
+        As such, using [`equinox.filter_jit`][] with sharded inputs is now recommended
+        over `filter_pmap`. See also the
+        [parallelism example](../../../examples/parallelism/).
+
+    Parallelises a function. By default, all JAX/NumPy arrays are parallelised down
     their leading axis (i.e. axis index 0), and all other types are broadcast.
 
     `jax.pmap`, and thus `equinox.filter_pmap`, also compiles their function in the same
@@ -605,10 +643,10 @@ def filter_pmap(
         it can be deduced by looking at the argument shapes.
     - `donate` indicates whether the buffers of JAX arrays are donated or not, it
         should either be:
-        - `'all'`: the default, donate all arrays and suppress all warnings about
+        - `'all'`: donate all arrays and suppress all warnings about
             unused buffers;
         - `'warn'`: as above, but don't suppress unused buffer warnings;
-        - `'none'`: disables buffer donation.
+        - `'none'`: the default, disables buffer donation.
 
     **Returns:**
 
@@ -668,11 +706,18 @@ def filter_pmap(
             "'donate_argnums'"
         )
 
-    if donate not in {"arrays", "warn", "none"}:
-        raise ValueError(
-            "`filter_jit(..., donate=...)` must be one of 'arrays', 'warn', or 'none'"
+    if donate == "arrays":
+        warnings.warn(
+            "The `donate='arrays'` option to `filter_pmap` has been renamed to "
+            "`donate='all'`",
+            DeprecationWarning,
         )
-    filter_warning = True if donate == "arrays" else False
+        donate = "all"
+    if donate not in {"all", "warn", "none"}:
+        raise ValueError(
+            "`filter_jit(..., donate=...)` must be one of 'all', 'warn', or 'none'"
+        )
+    filter_warning = True if donate == "all" else False
     if donate != "none":
         pmapkwargs["donate_argnums"] = (0,)
 
@@ -685,4 +730,4 @@ def filter_pmap(
         _filter_warning=filter_warning,
         _pmapkwargs=pmapkwargs,
     )
-    return module_update_wrapper(pmap_wrapper, fun)
+    return module_update_wrapper(pmap_wrapper)

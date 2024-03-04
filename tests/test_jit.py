@@ -1,15 +1,14 @@
 import warnings
 from typing import Union
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 import jax.tree_util as jtu
 import pytest
 
-import equinox as eqx
-
-from .helpers import shaped_allclose
+from .helpers import tree_allclose
 
 
 # We can't just use `lambda x: x` or any function just rearrange without modification
@@ -48,14 +47,14 @@ def test_filter_jit(donate, getkey):
     assert jnp.all(f1[0]["b"] == b + 1)
     assert jnp.all(f1[1][0] == c + 1)
     f2 = f(general_tree_)
-    assert shaped_allclose(f2[0], 1)
-    assert shaped_allclose(f2[1], True)
-    assert shaped_allclose(f2[2], general_tree[2])
+    assert tree_allclose(f2[0], 1)
+    assert tree_allclose(f2[1], True)
+    assert tree_allclose(f2[2], general_tree[2])
     assert jnp.all(f2[3]["a"] == a + 1)
-    assert shaped_allclose(f2[3]["tuple"][0], 2.0)
+    assert tree_allclose(f2[3]["tuple"][0], 2.0)
     assert jnp.all(f2[3]["tuple"][1] == b + 1)
     assert jnp.all(f2[4] == c + 1)
-    assert shaped_allclose(f2[5], mlp_add)
+    assert tree_allclose(f2[5], mlp_add)
 
 
 def test_num_traces():
@@ -243,11 +242,11 @@ def test_jit_vmap():
         return x + 1
 
     out = eqx.filter_jit(eqx.filter_vmap(f))(jnp.array([1, 2]))
-    assert shaped_allclose(out, jnp.array([2, 3]))
+    assert tree_allclose(out, jnp.array([2, 3]))
     assert num_traces == 1
 
     out = eqx.filter_jit(eqx.filter_vmap(f))(jnp.array([2, 3]))
-    assert shaped_allclose(out, jnp.array([3, 4]))
+    assert tree_allclose(out, jnp.array([3, 4]))
     assert num_traces == 1
 
 
@@ -266,7 +265,7 @@ def test_wrap_jax_partial(getkey):
     eqx.filter_jit(g)
 
 
-def test_buffer_donation(getkey):
+def test_buffer_donation_function():
     @eqx.filter_jit(donate="all")
     def f(x):
         return x + 1
@@ -274,10 +273,27 @@ def test_buffer_donation(getkey):
     x = jnp.array(0.0)
     old_p = x.unsafe_buffer_pointer()
     new_x = f(x)
-    assert shaped_allclose(new_x, jnp.array(1.0))
-    assert new_x.unsafe_buffer_pointer() == old_p
+    assert tree_allclose(new_x, jnp.array(1.0))
     assert x.is_deleted()
+    assert new_x.unsafe_buffer_pointer() == old_p
 
+
+def test_buffer_donation_function_except_first():
+    @eqx.filter_jit(donate="warn-except-first")
+    def f(x, y):
+        return x + y
+
+    x = jnp.array(0.0)
+    y = jnp.array(1.0)
+    old_p = y.unsafe_buffer_pointer()
+    new_x = f(x, y)
+    assert tree_allclose(new_x, jnp.array(1.0))
+    assert not x.is_deleted()
+    assert y.is_deleted()
+    assert new_x.unsafe_buffer_pointer() == old_p
+
+
+def test_buffer_donation_method(getkey):
     num_traces = 0
 
     class M(eqx.Module):
@@ -310,7 +326,7 @@ def test_buffer_donation(getkey):
     _, new_m = new_m(jnp.ones((10,)))
     assert num_traces == 1
 
-    assert shaped_allclose(new_m.buffer[0], jnp.array(3.0))
+    assert tree_allclose(new_m.buffer[0], jnp.array(3.0))
     assert m.buffer.is_deleted()
     assert new_m.buffer.unsafe_buffer_pointer() == old_m_p.buffer
 
@@ -320,6 +336,8 @@ def test_buffer_donation(getkey):
     for flag in jtu.tree_leaves(old_m_deleted_flag):
         assert flag is True or flag is None
 
+
+def test_buffer_donation_instance(getkey):
     num_traces = 0
 
     class F(eqx.Module):
@@ -374,12 +392,26 @@ def test_donation_warning():
 
 
 # Issue 325
-def test_aot_compilation():
+@pytest.mark.parametrize("donate", ("all", "all-except-first", "none"))
+def test_aot_compilation(donate):
     def f(x, y):
         return 2 * x + y
 
     x, y = jnp.array(3), 4
-    lowered = eqx.filter_jit(f).lower(x, y)
+    lowered = eqx.filter_jit(f, donate=donate).lower(x, y)
     lowered.as_text()
     compiled = lowered.compile()
     compiled(x, y)
+
+
+# Issue 625
+@pytest.mark.parametrize("donate", ("all", "all-except-first", "none"))
+def test_aot_compilation_kwargs(donate):
+    def f(x, y, **kwargs):
+        return 2 * x + y
+
+    x, y = jnp.array(3), 4
+    lowered = eqx.filter_jit(f, donate=donate).lower(x, y, test=123)
+    lowered.as_text()
+    compiled = lowered.compile()
+    compiled(x, y, test=123)

@@ -1,4 +1,5 @@
-from typing import Any, Callable, Sequence, TypeVar
+from collections.abc import Callable, Sequence
+from typing import Any, TypeVar
 
 import jax.lax as lax
 import jax.numpy as jnp
@@ -10,6 +11,7 @@ from .._filters import is_array
 from ._nontraceable import nonbatchable
 
 
+# Old; deprecated
 class ContainerMeta(type):
     reverse_lookup: dict
 

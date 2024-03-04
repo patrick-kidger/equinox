@@ -1,24 +1,23 @@
 from typing import cast
 
+import equinox as eqx
+import equinox.internal as eqxi
 import jax
 import jax.core
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import pytest
 
-import equinox as eqx
-import equinox.internal as eqxi
-
-from .helpers import shaped_allclose
+from .helpers import tree_allclose
 
 
 def test_nondiff():
     x = 1.0
     y = (jnp.array(1.0), object())
-    assert shaped_allclose(eqxi.nondifferentiable(x), x)
-    assert shaped_allclose(jax.jit(eqxi.nondifferentiable)(x), jnp.array(x))
-    assert shaped_allclose(eqxi.nondifferentiable(y), y)
-    assert shaped_allclose(eqx.filter_jit(eqxi.nondifferentiable, donate="none")(y), y)
+    assert tree_allclose(eqxi.nondifferentiable(x), x)
+    assert tree_allclose(jax.jit(eqxi.nondifferentiable)(x), jnp.array(x))
+    assert tree_allclose(eqxi.nondifferentiable(y), y)
+    assert tree_allclose(eqx.filter_jit(eqxi.nondifferentiable, donate="none")(y), y)
 
     with pytest.raises(RuntimeError):
         jax.jvp(eqxi.nondifferentiable, (x,), (x,))
@@ -29,19 +28,19 @@ def test_nondiff():
 def test_nondiff_back():
     x = 1.0
     y = (jnp.array(1.0), object())
-    assert shaped_allclose(eqxi.nondifferentiable_backward(x), x)
-    assert shaped_allclose(jax.jit(eqxi.nondifferentiable_backward)(x), jnp.array(x))
-    assert shaped_allclose(eqxi.nondifferentiable_backward(y), y)
-    assert shaped_allclose(
+    assert tree_allclose(eqxi.nondifferentiable_backward(x), x)
+    assert tree_allclose(jax.jit(eqxi.nondifferentiable_backward)(x), jnp.array(x))
+    assert tree_allclose(eqxi.nondifferentiable_backward(y), y)
+    assert tree_allclose(
         eqx.filter_jit(eqxi.nondifferentiable_backward, donate="none")(y), y
     )
 
     x1, x2 = jax.jvp(eqxi.nondifferentiable_backward, (x,), (x,))
     x3, x4 = jax.jvp(jax.jit(eqxi.nondifferentiable_backward), (x,), (x,))
-    assert shaped_allclose(x1, x)
-    assert shaped_allclose(x2, x)
-    assert shaped_allclose(x3, jnp.array(x))
-    assert shaped_allclose(x4, jnp.array(x))
+    assert tree_allclose(x1, x)
+    assert tree_allclose(x2, x)
+    assert tree_allclose(x3, jnp.array(x))
+    assert tree_allclose(x4, jnp.array(x))
 
     with pytest.raises(RuntimeError):
         jax.grad(eqxi.nondifferentiable_backward)(x)

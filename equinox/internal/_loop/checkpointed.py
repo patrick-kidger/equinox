@@ -36,7 +36,7 @@ and
     adjoint mode of computational differentiation
     https://dl.acm.org/doi/pdf/10.1145/347837.347846
 """
-# I think this code is not quite maximally efficient. A few things that could be
+# I think this code is not *quite* maximally efficient. A few things that could be
 # improved:
 # - The initial value is available on the backward pass twice: once as an argument,
 #   once as a saved checkpoint. We should be able to get away without this repetition.
@@ -48,7 +48,9 @@ and
 import functools as ft
 import math
 import operator
-from typing import Any, Callable, cast, Optional, Sequence, TypeVar, Union
+import typing
+from collections.abc import Callable, Sequence
+from typing import Any, cast, Optional, TypeVar, Union
 
 import jax
 import jax.core
@@ -57,12 +59,13 @@ import jax.numpy as jnp
 import jax.tree_util as jtu
 from jaxtyping import Array, ArrayLike, Bool
 
-from ..._ad import filter_closure_convert, filter_custom_vjp, filter_vjp
-from ..._filters import is_array, is_inexact_array
-from ..._tree import tree_at
-from .._errors import error_if
-from .._nontraceable import nonbatchable, nondifferentiable
-from .common import common_rewrite
+from ..._ad import filter_closure_convert, filter_custom_vjp
+from ..._errors import error_if
+from ..._filters import combine, filter, is_array, is_inexact_array, partition
+from ..._module import Static
+from ..._tree import tree_at, tree_equal
+from .._nontraceable import nonbatchable
+from .common import common_rewrite, fixed_asarray
 
 
 _T = TypeVar("_T")
@@ -214,10 +217,11 @@ def checkpointed_while_loop(
         # Binomial logarithmic growth is what is needed in classical treeverse.
         #
         # If
-        # `max_steps <= (checkpoints + 1)(checkpoints + 2)/2`
+        # `max_steps < (checkpoints + 1)(checkpoints + 2)/2`
         # then the time spend recomputing will be optimised; see equation (2.2) of
         # "New Algorithms for Optimal Online Checkpointing", Stumm and Walther 2010.
         # https://tu-dresden.de/mn/math/wir/ressourcen/dateien/forschung/publikationen/pdf2010/new_algorithms_for_optimal_online_checkpointing.pdf
+        # and also the `_should_save_residuals` function below.
         #
         # So by default we use `checkpoints = O(sqrt(max_steps))`.
         # (Classical treeverse uses only `O(log(max_steps))`, of course, but doesn't
@@ -225,28 +229,40 @@ def checkpointed_while_loop(
         if max_steps == 1:
             checkpoints = 1
         else:
-            checkpoints = math.ceil(-1.5 + 0.5 * math.sqrt(8 * max_steps + 1))
+            checkpoints = math.floor(-1.5 + math.sqrt(2 * max_steps + 0.25)) + 1
+            assert 2 * max_steps < ((checkpoints + 1) * (checkpoints + 2))
     if checkpoints < 1:
         raise ValueError("Must have at least one checkpoint")
-    init_val = jtu.tree_map(jnp.asarray, init_val)
+    init_val = jtu.tree_map(fixed_asarray, init_val)
     if max_steps == 0:
         return init_val
+    if max_steps is not None:
+        checkpoints = min(checkpoints, max_steps)
     cond_fun_, body_fun_, init_val_, buffers_ = common_rewrite(
-        cond_fun, body_fun, init_val, max_steps, buffers
+        cond_fun, body_fun, init_val, max_steps, buffers, makes_false_steps=False
     )
     del cond_fun, body_fun, init_val, buffers
+    cond_fun_ = filter_closure_convert(cond_fun_, init_val_)
+    cond_fun_ = jtu.tree_map(_stop_gradient, cond_fun_)
     body_fun_ = filter_closure_convert(body_fun_, init_val_)
     vjp_arg = (init_val_, body_fun_)
-    _, _, final_val = _checkpointed_while_loop(
-        vjp_arg, cond_fun_, checkpoints, buffers_
+    _, _, _, final_val = _checkpointed_while_loop(
+        vjp_arg, cond_fun_, checkpoints, buffers_, max_steps
     )
     return final_val
 
 
+def _stop_gradient(x):
+    if is_array(x):
+        return lax.stop_gradient(x)
+    else:
+        return x
+
+
 @filter_custom_vjp
-def _checkpointed_while_loop(vjp_arg, cond_fun, checkpoints, buffers):
+def _checkpointed_while_loop(vjp_arg, cond_fun, checkpoints, buffers, max_steps):
     """Uncheckpointed forward used when not differentiating."""
-    del checkpoints, buffers
+    del checkpoints, buffers, max_steps
     init_val, body_fun = vjp_arg
     _body_fun = lambda x: body_fun(x)  # hashable wrapper; JAX issue #13554
     while_loop = jax.named_call(lax.while_loop, name="checkpointed-no-vjp")
@@ -265,21 +281,7 @@ def _scalar_index(i, x):
 
 def _unique_index(i, x):
     """As `x[i]`, but states that `i` has unique indices."""
-    if jnp.size(x) == 0:
-        # This case doesn't actually produce a gather.
-        return x[i]
-    # lax.gather's API is impenetrable. This is way easier...
-    jaxpr = jax.make_jaxpr(lambda _x, _i: _x[_i])(x, i)
-    jaxpr = cast(jax.core.ClosedJaxpr, jaxpr)
-    *rest_eqns, eqn = jaxpr.jaxpr.eqns
-    assert eqn.primitive == jax.lax.gather_p
-    new_params = dict(eqn.params)
-    new_params["unique_indices"] = True
-    new_eqn = eqn.replace(params=new_params)
-    new_eqns = (*rest_eqns, new_eqn)
-    new_jaxpr = jaxpr.replace(jaxpr=jaxpr.jaxpr.replace(eqns=new_eqns))
-    (out,) = jax.core.jaxpr_as_fun(new_jaxpr)(x, i)  # pyright: ignore
-    return out
+    return x.at[i].get(unique_indices=True)
 
 
 def _stumm_walther_i(step, save_state):
@@ -309,7 +311,8 @@ def _stumm_walther_i(step, save_state):
         "`equinox.internal.checkpointed_while_loop`. "
         "Please raise an issue at https://github.com/patrick-kidger/equinox"
     )
-    out = error_if(out, pred & (o == -1), msg)
+    if getattr(typing, "TESTING", False):
+        out = error_if(out, pred & (o == -1), msg)
     out = nonbatchable(out)
     return out
 
@@ -377,21 +380,41 @@ def _wang_moin_wrapper(step, save_state, residual_steps):
     return save_residual, index, (save_state_sw_i, save_state_wm_2)
 
 
-def _should_save_residual(step, save_state, residual_steps, u2_minus_2):
+def _should_save_residual(
+    step, save_state, residual_steps, u2_minus_1, checkpoints, max_steps
+):
     """This is the controller for whether we should save the current value at each step,
     and if so which memory location to save it in.
     """
     # TODO: also implement Algorithm 2 of Stumm and Walther, which gives improved
     # results for u2 < step < u3.
-    step, u2_minus_2 = nonbatchable((step, u2_minus_2))
-    return lax.cond(
-        step > u2_minus_2,
-        _wang_moin_wrapper,
-        _stumm_walther_i_wrapper,
-        step,
-        save_state,
-        residual_steps,
-    )
+
+    if checkpoints == max_steps:
+        # Important special case! We don't need to do any computations in this case.
+        # This is a measurable performance optimisation.
+        save_residual = True
+        index = step
+        save_state2 = save_state
+    else:
+        if max_steps is not None and max_steps <= u2_minus_1:
+            # `step < max_steps` implies `step + 1 <= max_steps`. If it is also the case
+            # that `max_steps <= u2 - 1` then overall we know that `step <= u2 - 2`,
+            # which is the condition for using Stumm--Walther.
+            #
+            # Skipping this cond offers a measurable performance optimisation.
+            pred = False
+        else:
+            step, u2_minus_1 = nonbatchable((step, u2_minus_1))
+            pred = step >= u2_minus_1
+        save_residual, index, save_state2 = lax.cond(
+            pred,
+            _wang_moin_wrapper,
+            _stumm_walther_i_wrapper,
+            step,
+            save_state,
+            residual_steps,
+        )
+    return save_residual, index, save_state2
 
 
 def _unreachable_checkpoint_step(x):
@@ -405,13 +428,17 @@ def _array_to_none(x):
     return None
 
 
-def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, checkpoints, buffers):
+@_checkpointed_while_loop.def_fwd
+def _checkpointed_while_loop_fwd(
+    perturbed, vjp_arg, cond_fun, checkpoints, buffers, max_steps
+):
     """Run the while loop, saving checkpoints whenever the controller
     (`_should_save_residual`) requires.
     """
+    del perturbed
     init_val, body_fun = vjp_arg
     # Equation (2.2) of Stumm and Walther
-    u2_minus_2 = ((checkpoints + 1) * (checkpoints + 2)) // 2 - 2
+    u2_minus_1 = ((checkpoints + 1) * (checkpoints + 2)) // 2 - 1
 
     def _cond_fun(carry):
         _, _, val, _, _ = carry
@@ -423,7 +450,7 @@ def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, checkpoints, buffers):
 
         step2 = step + 1
         save_residual, index, save_state2 = _should_save_residual(
-            step, save_state, residual_steps, u2_minus_2
+            step, save_state, residual_steps, u2_minus_1, checkpoints, max_steps
         )
         val2 = body_fun(val)
 
@@ -485,17 +512,20 @@ def _checkpointed_while_loop_fwd(vjp_arg, cond_fun, checkpoints, buffers):
     # reading and writing the most recent residual to and from the end. So sort the
     # residuals we've produced here to obtain the desired invariant, i.e. that the
     # residuals are in order.
-    # TODO: does this introduce a 2x memory overhead?  It may be that we can do better
-    # here.
-    sort_indices = jnp.argsort(final_residual_steps)
-    final_residual_steps, final_residuals = jtu.tree_map(
-        ft.partial(_unique_index, sort_indices), (final_residual_steps, final_residuals)
-    )
+    if checkpoints != max_steps:
+        # If `checkpoints == max_steps` then residuals are already sorted.
+        sort_indices = jnp.argsort(final_residual_steps)
+        final_residual_steps, final_residuals = jtu.tree_map(
+            ft.partial(_unique_index, sort_indices),
+            (final_residual_steps, final_residuals),
+        )
     num_steps, final_residual_steps = nonbatchable((num_steps, final_residual_steps))
     return final_val, (num_steps, final_residual_steps, final_residuals, filled_buffers)
 
 
-def _load_from_checkpoint(step_grad_val, index, residual_steps, residuals):
+def _load_from_checkpoint(
+    step_grad_val, index, residual_steps, residuals, checkpoints, max_steps
+):
     """Loads a residual from the store of checkpoints."""
     # step_grad_val is the current location of grad_val.
     # index is the next currently empty slot for saving a residual.
@@ -518,7 +548,13 @@ def _load_from_checkpoint(step_grad_val, index, residual_steps, residuals):
     # step, so we won't need to load from this checkpoint. (And as
     # `_load_from_checkpoint` is itself used within a U-turn, then in practice this
     # triggers whenever we get >1 U-turns back-to-back.)
-    index2 = jnp.where(step_val2 + 1 == step_grad_val, read_index, index)
+    if checkpoints == max_steps:
+        # Known to be symbolically true in this case; this is a slight performance
+        # optimisation.
+        pred = True
+    else:
+        pred = step_val2 + 1 == step_grad_val
+    index2 = jnp.where(pred, read_index, index)
     step_val2, index2 = nonbatchable((step_val2, index2))
     return step_val2, val2, index2
 
@@ -616,6 +652,35 @@ def _is_none(x):
     return x is None
 
 
+def _get_value(x):
+    assert type(x) is jax.custom_derivatives.CustomVJPPrimal
+    return x.value
+
+
+def _is_symbolic_zero_or_none(x):
+    return isinstance(x, jax.custom_derivatives.SymbolicZero) or x is None
+
+
+def _not_symbolic_zero(x):
+    return not isinstance(x, jax.custom_derivatives.SymbolicZero)
+
+
+def _materialise_symbolic_zero(is_zero, ct_x, x):
+    if is_zero:
+        assert ct_x is None
+        return None
+    else:
+        if ct_x is None:
+            assert is_inexact_array(x)
+            return jnp.zeros_like(x)
+        else:
+            return ct_x
+
+
+def _assert_bool(x):
+    assert type(x) is bool
+
+
 def _fwd(
     step_val,
     step_grad_val,
@@ -638,7 +703,7 @@ def _fwd(
     )
 
 
-def _make_u_turn(vjp_fn, residual_steps, residuals, checkpoints):
+def _make_u_turn(vjp_fn, residual_steps, residuals, checkpoints, max_steps):
     """Propagates the cotangent backward one step."""
     residual_steps = nonbatchable(residual_steps)
 
@@ -657,7 +722,7 @@ def _make_u_turn(vjp_fn, residual_steps, residuals, checkpoints):
         grad_body_fun2 = jtu.tree_map(operator.add, grad_body_fun, grad_body_fun_update)
         step_grad_val2 = step_grad_val - 1
         step_val2, val2, index2 = _load_from_checkpoint(
-            step_grad_val2, index, residual_steps, residuals
+            step_grad_val2, index, residual_steps, residuals, checkpoints, max_steps
         )
         step_next_checkpoint2 = _calc_next_checkpoint(
             step_val2, step_grad_val2, index2, checkpoints
@@ -678,18 +743,27 @@ def _make_u_turn(vjp_fn, residual_steps, residuals, checkpoints):
     return _u_turn
 
 
+@_checkpointed_while_loop.def_bwd
 def _checkpointed_while_loop_bwd(
-    remainders, grad_final_val, vjp_arg, cond_fun, checkpoints, buffers
+    remainders,
+    grad_final_val,
+    perturbed,
+    vjp_arg,
+    cond_fun,
+    checkpoints,
+    buffers,
+    max_steps,
 ):
     """Time for the complicated bit: iterate backward through a checkpointed while loop,
     loading values from checkpoints and using treeverse to toggle between forward and
     backward steps.
     """
+    perturb_init_val, perturb_body_fun = perturbed
     _, body_fun = vjp_arg
     grad_final_body_fun = jtu.tree_map(
-        lambda x: jnp.zeros_like(x) if is_inexact_array(x) else None, body_fun
+        lambda x, p: jnp.zeros_like(x) if p else None, body_fun, perturb_body_fun
     )
-    del cond_fun
+    del cond_fun, perturbed
     num_steps, init_residual_steps, init_residuals, filled_buffers = remainders
     num_steps, init_residual_steps = nonbatchable((num_steps, init_residual_steps))
 
@@ -727,7 +801,8 @@ def _checkpointed_while_loop_bwd(
             "`equinox.internal.checkpointed_while_loop`. "
             "Please raise an issue at https://github.com/patrick-kidger/equinox"
         )
-        step_val = error_if(step_val, step_val >= step_grad_val, msg)
+        if getattr(typing, "TESTING", False):
+            step_val = error_if(step_val, step_val >= step_grad_val, msg)
 
         #
         # First either propagate our primal state forward, or make a U-turn if the
@@ -739,11 +814,30 @@ def _checkpointed_while_loop_bwd(
         # We pass in `body_fun` as an argument as it contains its closed-over values
         # in its PyTree structure, and we do want to compute cotangents wrt these.
         val_buffers = tree_at(buffers(_is_none), val, filled_buffers, is_leaf=_is_none)
-        val_candidate, vjp_fn = filter_vjp(lambda b, v: b(v), body_fun, val_buffers)
+        grad_val_has_ct = jtu.tree_map(is_array, grad_val, is_leaf=_is_none)
+        body_fun_has_ct = jtu.tree_map(is_array, grad_body_fun, is_leaf=_is_none)
+        diff_val, nondiff_val = partition(val_buffers, grad_val_has_ct)
+        diff_body, nondiff_body = partition(body_fun, body_fun_has_ct)
+
+        def _to_vjp(_diff_body, _diff_val):
+            _val_buffers = combine(_diff_val, nondiff_val)
+            _body_fun = combine(_diff_body, nondiff_body)
+            _out = _body_fun(_val_buffers)
+            return partition(_out, grad_val_has_ct)
+
+        dynamic_val_candidate, vjp_fn, static_val_candidate = jax.vjp(
+            _to_vjp, diff_body, diff_val, has_aux=True
+        )
+        val_candidate = combine(dynamic_val_candidate, static_val_candidate)
         val_candidate = tree_at(buffers(None), val_candidate, replace_fn=lambda _: None)
 
-        perform_u_turn = step_val + 1 == step_grad_val
-        perform_u_turn = nonbatchable(perform_u_turn)
+        if checkpoints == max_steps:
+            # Skip calculating this at runtime; we know it must be true.
+            # This means we can inline the U-turn branch of the `cond`.
+            perform_u_turn = True
+        else:
+            perform_u_turn = step_val + 1 == step_grad_val
+            perform_u_turn = nonbatchable(perform_u_turn)
         (
             step_val2,
             step_grad_val2,
@@ -754,7 +848,7 @@ def _checkpointed_while_loop_bwd(
             grad_body_fun2,
         ) = lax.cond(
             perform_u_turn,
-            _make_u_turn(vjp_fn, residual_steps, residuals, checkpoints),
+            _make_u_turn(vjp_fn, residual_steps, residuals, checkpoints, max_steps),
             _fwd,
             step_val,
             step_grad_val,
@@ -774,21 +868,27 @@ def _checkpointed_while_loop_bwd(
         # efficiency reasons that I don't think apply any more.)
         #
 
-        (
-            index2,
-            step_next_checkpoint2,
-            residual_steps2,
-            residuals2,
-        ) = _maybe_save_to_checkpoint(
-            step_val2,
-            step_grad_val2,
-            step_next_checkpoint2,
-            index2,
-            val2,
-            residual_steps,
-            residuals,
-            checkpoints,
-        )
+        if checkpoints == max_steps:
+            # In this case we never need to save any extra checkpoints on the backward
+            # pass, so skip this.
+            residual_steps2 = residual_steps
+            residuals2 = residuals
+        else:
+            (
+                index2,
+                step_next_checkpoint2,
+                residual_steps2,
+                residuals2,
+            ) = _maybe_save_to_checkpoint(
+                step_val2,
+                step_grad_val2,
+                step_next_checkpoint2,
+                index2,
+                val2,
+                residual_steps,
+                residuals,
+                checkpoints,
+            )
 
         return (
             step_val2,
@@ -810,11 +910,212 @@ def _checkpointed_while_loop_bwd(
     init_index = jnp.minimum(num_steps, checkpoints)
     init_step_grad_val = num_steps
     init_step_val, init_val, init_index = _load_from_checkpoint(
-        init_step_grad_val, init_index, init_residual_steps, init_residuals
+        init_step_grad_val,
+        init_index,
+        init_residual_steps,
+        init_residuals,
+        checkpoints,
+        max_steps,
     )
     init_step_next_checkpoint = _calc_next_checkpoint(
         init_step_val, init_step_grad_val, init_index, checkpoints
     )
+
+    #
+    # Okay, this next bit is a bit complicated.
+    # We need to figure out exactly which parts of the carry that we're going to compute
+    # cotangents for.
+    # There are three interacting pieces:
+    # (1) Only some inputs even need their cotangents computed (those that are marked
+    #     as perturbed). We should avoid computing intermediate cotangents that aren't
+    #     needed.
+    # (2) Some cotangents may be symbolic zeros. We should avoid materialising any that
+    #     don't need to be materialised.
+    # (3) Some parts of the body function may not be differentiable. (E.g. they call to
+    #     `eqxi.nondifferentiable` or `eqxi.nondifferentiable_backward`.) In particular,
+    #     some inexact arrays may be marked with these. (Anything else is automatically
+    #     nondifferentiable.) As these raise an error eagerly, we can't just take an
+    #     approach of "differentiate everything, then DCE".
+    #
+    # Our strategy is as follows. First, consider those inputs that are perturbed, and
+    # iterate to find all the carries that become perturbed as a result. We obtain a
+    # fixed point.
+    # * This mimicks what JAX does in JVP rules for scans/whiles. And in fact we also
+    #   track perturbation information forward via JVPs (which input tangents affect
+    #   which output tangents), rather than backward via VJPs (which output cotangents
+    #   affect which input cotangents), as this is what JAX does here and we'd like to
+    #   be consistent. (Also, it seems like there might be a catch-22 trying to do this
+    #   with VJPs -- how do you decide which inputs to perturb in your VJP?) This is
+    #   basically handling criteria (1).
+    # * This also means that we're perturbing the minmal amount possible. We don't even
+    #   run the JVP rule for something that isn't differentiated. This is part of
+    #   addressing criteria (3).
+    #
+    # Second, we ignore all cotangents (of our forward output) that aren't on a
+    # perturbed carry. Clearly they're not going to affect anything. So we switch them
+    # to symbolic zeros.
+    # * This is part of addressing criteria (3) -- we avoid propagating cotangents
+    #   that we don't need to. Maybe there's an `eqxi.nondifferentiable_backward` in
+    #   there.
+    #
+    # Third, we find another fixed point, this time for the symbolic zeros. Track which
+    # cotangents affect which cotangents, and materialise the minimal amount possible.
+    # * This addresses criteria (2).
+    # * Note that symbolic zeros are doing double-duty here. We avoid materialising them
+    #   for simple efficiency reasons, sure -- but we also want to keep as many
+    #   unmaterialised as possible, in case there's an `eqxi.nondifferentiable_backward`
+    #   in there, which only accepts symbolic zero cotangents.
+    #
+    # Phew! At that point, job done: we know which cotangents we're propagating and so
+    # we can run our loop.
+    #
+    # The first fixed point basically mimicks what JAX does in the JVP rule for a while
+    # or scan, figuring out which values are perturbed. The second fixed point basically
+    # mimicks what JAX does in the transpose rule of a scan, figuring out which
+    # cotangents are symbolic zeros.
+    #
+
+    # Do this inside the dynamic context of a `jax.eval_shape` so that it's as cheap as
+    # possible, without extra tracing.
+    def _resolve_perturb_val():
+        init_val_buffers = tree_at(
+            buffers(_is_none), init_val, filled_buffers, is_leaf=_is_none
+        )
+        perturb_val = perturb_init_val
+        assert jtu.tree_structure(init_val_buffers) == jtu.tree_structure(perturb_val)
+
+        while True:
+            # `body_fun` is included so that we also track perturbatations on that.
+            perturb_pair = (perturb_body_fun, perturb_val)
+            dynamic, static = partition((body_fun, init_val_buffers), perturb_pair)
+            new_perturb_val = sentinel = object()
+
+            @jax.custom_jvp
+            def _record_symbolic_zeros(_dynamic_out):
+                return _dynamic_out
+
+            def _record_symbolic_zeros_jvp(primals, tangents):
+                (primals,) = primals
+                (tangents,) = tangents
+                nonlocal new_perturb_val
+                new_perturb_val = jtu.tree_map(_not_symbolic_zero, tangents)
+                return primals, tangents
+
+            _record_symbolic_zeros.defjvp(
+                _record_symbolic_zeros_jvp, symbolic_zeros=True
+            )
+
+            def _to_linearize(_dynamic):
+                _body_fun, _val = combine(_dynamic, static)
+                _out = _body_fun(_val)
+                _dynamic_out, _static_out = partition(_out, is_inexact_array)
+                _dynamic_out = _record_symbolic_zeros(_dynamic_out)
+                _out = combine(_dynamic_out, _static_out)
+                return _out
+
+            # Not `jax.jvp`, so as not to error if `body_fun` has any `custom_vjp`s.
+            jax.linearize(_to_linearize, dynamic)
+            assert new_perturb_val is not sentinel
+            assert jtu.tree_structure(
+                perturb_val, is_leaf=_is_none
+            ) == jtu.tree_structure(new_perturb_val, is_leaf=_is_none)
+            new_perturb_val = jtu.tree_map(
+                lambda x, y: False if (x is False and y is None) else y,
+                perturb_val,
+                new_perturb_val,
+            )
+            assert jtu.tree_structure(perturb_val) == jtu.tree_structure(
+                new_perturb_val
+            )
+            if tree_equal(perturb_val, new_perturb_val):
+                jtu.tree_map(_assert_bool, perturb_val)
+                if getattr(typing, "TESTING", False):
+                    print("perturb_val", perturb_val)
+                return Static(perturb_val)
+            else:
+                perturb_val = jtu.tree_map(operator.or_, perturb_val, new_perturb_val)
+
+    # Find a fixed point of which values we need to perturb. (Not the same as whether
+    # or not they have symbolic zero cotangents! All unperturbed values must have
+    # symbolic zero cotangents, but some perturbed values may have these as well.)
+    perturb_val = jax.eval_shape(_resolve_perturb_val).value
+
+    # Do this inside the dynamic context of a `jax.eval_shape` so that it's as cheap as
+    # possible, without extra tracing.
+    def _resolve_symbolic_zeros(grad_val):
+        symbolic_zero_gradient = jtu.tree_map(_is_none, grad_val, is_leaf=_is_none)
+        init_val_buffers = tree_at(
+            buffers(_is_none), init_val, filled_buffers, is_leaf=_is_none
+        )
+        dynamic_init_val, static_init_val = partition(init_val_buffers, perturb_val)
+
+        while True:
+            new_symbolic_zero_gradient = sentinel = object()
+
+            # Some hackery to extract which inputs still have symbolic zero cotangents.
+            @jax.custom_vjp
+            def _record_symbolic_zero(_dynamic_val):
+                return _dynamic_val
+
+            def _record_symbolic_zero_fwd(_dynamic_val):
+                return jtu.tree_map(_get_value, _dynamic_val), None
+
+            def _record_symbolic_zero_bwd(_, grad_dynamic_val):
+                nonlocal new_symbolic_zero_gradient
+                new_symbolic_zero_gradient = jtu.tree_map(
+                    _is_symbolic_zero_or_none, grad_dynamic_val, is_leaf=_is_none
+                )
+                return (grad_dynamic_val,)
+
+            _record_symbolic_zero.defvjp(
+                _record_symbolic_zero_fwd,
+                _record_symbolic_zero_bwd,
+                symbolic_zeros=True,
+            )
+
+            def _to_vjp(_dynamic_val):
+                _dynamic_val = _record_symbolic_zero(_dynamic_val)
+                val = combine(_dynamic_val, static_init_val)
+                return filter(body_fun(val), symbolic_zero_gradient, inverse=True)
+
+            _, vjp_fn = jax.vjp(_to_vjp, dynamic_init_val)
+            vjp_fn(grad_val)
+            assert new_symbolic_zero_gradient is not sentinel
+            if tree_equal(symbolic_zero_gradient, new_symbolic_zero_gradient):
+                jtu.tree_map(_assert_bool, symbolic_zero_gradient)
+                if getattr(typing, "TESTING", False):
+                    print("symbolic_zero_gradient", symbolic_zero_gradient)
+                return Static(symbolic_zero_gradient)
+            else:
+                symbolic_zero_gradient = jtu.tree_map(
+                    operator.and_, symbolic_zero_gradient, new_symbolic_zero_gradient
+                )
+                grad_val = jtu.tree_map(
+                    _materialise_symbolic_zero,
+                    symbolic_zero_gradient,
+                    grad_val,
+                    init_val_buffers,
+                )
+
+    grad_final_val = filter(grad_final_val, perturb_val)
+    # If all provided cotangents end up being irrelevant -- i.e. the perturbed inputs
+    # depend only on those outputs which have symbolic zero cotangents -- then we can
+    # skip the whole computation.
+    if len(jtu.tree_leaves(grad_final_val)) == 0:
+        return jtu.tree_map(lambda _: None, (grad_final_val, body_fun))
+    symbolic_zero_gradient = jax.eval_shape(
+        _resolve_symbolic_zeros, grad_final_val
+    ).value
+    init_val_buffers = tree_at(
+        buffers(_is_none), init_val, filled_buffers, is_leaf=_is_none
+    )
+    grad_final_val = jtu.tree_map(
+        _materialise_symbolic_zero,
+        symbolic_zero_gradient,
+        grad_final_val,
+        init_val_buffers,
+    )
+
     init_carry = (
         init_step_val,
         init_step_grad_val,
@@ -858,18 +1159,10 @@ def _checkpointed_while_loop_bwd(
     # `residual_steps` is the memory holding the `step` for each checkpoint
     # `residuals` is the memory holding the `val` for each checkpoint
 
+    # Not reverse mode autodifferentiable, but it is forward-mode autodifferentiable!
+    # That means we can do Hessians, at least.
     while_loop = jax.named_call(lax.while_loop, name="checkpointed-bwd")
     final_carry = while_loop(_cond_fun, _body_fun, init_carry)
     *_, grad_init_val, grad_body_fun, _, _ = final_carry
     out = grad_init_val, grad_body_fun
-    # I think combining higher-order autodifferentiation with treeverse is an open
-    # problem? Probably JAX can differentiate through this but it'll be really
-    # inefficient, so to be safe we disable it for now.
-    msg = "`checkpointed_while_loop` is only first-order autodifferentiable"
-    out = nondifferentiable(out, msg=msg)
     return out
-
-
-_checkpointed_while_loop.defvjp(
-    _checkpointed_while_loop_fwd, _checkpointed_while_loop_bwd
-)

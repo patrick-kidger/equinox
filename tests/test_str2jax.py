@@ -1,6 +1,5 @@
-import jax
-
 import equinox.internal as eqxi
+import jax
 
 
 def test_basic():

@@ -1,13 +1,12 @@
 from typing import cast
 
+import equinox.internal as eqxi
 import jax
 import jax.core
 import jax.lax as lax
 import jax.numpy as jnp
 
-import equinox.internal as eqxi
-
-from .helpers import shaped_allclose
+from .helpers import tree_allclose
 
 
 def _safe_zip(*args):
@@ -68,14 +67,15 @@ def test_jaxpr2jaxpr_custom_idempotent():
 
 def test_fn2fn_nocustom_idempotent():
     def fn(x):
+        x = jnp.asarray(x)
         x = x + 1
         x = x * 2
         return x
 
     finalised_fn = eqxi.finalise_fn(fn)
-    assert shaped_allclose(fn(1), finalised_fn(1), match_weak=True)
-    assert shaped_allclose(fn(5), finalised_fn(5), match_weak=True)
-    assert shaped_allclose(fn(-1), finalised_fn(-1), match_weak=True)
+    assert tree_allclose(fn(1), finalised_fn(1))
+    assert tree_allclose(fn(5), finalised_fn(5))
+    assert tree_allclose(fn(-1), finalised_fn(-1))
 
     jaxpr = jax.make_jaxpr(fn)(1)
     jaxpr = cast(jax.core.ClosedJaxpr, jaxpr)
@@ -92,8 +92,8 @@ def test_fn2fn_custom_idempotent():
         return x
 
     finalised_fn = eqxi.finalise_fn(fn)
-    assert shaped_allclose(fn(False), finalised_fn(False))
-    assert shaped_allclose(fn(True), finalised_fn(True))
+    assert tree_allclose(fn(False), finalised_fn(False))
+    assert tree_allclose(fn(True), finalised_fn(True))
 
     finalised_jaxpr = jax.make_jaxpr(finalised_fn)(True)
     finalised_jaxpr = cast(jax.core.ClosedJaxpr, finalised_jaxpr)
@@ -111,7 +111,7 @@ def test_fn2fn_custom_idempotent():
         jnp.array([True, False]),
         jnp.array([True, True]),
     ):
-        assert shaped_allclose(vmap_fn(arg), finalised_vmap_fn(arg))
+        assert tree_allclose(vmap_fn(arg), finalised_vmap_fn(arg))
 
     finalised_vmap_jaxpr = jax.make_jaxpr(finalised_vmap_fn)(jnp.array([False, False]))
     finalised_vmap_jaxpr = cast(jax.core.ClosedJaxpr, finalised_vmap_jaxpr)

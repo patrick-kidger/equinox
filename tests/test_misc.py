@@ -1,11 +1,10 @@
+import equinox.internal as eqxi
 import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import pytest
 
-import equinox.internal as eqxi
-
-from .helpers import random_pytree, shaped_allclose, treedefs
+from .helpers import random_pytree, tree_allclose, treedefs
 
 
 def test_ω_add_mul(getkey):
@@ -22,7 +21,7 @@ def test_ω_add_mul(getkey):
 
         e1 = (a**ω * 2 + b**ω * c**ω - 3).ω
         e2 = jtu.tree_map(lambda ai, bi, ci: ai * 2 + bi * ci - 3, a, b, c)
-        assert shaped_allclose(e1, e2)
+        assert tree_allclose(e1, e2)
 
 
 def test_ω_inplace(getkey):
@@ -31,13 +30,13 @@ def test_ω_inplace(getkey):
         a = random_pytree(getkey(), treedef)
         b1 = ω(a).at[()].set(3).ω
         b2 = jtu.tree_map(lambda ai: ai.at[()].set(3), a)
-        assert shaped_allclose(b1, b2)
+        assert tree_allclose(b1, b2)
 
         a2 = jtu.tree_map(lambda x: x + 1, a)
 
         b3 = ω(a).at[()].set(ω(a2)).ω
         b4 = jtu.tree_map(lambda ai, a2i: ai.at[()].set(a2i[()]), a, a2)
-        assert shaped_allclose(b3, b4)
+        assert tree_allclose(b3, b4)
 
 
 def test_ω_is_leaf(getkey):

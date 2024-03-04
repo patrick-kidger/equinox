@@ -1,11 +1,10 @@
 from typing import Any
 
+import equinox as eqx
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
 import pytest
-
-import equinox as eqx
 
 
 def test_is_array(getkey):

@@ -81,6 +81,9 @@ plugins:
                     - pytkdocs_tweaks.main()
                     - import jaxtyping
                     - jaxtyping.set_array_name_format("array")
+                    - import jax
+                    - jax.ShapeDtypeStruct.__module__ = "jax"
+                    - jax.core.ClosedJaxpr.__module__ = "jax.core"
 
                 selection:
                     inherited_members: true  # Allow looking up inherited methods
@@ -104,34 +107,44 @@ nav:
             - Generative score-based diffusion: 'examples/score_based_diffusion.ipynb'
             - BERT language model: 'examples/bert.ipynb'
             - U-Net implementation: 'examples/unet.ipynb'
+            - Vision transformer: 'examples/vision_transformer.ipynb'
+            - Image GAN: 'examples/deep_convolutional_gan.ipynb'
         - Features:
             - Freezing parameters: 'examples/frozen_layer.ipynb'
             - Compatibility with init-apply libraries: 'examples/init_apply.ipynb'
             - Stateful operations (e.g. BatchNorm): 'examples/stateful.ipynb'
             - Autoparallelism (e.g. multi-GPU): 'examples/parallelism.ipynb'
-    - Full API:
-        - 'api/module.md'
+            - Serialisation (with hyperparameters): 'examples/serialisation.ipynb'
+    - Basic API:
+        - Modules:
+            - 'api/module/module.md'
+            - 'api/module/advanced_fields.md'
         - Neural network layers:
             - 'api/nn/linear.md'
             - 'api/nn/conv.md'
-            - 'api/nn/pool.md'
             - 'api/nn/rnn.md'
             - 'api/nn/attention.md'
+            - 'api/nn/activations.md'
+            - 'api/nn/pool.md'
             - 'api/nn/dropout.md'
             - 'api/nn/normalisation.md'
             - 'api/nn/embedding.md'
-            - 'api/nn/composed.md'
-            - 'api/nn/activations.md'
+            - 'api/nn/mlp.md'
+            - 'api/nn/sequential.md'
+            - 'api/nn/inference.md'
+            - 'api/nn/shared.md'
             - 'api/nn/stateful.md'
-        - Filtering:
-            - 'api/filtering/partition-combine.md'
-            - 'api/filtering/transformations.md'
-        - Utilities:
-            - 'api/utilities/manipulation.md'
-            - 'api/utilities/serialisation.md'
-            - 'api/utilities/pretty-printing.md'
-            - 'api/utilities/miscellaneous.md'
+        - 'api/transformations.md'
+        - 'api/manipulation.md'
+    - Advanced API:
+        - 'api/caches.md'
+        - 'api/debug.md'
+        - 'api/enumerations.md'
+        - 'api/errors.md'
+        - 'api/pretty-printing.md'
+        - 'api/serialisation.md'
     - Misc:
-        - 'tricks.md'
-        - 'citation.md'
         - 'faq.md'
+        - 'tricks.md'
+        # - 'pattern.md'
+        - 'citation.md'

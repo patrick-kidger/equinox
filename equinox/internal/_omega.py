@@ -1,5 +1,6 @@
 import operator
-from typing import Any, Callable, Optional, TYPE_CHECKING
+from collections.abc import Callable
+from typing import Any, Optional, TYPE_CHECKING
 
 import jax
 import jax.tree_util as jtu
@@ -131,7 +132,7 @@ def _rev(op):
     return __rev
 
 
-for (name, op) in [
+for name, op in [
     ("__add__", operator.add),
     ("__sub__", operator.sub),
     ("__mul__", operator.mul),
@@ -168,7 +169,7 @@ for (name, op) in [
     _set_binary(ω, name, op)
 
 
-for (name, op) in [
+for name, op in [
     ("__neg__", operator.neg),
     ("__pos__", operator.pos),
     ("__abs__", operator.abs),
@@ -224,7 +225,7 @@ def _set_binary_at(base, name: str, op: Callable[[Any, Any, Any], Any]) -> None:
     setattr(base, name, fn)
 
 
-for (name, op) in [
+for name, op in [
     ("set", lambda x, y, z, **kwargs: x.at[y].set(z, **kwargs)),
     ("add", lambda x, y, z, **kwargs: x.at[y].add(z, **kwargs)),
     ("multiply", lambda x, y, z, **kwargs: x.at[y].multiply(z, **kwargs)),

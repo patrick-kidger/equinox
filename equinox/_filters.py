@@ -1,4 +1,5 @@
-from typing import Any, Callable, Optional, Tuple, Union
+from collections.abc import Callable
+from typing import Any, Optional, Union
 
 import jax
 import jax.numpy as jnp
@@ -32,7 +33,7 @@ def is_array_like(element: Any) -> bool:
 
 
 def is_inexact_array(element: Any) -> bool:
-    """Returns `True` if `element` is an inexact (i.e. floating point) JAX/NumPy
+    """Returns `True` if `element` is an inexact (i.e. floating or complex) JAX/NumPy
     array.
     """
     if isinstance(element, (np.ndarray, np.generic)):
@@ -136,7 +137,7 @@ def partition(
     filter_spec: PyTree[AxisSpec],
     replace: Any = None,
     is_leaf: Optional[Callable[[Any], bool]] = None,
-) -> Tuple[PyTree, PyTree]:
+) -> tuple[PyTree, PyTree]:
     """Splits a PyTree into two pieces. Equivalent to
     `filter(...), filter(..., inverse=True)`, but slightly more efficient.
 

@@ -1,16 +1,16 @@
 import math
 from typing import Optional
 
+import jax
 import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
-from jaxtyping import Array
+from jaxtyping import Array, PRNGKeyArray
 
-from .._custom_types import PRNGKey
-from .._module import Module, static_field
+from .._module import field, Module
 
 
-class GRUCell(Module):
+class GRUCell(Module, strict=True):
     """A single step of a Gated Recurrent Unit (GRU).
 
     !!! example
@@ -36,9 +36,9 @@ class GRUCell(Module):
     weight_hh: Array
     bias: Optional[Array]
     bias_n: Optional[Array]
-    input_size: int = static_field()
-    hidden_size: int = static_field()
-    use_bias: bool = static_field()
+    input_size: int = field(static=True)
+    hidden_size: int = field(static=True)
+    use_bias: bool = field(static=True)
 
     def __init__(
         self,
@@ -46,8 +46,7 @@ class GRUCell(Module):
         hidden_size: int,
         use_bias: bool = True,
         *,
-        key: PRNGKey,
-        **kwargs
+        key: PRNGKeyArray,
     ):
         """**Arguments:**
 
@@ -58,7 +57,6 @@ class GRUCell(Module):
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
         """
-        super().__init__(**kwargs)
 
         ihkey, hhkey, bkey, bkey2 = jrandom.split(key, 4)
         lim = math.sqrt(1 / hidden_size)
@@ -84,7 +82,10 @@ class GRUCell(Module):
         self.hidden_size = hidden_size
         self.use_bias = use_bias
 
-    def __call__(self, input: Array, hidden: Array, *, key: Optional[PRNGKey] = None):
+    @jax.named_scope("eqx.nn.GRUCell")
+    def __call__(
+        self, input: Array, hidden: Array, *, key: Optional[PRNGKeyArray] = None
+    ):
         """**Arguments:**
 
         - `input`: The input, which should be a JAX array of shape `(input_size,)`.
@@ -111,7 +112,7 @@ class GRUCell(Module):
         return new + inp * (hidden - new)
 
 
-class LSTMCell(Module):
+class LSTMCell(Module, strict=True):
     """A single step of a Long-Short Term Memory unit (LSTM).
 
     !!! example
@@ -137,9 +138,9 @@ class LSTMCell(Module):
     weight_ih: Array
     weight_hh: Array
     bias: Optional[Array]
-    input_size: int = static_field()
-    hidden_size: int = static_field()
-    use_bias: bool = static_field()
+    input_size: int = field(static=True)
+    hidden_size: int = field(static=True)
+    use_bias: bool = field(static=True)
 
     def __init__(
         self,
@@ -147,8 +148,7 @@ class LSTMCell(Module):
         hidden_size: int,
         use_bias: bool = True,
         *,
-        key: PRNGKey,
-        **kwargs
+        key: PRNGKeyArray,
     ):
         """**Arguments:**
 
@@ -159,7 +159,6 @@ class LSTMCell(Module):
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
         """
-        super().__init__(**kwargs)
 
         ihkey, hhkey, bkey = jrandom.split(key, 3)
         lim = math.sqrt(1 / hidden_size)
@@ -181,6 +180,7 @@ class LSTMCell(Module):
         self.hidden_size = hidden_size
         self.use_bias = use_bias
 
+    @jax.named_scope("eqx.nn.LSTMCell")
     def __call__(self, input, hidden, *, key=None):
         """**Arguments:**
 

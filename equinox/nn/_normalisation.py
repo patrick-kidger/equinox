@@ -1,18 +1,19 @@
 import functools as ft
 import warnings
-from typing import Optional, overload, Sequence, Tuple, Union
+from collections.abc import Sequence
+from typing import Optional, overload, Union
 
 import jax
 import jax.numpy as jnp
-from jaxtyping import Array
+from jaxtyping import Array, Float, PRNGKeyArray
 
-from .._custom_types import PRNGKey, sentinel
+from .._custom_types import sentinel
 from .._misc import left_broadcast_to
-from .._module import Module, static_field
+from .._module import field, Module
 from ._stateful import State
 
 
-class LayerNorm(Module):
+class LayerNorm(Module, strict=True):
     r"""
     Computes a mean and standard deviation over the whole input array, and uses these
     to normalise the whole array. Optionally applies an elementwise affine
@@ -49,33 +50,34 @@ class LayerNorm(Module):
 
     """
 
-    shape: Union[None, int, Sequence[int]] = static_field()
-    eps: float = static_field()
-    use_weight: bool = static_field()
-    use_bias: bool = static_field()
-    weight: Optional[Array]
-    bias: Optional[Array]
+    shape: tuple[int, ...] = field(static=True)
+    eps: float = field(static=True)
+    use_weight: bool = field(static=True)
+    use_bias: bool = field(static=True)
+    weight: Optional[Float[Array, "*shape"]]
+    bias: Optional[Float[Array, "*shape"]]
 
     def __init__(
         self,
-        shape: Union[None, int, Sequence[int]],
+        shape: Union[int, Sequence[int]],
         eps: float = 1e-5,
         use_weight: bool = True,
         use_bias: bool = True,
         *,
         elementwise_affine: Optional[bool] = None,
-        **kwargs,
     ):
         """**Arguments:**
 
-        - `shape`: Input shape. May be left unspecified (e.g. just `None`) if
-            `elementwise_affine=False`.
+        - `shape`: Shape of the input.
         - `eps`: Value added to denominator for numerical stability.
         - `use_weight`: Whether the module has learnable affine weights.
         - `use_bias`: Whether the module has learnable affine biases.
         - `elementwise_affine`: Deprecated alternative to `use_weight` and `use_bias`.
         """
-        super().__init__(**kwargs)
+        if isinstance(shape, int):
+            shape = (shape,)
+        else:
+            shape = tuple(shape)
         self.shape = shape
         self.eps = eps
         if elementwise_affine is not None:
@@ -91,21 +93,26 @@ class LayerNorm(Module):
         self.bias = jnp.zeros(shape) if use_bias else None
 
     @overload
-    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         ...
 
     @overload
     def __call__(
-        self, x: Array, state: State, *, key: Optional[PRNGKey] = None
-    ) -> Tuple[Array, State]:
+        self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
+    ) -> tuple[Array, State]:
         ...
 
+    @jax.named_scope("eqx.nn.LayerNorm")
     def __call__(
-        self, x: Array, state: State = sentinel, *, key: Optional[PRNGKey] = None
-    ) -> Union[Array, Tuple[Array, State]]:
+        self,
+        x: Float[Array, "*shape"],
+        state: State = sentinel,
+        *,
+        key: Optional[PRNGKeyArray] = None,
+    ) -> Union[Array, tuple[Array, State]]:
         """**Arguments:**
 
-        - `x`: A JAX array.
+        - `x`: A JAX array, with the same shape as the `shape` passed to `__init__`.
         - `state`: Ignored; provided for interchangability with the
             [`equinox.nn.BatchNorm`][] API.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
@@ -119,6 +126,17 @@ class LayerNorm(Module):
         is passed through unchanged. If `state` is not passed, then just the output is
         returned.
         """
+        if x.shape != self.shape:
+            raise ValueError(
+                "`LayerNorm(shape)(x)` must satisfy the invariant `shape == x.shape`"
+                f"Received `shape={self.shape} and `x.shape={x.shape}`. You might need "
+                "to replace `layer_norm(x)` with `jax.vmap(layer_norm)(x)`.\n"
+                "\n"
+                "If this is a new error for you, it might be because this became "
+                "stricter in Equinox v0.11.0. Previously all that was required is that "
+                "`x.shape` ended with `shape`. However, this turned out to be a "
+                "frequent source of bugs, so we made the check stricter!"
+            )
         mean = jnp.mean(x, keepdims=True)
         variance = jnp.var(x, keepdims=True)
         variance = jnp.maximum(0.0, variance)
@@ -134,7 +152,7 @@ class LayerNorm(Module):
             return out, state
 
 
-class GroupNorm(Module):
+class GroupNorm(Module, strict=True):
     r"""
     Splits the first dimension ("channels") into groups of fixed size. Computes a mean
     and standard deviation over the contents of each group, and uses these to normalise
@@ -163,10 +181,10 @@ class GroupNorm(Module):
         ```
     """  # noqa: E501
 
-    groups: int = static_field()
-    channels: Optional[int] = static_field()
-    eps: float = static_field()
-    channelwise_affine: bool = static_field()
+    groups: int = field(static=True)
+    channels: Optional[int] = field(static=True)
+    eps: float = field(static=True)
+    channelwise_affine: bool = field(static=True)
     weight: Optional[Array]
     bias: Optional[Array]
 
@@ -176,7 +194,6 @@ class GroupNorm(Module):
         channels: Optional[int] = None,
         eps: float = 1e-5,
         channelwise_affine: bool = True,
-        **kwargs,
     ):
         """**Arguments:**
 
@@ -193,7 +210,6 @@ class GroupNorm(Module):
                 "The number of channels should be specified if "
                 "`channelwise_affine=True`"
             )
-        super().__init__(**kwargs)
         self.groups = groups
         self.channels = channels
         self.eps = eps
@@ -202,18 +218,19 @@ class GroupNorm(Module):
         self.bias = jnp.zeros(channels) if channelwise_affine else None
 
     @overload
-    def __call__(self, x: Array, *, key: Optional[PRNGKey] = None) -> Array:
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         ...
 
     @overload
     def __call__(
-        self, x: Array, state: State, *, key: Optional[PRNGKey] = None
-    ) -> Tuple[Array, State]:
+        self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
+    ) -> tuple[Array, State]:
         ...
 
+    @jax.named_scope("eqx.nn.GroupNorm")
     def __call__(
-        self, x: Array, state: State = sentinel, *, key: Optional[PRNGKey] = None
-    ) -> Union[Array, Tuple[Array, State]]:
+        self, x: Array, state: State = sentinel, *, key: Optional[PRNGKeyArray] = None
+    ) -> Union[Array, tuple[Array, State]]:
         """**Arguments:**
 
         - `x`: A JAX array of shape `(channels, ...)`.
@@ -242,6 +259,119 @@ class GroupNorm(Module):
             weight = left_broadcast_to(self.weight, out.shape)  # pyright: ignore
             bias = left_broadcast_to(self.bias, out.shape)  # pyright: ignore
             out = weight * out + bias
+        if state is sentinel:
+            return out
+        else:
+            return out, state
+
+
+class RMSNorm(Module, strict=True):
+    r"""
+    A simplified version of LayerNorm which rescales the inputs, but does not center
+    them. Optionally applies a learned reweighting of the transformed array afterward.
+
+    Given an input array $x$, this layer computes
+
+    $$\frac{x}{\sqrt{\varepsilon + \frac{1}{n}\Vert x \Vert^2_2}} \gamma + \beta$$
+
+    where $\Vert x \Vert^2_2 = \sum_{i=1}^n x_i^2$, $n = \dim(x)$, and $\gamma$ is a
+    learned array with the same shape as $x$ if `use_weight=True`, or
+    $\gamma = 1$ if `use_weight=False`, as proposed in
+    [this paper](https://browse.arxiv.org/abs/2307.14995). `\beta` is an optional bias
+    term.
+
+    ??? cite
+
+        [Root Mean Square Layer Normalization](https://browse.arxiv.org/abs/1910.07467)
+
+        ```bibtex
+        @article{zhang2019root,
+            title={Root Mean Square Layer Normalization},
+            author={Biao Zhang and Rico Sennrich},
+            year={2019},
+            journal={arXiv:1910.07467}
+        }
+        ```
+    """
+
+    shape: tuple[int, ...] = field(static=True)
+    eps: float = field(static=True)
+    use_weight: bool = field(static=True)
+    use_bias: bool = field(static=True)
+    weight: Optional[Float[Array, "*shape"]]
+    bias: Optional[Float[Array, "*shape"]]
+
+    def __init__(
+        self,
+        shape: Union[int, Sequence[int]],
+        eps: float = 1e-5,
+        use_weight: bool = True,
+        use_bias: bool = True,
+    ):
+        """**Arguments:**
+
+        - `shape`: Shape of the input.
+        - `eps`: Value added to denominator for numerical stability.
+        - `use_weight`: Whether the module has learnable affine weights.
+        - `use_bias`: Whether the module has learnable affine shift.
+        """
+        if isinstance(shape, int):
+            shape = (shape,)
+        else:
+            shape = tuple(shape)
+        self.shape = shape
+        self.eps = eps
+        self.use_weight = use_weight
+        self.use_bias = use_bias
+        self.weight = jnp.ones(shape) if use_weight else None
+        self.bias = jnp.zeros(shape) if use_bias else None
+
+    @overload
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
+        ...
+
+    @overload
+    def __call__(
+        self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
+    ) -> tuple[Array, State]:
+        ...
+
+    @jax.named_scope("eqx.nn.RMSNorm")
+    def __call__(
+        self,
+        x: Float[Array, "*shape"],
+        state: State = sentinel,
+        *,
+        key: Optional[PRNGKeyArray] = None,
+    ) -> Union[Array, tuple[Array, State]]:
+        """**Arguments:**
+
+        - `x`: A JAX array, with the same shape as the `shape` passed to `__init__`.
+        - `state`: Ignored; provided for interchangability with the
+            [`equinox.nn.BatchNorm`][] API.
+        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
+            (Keyword only argument.)
+
+        **Returns:**
+
+        The output is a JAX array of the same shape as `x`.
+
+        If `state` is passed, then a 2-tuple of `(output, state)` is returned. The state
+        is passed through unchanged. If `state` is not passed, then just the output is
+        returned.
+        """
+        if x.shape != self.shape:
+            raise ValueError(
+                "`RMSNorm(shape)(x)` must satisfy the invariant `shape == x.shape`"
+                f"Received `shape={self.shape} and `x.shape={x.shape}`. You might need "
+                "to replace `rms_norm(x)` with `jax.vmap(rms_norm)(x)`.\n"
+            )
+        inv_rms = jax.lax.rsqrt(jnp.mean(x**2) + self.eps)
+        out = inv_rms * x
+        if self.use_weight:
+            out = self.weight * out
+        if self.use_bias:
+            out = out + self.bias
         if state is sentinel:
             return out
         else:

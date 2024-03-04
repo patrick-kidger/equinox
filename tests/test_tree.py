@@ -1,13 +1,12 @@
-from typing import Callable
-
+import equinox as eqx
 import jax
+import jax.core
 import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
 import jax.tree_util as jtu
+import numpy as np
 import pytest
-
-import equinox as eqx
 
 
 def test_tree_at_replace(getkey):
@@ -113,10 +112,14 @@ def test_tree_at_none_leaf():
     assert x == (True, None, 0)
 
 
+def _typeequal(x, y):
+    return (type(x) == type(y)) and (x == y)
+
+
 def test_tree_equal():
     key1 = jrandom.PRNGKey(0)
     key2 = jrandom.PRNGKey(1)
-    # Not using getkey as ever-so-in-principle two random keys could produce the same
+    # Not using `getkey` as ever-so-in-principle two random keys could produce the same
     # weights (like that's ever going to happen).
     pytree1 = [1, 2, 3, {"a": jnp.array([1.0, 2.0])}, eqx.nn.Linear(1, 2, key=key1)]
     pytree2 = [1, 2, 3, {"a": jnp.array([1.0, 2.0])}, eqx.nn.Linear(1, 2, key=key1)]
@@ -124,11 +127,11 @@ def test_tree_equal():
     pytree4 = [1, 2, 3, {"a": jnp.array([1.0, 4.0])}, eqx.nn.Linear(1, 2, key=key1)]
     pytree5 = [1, 2, 4, {"a": jnp.array([1.0, 2.0])}, eqx.nn.Linear(1, 2, key=key1)]
 
-    assert eqx.tree_equal(pytree1, pytree1, pytree1)
-    assert eqx.tree_equal(pytree1, pytree2)
-    assert not eqx.tree_equal(pytree1, pytree3)
-    assert not eqx.tree_equal(pytree1, pytree4)
-    assert not eqx.tree_equal(pytree1, pytree5)
+    assert _typeequal(eqx.tree_equal(pytree1, pytree1, pytree1), jnp.array(True))
+    assert _typeequal(eqx.tree_equal(pytree1, pytree2), jnp.array(True))
+    assert _typeequal(eqx.tree_equal(pytree1, pytree3), jnp.array(False))
+    assert _typeequal(eqx.tree_equal(pytree1, pytree4), jnp.array(False))
+    assert _typeequal(eqx.tree_equal(pytree1, pytree5), False)
 
 
 def test_tree_equal_jit():
@@ -137,7 +140,7 @@ def test_tree_equal_jit():
 
     @jax.jit
     def run1():
-        assert not eqx.tree_equal(a, 0)
+        assert _typeequal(eqx.tree_equal(a, 0), False)
 
     run1()
 
@@ -145,20 +148,72 @@ def test_tree_equal_jit():
     def run2():
         return eqx.tree_equal(a, b)
 
-    assert run2()
+    assert _typeequal(run2(), jnp.array(True))
 
     @jax.jit
     def run3(x, y):
         return eqx.tree_equal(x, y)
 
-    assert run3(a, b)
-    assert not run3(a, 1)
+    assert _typeequal(run3(a, b), jnp.array(True))
+    assert _typeequal(run3(a, 1), jnp.array(False))
 
 
-def test_tree_inference(getkey):
+def test_tree_equal_numpy():
+    x = np.array([1, 2], dtype=np.float32)
+    x2 = np.array([1, 2], dtype=np.float32)
+    y = jnp.array([1, 2], dtype=jnp.float32)
+    z = jnp.array([1, 2], dtype=jnp.float16)
+    assert _typeequal(eqx.tree_equal(x, x), True)
+    assert _typeequal(eqx.tree_equal(x, x2), True)
+    assert _typeequal(eqx.tree_equal(x, x2, typematch=True), True)
+    assert _typeequal(eqx.tree_equal(x, y), jnp.array(True))
+    assert _typeequal(eqx.tree_equal(x, y, typematch=True), False)
+    assert _typeequal(eqx.tree_equal(y, y), jnp.array(True))
+    assert _typeequal(eqx.tree_equal(y, y, typematch=True), jnp.array(True))
+    assert _typeequal(eqx.tree_equal(x, z), False)
+    assert _typeequal(eqx.tree_equal(y, z), False)
+
+    @jax.jit
+    def f():
+        assert _typeequal(eqx.tree_equal(x, x), True)
+        assert _typeequal(eqx.tree_equal(x, y, typematch=True), False)
+        out = eqx.tree_equal(x, y)
+        assert isinstance(out, jax.core.Tracer)
+        return out
+
+    assert _typeequal(f(), jnp.array(True))
+
+
+def test_tree_equal_scalars():
+    x = np.float32(1)
+    y = np.array(1, dtype=np.float32)
+    z = np.array(1, dtype=np.float16)
+    # scalar-ness does not matter
+    assert _typeequal(eqx.tree_equal(x, y), True)
+    # dtype does matter
+    assert _typeequal(eqx.tree_equal(x, z), False)
+
+    z = jax.dtypes.bfloat16(1)
+    z2 = jax.dtypes.bfloat16(1)
+    w = jax.dtypes.bfloat16(2)
+    assert _typeequal(eqx.tree_equal(z, z2), True)
+    assert _typeequal(eqx.tree_equal(z, w), False)
+
+
+def test_tree_allclose():
+    x = np.array(1.0, dtype=np.float32)
+    y = np.array(1.00001, dtype=np.float32)
+    z = jnp.array(1.00001, dtype=np.float32)
+    assert _typeequal(eqx.tree_equal(x, y), False)
+    assert _typeequal(eqx.tree_equal(x, y, atol=1e-3), True)
+    assert _typeequal(eqx.tree_equal(x, z, atol=1e-3), jnp.array(True))
+    assert _typeequal(eqx.tree_equal(x, z, typematch=True, atol=1e-3), False)
+
+
+def test_inference_mode(getkey):
     attention = eqx.nn.MultiheadAttention(2, 4, key=getkey())
     assert attention.dropout.inference is False
-    attention2 = eqx.tree_inference(attention, True)
+    attention2 = eqx.nn.inference_mode(attention)
     assert attention.dropout.inference is False
     assert attention2.dropout.inference is True
 
@@ -188,6 +243,14 @@ def test_tree_flatten_one_level():
         eqx.tree_flatten_one_level(x)
 
 
+# This matches the behaviour of `jax._src.tree_util.flatten_one_level`
+def test_tree_flatten_one_level_special():
+    x = [None, None, eqx.Module(), 1, 2]
+    leaves, treedef = eqx.tree_flatten_one_level(x)
+    assert leaves == [None, None, eqx.Module(), 1, 2]
+    assert treedef == jtu.tree_structure([0, 0, 0, 0, 0])
+
+
 def test_tree_check():
     x = []
     y = []
@@ -201,28 +264,15 @@ def test_tree_check():
     with pytest.raises(ValueError):
         eqx.tree_check(x)
 
-    # From https://github.com/patrick-kidger/equinox/issues/327
-    class Component(eqx.Module):
-        transform: Callable[[float], float]
-        validator: Callable[[Callable], Callable]
 
-        def __init__(self, transform=lambda x: x, validator=lambda f: f) -> None:
-            self.transform = transform
-            self.validator = validator
+def test_tree_check_none():
+    eqx.tree_check([None, None])
 
-        def __call__(self, x):
-            return self.validator(self.transform)(x)
 
-    class SubComponent(Component):
-        test: Callable[[float], float]
+def test_tree_check_integer():
+    eqx.tree_check([0, 0])
 
-        def __init__(self, test=lambda x: 2 * x) -> None:
-            self.test = test
-            super().__init__(self._transform)
 
-        def _transform(self, x):
-            return self.test(x)
-
-    a = SubComponent()
-    with pytest.raises(ValueError):
-        eqx.tree_check(a)
+def test_tree_check_module():
+    a = eqx.Module()  # same `id(...)` for both entries passed to `tree_check`.
+    eqx.tree_check([a, a])

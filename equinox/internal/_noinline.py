@@ -1,5 +1,6 @@
 import functools as ft
-from typing import Any, Callable, Optional, Union
+from collections.abc import Callable
+from typing import Any, Optional, Union
 
 import jax
 import jax._src.pretty_printer as pp
@@ -14,10 +15,11 @@ import numpy as np
 from jaxtyping import Array, Int, PyTree
 
 from .._ad import filter_jvp
+from .._caches import internal_lru_caches
 from .._compile_utils import hashable_combine, hashable_partition
 from .._eval_shape import filter_eval_shape
 from .._filters import combine, is_array, partition
-from .._module import Module, module_update_wrapper, static_field
+from .._module import field, Module, module_update_wrapper
 from .._vmap_pmap import filter_vmap
 from . import _primitive
 from ._primitive import (
@@ -70,6 +72,9 @@ def _cache_filter_eval_shape(key):
     return filter_eval_shape(abstract_fn, args)
 
 
+internal_lru_caches.append(_cache_filter_eval_shape)
+
+
 def _is_undefined(x):
     return type(x) is ad.UndefinedPrimal
 
@@ -120,6 +125,9 @@ def _get_callback(treedef, static, is_float0):
         return callback(static_fn, dynamic)
 
     return callback_lookup
+
+
+internal_lru_caches.append(_get_callback)
 
 
 def _impl_transform(static_fn):
@@ -377,9 +385,13 @@ _index_to_fn = []
 
 
 class _NoInlineWrapper(Module):
-    dynamic_index: Int[Array, ""]
-    abstract_fn: Callable = static_field()
+    dynamic_index: Int[Union[Array, np.ndarray], ""]
+    abstract_fn: Callable = field(static=True)
     dynamic_fn: Any
+
+    @property
+    def __wrapped__(self):
+        return self.abstract_fn
 
     def __call__(self, *args, **kwargs):
         return filter_primitive_bind(
@@ -391,9 +403,7 @@ class _NoInlineWrapper(Module):
         )
 
 
-def noinline(
-    fn: Callable, abstract_fn: Optional[Callable] = None  # pyright: ignore
-) -> Callable:
+def noinline(fn: Callable, abstract_fn: Optional[Callable] = None) -> Callable:  # pyright: ignore
     """Marks a function as not being inlined into a larger computation.
     This can help to reduce compile time at the expense of increased runtime.
 
@@ -492,6 +502,6 @@ def noinline(
         dynamic_index = len(_index_to_fn)
         _fn_to_index[static_fn] = dynamic_index
         _index_to_fn.append(static_fn)
-    dynamic_index = jnp.array(dynamic_index)
+    dynamic_index = np.array(dynamic_index)
     noinline_fn = _NoInlineWrapper(dynamic_index, abstract_fn, dynamic_fn)
-    return module_update_wrapper(noinline_fn, abstract_fn)
+    return module_update_wrapper(noinline_fn)

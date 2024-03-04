@@ -1,11 +1,10 @@
 import functools as ft
 import typing
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
-
-import equinox as eqx
 
 
 def test_tuple():

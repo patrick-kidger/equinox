@@ -1,7 +1,6 @@
 from ._activations import PReLU as PReLU
 from ._attention import MultiheadAttention as MultiheadAttention
 from ._batch_norm import BatchNorm as BatchNorm
-from ._composed import Lambda as Lambda, MLP as MLP, Sequential as Sequential
 from ._conv import (
     Conv as Conv,
     Conv1d as Conv1d,
@@ -14,8 +13,14 @@ from ._conv import (
 )
 from ._dropout import Dropout as Dropout
 from ._embedding import Embedding as Embedding
+from ._inference import inference_mode as inference_mode
 from ._linear import Identity as Identity, Linear as Linear
-from ._normalisation import GroupNorm as GroupNorm, LayerNorm as LayerNorm
+from ._mlp import MLP as MLP
+from ._normalisation import (
+    GroupNorm as GroupNorm,
+    LayerNorm as LayerNorm,
+    RMSNorm as RMSNorm,
+)
 from ._pool import (
     AdaptiveAvgPool1d as AdaptiveAvgPool1d,
     AdaptiveAvgPool2d as AdaptiveAvgPool2d,
@@ -33,5 +38,17 @@ from ._pool import (
     Pool as Pool,
 )
 from ._rnn import GRUCell as GRUCell, LSTMCell as LSTMCell
+from ._sequential import (
+    Lambda as Lambda,
+    Sequential as Sequential,
+    StatefulLayer as StatefulLayer,
+)
+from ._shared import Shared as Shared
 from ._spectral_norm import SpectralNorm as SpectralNorm
-from ._stateful import State as State, StateIndex as StateIndex
+from ._stateful import (
+    delete_init_state as delete_init_state,
+    make_with_state as make_with_state,
+    State as State,
+    StateIndex as StateIndex,
+)
+from ._weight_norm import WeightNorm as WeightNorm

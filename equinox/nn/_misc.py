@@ -1,5 +1,6 @@
 import typing_extensions as te
-from typing import Any, Sequence, TYPE_CHECKING, TypeVar, Union
+from collections.abc import Sequence
+from typing import Any, TYPE_CHECKING, TypeVar, Union
 
 
 _T = TypeVar("_T", bound=Sequence)
@@ -9,7 +10,7 @@ if TYPE_CHECKING:
     # the `else` branch as well:
     # https://github.com/microsoft/pyright/issues/3450
     def all_sequences(
-        x: Union[Sequence[Any], Sequence[_T]]
+        x: Union[Sequence[Any], Sequence[_T]],
     ) -> "te.StrictTypeGuard[Sequence[_T]]":
         ...
 

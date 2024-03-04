@@ -1,23 +1,20 @@
-import random
 import typing
-import warnings
 
-import beartype
-import jax.random as jrandom
+import jax
 import pytest
 
 
 typing.TESTING = True  # pyright: ignore
-warnings.filterwarnings(
-    "ignore",
-    category=beartype.roar.BeartypeDecorHintPep585DeprecationWarning,  # pyright: ignore
-)
 
 
-@pytest.fixture()
+jax.config.update("jax_numpy_dtype_promotion", "strict")
+jax.config.update("jax_numpy_rank_promotion", "raise")
+
+
+@pytest.fixture
 def getkey():
-    def _getkey():
-        # Not sure what the maximum actually is but this will do
-        return jrandom.PRNGKey(random.randint(0, 2**31 - 1))
+    # Delayed import so that jaxtyping can transform the AST of Equinox before it is
+    # imported, but conftest.py is ran before then.
+    import equinox.internal as eqxi
 
-    return _getkey
+    return eqxi.GetKey()

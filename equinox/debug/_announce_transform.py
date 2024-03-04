@@ -1,25 +1,49 @@
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import jax
 import jax.core
 import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
-import jax.numpy as jnp
 import jax.tree_util as jtu
 
-from .._ad import filter_custom_vjp
-from .._filters import combine, filter, is_array, is_array_like, partition
-from .._module import Module
-from .._pretty_print import tree_pformat
-from ._errors import error_if
+from .._filters import combine, is_array, partition
 
 
 def announce_transform(
     x, name=None, intermediates=False, announce: Callable[[str], Any] = print
 ):
-    """Identity function on an arbitrary PyTree. Announces each time it is parsed as
-    part of a jaxpr.
+    """Identity function on an arbitrary PyTree. Announces each time a JAX transform is
+    applied (grad, vmap, etc.).
+
+    !!! warning
+
+        This API is not stable. It should be used for one-off debugging purposes only.
+
+    **Arguments:**
+
+    - `x`: a variable to intercept.
+    - `intermediates`: whether to include intermediate transforms, that haven't yet
+        finished being transformed. E.g. if
+        `intermediates=False`, then `jit(vmap(...))` will print out
+        ```
+        vmap:abstract
+        vmap:mlir`
+        ```
+        whilst if `intermediates=True`, then `jit(vmap(...))` will print out
+        ```
+        vmap
+        vmap:abstract
+        vmap:mlir`
+        ```
+    - `announce`: the function to announce via. Defaults to just `print`.
+
+    **Returns:**
+
+    The `x` argument is returned unchanged.
+
+    As a side-effect, the transforms applied to `x` will be printed out.
     """
     if name is None:
         name = ""
@@ -36,7 +60,7 @@ def announce_transform(
 
 def _impl(*x, stack, name, intermediates, announce):
     del intermediates
-    stack = stack + ("impl,")
+    stack = stack + ("impl",)
     announce(name + ":".join(stack))
     return x
 
@@ -57,9 +81,20 @@ def _jvp(p, t, *, stack, name, intermediates, announce):
     p_out = announce_jaxpr_p.bind(
         *p, stack=p_stack, name=name, intermediates=intermediates, announce=announce
     )
-    t_out = announce_jaxpr_p.bind(
-        *t, stack=t_stack, name=name, intermediates=intermediates, announce=announce
-    )
+    t_nonzero = [ti for ti in t if type(ti) is not ad.Zero]
+    if len(t_nonzero) > 0:
+        t_nonzero_out = announce_jaxpr_p.bind(
+            *t_nonzero,
+            stack=t_stack,
+            name=name,
+            intermediates=intermediates,
+            announce=announce,
+        )
+    else:
+        t_nonzero_out = []
+    t_nonzero_out = iter(t_nonzero_out)
+    t_out = [ti if type(ti) is ad.Zero else next(t_nonzero_out) for ti in t]
+    assert next(t_nonzero_out, None) is None
     return p_out, t_out
 
 
@@ -97,41 +132,3 @@ ad.primitive_jvps[announce_jaxpr_p] = _jvp
 ad.primitive_transposes[announce_jaxpr_p] = _transpose
 batching.primitive_batchers[announce_jaxpr_p] = _batching
 mlir.register_lowering(announce_jaxpr_p, mlir.lower_fun(_mlir, multiple_results=True))
-
-
-def debug_backward_nan(x, name=None, terminate=True):
-    return _debug_backward_nan(x, name, terminate)
-
-
-@filter_custom_vjp
-def _debug_backward_nan(x, name, terminate):
-    return x
-
-
-def _debug_backward_nan_fwd(x, name, terminate):
-    return debug_backward_nan(x, name, terminate), None
-
-
-class _LongRepr(Module):
-    obj: Any
-
-    def __repr__(self):
-        return tree_pformat(self.obj, short_arrays=False)
-
-
-def _debug_backward_nan_bwd(_, grad_x, x, name, terminate):
-    msg = "   primals={x}\ncotangents={grad_x}"
-    if name is not None:
-        msg = f"{name}:\n" + msg
-    jax.debug.print(  # pyright: ignore
-        msg, x=_LongRepr(x), grad_x=_LongRepr(grad_x), ordered=True
-    )
-    if terminate:
-        nans = [
-            jnp.isnan(a).any() for a in jtu.tree_leaves(filter(grad_x, is_array_like))
-        ]
-        grad_x = error_if(grad_x, jnp.any(jnp.stack(nans)), "Encountered NaN")
-    return grad_x
-
-
-_debug_backward_nan.defvjp(_debug_backward_nan_fwd, _debug_backward_nan_bwd)

@@ -14,7 +14,7 @@ def _is_none(x):
 
 
 def apply_updates(model: PyTree, updates: PyTree) -> PyTree:
-    """A `jtu.tree_map`-broadcasted version of
+    """A `jax.tree_util.tree_map`-broadcasted version of
     ```python
     if update is None:
         return model

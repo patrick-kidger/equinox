@@ -13,8 +13,8 @@ import jax.tree_util as jtu
 from jaxtyping import PyTree
 
 from .._ad import nondifferentiable as nondifferentiable  # public re-export
+from .._errors import error_if
 from .._filters import combine, is_array, partition
-from ._errors import error_if
 
 
 _nontraceable_impl = lambda x, *, name: x
@@ -123,8 +123,10 @@ def nondifferentiable_backward(
 
 
 def _cannot_batch(x, b, *, msg):
+    (x,) = x
+    (b,) = b
     if b is batching.not_mapped:
-        return x
+        return x, b
     else:
         raise ValueError(msg)
 
