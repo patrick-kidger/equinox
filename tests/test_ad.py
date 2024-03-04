@@ -463,8 +463,8 @@ def test_filter_custom_jvp_exact():
     jax.grad(g)(1.0, 1)
 
 
-def test_filter_hessian_and_dce_and_jacfwd_and_jacrev():
-    # filter_hessian is implemented in terms of the other 3, so this tests all 4.
+def test_filter_hessian_and_jacfwd_and_jacrev():
+    # filter_hessian is implemented in terms of the other 2, so this tests all 3.
 
     def f(x, y):
         return jnp.sin(x) * y
