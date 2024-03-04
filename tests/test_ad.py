@@ -436,4 +436,6 @@ def test_filter_hessian_and_dce_and_jacfwd_and_jacrev():
 
     f_custom = jax.custom_vjp(f)
     f_custom.defvjp(f_fwd, f_bwd)
-    jax.hessian(f)(1.0, 2.0)
+    jax_hess = jax.hessian(f)(1.0, 2.0)
+    eqx_hess = eqx.filter_hessian(f)(jnp.array(1.0), jnp.array(2.0))
+    assert shaped_allclose(jax_hess, eqx_hess)
