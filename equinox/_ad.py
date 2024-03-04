@@ -579,33 +579,6 @@ def filter_closure_convert(fn: Callable[_P, _T], *args, **kwargs) -> Callable[_P
     return module_update_wrapper(_fn_to_jaxpr(fn, args, kwargs, dce=False), fn)
 
 
-class _Dce(Module):
-    fn: Callable
-
-    def __call__(self, *args, **kwargs):
-        return _fn_to_jaxpr(self.fn, args, kwargs, dce=True)(*args, **kwargs)
-
-
-def filter_dce(fn: Callable[_P, _T]) -> Callable[_P, _T]:
-    """Applies dead code elimination (DCE) to `fn`.
-
-    This is occasionally useful prior to performing autodifferentiation. In particular,
-    it may remove any unused `jax.custom_vjp`s (or [`equinox.filter_custom_vjp`][]s)
-    which might prohibit forward-mode autodifferentiation, or it may remove
-    `lax.while_loop`s which might prohibit reverse-mode autodifferentiation.
-
-    **Arguments:**
-
-    - `fn`: The function to DCE.
-
-    **Returns:**
-
-    A function with the same arguments and return value as `fn`, but with any
-    unused intermediate computations removed.
-    """
-    return module_update_wrapper(_Dce(fn), fn)
-
-
 def filter_hessian(fun, has_aux: bool = False):
     """Computes the Hessian of `fun`. The inputs and outputs may be arbitrary PyTrees.
 
@@ -623,13 +596,7 @@ def filter_hessian(fun, has_aux: bool = False):
     If `has_aux is True` then it returns a pair `(hessian, aux)`, where `aux` is the
     auxiliary data returned from `fun`.
     """
-    # Unlike JAX, we insert a DCE call in between the jacrev and the jacfwd.
-    # This sacrifices the ability to handle non-jaxpr'able eager on the jacfwd pass,
-    # in return for being able to handle some DCE'able exmaples -- in particular
-    # anything using `equinox.internal.while_loop`. See JAX issue #16049.
-    return filter_jacfwd(
-        filter_dce(filter_jacrev(fun, has_aux=has_aux)), has_aux=has_aux
-    )
+    return filter_jacfwd(filter_jacrev(fun, has_aux=has_aux)), has_aux=has_aux)
 
 
 # Work around JAX issue #16000
