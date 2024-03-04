@@ -502,12 +502,18 @@ def filter_jacrev(fun, has_aux: bool = False):
 
 def filter_hessian(fun, has_aux: bool = False):
     """Computes the Hessian of `fun`. The inputs and outputs may be arbitrary PyTrees.
+
     **Arguments:**
+
     - `fun`: The function to be differentiated.
+
     **Returns:**
+
     A function with the same arguments as `fun`.
+
     If `has_aux is False` then this function returns just the Hessian of `fun` with
     respect to its first argument.
+
     If `has_aux is True` then it returns a pair `(hessian, aux)`, where `aux` is the
     auxiliary data returned from `fun`.
     """
