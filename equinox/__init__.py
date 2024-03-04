@@ -5,7 +5,6 @@ from ._ad import (
     filter_closure_convert as filter_closure_convert,
     filter_custom_jvp as filter_custom_jvp,
     filter_custom_vjp as filter_custom_vjp,
-    filter_dce as filter_dce,
     filter_grad as filter_grad,
     filter_hessian as filter_hessian,
     filter_jacfwd as filter_jacfwd,
