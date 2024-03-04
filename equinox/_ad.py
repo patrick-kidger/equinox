@@ -439,7 +439,9 @@ class _Jac(Module):
                 _out, _aux = _out
             else:
                 _aux = None
-            _dynamic_out, _static_out = partition(_out, _is_jvp_tracer)
+            _dynamic_out, _static_out = partition(
+                _out, lambda j: isinstance(j, ad.JVPTracer)
+            )
             return _dynamic_out, (_static_out, _aux)
 
         if self.rev:
