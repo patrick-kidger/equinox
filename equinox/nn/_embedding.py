@@ -11,9 +11,7 @@ from .._module import field, Module
 
 
 internal_rope_embedding_cache: dict[int, Array] = {}
-internal_sinusoidal_positional_encoding_cache: dict[tuple[int, float], Array] = {}
 cache_clears.append(internal_rope_embedding_cache.clear)
-cache_clears.append(internal_sinusoidal_positional_encoding_cache.clear)
 
 
 class Embedding(Module, strict=True):
