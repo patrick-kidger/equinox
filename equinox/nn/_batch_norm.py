@@ -53,7 +53,7 @@ class BatchNorm(StatefulLayer, strict=True):
     axis_name: Union[Hashable, Sequence[Hashable]]
     inference: bool
     input_size: int = field(static=True)
-    approach: Union[None, str] = field(static=True)
+    approach: Literal["batch", "ema"] = field(static=True)
     eps: float = field(static=True)
     channelwise_affine: bool = field(static=True)
     momentum: float = field(static=True)
