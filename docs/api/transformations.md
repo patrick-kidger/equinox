@@ -36,7 +36,15 @@ Most users find that this is a simpler API when working with complicated PyTrees
 
 ---
 
-::: equinox.filter_checkpoint
+::: equinox.filter_jacfwd
+
+---
+
+::: equinox.filter_jacrev
+
+---
+
+::: equinox.filter_hessian
 
 ---
 
@@ -45,6 +53,10 @@ Most users find that this is a simpler API when working with complicated PyTrees
 ---
 
 ::: equinox.filter_custom_vjp
+
+---
+
+::: equinox.filter_checkpoint
 
 ---
 
