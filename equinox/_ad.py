@@ -377,7 +377,7 @@ def filter_vjp(
 
 
 def filter_vjp(fun, *primals, has_aux: bool = False):
-    """Filtered version of `jax.vjp`.
+    """Like `jax.vjp`, but accepts arbitrary PyTrees. (Not just JAXable types.)
 
     **Arguments:**
 
@@ -422,6 +422,104 @@ def filter_vjp(fun, *primals, has_aux: bool = False):
         return out, vjp_fn, aux
     else:
         return out, vjp_fn
+
+
+class _Jac(Module):
+    fun: Callable
+    has_aux: bool
+    rev: bool
+
+    def __call__(self, x, /, *args, **kwargs):
+        diff_x, static_x = partition(x, is_inexact_array)
+
+        def _fun(_diff_x):
+            _x = combine(_diff_x, static_x)
+            _out = self.fun(_x, *args, **kwargs)
+            if self.has_aux:
+                _out, _aux = _out
+            else:
+                _aux = None
+            _dynamic_out, _static_out = partition(
+                _out, lambda j: isinstance(j, ad.JVPTracer)
+            )
+            return _dynamic_out, (_static_out, _aux)
+
+        if self.rev:
+            jacobian = jax.jacrev
+        else:
+            jacobian = jax.jacfwd
+        dynamic_out, (static_out, aux) = jacobian(_fun, has_aux=True)(diff_x)
+        out = combine(dynamic_out, static_out)
+        if self.has_aux:
+            return out, aux
+        else:
+            return out
+
+
+def filter_jacfwd(fun, has_aux: bool = False):
+    """Computes the Jacobian of `fun`, evaluated using forward-mode AD. The inputs and
+    outputs may be arbitrary PyTrees.
+
+    **Arguments:**
+
+    - `fun`: The function to be differentiated.
+    - `has_aux`: Indicates whether `fun` returns a pair, with the first element the
+        output to be differentiated, and the latter auxiliary data. Defaults to `False`.
+
+    **Returns:**
+
+    A function with the same arguments as `fun`.
+
+    If `has_aux is False` then this function returns just the Jacobian of `fun` with
+    respect to its first argument.
+
+    If `has_aux is True` then it returns a pair `(jacobian, aux)`, where `aux` is the
+    auxiliary data returned from `fun`.
+    """
+    return _Jac(fun, has_aux, rev=False)
+
+
+def filter_jacrev(fun, has_aux: bool = False):
+    """Computes the Jacobian of `fun`, evaluated using reverse-mode AD. The inputs and
+    outputs may be arbitrary PyTrees.
+
+    **Arguments:**
+
+    - `fun`: The function to be differentiated.
+    - `has_aux`: Indicates whether `fun` returns a pair, with the first element the
+        output to be differentiated, and the latter auxiliary data. Defaults to `False`.
+
+    **Returns:**
+
+    A function with the same arguments as `fun`.
+
+    If `has_aux is False` then this function returns just the Jacobian of `fun` with
+    respect to its first argument.
+
+    If `has_aux is True` then it returns a pair `(jacobian, aux)`, where `aux` is the
+    auxiliary data returned from `fun`.
+    """
+    return _Jac(fun, has_aux, rev=True)
+
+
+def filter_hessian(fun, has_aux: bool = False):
+    """Computes the Hessian of `fun`. The inputs and outputs may be arbitrary PyTrees.
+
+    **Arguments:**
+
+    - `fun`: The function to be differentiated.
+
+    **Returns:**
+
+    A function with the same arguments as `fun`.
+
+    If `has_aux is False` then this function returns just the Hessian of `fun` with
+    respect to its first argument.
+
+    If `has_aux is True` then it returns a pair `(hessian, aux)`, where `aux` is the
+    auxiliary data returned from `fun`.
+    """
+    return filter_jacfwd(filter_jacrev(fun, has_aux=has_aux), has_aux=has_aux)
 
 
 def _is_struct(x):
