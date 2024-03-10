@@ -212,7 +212,7 @@ class _JitWrapper(Module):
             (msg,) = e.args
             if "EqxRuntimeError: " in msg:
                 _, msg = msg.split("EqxRuntimeError: ", 1)
-                msg, _ = msg.rsplit("\n\nAt:\n", 1)
+                msg, *_ = msg.rsplit("\n\nAt:\n", 1)
                 msg = msg + _eqx_on_error_msg
                 e.args = (msg,)
                 if jax.config.jax_traceback_filtering in (  # pyright: ignore
