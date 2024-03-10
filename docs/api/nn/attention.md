@@ -5,3 +5,11 @@
         members:
             - __init__
             - __call__
+
+---
+
+::: equinox.nn.RotaryPositionalEmbedding
+    selection:
+        members:
+            - __init__
+            - __call__
