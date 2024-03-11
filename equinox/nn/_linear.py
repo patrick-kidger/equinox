@@ -23,6 +23,7 @@ class Linear(Module, strict=True):
         in_features: Union[int, Literal["scalar"]],
         out_features: Union[int, Literal["scalar"]],
         use_bias: bool = True,
+        dtype=jnp.float32,
         *,
         key: PRNGKeyArray,
     ):
@@ -47,10 +48,12 @@ class Linear(Module, strict=True):
         out_features_ = 1 if out_features == "scalar" else out_features
         lim = 1 / math.sqrt(in_features_)
         self.weight = jrandom.uniform(
-            wkey, (out_features_, in_features_), minval=-lim, maxval=lim
+            wkey, (out_features_, in_features_), minval=-lim, maxval=lim, dtype=dtype
         )
         if use_bias:
-            self.bias = jrandom.uniform(bkey, (out_features_,), minval=-lim, maxval=lim)
+            self.bias = jrandom.uniform(
+                bkey, (out_features_,), minval=-lim, maxval=lim, dtype=dtype
+            )
         else:
             self.bias = None
 
