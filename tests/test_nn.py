@@ -6,6 +6,7 @@ import jax
 import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
+import optax
 import pytest
 
 
@@ -1418,3 +1419,31 @@ def test_rope_embeddings_values():
     res = rope_embeddings(x)
 
     assert jnp.allclose(res, expected_values, atol=1e-6)
+
+
+def test_optax_scan_attn():
+    # we need standard type promotions because optax dies otherwise :(
+    with jax.numpy_dtype_promotion("standard"):
+        model = eqx.nn.MultiheadAttention(
+            num_heads=2, query_size=2, key=jrandom.PRNGKey(0)
+        )
+        optim = optax.adam(learning_rate=1e-3)
+        opt_state = optim.init(eqx.filter(model, eqx.is_array))
+
+        # the most standard training loop
+        def step(carry, _):
+            model, opt_state = carry
+            inp = jnp.ones((2, 2), dtype=jnp.float32)
+            loss_value, grads = eqx.filter_value_and_grad(
+                lambda model: jnp.sum(
+                    model(query=inp, key_=inp, value=inp, inference=True)
+                )
+            )(model)
+            updates, opt_state = optim.update(grads, opt_state, model)
+            model = eqx.apply_updates(model, updates)
+            return (model, opt_state), None
+
+        # we use scan so that we don't depend on some inner properties of optax state
+        carry, xs = jax.lax.scan(step, init=(model, opt_state), xs=None, length=10)
+        # the fact that we didn't fail means that the opt_state is consistent
+        # between iterations, and, overall, we care mainly about not-failing
