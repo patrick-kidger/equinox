@@ -84,8 +84,6 @@ class Dropout(Module, strict=True):
 
         if inference is None:
             inference = self.inference
-        if isinstance(self.p, (int, float)) and self.p == 0:
-            inference = True
         if inference:
             return x
         elif key is None:
