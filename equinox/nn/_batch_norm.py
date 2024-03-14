@@ -224,6 +224,7 @@ class BatchNorm(StatefulLayer, strict=True):
         if inference is None:
             inference = self.inference
         if inference:
+            # renormalize running stats to account for the zeroed part
             zero_frac = state.get(self.zero_frac_index)
             running_mean, running_var = state.get(self.state_index)
             norm_mean = running_mean / jnp.maximum(1.0 - zero_frac, self.eps)
@@ -253,17 +254,23 @@ class BatchNorm(StatefulLayer, strict=True):
                 warmup_count = jnp.minimum(warmup_count + 1, self.warmup_period)
                 state = state.set(self.count_index, warmup_count)
 
+                # fill in unpopulated part of running stats with batch stats
                 warmup_frac = warmup_count / self.warmup_period
                 norm_mean = zero_frac * batch_mean + running_mean
-                norm_mean = (1.0 - warmup_frac) * batch_mean + warmup_frac * norm_mean
                 norm_var = zero_frac * batch_var + running_var
+
+                # apply warmup interpolation between batch and running statistics
+                norm_mean = (1.0 - warmup_frac) * batch_mean + warmup_frac * norm_mean
                 norm_var = (1.0 - warmup_frac) * batch_var + warmup_frac * norm_var
             else:
+                # calculate unbiased variance for saving
                 axis_size = jax.lax.psum(jnp.array(1.0), self.axis_name)
                 debias_coef = (axis_size) / jnp.maximum(axis_size - 1, self.eps)
                 running_var = (
                     1 - momentum
                 ) * debias_coef * batch_var + momentum * running_var
+
+                # just use batch statistics when not in inference mode
                 norm_mean, norm_var = batch_mean, batch_var
 
             state = state.set(self.state_index, (running_mean, running_var))
