@@ -7,7 +7,7 @@ import pytest
 
 
 def test_delete_init_state():
-    model = eqx.nn.BatchNorm(3, "batch")
+    model = eqx.nn.BatchNorm(3, "batch", approach="batch")
     eqx.nn.State(model)
     model2 = eqx.nn.delete_init_state(model)
 
@@ -17,7 +17,7 @@ def test_delete_init_state():
 
     leaves = [x for x in jtu.tree_leaves(model) if eqx.is_array(x)]
     leaves2 = [x for x in jtu.tree_leaves(model2) if eqx.is_array(x)]
-    assert len(leaves) == len(leaves2) + 3
+    assert len(leaves) == len(leaves2) + 4
 
 
 def test_double_state():
