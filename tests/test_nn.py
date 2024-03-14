@@ -830,9 +830,14 @@ def test_batch_norm(getkey):
         bn = eqx.nn.BatchNorm(5, "batch")
         assert bn.approach == "batch"
 
+    with pytest.raises(ValueError):
+        bn = eqx.nn.BatchNorm(5, "batch", approach="ema", warmup_period=0)
+
     # Test initialization
     bn_momentum = 0.99
-    bn = eqx.nn.BatchNorm(5, "batch", approach="ema", momentum=bn_momentum)
+    bn = eqx.nn.BatchNorm(
+        5, "batch", approach="ema", warmup_period=10, momentum=bn_momentum
+    )
     state = eqx.nn.State(bn)
     vbn = jax.vmap(bn, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
     running_mean, running_var = state.get(bn.state_index)
@@ -890,8 +895,7 @@ def test_batch_norm(getkey):
     assert running_mean.shape == (6,)
     assert running_var.shape == (6,)
 
-    # Test that it normalises
-
+    # Test that approach=ema normalises
     x1alt = jrandom.normal(jrandom.PRNGKey(5678), (10, 5))  # avoid flakey test
     bn = eqx.nn.BatchNorm(5, "batch", channelwise_affine=False, approach="ema")
     state = eqx.nn.State(bn)
@@ -899,6 +903,27 @@ def test_batch_norm(getkey):
     out, state = vbn(x1alt, state)
     true_out = (x1alt - jnp.mean(x1alt, axis=0, keepdims=True)) / jnp.sqrt(
         jnp.var(x1alt, axis=0, keepdims=True) + 1e-5
+    )
+    assert jnp.allclose(out, true_out)
+
+    # Test that approach=batch normalises in training mode
+    bn = eqx.nn.BatchNorm(
+        5, "batch", channelwise_affine=False, approach="batch", momentum=0.9
+    )
+    state = eqx.nn.State(bn)
+    vbn = jax.vmap(bn, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
+    out, state = vbn(x1alt, state)
+    true_out = (x1alt - jnp.mean(x1alt, axis=0, keepdims=True)) / jnp.sqrt(
+        jnp.var(x1alt, axis=0, keepdims=True) + 1e-5
+    )
+    assert jnp.allclose(out, true_out)
+    # Test that approach=batch normaises in inference mode
+    bn_inf = eqx.nn.inference_mode(bn, value=True)
+    vbn_inf = jax.vmap(bn_inf, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
+    out, state = vbn_inf(x1alt, state)
+    debias_coef = x1alt.shape[0] / (x1alt.shape[0] - 1)
+    true_out = (x1alt - jnp.mean(x1alt, axis=0, keepdims=True)) / jnp.sqrt(
+        debias_coef * jnp.var(x1alt, axis=0, keepdims=True) + 1e-5
     )
     assert jnp.allclose(out, true_out)
 
@@ -913,7 +938,6 @@ def test_batch_norm(getkey):
     assert not jnp.allclose(running_var, running_var2)
 
     # Test that the statistics don't update at inference
-
     ibn = eqx.nn.inference_mode(bn, value=True)
     vibn = jax.vmap(ibn, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
     out, state = vibn(4 * x1 + 20, state)

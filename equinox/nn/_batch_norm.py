@@ -41,6 +41,61 @@ class BatchNorm(StatefulLayer, strict=True):
     statistics updated. During inference then just the running statistics are used.
     Whether the model is in training or inference mode should be toggled using
     [`equinox.nn.inference_mode`][].
+
+    With `approach = "batch"` during training the batch mean and variance are used
+    for normalization.  For inference the exponential running mean and ubiased
+    variance are used for normalization in accordance with the cited paper below:
+
+    $\text{TrainStats}_t = \text{BatchStats}_t$
+
+    $\text{InferenceStats}_t = \frac{\left(1.0 - m\right)\sum_{i=0}^{t}m^{t-i}
+    \text{BatchStats}_i}{\text{max} \left(1.0 - m^{t+1}, \varepsilon \right)}$
+
+    With `approach = "ema"` exponential running means and variances are kept.  During
+    training the batch statistics are used to fill in the running statistics until
+    they are populated.  In addition a linear iterpolation is used between the batch
+    and running statistics over the `warmup_period`.  During inference the running
+    statistics are used for normalization:
+
+
+
+    $\text{WarmupFrac}_t = \text{min} \left(1.0, \frac{t}{\text{WarmupPeriod}} \right)$
+
+    $\text{TrainStats}_t = (1.0 - \text{WarmupFrac}_t) * BatchStats_t +
+    \text{WarmupFrac}_t * \left(1.0 - m\right)\sum_{i=0}^{t}m^{t-i}\text{BatchStats}_i$
+
+    $\text{InferenceStats}_t = \frac{\left(1.0 - m\right)\sum_{i=0}^{t}m^{t-i}
+    \text{BatchStats}_i}{\text{Max} \left(1.0 - m^{t+1}, \varepsilon \right)}$
+
+
+    $\text{Note: } \frac{(1.0 - m)\sum_{i=0}^{t}m^{t-i}}{1.0 - m^{t+1}} =
+    \frac{(1.0 - m)\sum_{i=0}^{t}m^{i}}{1.0 - m^{t+1}}$
+    $= \frac{(1.0 - m)\frac{1.0 - m^{t+1}}{1.0 - m}}{1.0 - m^{t+1}} = 1$
+
+
+    ??? cite
+
+        [Batch Normalization: Accelerating Deep Network Training by Reducing
+         Internal Covariate Shift](https://arxiv.org/abs/1502.03167)
+
+        ```bibtex
+        @article{DBLP:journals/corr/IoffeS15,
+        author       = {Sergey Ioffe and
+                        Christian Szegedy},
+        title        = {Batch Normalization: Accelerating Deep Network Training
+                        by Reducing Internal Covariate Shift},
+        journal      = {CoRR},
+        volume       = {abs/1502.03167},
+        year         = {2015},
+        url          = {http://arxiv.org/abs/1502.03167},
+        eprinttype    = {arXiv},
+        eprint       = {1502.03167},
+        timestamp    = {Mon, 13 Aug 2018 16:47:06 +0200},
+        biburl       = {https://dblp.org/rec/journals/corr/IoffeS15.bib},
+        bibsource    = {dblp computer science bibliography, https://dblp.org}
+        }
+        ```
+
     """  # noqa: E501
 
     weight: Optional[Float[Array, "input_size"]]
@@ -67,7 +122,7 @@ class BatchNorm(StatefulLayer, strict=True):
         eps: float = 1e-5,
         channelwise_affine: bool = True,
         momentum: float = 0.99,
-        warmup_period: int = 1000,
+        warmup_period: int = 1,
         inference: bool = False,
         dtype=None,
     ):
@@ -86,8 +141,8 @@ class BatchNorm(StatefulLayer, strict=True):
             parameters.
         - `momentum`: The rate at which to update the running statistics. Should be a
             value between 0 and 1 exclusive.
-        - `warmup_period`: The period to warm up the running statistics. Only used when
-            `approach=\"ema\"`.
+        - `warmup_period`: The interpolation period between batch and running
+            statistics. Only used when `approach=\"ema\"`.
         - `inference`: If `False` then the batch means and variances will be calculated
             and used to update the running statistics. If `True` then the running
             statistics are directly used for normalisation. This may be toggled with
@@ -106,6 +161,9 @@ class BatchNorm(StatefulLayer, strict=True):
         if approach not in valid_approaches:
             raise ValueError(f"approach must be one of {valid_approaches}")
         self.approach = approach
+
+        if warmup_period < 1:
+            raise ValueError("warmup_period must be >= 1")
 
         if channelwise_affine:
             self.weight = jnp.ones((input_size,))
@@ -128,7 +186,7 @@ class BatchNorm(StatefulLayer, strict=True):
         self.eps = eps
         self.channelwise_affine = channelwise_affine
         self.momentum = momentum
-        self.warmup_period = max(1, warmup_period)
+        self.warmup_period = warmup_period
 
     @jax.named_scope("eqx.nn.BatchNorm")
     def __call__(
@@ -182,16 +240,15 @@ class BatchNorm(StatefulLayer, strict=True):
 
             momentum = self.momentum
             zero_frac = state.get(self.zero_frac_index)
-            zero_frac *= momentum
+            zero_frac = zero_frac * momentum
             state = state.set(self.zero_frac_index, zero_frac)
 
             batch_mean, batch_var = jax.vmap(_stats)(x)
             running_mean, running_var = state.get(self.state_index)
             running_mean = (1 - momentum) * batch_mean + momentum * running_mean
-            running_var = (1 - momentum) * batch_var + momentum * running_var
-            state = state.set(self.state_index, (running_mean, running_var))
 
             if self.approach == "ema":
+                running_var = (1 - momentum) * batch_var + momentum * running_var
                 warmup_count = state.get(self.count_index)
                 warmup_count = jnp.minimum(warmup_count + 1, self.warmup_period)
                 state = state.set(self.count_index, warmup_count)
@@ -202,7 +259,14 @@ class BatchNorm(StatefulLayer, strict=True):
                 norm_var = zero_frac * batch_var + running_var
                 norm_var = (1.0 - warmup_frac) * batch_var + warmup_frac * norm_var
             else:
+                axis_size = jax.lax.psum(jnp.array(1.0), self.axis_name)
+                debias_coef = (axis_size) / jnp.maximum(axis_size - 1, self.eps)
+                running_var = (
+                    1 - momentum
+                ) * debias_coef * batch_var + momentum * running_var
                 norm_mean, norm_var = batch_mean, batch_var
+
+            state = state.set(self.state_index, (running_mean, running_var))
 
         def _norm(y, m, v, w, b):
             out = (y - m) / jnp.sqrt(v + self.eps)
