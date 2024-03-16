@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array, PRNGKeyArray
 
+from .._misc import default_floating_dtype
 from .._module import field, Module
 
 
@@ -23,6 +24,7 @@ class Linear(Module, strict=True):
         in_features: Union[int, Literal["scalar"]],
         out_features: Union[int, Literal["scalar"]],
         use_bias: bool = True,
+        dtype=None,
         *,
         key: PRNGKeyArray,
     ):
@@ -33,6 +35,9 @@ class Linear(Module, strict=True):
         - `out_features`: The output size. The output from the layer will be a vector
             of shape `(out_features,)`.
         - `use_bias`: Whether to add on a bias as well.
+        - `dtype`: The dtype to use for the weight and the bias in this layer.
+            Defaults to either `jax.numpy.float32` or `jax.numpy.float64` depending
+            on whether JAX is in 64-bit mode.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
 
@@ -46,11 +51,17 @@ class Linear(Module, strict=True):
         in_features_ = 1 if in_features == "scalar" else in_features
         out_features_ = 1 if out_features == "scalar" else out_features
         lim = 1 / math.sqrt(in_features_)
+
+        if dtype is None:
+            dtype = default_floating_dtype()
+
         self.weight = jrandom.uniform(
-            wkey, (out_features_, in_features_), minval=-lim, maxval=lim
+            wkey, (out_features_, in_features_), minval=-lim, maxval=lim, dtype=dtype
         )
         if use_bias:
-            self.bias = jrandom.uniform(bkey, (out_features_,), minval=-lim, maxval=lim)
+            self.bias = jrandom.uniform(
+                bkey, (out_features_,), minval=-lim, maxval=lim, dtype=dtype
+            )
         else:
             self.bias = None
 

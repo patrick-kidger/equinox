@@ -44,6 +44,10 @@ def test_linear(getkey):
     x = jrandom.normal(getkey(), (2,))
     assert linear(x).shape == ()
 
+    linear = eqx.nn.Linear(2, "scalar", key=getkey(), dtype=jnp.float16)
+    x = jrandom.normal(getkey(), (2,), dtype=jnp.float16)
+    assert linear(x).dtype == jnp.float16
+
 
 def test_identity(getkey):
     identity1 = eqx.nn.Identity()
