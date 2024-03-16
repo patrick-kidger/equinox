@@ -35,8 +35,9 @@ class Linear(Module, strict=True):
         - `out_features`: The output size. The output from the layer will be a vector
             of shape `(out_features,)`.
         - `use_bias`: Whether to add on a bias as well.
-        - `dtype`: The dtype to use. Defaults to either `jax.numpy.float32` or
-            `jax.numpy.float64` depending on whether JAX is in 64-bit mode.
+        - `dtype`: The dtype to use for the weight and the bias in this layer.
+            Defaults to either `jax.numpy.float32` or `jax.numpy.float64` depending
+            on whether JAX is in 64-bit mode.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
 
