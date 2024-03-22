@@ -39,7 +39,7 @@ def test_shared_node(getkey):
 
         def __init__(self):
             attention = eqx.nn.MultiheadAttention(
-                num_heads=3, query_size=12, key=getkey(), inference=True
+                num_heads=3, query_size=12, key=getkey()
             )
             my_proj = eqx.nn.Linear(12, 12, use_bias=False, key=getkey())
             where = lambda pair: pair[1].key_proj
@@ -88,7 +88,7 @@ def test_multi_shared(getkey):
         def __init__(self):
             my_proj = eqx.nn.Linear(12, 12, use_bias=False, key=getkey())
             attention = eqx.nn.MultiheadAttention(
-                num_heads=3, query_size=12, key=getkey(), inference=True
+                num_heads=3, query_size=12, key=getkey()
             )
             where = lambda pair: (pair[1].key_proj, pair[1].query_proj.weight)
             get = lambda pair: (pair[0], pair[0].weight + 1)

@@ -763,12 +763,11 @@ def test_multihead_attention(getkey):
         qk_size=13,
         vo_size=17,
         key=getkey(),
-        inference=True,
     )
     q = jrandom.uniform(getkey(), (19, 3))
     k = jrandom.uniform(getkey(), (23, 5))
     v = jrandom.uniform(getkey(), (23, 7))
-    assert attn(q, k, v, key=jrandom.PRNGKey(1)).shape == (19, 11)
+    assert attn(q, k, v).shape == (19, 11)
 
     attn = eqx.nn.MultiheadAttention(num_heads=2, query_size=4, key=getkey())
     attn = eqx.tree_at(
@@ -782,21 +781,18 @@ def test_multihead_attention(getkey):
         [jnp.arange(16.0).reshape(4, 4) for _ in range(4)],
     )
     x = jnp.array([[1.0, 2.0, 3.0, 4.0]])
-    assert jnp.allclose(
-        attn(x, x, x, key=jrandom.PRNGKey(2)),
-        jnp.array([[680.0, 1960.0, 3240.0, 4520.0]]),
-    )
+    assert jnp.allclose(attn(x, x, x), jnp.array([[680.0, 1960.0, 3240.0, 4520.0]]))
 
     x = jnp.arange(1, 13, dtype=jnp.float32).reshape(3, 4)
     mask = jnp.broadcast_to(jnp.array([True, False, False]), (2, 3, 3))
     assert jnp.allclose(
-        attn(x, x, x, mask, key=jrandom.PRNGKey(3)),
+        attn(x, x, x, mask),
         jnp.broadcast_to(jnp.array([[680.0, 1960.0, 3240.0, 4520.0]]), (3, 4)),
     )
 
     mask = jnp.broadcast_to(jnp.array([True, False, False]), (3, 3))
     assert jnp.allclose(
-        attn(x, x, x, mask, key=jrandom.PRNGKey(4)),
+        attn(x, x, x, mask),
         jnp.broadcast_to(jnp.array([[680.0, 1960.0, 3240.0, 4520.0]]), (3, 4)),
     )
 

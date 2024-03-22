@@ -5,8 +5,10 @@ import jax
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.random as jrandom
+import numpy as np
 from jaxtyping import Array, Float, PRNGKeyArray
 
+from .._errors import error_if
 from .._filters import is_array
 from .._module import field, Module
 
@@ -20,8 +22,10 @@ class Dropout(Module, strict=True):
     [`equinox.nn.inference_mode`][].
     """
 
-    # Not static fields as it makes sense to want to modify them via equinox.tree_at.
-    p: Float[Array, ""] = field(converter=lambda x: x if is_array(x) else jnp.array(x))
+    # Not static fields as it makes sense to modify them via equinox.tree_at
+    p: Float[np.ndarray, ""] = field(
+        converter=lambda x: x if is_array(x) else np.array(x)
+    )
     inference: bool
 
     def __init__(
@@ -84,13 +88,24 @@ class Dropout(Module, strict=True):
 
         if inference is None:
             inference = self.inference
+
         if inference:
             return x
-        elif key is None:
-            raise RuntimeError(
-                "Dropout requires a key when running in non-deterministic mode."
-            )
         else:
-            q = 1 - lax.stop_gradient(self.p)
+            p = self.p
+            if key is None:
+                p = error_if(
+                    p,
+                    p != 0,
+                    "Dropout requires a key when running in non-"
+                    "deterministic mode with non-zero probability.",
+                )
+
+                # placeholder value for the key;
+                # this statement is only reachable (during execution)
+                # if the probability is zero, so the key does not matter.
+                key = jrandom.PRNGKey(0)
+
+            q = 1 - lax.stop_gradient(p)
             mask = jrandom.bernoulli(key, q, x.shape)
             return jnp.where(mask, x / q, 0)
