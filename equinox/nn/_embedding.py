@@ -7,6 +7,7 @@ from jaxtyping import Array, ArrayLike, Complex, Float, Int, PRNGKeyArray
 
 from .._caches import cache_clears
 from .._filters import is_array_like
+from .._misc import default_floating_dtype
 from .._module import field, Module
 
 
@@ -26,6 +27,7 @@ class Embedding(Module, strict=True):
         num_embeddings: Optional[int] = None,  # pyright: ignore
         embedding_size: Optional[int] = None,  # pyright: ignore
         weight: Optional[Float[Array, "num_embeddings embedding_size"]] = None,
+        dtype=None,
         *,
         key: Optional[PRNGKeyArray] = None,
     ):
@@ -35,6 +37,9 @@ class Embedding(Module, strict=True):
 
         - `num_embeddings`: Size of embedding dictionary. Must be non-negative.
         - `embedding_size`: Size of each embedding vector. Must be non-negative.
+        - `dtype`: The dtype to use for the embedding weights. Defaults to either
+            `jax.numpy.float32` or `jax.numpy.float64` depending on whether JAX is in
+            64-bit mode.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for initialisation
             of the embedding lookup table. (Keyword only argument.)
 
@@ -43,6 +48,7 @@ class Embedding(Module, strict=True):
         - `weight`: The embedding lookup table, of shape
             `(num_embeddings, embedding_size)`.
         """
+        dtype = default_floating_dtype() if dtype is None else dtype
         if weight is None:
             if num_embeddings is None or embedding_size is None or key is None:
                 raise ValueError(
@@ -54,7 +60,9 @@ class Embedding(Module, strict=True):
                 raise ValueError("num_embeddings must not be negative.")
             if embedding_size < 0:
                 raise ValueError("embedding_size must not be negative.")
-            self.weight = jrandom.normal(key, (num_embeddings, embedding_size))
+            self.weight = jrandom.normal(
+                key, (num_embeddings, embedding_size), dtype=dtype
+            )
         else:
             if weight.ndim != 2:
                 raise ValueError(

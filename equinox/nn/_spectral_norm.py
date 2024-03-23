@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import jax.random as jr
 from jaxtyping import Array, Float, PRNGKeyArray
 
+from .._misc import default_floating_dtype
 from .._module import field
 from .._tree import tree_at
 from ._sequential import StatefulLayer
@@ -66,6 +67,7 @@ class SpectralNorm(StatefulLayer, Generic[_Layer], strict=True):
         num_power_iterations: int = 1,
         eps: float = 1e-12,
         inference: bool = False,
+        dtype=None,
         *,
         key: PRNGKeyArray,
     ):
@@ -81,10 +83,13 @@ class SpectralNorm(StatefulLayer, Generic[_Layer], strict=True):
         - `inference`: Whether this is in inference mode, at which time no power
             iterations are performed.  This may be toggled with
             [`equinox.nn.inference_mode`][].
+        - `dtype`: The dtype to use for the `u` and `v` vectors. Defaults to either
+            `jax.numpy.float32` or `jax.numpy.float64` depending on whether JAX is in
+            64-bit mode.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for initialisation.
             (Keyword only argument.)
         """
-
+        dtype = default_floating_dtype() if dtype is None else dtype
         self.layer = layer
         self.weight_name = weight_name
         self.num_power_iterations = num_power_iterations
@@ -97,8 +102,8 @@ class SpectralNorm(StatefulLayer, Generic[_Layer], strict=True):
         weight = jnp.reshape(weight, (weight.shape[0], -1))
         u_len, v_len = weight.shape
         ukey, vkey = jr.split(key)
-        u0 = jr.normal(ukey, (u_len,))
-        v0 = jr.normal(vkey, (v_len,))
+        u0 = jr.normal(ukey, (u_len,), dtype=dtype)
+        v0 = jr.normal(vkey, (v_len,), dtype=dtype)
         for _ in range(15):
             u0, v0 = _power_iteration(weight, u0, v0, eps)
         self.uv_index = StateIndex((u0, v0))

@@ -13,6 +13,7 @@ from jaxtyping import Array, PRNGKeyArray
 
 from .._doc_utils import doc_repr
 from .._filters import is_array
+from .._misc import default_floating_dtype
 from .._module import field, Module
 from .._vmap_pmap import filter_vmap
 from ._linear import Linear
@@ -50,6 +51,7 @@ class MLP(Module, strict=True):
         final_activation: Callable = _identity,
         use_bias: bool = True,
         use_final_bias: bool = True,
+        dtype=None,
         *,
         key: PRNGKeyArray,
     ):
@@ -72,6 +74,9 @@ class MLP(Module, strict=True):
             to `True`.
         - `use_final_bias`: Whether to add on a bias to the final layer. Defaults
             to `True`.
+        - `dtype`: The dtype to use for all the weights and biases in this MLP.
+            Defaults to either `jax.numpy.float32` or `jax.numpy.float64` depending
+            on whether JAX is in 64-bit mode.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
 
@@ -81,16 +86,26 @@ class MLP(Module, strict=True):
         Likewise `out_size` can also be a string `"scalar"`, in which case the
         output from the module will have shape `()`.
         """
-
+        dtype = default_floating_dtype() if dtype is None else dtype
         keys = jrandom.split(key, depth + 1)
         layers = []
         if depth == 0:
-            layers.append(Linear(in_size, out_size, use_final_bias, key=keys[0]))
+            layers.append(
+                Linear(in_size, out_size, use_final_bias, dtype=dtype, key=keys[0])
+            )
         else:
-            layers.append(Linear(in_size, width_size, use_bias, key=keys[0]))
+            layers.append(
+                Linear(in_size, width_size, use_bias, dtype=dtype, key=keys[0])
+            )
             for i in range(depth - 1):
-                layers.append(Linear(width_size, width_size, use_bias, key=keys[i + 1]))
-            layers.append(Linear(width_size, out_size, use_final_bias, key=keys[-1]))
+                layers.append(
+                    Linear(
+                        width_size, width_size, use_bias, dtype=dtype, key=keys[i + 1]
+                    )
+                )
+            layers.append(
+                Linear(width_size, out_size, use_final_bias, dtype=dtype, key=keys[-1])
+            )
         self.layers = tuple(layers)
         self.in_size = in_size
         self.out_size = out_size
