@@ -16,7 +16,7 @@ def _selective_scan(
     A: Float[Array, "d_inner state_space_dims"],
     B: Float[Array, "seq_len state_space_dims"],
     C: Float[Array, "seq_len state_space_dims"],
-    D: Float[Array, "d_inner"],  # noqa
+    D: Float[Array, " d_inner"],
 ):
     seq_len, _ = u.shape
     d_inner, state_space_dims = A.shape
@@ -39,13 +39,25 @@ def _selective_scan(
 
 
 class SelectiveStateSpaceModel(Module, strict=True):
-    """
+    r"""
     State Space Model with Selective Scan. This is the implementation of the
     Mamba Block from the paper
     "Mamba: Linear-Time Sequence Modeling with Selective State Spaces" [1].
 
-    [1] Albert Gu and Tri Dao, Mamba: Linear-Time Sequence Modeling
-    with Selective State Spaces, 2023
+
+    ??? cite
+        [Mamba: Linear-Time Sequence Modeling with Selective State Spaces](https://arxiv.org/abs/2312.00752)
+        ```bibtex
+            @misc{
+            gu2023mamba,
+            title={Mamba: Linear-Time Sequence Modeling with Selective State Spaces},
+            author={Albert Gu and Tri Dao},
+            year={2023},
+            eprint={2312.00752},
+            archivePrefix={arXiv},
+            primaryClass={cs.LG}
+        }
+        ```
     """
 
     n_input_dims: int = field(static=True)
@@ -83,19 +95,19 @@ class SelectiveStateSpaceModel(Module, strict=True):
         *,
         key: PRNGKeyArray,
     ):
-        """
-        Args:
-            n_input_dims: The dimension of the input.
-            state_space_dims: The dimension of the SSM (refers to 'N' in [1]).
-            expand: The expansion factor of the inner dimension (refers to 'E' in [1]).
-            d_conv: The kernel size of the convolutional layer
-            dt_rank: The rank of delta. If "auto", it will be
-                set to ceil(n_input_dims / state_space_dims).
-            pad_vocab_size_multiple: The multiple of the vocabulary size
-            use_bias_in_proj: Whether to use bias in the input projection layer.
-            use_bias_conv1d: Whether to use bias in the convolutional layer.
-            use_bias_out_proj: Whether to use bias in the output projection layer.
-            key: The PRNG key.
+        r"""**Arguments:**
+
+        - `n_input_dims`: The dimension of the input.
+        - `state_space_dims`: The dimension of the SSM (refers to $N$ in [1]).
+        - `expand`: The expansion factor of the inner dimension (refers to $E$ in [1]).
+        - `d_conv`: The kernel size of the convolutional layer
+        - `dt_rank`: The rank of delta. If "auto", it will be set to
+            ceil(n_input_dims / state_space_dims).
+        - `pad_vocab_size_multiple`: The multiple of the vocabulary size
+        - `use_bias_in_proj`: Whether to use bias in the input projection layer.
+        - `use_bias_conv1d`: Whether to use bias in the convolutional layer.
+        - `use_bias_out_proj`: Whether to use bias in the output projection layer.
+        - `key`: The PRNG key.
 
         """
         self.n_input_dims = n_input_dims
@@ -148,8 +160,10 @@ class SelectiveStateSpaceModel(Module, strict=True):
             self.dt_rank, self.d_inner, use_bias=True, key=dt_proj_key
         )
 
-        A = jnp.repeat(jnp.arange(1, self.state_space_dims + 1), self.d_inner).reshape(
-            self.d_inner, self.state_space_dims
+        A = (
+            jnp.repeat(jnp.arange(1, self.state_space_dims + 1), self.d_inner)
+            .reshape(self.state_space_dims, self.d_inner)
+            .transpose()
         )
         self.A_log = jnp.log(A)
         self.D = jnp.ones(self.d_inner)
@@ -162,6 +176,16 @@ class SelectiveStateSpaceModel(Module, strict=True):
 
     @jax.named_scope("eqx.nn.SelectiveStateSpaceModel")
     def __call__(self, x: Float[Array, "seq_len n_input_dims"]) -> Array:
+        r"""**Arguments:**
+
+        - `x`: The input sequence. Should be a JAX array of
+                shape `(seq_len, n_input_dims)`.
+
+        **Returns:**
+
+        - A JAX array of shape `(seq_len, n_input_dims)`.
+
+        """
         seq_len, d = x.shape
         if d != self.n_input_dims:
             raise ValueError(
