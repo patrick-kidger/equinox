@@ -11,7 +11,7 @@ import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array, Bool, Float, PRNGKeyArray
 
-from .._custom_types import sentinel
+from .._misc import default_int_dtype
 from .._module import field, Module
 from ._dropout import Dropout
 from ._linear import Linear
@@ -125,7 +125,7 @@ class MultiheadAttention(Module, strict=True):
     value_proj: Linear
     output_proj: Linear
     dropout: Dropout
-    autoregressive_index: StateIndex
+    autoregressive_index: Optional[StateIndex]
 
     num_heads: int = field(static=True)
     query_size: int = field(static=True)
@@ -198,20 +198,6 @@ class MultiheadAttention(Module, strict=True):
         if output_size is None:
             output_size = query_size
 
-        def _make_autoregressive_cache(**_):
-            if state_length is None:
-                raise ValueError(
-                    "Cannot use autoregressive decoding without specifying "
-                    "`MultiheadAttention(..., state_length=...)`."
-                )
-            key_shape = state_length, qk_size
-            value_shape = state_length, vo_size
-            if jax.config.jax_enable_x64:  # pyright: ignore
-                _int = jnp.int64
-            else:
-                _int = jnp.int32
-            return jnp.empty(key_shape), jnp.empty(value_shape), jnp.zeros((), _int)
-
         self.query_proj = Linear(
             query_size, num_heads * qk_size, use_bias=use_query_bias, key=qkey
         )
@@ -237,7 +223,19 @@ class MultiheadAttention(Module, strict=True):
         self.use_key_bias = use_key_bias
         self.use_value_bias = use_value_bias
         self.use_output_bias = use_output_bias
-        self.autoregressive_index = StateIndex(_make_autoregressive_cache())
+        self.state_length = state_length
+
+        def _make_autoregressive_cache(**_):
+            key_shape = state_length, num_heads, qk_size
+            value_shape = state_length, num_heads, vo_size
+            _int = default_int_dtype()
+            return jnp.empty(key_shape), jnp.empty(value_shape), jnp.zeros((), _int)
+
+        self.autoregressive_index = (
+            StateIndex(_make_autoregressive_cache())
+            if state_length is not None
+            else None
+        )
 
     @overload
     def __call__(
@@ -304,7 +302,7 @@ class MultiheadAttention(Module, strict=True):
             Bool[Array, "num_heads q_seq kv_seq"],
             Literal["causal"],
         ] = None,
-        state: State = sentinel,
+        state: Optional[State] = None,
         *,
         key: Optional[PRNGKeyArray] = None,
         inference: Optional[bool] = None,
@@ -338,6 +336,9 @@ class MultiheadAttention(Module, strict=True):
             be a JAX array of shape `(query_seq_length, kv_seq_length)`, or (for custom
             per-head masking) `(num_heads, query_seq_length, kv_seq_length)`. A value of
             `False` at a position indicates that position should be ignored.
+        - `state`: Optional state for the KV cache. Used for autoregressive decoding.
+            If the state is provided but not the `state_length` parameter during
+            initialisation, a `ValueError` will be raised.
         - `key`: A `jax.random.PRNGKey` used for dropout. Unused if `dropout = 0`.
             (Keyword only argument.)
         - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
@@ -390,13 +391,32 @@ class MultiheadAttention(Module, strict=True):
                     "process_heads must not change the shape of the heads."
                 )
 
-        if state is sentinel:
+        if state is None:
             causal_mask_offset = 0
         else:
+            if self.autoregressive_index is None:
+                raise ValueError(
+                    "State was provided, but cannot use autoregressive decoding "
+                    "without specifying "
+                    "`MultiheadAttention(..., state_length=...)`."
+                )
             key_state, value_state, index = state.get(self.autoregressive_index)
+            key_seq_length = key_heads.shape[0]
+            if index + key_seq_length > self.state_length:
+                key_shift = index + key_seq_length - self.state_length
+                key_shift = min(key_shift, key_seq_length)
+                key_state = jnp.roll(key_state, -key_shift, axis=0)
+
             key_state = lax.dynamic_update_slice_in_dim(
                 key_state, key_heads, index, axis=0
             )
+
+            value_seq_length = value_heads.shape[0]
+            if index + value_seq_length > self.state_length:
+                value_shift = index + value_seq_length - self.state_length
+                value_shift = min(value_shift, value_seq_length)
+                value_state = jnp.roll(value_state, -value_shift, axis=0)
+
             value_state = lax.dynamic_update_slice_in_dim(
                 value_state, value_heads, index, axis=0
             )
@@ -440,7 +460,7 @@ class MultiheadAttention(Module, strict=True):
         attn = attn.reshape(query_seq_length, -1)
         out = jax.vmap(self.output_proj)(attn)
 
-        if state is sentinel:
+        if state is None:
             return out
         else:
             return out, state
@@ -449,42 +469,3 @@ class MultiheadAttention(Module, strict=True):
         seq_length, _ = x.shape
         projection = jax.vmap(proj)(x)
         return projection.reshape(seq_length, self.num_heads, -1)
-
-
-def self_attention(
-    num_heads: int,
-    size: int,
-    *,
-    multiquery: bool = False,
-    state_length: Optional[int] = None,
-    key: PRNGKeyArray,
-):
-    """Multi-head or multi-query attention. Also supports autoregressive decoding.
-
-    This function is just a convenience wrapper for creating
-    [`equinox.nn.MultiheadAttention`][] instances, as the full API has a great many
-    options.
-
-    **Arguments:**
-
-    - `num_heads`: Number of parallel attention heads.
-    - `size`: Number of input channels in the key, value, and query, and the number of
-        channels in the output.
-    - `multiquery`: if `True`, then compute multi-query rather than full multi-head
-        attention. (Keyword only argument.)
-    - `state_length`: Used when autoregressively decoding. This is the size of the
-        key and value buffers that are updated each time the module is called. (Keyword
-        only argument.)
-    - `key`: A `jax.random.PRNGKeyArray` used to provide randomness for parameter
-        initialisation. (Keyword only argument.)
-
-    **Returns:**
-
-    An [`equinox.nn.MultiheadAttention`][] instance.
-    """
-    return MultiheadAttention(
-        num_heads=num_heads,
-        query_size=size,
-        state_length=state_length,
-        key=key,
-    )
