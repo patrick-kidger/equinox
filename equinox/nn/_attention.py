@@ -3,16 +3,19 @@ import math
 import warnings
 from collections.abc import Callable
 from functools import partial
-from typing import cast, Optional, Union
+from typing import cast, Literal, Optional, overload, Union
 
 import jax
+import jax.lax as lax
 import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array, Bool, Float, PRNGKeyArray
 
+from .._misc import default_int_dtype
 from .._module import field, Module
 from ._dropout import Dropout
 from ._linear import Linear
+from ._stateful import State, StateIndex
 
 
 def dot_product_attention_weights(
@@ -122,6 +125,7 @@ class MultiheadAttention(Module, strict=True):
     value_proj: Linear
     output_proj: Linear
     dropout: Dropout
+    autoregressive_index: Optional[StateIndex]
 
     num_heads: int = field(static=True)
     query_size: int = field(static=True)
@@ -130,6 +134,7 @@ class MultiheadAttention(Module, strict=True):
     output_size: int = field(static=True)
     qk_size: int = field(static=True)
     vo_size: int = field(static=True)
+    state_length: Optional[int] = field(static=True)
     use_query_bias: bool = field(static=True)
     use_key_bias: bool = field(static=True)
     use_value_bias: bool = field(static=True)
@@ -144,6 +149,7 @@ class MultiheadAttention(Module, strict=True):
         output_size: Optional[int] = None,
         qk_size: Optional[int] = None,
         vo_size: Optional[int] = None,
+        state_length: Optional[int] = None,
         use_query_bias: bool = False,
         use_key_bias: bool = False,
         use_value_bias: bool = False,
@@ -165,6 +171,8 @@ class MultiheadAttention(Module, strict=True):
             Defaults to `query_size // num_heads`.
         - `vo_size`: Number of channels to compare attention-weighted value and output
             over, per head. Defaults to `query_size // num_heads`.
+        - `state_length`: Used when autoregressively decoding. This is the size of the
+            key and value buffers that are updated each time the module is called.
         - `use_query_bias`: Whether to use a bias term in the query projections.
         - `use_key_bias`: Whether to use a bias term in the key projections.
         - `use_value_bias`: Whether to use a bias term in the value projections.
@@ -215,6 +223,72 @@ class MultiheadAttention(Module, strict=True):
         self.use_key_bias = use_key_bias
         self.use_value_bias = use_value_bias
         self.use_output_bias = use_output_bias
+        self.state_length = state_length
+
+        def _make_autoregressive_cache(**_):
+            key_shape = state_length, num_heads, qk_size
+            value_shape = state_length, num_heads, vo_size
+            _int = default_int_dtype()
+            return jnp.empty(key_shape), jnp.empty(value_shape), jnp.zeros((), _int)
+
+        self.autoregressive_index = (
+            StateIndex(_make_autoregressive_cache())
+            if state_length is not None
+            else None
+        )
+
+    @overload
+    def __call__(
+        self,
+        query: Float[Array, "q_seq q_size"],
+        key_: Float[Array, "kv_seq k_size"],
+        value: Float[Array, "kv_seq v_size"],
+        mask: Union[
+            None,
+            Bool[Array, "q_seq kv_seq"],
+            Bool[Array, "num_heads q_seq kv_seq"],
+            Literal["causal"],
+        ] = None,
+        *,
+        key: Optional[PRNGKeyArray] = None,
+        inference: Optional[bool] = None,
+        deterministic: Optional[bool] = None,
+    ) -> Float[Array, "q_seq o_size"]:
+        ...
+
+    @overload
+    def __call__(
+        self,
+        query: Float[Array, "q_seq q_size"],
+        key_: Float[Array, "kv_seq k_size"],
+        value: Float[Array, "kv_seq v_size"],
+        mask: Union[
+            None,
+            Bool[Array, "q_seq kv_seq"],
+            Bool[Array, "num_heads q_seq kv_seq"],
+            Literal["causal"],
+        ],
+        state: State,
+        *,
+        key: Optional[PRNGKeyArray] = None,
+        inference: Optional[bool] = None,
+        deterministic: Optional[bool] = None,
+    ) -> tuple[Float[Array, "q_seq o_size"], State]:
+        ...
+
+    @overload
+    def __call__(
+        self,
+        query: Float[Array, "q_seq q_size"],
+        key_: Float[Array, "kv_seq k_size"],
+        value: Float[Array, "kv_seq v_size"],
+        *,
+        state: State,
+        key: Optional[PRNGKeyArray] = None,
+        inference: Optional[bool] = None,
+        deterministic: Optional[bool] = None,
+    ) -> tuple[Float[Array, "q_seq o_size"], State]:
+        ...
 
     @jax.named_scope("eqx.nn.MultiheadAttention")
     def __call__(
@@ -223,8 +297,12 @@ class MultiheadAttention(Module, strict=True):
         key_: Float[Array, "kv_seq k_size"],
         value: Float[Array, "kv_seq v_size"],
         mask: Union[
-            None, Bool[Array, "q_seq kv_seq"], Bool[Array, "num_heads q_seq kv_seq"]
+            None,
+            Bool[Array, "q_seq kv_seq"],
+            Bool[Array, "num_heads q_seq kv_seq"],
+            Literal["causal"],
         ] = None,
+        state: Optional[State] = None,
         *,
         key: Optional[PRNGKeyArray] = None,
         inference: Optional[bool] = None,
@@ -243,7 +321,9 @@ class MultiheadAttention(Module, strict=True):
                 ],
             ]
         ] = None,
-    ) -> Float[Array, "q_seq o_size"]:
+    ) -> Union[
+        Float[Array, "q_seq o_size"], tuple[Float[Array, "q_seq o_size"], State]
+    ]:
         """**Arguments:**
 
         - `query`: Query embedding. Should be a JAX array of shape
@@ -256,6 +336,9 @@ class MultiheadAttention(Module, strict=True):
             be a JAX array of shape `(query_seq_length, kv_seq_length)`, or (for custom
             per-head masking) `(num_heads, query_seq_length, kv_seq_length)`. A value of
             `False` at a position indicates that position should be ignored.
+        - `state`: Optional state for the KV cache. Used for autoregressive decoding.
+            If the state is provided but not the `state_length` parameter during
+            initialisation, a `ValueError` will be raised.
         - `key`: A `jax.random.PRNGKey` used for dropout. Unused if `dropout = 0`.
             (Keyword only argument.)
         - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
@@ -308,6 +391,58 @@ class MultiheadAttention(Module, strict=True):
                     "process_heads must not change the shape of the heads."
                 )
 
+        if state is None:
+            causal_mask_offset = 0
+        else:
+            if self.autoregressive_index is None:
+                raise ValueError(
+                    "State was provided, but cannot use autoregressive decoding "
+                    "without specifying "
+                    "`MultiheadAttention(..., state_length=...)`."
+                )
+            key_state, value_state, index = state.get(self.autoregressive_index)
+            key_seq_length = key_heads.shape[0]
+            if index + key_seq_length > self.state_length:
+                key_shift = index + key_seq_length - self.state_length
+                key_shift = min(key_shift, key_seq_length)
+                key_state = jnp.roll(key_state, -key_shift, axis=0)
+
+            key_state = lax.dynamic_update_slice_in_dim(
+                key_state, key_heads, index, axis=0
+            )
+
+            value_seq_length = value_heads.shape[0]
+            if index + value_seq_length > self.state_length:
+                value_shift = index + value_seq_length - self.state_length
+                value_shift = min(value_shift, value_seq_length)
+                value_state = jnp.roll(value_state, -value_shift, axis=0)
+
+            value_state = lax.dynamic_update_slice_in_dim(
+                value_state, value_heads, index, axis=0
+            )
+            causal_mask_offset = index
+            index = index + kv_seq_length
+            state = state.set(
+                self.autoregressive_index, (key_state, value_state, index)
+            )
+            key_heads = key_state
+            value_heads = value_state
+            kv_seq_length = self.state_length
+
+        if mask == "causal":
+            query_indices = jnp.arange(query_seq_length)[:, None]
+            kv_indices = jnp.arange(kv_seq_length)[None, :]
+            mask = kv_indices <= query_indices + causal_mask_offset
+        if state is not None:
+            # Also mask out the latter parts of the state we haven't written into yet.
+            unwritten_mask = jnp.arange(self.state_length) < index  # pyright: ignore
+            if mask is None:
+                mask = jnp.broadcast_to(
+                    unwritten_mask, (query_seq_length, self.state_length)
+                )
+            else:
+                mask = mask & unwritten_mask
+
         attn_fn = partial(
             dot_product_attention, dropout=self.dropout, inference=inference
         )
@@ -323,8 +458,12 @@ class MultiheadAttention(Module, strict=True):
                 query_heads, key_heads, value_heads, key=keys
             )
         attn = attn.reshape(query_seq_length, -1)
+        out = jax.vmap(self.output_proj)(attn)
 
-        return jax.vmap(self.output_proj)(attn)
+        if state is None:
+            return out
+        else:
+            return out, state
 
     def _project(self, proj, x):
         seq_length, _ = x.shape
