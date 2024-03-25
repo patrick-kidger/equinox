@@ -9,17 +9,19 @@ from ._filters import combine, is_array, partition
 
 
 def filter_shard(
-    x: PyTree[Any], device_or_shardings: Union[Device, jax.sharding.Sharding]
+    x: PyTree[Any], 
+    device_or_shardings: Union[Device, jax.sharding.Sharding]
 ):
-    """Filtered version of a combination `jax.lax.with_sharding_constraint` and `jax.device_put`. 
-    Enforces sharding within a JIT'd computation (That is, how an array is split between multiple 
-    devices, i.e. multiple GPUs/TPUs.), or moves `x` to a device, by converting the device to a 
+    """Filtered version of a combination `jax.lax.with_sharding_constraint` 
+    and `jax.device_put`. Enforces sharding within a JIT'd computation 
+    (That is, how an array is split between multiple devices, i.e. multiple 
+    GPUs/TPUs.), or moves `x` to a device, by converting the device to a 
     single-device sharding (`jaxlib.xla_extension.Device`).
     **Arguments:**
-    - `x`: A PyTree, with potentially a mix of arrays and non-arrays on the leaves. They
-        will have their shardings constrained.
-    - `device_or_shardings`: Either a singular device (e.g. CPU or GPU) or PyTree of sharding 
-        specifications. The structure should be a prefix of `x`.
+    - `x`: A PyTree, with potentially a mix of arrays and non-arrays on the leaves.
+        They will have their shardings constrained.
+    - `device_or_shardings`: Either a singular device (e.g. CPU or GPU) or PyTree of 
+        sharding specifications. The structure should be a prefix of `x`.
     **Returns:**
     A copy of `x` with the specified sharding constraints.
     !!! Example
