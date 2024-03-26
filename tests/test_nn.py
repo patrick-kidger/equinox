@@ -6,6 +6,8 @@ import jax
 import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
+import numpy as np
+import optax
 import pytest
 
 
@@ -1422,3 +1424,42 @@ def test_rope_embeddings_values():
     res = rope_embeddings(x)
 
     assert jnp.allclose(res, expected_values, atol=1e-6)
+
+
+@pytest.mark.parametrize("dropout_p", (None, 0.1, 0.0, np.array(0.5, dtype=np.float32)))
+def test_optax_scan_attn(dropout_p):
+    # we need standard type promotions because optax dies otherwise :(
+    with jax.numpy_dtype_promotion("standard"):
+        if dropout_p is not None:
+            # testing a bunch of different dropout probabilities
+            model = eqx.nn.MultiheadAttention(
+                num_heads=2, query_size=2, key=jrandom.PRNGKey(0), dropout_p=dropout_p
+            )
+        else:
+            # and checking that without explicit p also works
+            model = eqx.nn.MultiheadAttention(
+                num_heads=2, query_size=2, key=jrandom.PRNGKey(0)
+            )
+
+        optim = optax.adam(learning_rate=1e-3)
+        opt_state = optim.init(eqx.filter(model, eqx.is_array))
+
+        # the most standard training loop
+        def step(carry, _):
+            model, opt_state = carry
+            inp = jnp.ones((2, 2), dtype=jnp.float32)
+            loss_value, grads = eqx.filter_value_and_grad(
+                lambda model: jnp.sum(
+                    model(query=inp, key_=inp, value=inp, inference=True)
+                )
+            )(model)
+            # this does not throw only if dropout is dynamic
+            model = eqx.tree_at(lambda m: m.dropout.p, model, jnp.absolute(loss_value))
+            updates, opt_state = optim.update(grads, opt_state, model)
+            model = eqx.apply_updates(model, updates)
+            return (model, opt_state), None
+
+        # we use scan so that we don't depend on some inner properties of optax state
+        carry, xs = jax.lax.scan(step, init=(model, opt_state), xs=None, length=10)
+        # the fact that we didn't fail means that the opt_state is consistent
+        # between iterations, and, overall, we care mainly about not-failing
