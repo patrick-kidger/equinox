@@ -30,7 +30,7 @@ class Dropout(Module, strict=True):
 
     def __init__(
         self,
-        p: ArrayLike = 0.5,
+        p: Float[ArrayLike, ""] = 0.5,
         inference: bool = False,
         *,
         deterministic: Optional[bool] = None,

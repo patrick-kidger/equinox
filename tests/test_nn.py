@@ -1450,7 +1450,7 @@ def test_optax_scan_attn(dropout_p):
                 )
             )(model)
             # this does not throw only if dropout is dynamic
-            model = eqx.tree_at(lambda m: m._dropout.p, model, jnp.absolute(loss_value))
+            model = eqx.tree_at(lambda m: m.dropout.p, model, jnp.absolute(loss_value))
             updates, opt_state = optim.update(grads, opt_state, model)
             model = eqx.apply_updates(model, updates)
             return (model, opt_state), None

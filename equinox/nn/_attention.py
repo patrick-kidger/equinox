@@ -8,7 +8,7 @@ from typing import cast, Optional, Union
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
-from jaxtyping import Array, Bool, Float, PRNGKeyArray
+from jaxtyping import Array, ArrayLike, Bool, Float, PRNGKeyArray
 
 from .._module import field, Module
 from ._dropout import Dropout
@@ -148,7 +148,7 @@ class MultiheadAttention(Module, strict=True):
         use_key_bias: bool = False,
         use_value_bias: bool = False,
         use_output_bias: bool = False,
-        dropout_p: float = 0.0,
+        dropout_p: Float[ArrayLike, ""] = 0.0,
         inference: bool = False,
         *,
         key: PRNGKeyArray,
