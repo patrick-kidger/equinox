@@ -6,7 +6,7 @@ import jax.lax as lax
 import jax.numpy as jnp
 import jax.random as jrandom
 import numpy as np
-from jaxtyping import Array, Float, PRNGKeyArray
+from jaxtyping import Array, ArrayLike, Float, PRNGKeyArray
 
 from .._errors import error_if
 from .._filters import is_array
@@ -23,14 +23,14 @@ class Dropout(Module, strict=True):
     """
 
     # Not static fields as it makes sense to modify them via equinox.tree_at
-    p: Float[np.ndarray, ""] = field(
-        converter=lambda x: x if is_array(x) else np.array(x)
+    p: Float[ArrayLike, ""] = field(
+        converter=lambda x: x if is_array(x) else np.array(x, dtype=np.float32)
     )
     inference: bool
 
     def __init__(
         self,
-        p: float = 0.5,
+        p: ArrayLike = 0.5,
         inference: bool = False,
         *,
         deterministic: Optional[bool] = None,
@@ -51,7 +51,7 @@ class Dropout(Module, strict=True):
                 "Dropout(deterministic=...) is deprecated "
                 "in favour of Dropout(inference=...)"
             )
-        self.p = p  # type: ignore
+        self.p = p
         self.inference = inference
 
     # Backward compatibility
