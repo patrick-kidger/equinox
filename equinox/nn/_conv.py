@@ -10,6 +10,7 @@ import jax.random as jrandom
 import numpy as np
 from jaxtyping import Array, PRNGKeyArray
 
+from .._misc import default_floating_dtype
 from .._module import field, Module
 from ._misc import all_sequences
 
@@ -95,6 +96,7 @@ class Conv(Module, strict=True):
         groups: int = 1,
         use_bias: bool = True,
         padding_mode: str = "ZEROS",
+        dtype=None,
         *,
         key: PRNGKeyArray,
     ):
@@ -122,6 +124,9 @@ class Conv(Module, strict=True):
             - `'REPLICATE'`: pads with the replication of edge values,
                 `1234 -> 11123444`.
             - `'CIRCULAR'`: pads with circular values, `1234 -> 34123412`.
+        - `dtype`: The dtype to use for the weight and the bias in this layer.
+            Defaults to either `jax.numpy.float32` or `jax.numpy.float64` depending
+            on whether JAX is in 64-bit mode.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
 
@@ -148,6 +153,7 @@ class Conv(Module, strict=True):
                 case the padding is an odd number, then the extra padding is added at
                 the end for `'SAME'` and at the beginning for `'SAME_LOWER'`.
         """
+        dtype = default_floating_dtype() if dtype is None else dtype
         wkey, bkey = jrandom.split(key, 2)
 
         parse = _ntuple(num_spatial_dims)
@@ -168,6 +174,7 @@ class Conv(Module, strict=True):
             (out_channels, grouped_in_channels) + kernel_size,
             minval=-lim,
             maxval=lim,
+            dtype=dtype,
         )
         if use_bias:
             self.bias = jrandom.uniform(
@@ -175,6 +182,7 @@ class Conv(Module, strict=True):
                 (out_channels,) + (1,) * num_spatial_dims,
                 minval=-lim,
                 maxval=lim,
+                dtype=dtype,
             )
         else:
             self.bias = None
@@ -270,6 +278,7 @@ class Conv1d(Conv):
         groups: int = 1,
         use_bias: bool = True,
         padding_mode: str = "ZEROS",
+        dtype=None,
         *,
         key: PRNGKeyArray,
     ):
@@ -284,6 +293,7 @@ class Conv1d(Conv):
             groups=groups,
             use_bias=use_bias,
             padding_mode=padding_mode,
+            dtype=dtype,
             key=key,
         )
 
@@ -302,6 +312,7 @@ class Conv2d(Conv):
         groups: int = 1,
         use_bias: bool = True,
         padding_mode: str = "ZEROS",
+        dtype=None,
         *,
         key: PRNGKeyArray,
     ):
@@ -316,6 +327,7 @@ class Conv2d(Conv):
             groups=groups,
             use_bias=use_bias,
             padding_mode=padding_mode,
+            dtype=dtype,
             key=key,
         )
 
@@ -334,6 +346,7 @@ class Conv3d(Conv):
         groups: int = 1,
         use_bias: bool = True,
         padding_mode: str = "ZEROS",
+        dtype=None,
         *,
         key: PRNGKeyArray,
     ):
@@ -348,6 +361,7 @@ class Conv3d(Conv):
             groups=groups,
             use_bias=use_bias,
             padding_mode=padding_mode,
+            dtype=dtype,
             key=key,
         )
 
@@ -382,6 +396,7 @@ class ConvTranspose(Module, strict=True):
         groups: int = 1,
         use_bias: bool = True,
         padding_mode: str = "ZEROS",
+        dtype=None,
         *,
         key: PRNGKeyArray,
     ):
@@ -409,6 +424,9 @@ class ConvTranspose(Module, strict=True):
             - `'ZEROS'` (default): pads with zeros, no extra connectivity.
             - `'CIRCULAR'`: pads with circular values, extra connectivity (see the Tip
                 below).
+        - `dtype`: The dtype to use for the weight and the bias in this layer.
+            Defaults to either `jax.numpy.float32` or `jax.numpy.float64` depending
+            on whether JAX is in 64-bit mode.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
 
@@ -474,7 +492,7 @@ class ConvTranspose(Module, strict=True):
             `padding_mode='CIRCULAR'` is only implemented for `output_padding=0` and
             `padding='SAME'` or `'SAME_LOWER'`.
         """  # noqa: E501
-
+        dtype = default_floating_dtype() if dtype is None else dtype
         wkey, bkey = jrandom.split(key, 2)
 
         parse = _ntuple(num_spatial_dims)
@@ -494,6 +512,7 @@ class ConvTranspose(Module, strict=True):
             (out_channels, grouped_in_channels) + kernel_size,
             minval=-lim,
             maxval=lim,
+            dtype=dtype,
         )
         if use_bias:
             self.bias = jrandom.uniform(
@@ -501,6 +520,7 @@ class ConvTranspose(Module, strict=True):
                 (out_channels,) + (1,) * num_spatial_dims,
                 minval=-lim,
                 maxval=lim,
+                dtype=dtype,
             )
         else:
             self.bias = None
@@ -628,6 +648,7 @@ class ConvTranspose1d(ConvTranspose):
         groups: int = 1,
         use_bias: bool = True,
         padding_mode: str = "ZEROS",
+        dtype=None,
         *,
         key: PRNGKeyArray,
     ):
@@ -643,6 +664,7 @@ class ConvTranspose1d(ConvTranspose):
             groups=groups,
             use_bias=use_bias,
             padding_mode=padding_mode,
+            dtype=dtype,
             key=key,
         )
 
@@ -662,6 +684,7 @@ class ConvTranspose2d(ConvTranspose):
         groups: int = 1,
         use_bias: bool = True,
         padding_mode: str = "ZEROS",
+        dtype=None,
         *,
         key: PRNGKeyArray,
     ):
@@ -677,6 +700,7 @@ class ConvTranspose2d(ConvTranspose):
             groups=groups,
             use_bias=use_bias,
             padding_mode=padding_mode,
+            dtype=dtype,
             key=key,
         )
 
@@ -696,6 +720,7 @@ class ConvTranspose3d(ConvTranspose):
         groups: int = 1,
         use_bias: bool = True,
         padding_mode: str = "ZEROS",
+        dtype=None,
         *,
         key: PRNGKeyArray,
     ):

@@ -81,20 +81,19 @@ class BatchNorm(StatefulLayer, strict=True):
             statistics are directly used for normalisation. This may be toggled with
             [`equinox.nn.inference_mode`][] or overridden during
             [`equinox.nn.BatchNorm.__call__`][].
-        - `dtype`: The dtype to use for the running statistics. Defaults to either
+        - `dtype`: The dtype to use for the running statistics and the weight and bias
+            if `channelwise_affine` is `True`. Defaults to either
             `jax.numpy.float32` or `jax.numpy.float64` depending on whether JAX is in
             64-bit mode.
         """
-
+        dtype = default_floating_dtype() if dtype is None else dtype
         if channelwise_affine:
-            self.weight = jnp.ones((input_size,))
-            self.bias = jnp.zeros((input_size,))
+            self.weight = jnp.ones((input_size,), dtype=dtype)
+            self.bias = jnp.zeros((input_size,), dtype=dtype)
         else:
             self.weight = None
             self.bias = None
         self.first_time_index = StateIndex(jnp.array(True))
-        if dtype is None:
-            dtype = default_floating_dtype()
         init_buffers = (
             jnp.empty((input_size,), dtype=dtype),
             jnp.empty((input_size,), dtype=dtype),
