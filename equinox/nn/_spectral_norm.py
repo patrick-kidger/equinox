@@ -83,8 +83,14 @@ class SpectralNorm(StatefulLayer, Generic[_Layer], strict=True):
             [`equinox.nn.inference_mode`][].
         - `key`: A `jax.random.PRNGKey` used to provide randomness for initialisation.
             (Keyword only argument.)
-        """
 
+
+        !!! info
+
+            The `dtype` of the weight array of the `layer` input is applied to all
+            parameters in this layer.
+
+        """
         self.layer = layer
         self.weight_name = weight_name
         self.num_power_iterations = num_power_iterations
@@ -95,10 +101,11 @@ class SpectralNorm(StatefulLayer, Generic[_Layer], strict=True):
         if weight.ndim < 2:
             raise ValueError("`weight` must be at least two-dimensional")
         weight = jnp.reshape(weight, (weight.shape[0], -1))
+        dtype = weight.dtype
         u_len, v_len = weight.shape
         ukey, vkey = jr.split(key)
-        u0 = jr.normal(ukey, (u_len,))
-        v0 = jr.normal(vkey, (v_len,))
+        u0 = jr.normal(ukey, (u_len,), dtype=dtype)
+        v0 = jr.normal(vkey, (v_len,), dtype=dtype)
         for _ in range(15):
             u0, v0 = _power_iteration(weight, u0, v0, eps)
         self.uv_index = StateIndex((u0, v0))

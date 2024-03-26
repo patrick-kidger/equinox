@@ -1,6 +1,7 @@
 import functools as ft
 import math
 import warnings
+from collections.abc import Callable
 from functools import partial
 from typing import cast, Optional, Union
 
@@ -9,6 +10,7 @@ import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array, Bool, Float, PRNGKeyArray
 
+from .._misc import default_floating_dtype
 from .._module import field, Module
 from ._dropout import Dropout
 from ._linear import Linear
@@ -149,6 +151,7 @@ class MultiheadAttention(Module, strict=True):
         use_output_bias: bool = False,
         dropout_p: float = 0.0,
         inference: bool = False,
+        dtype=None,
         *,
         key: PRNGKeyArray,
     ):
@@ -173,9 +176,13 @@ class MultiheadAttention(Module, strict=True):
             is not applied. If `False` then dropout is applied. This may be toggled
             with [`equinox.nn.inference_mode`][] or overridden during
             [`equinox.nn.MultiheadAttention.__call__`][].
+        - `dtype`: The dtype to use for all trainable parameters in this layer.
+            Defaults to either `jax.numpy.float32` or `jax.numpy.float64` depending
+            on whether JAX is in 64-bit mode.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
         """
+        dtype = default_floating_dtype() if dtype is None else dtype
         qkey, kkey, vkey, okey = jrandom.split(key, 4)
 
         if key_size is None:
@@ -190,16 +197,28 @@ class MultiheadAttention(Module, strict=True):
             output_size = query_size
 
         self.query_proj = Linear(
-            query_size, num_heads * qk_size, use_bias=use_query_bias, key=qkey
+            query_size,
+            num_heads * qk_size,
+            use_bias=use_query_bias,
+            dtype=dtype,
+            key=qkey,
         )
         self.key_proj = Linear(
-            key_size, num_heads * qk_size, use_bias=use_key_bias, key=kkey
+            key_size, num_heads * qk_size, use_bias=use_key_bias, dtype=dtype, key=kkey
         )
         self.value_proj = Linear(
-            value_size, num_heads * vo_size, use_bias=use_value_bias, key=vkey
+            value_size,
+            num_heads * vo_size,
+            use_bias=use_value_bias,
+            dtype=dtype,
+            key=vkey,
         )
         self.output_proj = Linear(
-            num_heads * vo_size, output_size, use_bias=use_output_bias, key=okey
+            num_heads * vo_size,
+            output_size,
+            use_bias=use_output_bias,
+            dtype=dtype,
+            key=okey,
         )
         self.dropout = Dropout(dropout_p, inference=inference)
 
@@ -228,6 +247,20 @@ class MultiheadAttention(Module, strict=True):
         key: Optional[PRNGKeyArray] = None,
         inference: Optional[bool] = None,
         deterministic: Optional[bool] = None,
+        process_heads: Optional[
+            Callable[
+                [
+                    Float[Array, "seq_length num_heads qk_size"],
+                    Float[Array, "seq_length num_heads qk_size"],
+                    Float[Array, "seq_length num_heads vo_size"],
+                ],
+                tuple[
+                    Float[Array, "seq_length num_heads qk_size"],
+                    Float[Array, "seq_length num_heads qk_size"],
+                    Float[Array, "seq_length num_heads vo_size"],
+                ],
+            ]
+        ] = None,
     ) -> Float[Array, "q_seq o_size"]:
         """**Arguments:**
 
@@ -246,6 +279,10 @@ class MultiheadAttention(Module, strict=True):
         - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
             argument.)
         - `deterministic`: (Deprecated in favour of `inference`.)
+        - `process_heads`: A function that takes in the query, key, and value heads and
+            returns new query, key, and value heads. For example, this can be
+            used to implement relative positional embeddings -
+            see e.g. `RotaryPositionalEmbedding`for an example. (Keyword only argument.)
 
         **Returns:**
 
@@ -269,6 +306,25 @@ class MultiheadAttention(Module, strict=True):
         query_heads = self._project(self.query_proj, query)
         key_heads = self._project(self.key_proj, key_)
         value_heads = self._project(self.value_proj, value)
+
+        if process_heads is not None:
+            q_shape, k_shape, v_shape = (
+                query_heads.shape,
+                key_heads.shape,
+                value_heads.shape,
+            )
+            query_heads, key_heads, value_heads = process_heads(
+                query_heads, key_heads, value_heads
+            )
+
+            if (
+                query_heads.shape != q_shape
+                or key_heads.shape != k_shape
+                or value_heads.shape != v_shape
+            ):
+                raise ValueError(
+                    "process_heads must not change the shape of the heads."
+                )
 
         attn_fn = partial(
             dot_product_attention, dropout=self.dropout, inference=inference

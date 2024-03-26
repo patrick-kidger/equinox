@@ -1,5 +1,4 @@
-internal_caches = []
-internal_lru_caches = []
+cache_clears = []
 
 
 def clear_caches():
@@ -15,7 +14,5 @@ def clear_caches():
 
     None.
     """
-    for cache in internal_caches:
-        cache.clear()
-    for cache in internal_lru_caches:
-        cache.cache_clear()
+    for cache_clear in cache_clears:
+        cache_clear()

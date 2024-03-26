@@ -12,7 +12,10 @@ from ._conv import (
     ConvTranspose3d as ConvTranspose3d,
 )
 from ._dropout import Dropout as Dropout
-from ._embedding import Embedding as Embedding
+from ._embedding import (
+    Embedding as Embedding,
+    RotaryPositionalEmbedding as RotaryPositionalEmbedding,
+)
 from ._inference import inference_mode as inference_mode
 from ._linear import Identity as Identity, Linear as Linear
 from ._mlp import MLP as MLP

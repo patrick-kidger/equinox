@@ -1085,3 +1085,35 @@ def test_module_setattr():
     assert Foo.g is g  # pyright: ignore
     assert type(Foo.__dict__["f"]).__name__ == "_wrap_method"
     assert type(Foo.__dict__["g"]).__name__ == "_wrap_method"
+
+
+# See https://github.com/patrick-kidger/equinox/issues/206
+def test_jax_transform_warn(getkey):
+    class A(eqx.Module):
+        linear: Callable
+
+    class B(eqx.Module):
+        linear: Callable
+
+        def __init__(self, linear):
+            self.linear = linear
+
+    for cls in (A, B):
+        for transform in (
+            jax.jit,
+            jax.grad,
+            jax.vmap,
+            jax.value_and_grad,
+            jax.jacfwd,
+            jax.jacrev,
+            jax.hessian,
+            jax.custom_jvp,
+            jax.custom_vjp,
+            jax.checkpoint,  # pyright: ignore
+            jax.pmap,
+        ):
+            with pytest.warns(
+                match="Possibly assigning a JAX-transformed callable as an attribute"
+            ):
+                transformed = transform(eqx.nn.Linear(2, 2, key=getkey()))
+                cls(transformed)
