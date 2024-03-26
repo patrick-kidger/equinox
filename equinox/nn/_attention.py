@@ -10,6 +10,7 @@ import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array, Bool, Float, PRNGKeyArray
 
+from .._misc import default_floating_dtype
 from .._module import field, Module
 from ._dropout import Dropout
 from ._linear import Linear
@@ -150,6 +151,7 @@ class MultiheadAttention(Module, strict=True):
         use_output_bias: bool = False,
         dropout_p: float = 0.0,
         inference: bool = False,
+        dtype=None,
         *,
         key: PRNGKeyArray,
     ):
@@ -174,9 +176,13 @@ class MultiheadAttention(Module, strict=True):
             is not applied. If `False` then dropout is applied. This may be toggled
             with [`equinox.nn.inference_mode`][] or overridden during
             [`equinox.nn.MultiheadAttention.__call__`][].
+        - `dtype`: The dtype to use for all trainable parameters in this layer.
+            Defaults to either `jax.numpy.float32` or `jax.numpy.float64` depending
+            on whether JAX is in 64-bit mode.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
         """
+        dtype = default_floating_dtype() if dtype is None else dtype
         qkey, kkey, vkey, okey = jrandom.split(key, 4)
 
         if key_size is None:
@@ -191,16 +197,28 @@ class MultiheadAttention(Module, strict=True):
             output_size = query_size
 
         self.query_proj = Linear(
-            query_size, num_heads * qk_size, use_bias=use_query_bias, key=qkey
+            query_size,
+            num_heads * qk_size,
+            use_bias=use_query_bias,
+            dtype=dtype,
+            key=qkey,
         )
         self.key_proj = Linear(
-            key_size, num_heads * qk_size, use_bias=use_key_bias, key=kkey
+            key_size, num_heads * qk_size, use_bias=use_key_bias, dtype=dtype, key=kkey
         )
         self.value_proj = Linear(
-            value_size, num_heads * vo_size, use_bias=use_value_bias, key=vkey
+            value_size,
+            num_heads * vo_size,
+            use_bias=use_value_bias,
+            dtype=dtype,
+            key=vkey,
         )
         self.output_proj = Linear(
-            num_heads * vo_size, output_size, use_bias=use_output_bias, key=okey
+            num_heads * vo_size,
+            output_size,
+            use_bias=use_output_bias,
+            dtype=dtype,
+            key=okey,
         )
         self.dropout = Dropout(dropout_p, inference=inference)
 
