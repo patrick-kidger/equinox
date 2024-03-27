@@ -401,22 +401,9 @@ class MultiheadAttention(Module, strict=True):
                     "`MultiheadAttention(..., state_length=...)`."
                 )
             key_state, value_state, index = state.get(self.autoregressive_index)
-            key_seq_length = key_heads.shape[0]
-            if index + key_seq_length > self.state_length:
-                key_shift = index + key_seq_length - self.state_length
-                key_shift = min(key_shift, key_seq_length)
-                key_state = jnp.roll(key_state, -key_shift, axis=0)
-
             key_state = lax.dynamic_update_slice_in_dim(
                 key_state, key_heads, index, axis=0
             )
-
-            value_seq_length = value_heads.shape[0]
-            if index + value_seq_length > self.state_length:
-                value_shift = index + value_seq_length - self.state_length
-                value_shift = min(value_shift, value_seq_length)
-                value_state = jnp.roll(value_state, -value_shift, axis=0)
-
             value_state = lax.dynamic_update_slice_in_dim(
                 value_state, value_heads, index, axis=0
             )
