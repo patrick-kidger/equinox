@@ -53,6 +53,7 @@ from ._serialisation import (
     tree_deserialise_leaves as tree_deserialise_leaves,
     tree_serialise_leaves as tree_serialise_leaves,
 )
+from ._sharding import filter_shard as filter_shard
 from ._tree import (
     tree_at as tree_at,
     tree_check as tree_check,

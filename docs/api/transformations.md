@@ -18,6 +18,10 @@ Most users find that this is a simpler API when working with complicated PyTrees
 
 ::: equinox.filter_eval_shape
 
+---
+
+::: equinox.filter_shard
+
 ## Automatic differentiation
 
 ::: equinox.filter_grad
