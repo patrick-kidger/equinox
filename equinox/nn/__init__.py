@@ -41,6 +41,9 @@ from ._pool import (
     Pool as Pool,
 )
 from ._rnn import GRUCell as GRUCell, LSTMCell as LSTMCell
+from ._selective_state_space_models import (
+    SelectiveStateSpaceModel as SelectiveStateSpaceModel,
+)
 from ._sequential import (
     Lambda as Lambda,
     Sequential as Sequential,
