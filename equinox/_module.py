@@ -334,6 +334,34 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
         # [Step 3b] -- finish off building `__init__` methods. Until we'd done
         # dataclass'ification then we didn't necessarily have our `__init__` method.
 
+        # Set annotation to the converter input. This is useful for runtime type
+        # checkers.
+        # Note that mutating the `__init__.__annotations__` is okay, as it was created
+        # by the dataclass decorator on the previous line, so nothing else owns it.
+        for f in dataclasses.fields(cls):
+            if f.name not in cls.__init__.__annotations__:
+                continue  # Odd behaviour, so skip.
+            try:
+                converter = f.metadata["converter"]
+            except KeyError:
+                pass
+            else:
+                try:
+                    signature = inspect.signature(converter)
+                except ValueError:
+                    # e.g. `inspect.signature(str)` fails
+                    converter_annotation = Any
+                else:
+                    parameters = list(signature.parameters.values())
+                    if len(parameters) == 0:
+                        # No idea what happened, but play it safe.
+                        converter_annotation = Any
+                    else:
+                        converter_annotation = parameters[0].annotation
+                        if converter_annotation is inspect.Signature.empty:
+                            converter_annotation = Any
+                cls.__init__.__annotations__[f.name] = converter_annotation
+
         # Registering here records that the `dataclass(...)` call has happened.
         _has_dataclass_init[cls] = has_dataclass_init
 

@@ -1117,3 +1117,27 @@ def test_jax_transform_warn(getkey):
             ):
                 transformed = transform(eqx.nn.Linear(2, 2, key=getkey()))
                 cls(transformed)
+
+
+def test_converter_annotations():
+    def converter1(x):
+        return x
+
+    def converter2(x: int):
+        return "hi"
+
+    def converter3(x: bool, y=1):
+        return "bye"
+
+    class Foo1(eqx.Module):
+        x: str = eqx.field(converter=converter1)
+
+    class Foo2(eqx.Module):
+        x: str = eqx.field(converter=converter2)
+
+    class Foo3(eqx.Module):
+        x: str = eqx.field(converter=converter3)
+
+    assert Foo1.__init__.__annotations__["x"] is Any
+    assert Foo2.__init__.__annotations__["x"] is int
+    assert Foo3.__init__.__annotations__["x"] is bool
