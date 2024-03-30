@@ -32,7 +32,7 @@ def bounded_while_loop(
     - `body_fun`: As `lax.while_loop`.
     - `init_val`: As `lax.while_loop`.
     - `max_steps`: A bound on the maximum number of steps, after which the loop
-        terminates unconditionally. Can be set to `None` for arbitrarily many steps.
+        terminates unconditionally.
     - `buffers`: If passed, then every leaf of `tree_leaves(buffers(init_val))` must
         be an array; all such arrays become buffers supporting only `[]` and
         `.at[].set()`. However they will act efficiently, without spurious copies.
@@ -43,7 +43,6 @@ def bounded_while_loop(
     **Returns:**
 
     The final value; as `lax.while_loop`.
-
     """
 
     if not isinstance(max_steps, int) or max_steps < 0:

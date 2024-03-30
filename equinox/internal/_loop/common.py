@@ -429,7 +429,17 @@ def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers, makes_false
             if type(max_steps) is not int:
                 raise ValueError("`max_steps` must be a Python integer")
             out = out & (step < max_steps)
-        return nonbatchable(out)
+        # Need to allow being constant across the batch. This seems to arise in some
+        # edge case when using `bounded_while_loop`, in which:
+        # - `lax.scan` saves a copy of its state (in particular `step`) for use in the
+        #    backward pass;
+        # - for some reason the `jax.checkpoint` causes such state to pick up a spurious
+        #   batch tracer.
+        # See:
+        # https://github.com/patrick-kidger/optimistix/issues/48#issuecomment-2009221739
+        return nonbatchable(
+            out, name="`equinox.internal.while_loop`", allow_constant_across_batch=True
+        )
 
     def new_body_fun(val):
         tag = object()
