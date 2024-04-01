@@ -137,9 +137,9 @@ class BatchNorm(StatefulLayer, strict=True):
             to `axis_name` in `jax.vmap` or `jax.pmap`. Can also be a sequence (e.g. a
             tuple or a list) of names, to compute statistics over multiple named axes.
         - `approach`: The approach to use for the running statistics. If `approach=None`
-            a warning will be raised and approach will default to `"batch"`. During
-            training `"batch"` only uses batch statisics while`"ema"` uses the running
-            statistics.
+            a warning will be raised and approach will default to `"ema_compatibility"`.
+            During training `"batch"` only uses batch statisics while`"ema"` and
+            `"ema_compatibility"` uses the running statistics.
         - `eps`: Value added to the denominator for numerical stability.
         - `channelwise_affine`: Whether the module has learnable channel-wise affine
             parameters.
