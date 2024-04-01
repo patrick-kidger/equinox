@@ -44,7 +44,8 @@ class BatchNorm(StatefulLayer, strict=True):
 
     With `approach = "batch"` during training the batch mean and variance are used
     for normalization.  For inference the exponential running mean and ubiased
-    variance are used for normalization in accordance with the cited paper below:
+    variance are used for normalization in accordance with the cited paper below.
+    Let `m` be momentum:
 
     $\text{TrainStats}_t = \text{BatchStats}_t$
 
@@ -65,13 +66,16 @@ class BatchNorm(StatefulLayer, strict=True):
     \text{WarmupFrac}_t * \left(1.0 - m\right)\sum_{i=0}^{t}m^{t-i}\text{BatchStats}_i$
 
     $\text{InferenceStats}_t = \frac{\left(1.0 - m\right)\sum_{i=0}^{t}m^{t-i}
-    \text{BatchStats}_i}{\text{Max} \left(1.0 - m^{t+1}, \varepsilon \right)}$
+    \text{BatchStats}_i}{\text{max} \left(1.0 - m^{t+1}, \varepsilon \right)}$
 
 
     $\text{Note: } \frac{(1.0 - m)\sum_{i=0}^{t}m^{t-i}}{1.0 - m^{t+1}} =
     \frac{(1.0 - m)\sum_{i=0}^{t}m^{i}}{1.0 - m^{t+1}}$
     $= \frac{(1.0 - m)\frac{1.0 - m^{t+1}}{1.0 - m}}{1.0 - m^{t+1}} = 1$
 
+    `approach = "ema_compatibility"` reproduces the original equinox BatchNorm
+    behavior.  It often results in training instabilities and `approach = "batch"`
+    or `"ema"` is recommended.
 
     ??? cite
 
@@ -108,7 +112,7 @@ class BatchNorm(StatefulLayer, strict=True):
     axis_name: Union[Hashable, Sequence[Hashable]]
     inference: bool
     input_size: int = field(static=True)
-    approach: Literal["batch", "ema"] = field(static=True)
+    approach: Literal["batch", "ema", "ema_compatibility"] = field(static=True)
     eps: float = field(static=True)
     channelwise_affine: bool = field(static=True)
     momentum: float = field(static=True)
@@ -118,7 +122,7 @@ class BatchNorm(StatefulLayer, strict=True):
         self,
         input_size: int,
         axis_name: Union[Hashable, Sequence[Hashable]],
-        approach: Optional[Literal["batch", "ema"]] = None,
+        approach: Optional[Literal["batch", "ema", "ema_compatibility"]] = None,
         eps: float = 1e-5,
         channelwise_affine: bool = True,
         momentum: float = 0.99,
@@ -154,10 +158,16 @@ class BatchNorm(StatefulLayer, strict=True):
         """
 
         if approach is None:
-            warnings.warn('BatchNorm approach is None, defaults to approach="batch"')
-            approach = "batch"
+            warnings.warn(
+                "BatchNorm approach is None, defaults to "
+                'approach="ema_compatibility".  This is not recommended as '
+                'it can lead to training instability.  Use "batch" or '
+                'alternatively "ema" with appropriately selected warmup '
+                "instead."
+            )
+            approach = "ema_compatibility"
 
-        valid_approaches = {"batch", "ema"}
+        valid_approaches = {"batch", "ema", "ema_compatibility"}
         if approach not in valid_approaches:
             raise ValueError(f"approach must be one of {valid_approaches}")
         self.approach = approach
@@ -240,15 +250,13 @@ class BatchNorm(StatefulLayer, strict=True):
                 return mean, var
 
             momentum = self.momentum
-            zero_frac = state.get(self.zero_frac_index)
-            zero_frac = zero_frac * momentum
-            state = state.set(self.zero_frac_index, zero_frac)
-
             batch_mean, batch_var = jax.vmap(_stats)(x)
+            zero_frac = state.get(self.zero_frac_index)
             running_mean, running_var = state.get(self.state_index)
-            running_mean = (1 - momentum) * batch_mean + momentum * running_mean
 
             if self.approach == "ema":
+                zero_frac = zero_frac * momentum
+                running_mean = (1 - momentum) * batch_mean + momentum * running_mean
                 running_var = (1 - momentum) * batch_var + momentum * running_var
                 warmup_count = state.get(self.count_index)
                 warmup_count = jnp.minimum(warmup_count + 1, self.warmup_period)
@@ -262,7 +270,18 @@ class BatchNorm(StatefulLayer, strict=True):
                 # apply warmup interpolation between batch and running statistics
                 norm_mean = (1.0 - warmup_frac) * batch_mean + warmup_frac * norm_mean
                 norm_var = (1.0 - warmup_frac) * batch_var + warmup_frac * norm_var
+
+            elif self.approach == "ema_compatibility":
+                running_mean = (1 - momentum) * batch_mean + momentum * running_mean
+                running_var = (1 - momentum) * batch_var + momentum * running_var
+                running_mean = lax.select(zero_frac == 1.0, batch_mean, running_mean)
+                running_var = lax.select(zero_frac == 1.0, batch_var, running_var)
+                norm_mean, norm_var = running_mean, running_var
+                zero_frac = 0.0 * zero_frac
+
             else:
+                zero_frac = zero_frac * momentum
+                running_mean = (1 - momentum) * batch_mean + momentum * running_mean
                 # calculate unbiased variance for saving
                 axis_size = jax.lax.psum(jnp.array(1.0), self.axis_name)
                 debias_coef = (axis_size) / jnp.maximum(axis_size - 1, self.eps)
@@ -273,6 +292,7 @@ class BatchNorm(StatefulLayer, strict=True):
                 # just use batch statistics when not in inference mode
                 norm_mean, norm_var = batch_mean, batch_var
 
+            state = state.set(self.zero_frac_index, zero_frac)
             state = state.set(self.state_index, (running_mean, running_var))
 
         def _norm(y, m, v, w, b):

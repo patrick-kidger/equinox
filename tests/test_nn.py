@@ -828,7 +828,7 @@ def test_batch_norm(getkey):
     # Test that it warns with no approach - defaulting to batch
     with pytest.warns(UserWarning):
         bn = eqx.nn.BatchNorm(5, "batch")
-        assert bn.approach == "batch"
+        assert bn.approach == "ema_compatibility"
 
     with pytest.raises(ValueError):
         bn = eqx.nn.BatchNorm(5, "batch", approach="ema", warmup_period=0)
