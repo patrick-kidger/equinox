@@ -6,16 +6,15 @@ from functools import partial
 from typing import cast, Literal, Optional, overload, Union
 
 import jax
-import jax.lax as lax
 import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array, Bool, Float, PRNGKeyArray
 
-from .._misc import default_int_dtype
 from .._module import field, Module
 from ._dropout import Dropout
+from ._kv_cache import AbstractKVCache
 from ._linear import Linear
-from ._stateful import State, StateIndex
+from ._stateful import State
 
 
 def dot_product_attention_weights(
@@ -125,7 +124,7 @@ class MultiheadAttention(Module, strict=True):
     value_proj: Linear
     output_proj: Linear
     dropout: Dropout
-    autoregressive_index: Optional[StateIndex]
+    kv_cache: Optional[AbstractKVCache]
 
     num_heads: int = field(static=True)
     query_size: int = field(static=True)
@@ -156,6 +155,7 @@ class MultiheadAttention(Module, strict=True):
         use_output_bias: bool = False,
         dropout_p: float = 0.0,
         inference: bool = False,
+        kv_cache: Optional[AbstractKVCache] = None,
         *,
         key: PRNGKeyArray,
     ):
@@ -224,18 +224,7 @@ class MultiheadAttention(Module, strict=True):
         self.use_value_bias = use_value_bias
         self.use_output_bias = use_output_bias
         self.state_length = state_length
-
-        def _make_autoregressive_cache(**_):
-            key_shape = state_length, num_heads, qk_size
-            value_shape = state_length, num_heads, vo_size
-            _int = default_int_dtype()
-            return jnp.empty(key_shape), jnp.empty(value_shape), jnp.zeros((), _int)
-
-        self.autoregressive_index = (
-            StateIndex(_make_autoregressive_cache())
-            if state_length is not None
-            else None
-        )
+        self.kv_cache = kv_cache
 
     @overload
     def __call__(
@@ -394,24 +383,18 @@ class MultiheadAttention(Module, strict=True):
         if state is None:
             causal_mask_offset = 0
         else:
-            if self.autoregressive_index is None:
+            if self.kv_cache is None:
                 raise ValueError(
                     "State was provided, but cannot use autoregressive decoding "
                     "without specifying "
-                    "`MultiheadAttention(..., state_length=...)`."
+                    "`MultiheadAttention(..., kv_cache=...)`. "
+                    "See `equinox.nn.StandardKVCache` for an example."
                 )
-            key_state, value_state, index = state.get(self.autoregressive_index)
-            key_state = lax.dynamic_update_slice_in_dim(
-                key_state, key_heads, index, axis=0
+
+            key_state, value_state, index, state = self.kv_cache(
+                state, key_heads, value_heads
             )
-            value_state = lax.dynamic_update_slice_in_dim(
-                value_state, value_heads, index, axis=0
-            )
-            causal_mask_offset = index
-            index = index + kv_seq_length
-            state = state.set(
-                self.autoregressive_index, (key_state, value_state, index)
-            )
+            causal_mask_offset = index - kv_seq_length
             key_heads = key_state
             value_heads = value_state
             kv_seq_length = self.state_length
