@@ -8,7 +8,7 @@ Equinox is a small and easy to understand library. So as the title suggests, thi
 
     [PyTrees](https://jax.readthedocs.io/en/latest/pytrees.html) are what JAX calls nested collections of tuples, lists, and dicts. (And any custom-registered PyTree nodes.) The "leaves" of the tree can be anything at all: JAX/NumPy arrays, floats, functions, etc. Most JAX operations will accept either (a) arbitrary PyTrees; (b) PyTrees with just JAX/NumPy arrays as the leaves; (c) PyTrees without any JAX/NumPy arrays as the leaves.
 
-As we saw on the [Getting Started](./index.md) page, Equinox offers the ability to represents models as PyTrees. This is one of Equinox's main features.
+As we saw on the [Getting Started](./index.md) page, Equinox offers the ability to represent models as PyTrees. This is one of Equinox's main features.
 
 Once we've done so, we'll be able to JIT/grad/etc. with respect to the model. For example, using a few built-in layers by way of demonstration, here's a small neural network:
 
