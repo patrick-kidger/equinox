@@ -607,7 +607,7 @@ def filter_pmap(
         JAX has now added more powerful parallelism APIs directly to the JIT interface.
         As such, using [`equinox.filter_jit`][] with sharded inputs is now recommended
         over `filter_pmap`. See also the
-        [parallelism example](../../../examples/parallelism/).
+        [parallelism example](../../examples/parallelism/).
 
     Parallelises a function. By default, all JAX/NumPy arrays are parallelised down
     their leading axis (i.e. axis index 0), and all other types are broadcast.
