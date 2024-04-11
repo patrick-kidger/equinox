@@ -124,7 +124,7 @@ def test_sequential(getkey):
         [
             eqx.nn.Linear(2, 4, key=getkey()),
             eqx.nn.Linear(4, 1, key=getkey()),
-            eqx.nn.BatchNorm(1, axis_name="batch"),
+            eqx.nn.BatchNorm(1, axis_name="batch", approach="batch"),
             eqx.nn.Linear(1, 3, key=getkey()),
         ]
     )
@@ -158,7 +158,7 @@ def test_nested_sequential(inner_stateful, outer_stateful, getkey):
         inner_seq = eqx.nn.Sequential(
             [
                 eqx.nn.Linear(2, 4, key=getkey()),
-                eqx.nn.BatchNorm(4, axis_name="batch")
+                eqx.nn.BatchNorm(4, axis_name="batch", approach="batch")
                 if inner_stateful
                 else eqx.nn.Identity(),
                 eqx.nn.Linear(4, 3, key=getkey()),
@@ -168,7 +168,7 @@ def test_nested_sequential(inner_stateful, outer_stateful, getkey):
             [
                 eqx.nn.Linear(5, 2, key=getkey()),
                 inner_seq,
-                eqx.nn.BatchNorm(3, axis_name="batch")
+                eqx.nn.BatchNorm(3, axis_name="batch", approach="batch")
                 if outer_stateful
                 else eqx.nn.Identity(),
                 eqx.nn.Linear(3, 6, key=getkey()),
@@ -825,18 +825,40 @@ def test_batch_norm(getkey):
     x2 = jrandom.uniform(getkey(), (10, 5, 6))
     x3 = jrandom.uniform(getkey(), (10, 5, 7, 8))
 
-    # Test that it works with a single vmap'd axis_name
+    # Test that it warns with no approach - defaulting to batch
+    with pytest.warns(UserWarning):
+        bn = eqx.nn.BatchNorm(5, "batch")
+        assert bn.approach == "ema_compatibility"
 
-    bn = eqx.nn.BatchNorm(5, "batch")
+    with pytest.raises(ValueError):
+        bn = eqx.nn.BatchNorm(5, "batch", approach="ema", warmup_period=0)
+
+    # Test initialization
+    bn_momentum = 0.99
+    bn = eqx.nn.BatchNorm(
+        5, "batch", approach="ema", warmup_period=10, momentum=bn_momentum
+    )
     state = eqx.nn.State(bn)
     vbn = jax.vmap(bn, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
+    running_mean, running_var = state.get(bn.state_index)
+    zero_frac = state.get(bn.zero_frac_index)
+    warmup_count = state.get(bn.count_index)
+    assert jnp.array_equal(running_mean, jnp.zeros(running_mean.shape))
+    assert jnp.array_equal(running_var, jnp.zeros(running_var.shape))
+    assert jnp.array_equal(zero_frac, jnp.array(1.0))
+    assert jnp.array_equal(warmup_count, jnp.array(0))
 
-    for x in (x1, x2, x3):
+    # Test that it works with a single vmap'd axis_name
+    for i, x in enumerate([x1, x2, x3]):
         out, state = vbn(x, state)
         assert out.shape == x.shape
         running_mean, running_var = state.get(bn.state_index)
+        zero_frac = state.get(bn.zero_frac_index)
+        warmup_count = state.get(bn.count_index)
         assert running_mean.shape == (5,)
         assert running_var.shape == (5,)
+        assert jnp.array_equal(warmup_count, jnp.array(i + 1))
+        assert jnp.allclose(zero_frac, jnp.array(bn_momentum ** (i + 1)))
 
     # Test that it fails without any vmap'd axis_name
 
@@ -861,7 +883,7 @@ def test_batch_norm(getkey):
 
     # Test that it handles multiple axis_names
 
-    vvbn = eqx.nn.BatchNorm(6, ("batch1", "batch2"))
+    vvbn = eqx.nn.BatchNorm(6, ("batch1", "batch2"), approach="ema")
     vvstate = eqx.nn.State(vvbn)
     for axis_name in ("batch1", "batch2"):
         vvbn = jax.vmap(
@@ -873,10 +895,9 @@ def test_batch_norm(getkey):
     assert running_mean.shape == (6,)
     assert running_var.shape == (6,)
 
-    # Test that it normalises
-
+    # Test that approach=ema normalises
     x1alt = jrandom.normal(jrandom.PRNGKey(5678), (10, 5))  # avoid flakey test
-    bn = eqx.nn.BatchNorm(5, "batch", channelwise_affine=False)
+    bn = eqx.nn.BatchNorm(5, "batch", channelwise_affine=False, approach="ema")
     state = eqx.nn.State(bn)
     vbn = jax.vmap(bn, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
     out, state = vbn(x1alt, state)
@@ -885,22 +906,48 @@ def test_batch_norm(getkey):
     )
     assert jnp.allclose(out, true_out)
 
+    # Test that approach=batch normalises in training mode
+    bn = eqx.nn.BatchNorm(
+        5, "batch", channelwise_affine=False, approach="batch", momentum=0.9
+    )
+    state = eqx.nn.State(bn)
+    vbn = jax.vmap(bn, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
+    out, state = vbn(x1alt, state)
+    true_out = (x1alt - jnp.mean(x1alt, axis=0, keepdims=True)) / jnp.sqrt(
+        jnp.var(x1alt, axis=0, keepdims=True) + 1e-5
+    )
+    assert jnp.allclose(out, true_out)
+    # Test that approach=batch normaises in inference mode
+    bn_inf = eqx.nn.inference_mode(bn, value=True)
+    vbn_inf = jax.vmap(bn_inf, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
+    out, state = vbn_inf(x1alt, state)
+    debias_coef = x1alt.shape[0] / (x1alt.shape[0] - 1)
+    true_out = (x1alt - jnp.mean(x1alt, axis=0, keepdims=True)) / jnp.sqrt(
+        debias_coef * jnp.var(x1alt, axis=0, keepdims=True) + 1e-5
+    )
+    assert jnp.allclose(out, true_out)
+
     # Test that the statistics update during training
     out, state = vbn(x1, state)
     running_mean, running_var = state.get(bn.state_index)
     out, state = vbn(3 * x1 + 10, state)
     running_mean2, running_var2 = state.get(bn.state_index)
+    zero_frac2 = state.get(bn.zero_frac_index)
+    warmup_count2 = state.get(bn.count_index)
     assert not jnp.allclose(running_mean, running_mean2)
     assert not jnp.allclose(running_var, running_var2)
 
     # Test that the statistics don't update at inference
-
     ibn = eqx.nn.inference_mode(bn, value=True)
     vibn = jax.vmap(ibn, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
     out, state = vibn(4 * x1 + 20, state)
     running_mean3, running_var3 = state.get(bn.state_index)
+    zero_frac3 = state.get(bn.zero_frac_index)
+    warmup_count3 = state.get(bn.count_index)
     assert jnp.array_equal(running_mean2, running_mean3)
     assert jnp.array_equal(running_var2, running_var3)
+    assert jnp.array_equal(zero_frac2, zero_frac3)
+    assert jnp.array_equal(warmup_count2, warmup_count3)
 
     # Test that we can differentiate through it
 
