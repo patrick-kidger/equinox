@@ -197,7 +197,7 @@ def _maybe_set_transpose(
             ct_x = _select_if_vmap(pred, ct_x, jnp.zeros_like(ct_x), makes_false_steps)
     else:
         ct_x = None
-    return [None, ct_xs, ct_x, None]
+    return [None, ct_xs, ct_x] + [None] * len(i_dynamic_leaves)
 
 
 maybe_set_p = create_vprim(

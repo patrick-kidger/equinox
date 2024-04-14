@@ -11,6 +11,7 @@ import jax.numpy as jnp
 import jax.random as jr
 import jax.tree_util as jtu
 import pytest
+from jaxtyping import Array
 
 from .helpers import tree_allclose
 
@@ -889,3 +890,91 @@ def test_buffer_at_set():
 
     assert eqx.tree_equal(g(True), jnp.array([1]))
     assert eqx.tree_equal(g(False), jnp.array([0]))
+
+
+def test_unperturbed_output():
+    class Carry(eqx.Module):
+        is_none: None
+        is_bool: Array
+        is_int: Array
+        is_unperturbed_float: Array
+        is_perturbed_float1: Array
+        is_perturbed_float2: Array
+        is_perturbed_buffer: Array
+        is_unperturbed_buffer: Array
+
+    init_carry = Carry(
+        None,
+        jnp.array(True),
+        jnp.array(1),
+        jnp.array(1.0),
+        jnp.array(1.0),
+        jnp.array(2.0),
+        jnp.array([3.0]),
+        jnp.array([4.0]),
+    )
+
+    def cond(_):
+        return True
+
+    def body(carry: Carry):
+        perturbed_buffer = carry.is_perturbed_buffer.at[0].set(
+            carry.is_perturbed_float2
+        )
+        unperturbed_buffer = carry.is_unperturbed_buffer.at[0].set(
+            carry.is_unperturbed_float
+        )
+        # 1->2
+        return Carry(
+            carry.is_none,
+            carry.is_bool,
+            carry.is_int,
+            carry.is_unperturbed_float,
+            carry.is_perturbed_float2,
+            carry.is_perturbed_float2,
+            perturbed_buffer,
+            unperturbed_buffer,
+        )
+
+    # The `eqxi.nondifferentiable` serve as our test assertions.
+    def run(init_carry):
+        init_carry = eqx.tree_at(
+            lambda c: (
+                c.is_unperturbed_float,
+                c.is_unperturbed_buffer,
+                c.is_perturbed_float1,
+            ),
+            init_carry,
+            replace_fn=lax.stop_gradient,
+        )
+
+        final_carry = eqxi.while_loop(
+            cond,
+            body,
+            init_carry,
+            max_steps=1,
+            buffers=lambda x: x.is_perturbed_buffer,
+            kind="checkpointed",
+        )
+
+        unperturbed = eqxi.nondifferentiable(
+            (
+                final_carry.is_none,
+                final_carry.is_bool,
+                final_carry.is_int,
+                final_carry.is_unperturbed_float,
+                final_carry.is_unperturbed_buffer,
+            )
+        )
+        with pytest.raises(RuntimeError, match="kaboom!"):
+            eqxi.nondifferentiable(final_carry.is_perturbed_float1, msg="kaboom!")
+        with pytest.raises(RuntimeError, match="kaboom!"):
+            eqxi.nondifferentiable(final_carry.is_perturbed_float2, msg="kaboom!")
+        with pytest.raises(RuntimeError, match="kaboom!"):
+            eqxi.nondifferentiable(final_carry.is_perturbed_buffer, msg="kaboom!")
+        with jax.numpy_dtype_promotion("standard"):
+            out = sum(jtu.tree_leaves((unperturbed, final_carry)))
+        return jnp.reshape(out, ())
+
+    jax.linearize(run, init_carry)
+    eqx.filter_grad(run)(init_carry)
