@@ -3,17 +3,18 @@ import math
 import warnings
 from collections.abc import Callable
 from functools import partial
-from typing import cast, Optional, Union
+from typing import cast, Literal, Optional, Union
 
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
-from jaxtyping import Array, Bool, Float, PRNGKeyArray
+from jaxtyping import Array, Bool, Float, Int, PRNGKeyArray
 
 from .._misc import default_floating_dtype
 from .._module import field, Module
 from ._dropout import Dropout
 from ._linear import Linear
+from ._stateful import State
 
 
 def dot_product_attention_weights(
@@ -124,6 +125,22 @@ class MultiheadAttention(Module, strict=True):
     output_proj: Linear
     dropout: Dropout
 
+    kv_cache: Optional[
+        Callable[
+            [
+                State,
+                Float[Array, "seq_length num_heads qk_size"],
+                Float[Array, "seq_length num_heads vo_size"],
+            ],
+            tuple[
+                Float[Array, "state_length num_heads qk_size"],
+                Float[Array, "state_length num_heads vo_size"],
+                Int[Array, ""],
+                State,
+            ],
+        ]
+    ]
+
     num_heads: int = field(static=True)
     query_size: int = field(static=True)
     key_size: int = field(static=True)
@@ -152,6 +169,21 @@ class MultiheadAttention(Module, strict=True):
         dropout_p: float = 0.0,
         inference: bool = False,
         dtype=None,
+        kv_cache: Optional[
+            Callable[
+                [
+                    State,
+                    Float[Array, "seq_length num_heads qk_size"],
+                    Float[Array, "seq_length num_heads vo_size"],
+                ],
+                tuple[
+                    Float[Array, "state_length num_heads qk_size"],
+                    Float[Array, "state_length num_heads vo_size"],
+                    Int[Array, ""],
+                    State,
+                ],
+            ]
+        ] = None,
         *,
         key: PRNGKeyArray,
     ):
@@ -179,8 +211,44 @@ class MultiheadAttention(Module, strict=True):
         - `dtype`: The dtype to use for all trainable parameters in this layer.
             Defaults to either `jax.numpy.float32` or `jax.numpy.float64` depending
             on whether JAX is in 64-bit mode.
+        - `kv_cache`: The callable module to handle KV caching.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
+
+
+
+        !!! info
+
+        The following shows an example of how to use `MultiheadAttention` for
+        autoregressive decoding with a `kv_cache` and `state`:
+        ```python
+        import equinox as eqx
+        import jax
+
+        query_size = 6
+        num_heads = 1
+        state_length = 8
+        seq_len = 3
+
+        standard_kv_cache = eqx.nn.StandardKVCache(
+            key_shape=(state_length, num_heads, query_size),
+            value_shape=(state_length, num_heads, query_size),
+        )
+
+        mha, state = eqx.nn.make_with_state(MultiheadAttention)(
+            query_size=query_size,
+            num_heads=num_heads,
+            kv_cache=standard_kv_cache,
+            key=jax.random.PRNGKey(0)
+
+        )
+
+        for states in range(state_length):
+            x = jax.numpy.ones(shape=(seq_len, query_size)) * (states + 1)
+            y, state = mha(x, x, x, mask="causal", state=state)
+
+        ```
+
         """
         dtype = default_floating_dtype() if dtype is None else dtype
         qkey, kkey, vkey, okey = jrandom.split(key, 4)
@@ -233,6 +301,7 @@ class MultiheadAttention(Module, strict=True):
         self.use_key_bias = use_key_bias
         self.use_value_bias = use_value_bias
         self.use_output_bias = use_output_bias
+        self.kv_cache = kv_cache
 
     @jax.named_scope("eqx.nn.MultiheadAttention")
     def __call__(
@@ -241,8 +310,12 @@ class MultiheadAttention(Module, strict=True):
         key_: Float[Array, "kv_seq k_size"],
         value: Float[Array, "kv_seq v_size"],
         mask: Union[
-            None, Bool[Array, "q_seq kv_seq"], Bool[Array, "num_heads q_seq kv_seq"]
+            None,
+            Bool[Array, "q_seq kv_seq"],
+            Bool[Array, "num_heads q_seq kv_seq"],
+            Literal["causal"],
         ] = None,
+        state: Optional[State] = None,
         *,
         key: Optional[PRNGKeyArray] = None,
         inference: Optional[bool] = None,
@@ -261,7 +334,9 @@ class MultiheadAttention(Module, strict=True):
                 ],
             ]
         ] = None,
-    ) -> Float[Array, "q_seq o_size"]:
+    ) -> Union[
+        Float[Array, "q_seq o_size"], tuple[Float[Array, "q_seq o_size"], State]
+    ]:
         """**Arguments:**
 
         - `query`: Query embedding. Should be a JAX array of shape
@@ -272,8 +347,11 @@ class MultiheadAttention(Module, strict=True):
             `(kv_seq_length, value_size)`.
         - `mask`: Optional mask preventing attention to certain positions. Should either
             be a JAX array of shape `(query_seq_length, kv_seq_length)`, or (for custom
-            per-head masking) `(num_heads, query_seq_length, kv_seq_length)`. A value of
-            `False` at a position indicates that position should be ignored.
+            per-head masking) `(num_heads, query_seq_length, kv_seq_length)` or
+            `causal`. A value of `False` at a position indicates that position should be
+            ignored. Use the string `causal` if you plan to use autoregressive decoding.
+        - `state`: Optional state to be passed in to the `kv_cache` callable. Used for
+            autoregressive decoding only.
         - `key`: A `jax.random.PRNGKey` used for dropout. Unused if `dropout = 0`.
             (Keyword only argument.)
         - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
@@ -297,10 +375,8 @@ class MultiheadAttention(Module, strict=True):
             )
 
         query_seq_length, _ = query.shape
-        kv_seq_length, _ = key_.shape
-        kv_seq_length2, _ = value.shape
-        if kv_seq_length != kv_seq_length2:
-            # query length can be different
+
+        if (kv_seq_length := key_.shape[0]) != value.shape[0]:
             raise ValueError("key and value must both be sequences of equal length.")
 
         query_heads = self._project(self.query_proj, query)
@@ -325,6 +401,42 @@ class MultiheadAttention(Module, strict=True):
                 raise ValueError(
                     "process_heads must not change the shape of the heads."
                 )
+        state_length = None
+        if state is None:
+            causal_mask_offset = 0
+        else:
+            if self.kv_cache is None:
+                raise ValueError(
+                    "State was provided, but cannot use autoregressive decoding "
+                    "without specifying "
+                    "`MultiheadAttention(..., kv_cache=...)`. "
+                    "See `equinox.nn.StandardKVCache` for an example."
+                )
+
+            key_state, value_state, index, state = self.kv_cache(
+                state, key_heads, value_heads
+            )
+            _check_kv_shapes(key_state, value_state, key_heads, value_heads)
+            state_length = key_state.shape[0]
+
+            causal_mask_offset = index - kv_seq_length
+            key_heads = key_state
+            value_heads = value_state
+            kv_seq_length = state_length
+
+        if mask == "causal":
+            query_indices = jnp.arange(query_seq_length)[:, None]
+            kv_indices = jnp.arange(kv_seq_length)[None, :]
+            mask = kv_indices <= query_indices + causal_mask_offset
+        if state is not None and state_length is not None:
+            # Also mask out the latter parts of the state we haven't written into yet.
+            unwritten_mask = jnp.arange(state_length) < index  # pyright: ignore
+            if mask is None:
+                mask = jnp.broadcast_to(
+                    unwritten_mask, (query_seq_length, state_length)
+                )
+            else:
+                mask = mask & unwritten_mask
 
         attn_fn = partial(
             dot_product_attention, dropout=self.dropout, inference=inference
@@ -341,10 +453,38 @@ class MultiheadAttention(Module, strict=True):
                 query_heads, key_heads, value_heads, key=keys
             )
         attn = attn.reshape(query_seq_length, -1)
+        out = jax.vmap(self.output_proj)(attn)
 
-        return jax.vmap(self.output_proj)(attn)
+        if state is None:
+            return out
+        else:
+            return out, state
 
     def _project(self, proj, x):
         seq_length, _ = x.shape
         projection = jax.vmap(proj)(x)
         return projection.reshape(seq_length, self.num_heads, -1)
+
+
+def _check_kv_shapes(
+    key_state: Float[Array, "state_length num_heads qk_size"],
+    value_state: Float[Array, "state_length num_heads vo_size"],
+    key_heads: Float[Array, "seq_length num_heads qk_size"],
+    value_heads: Float[Array, "seq_length num_heads vo_size"],
+) -> None:
+    if key_state.shape[0] != value_state.shape[0]:
+        raise ValueError(
+            "key_state and value_state have different state lengths: \n"
+            f"\t{key_state.shape[0]=} != {value_state.shape[0]=}"
+        )
+    if key_state.shape[1:] != key_heads.shape[1:]:
+        raise ValueError(
+            "key_state has different `num_heads` or `qk_size` than key_heads\n"
+            f"\tExpected {key_state.shape[1:]}, got {key_heads.shape[1:]}"
+        )
+
+    if value_state.shape[1:] != value_heads.shape[1:]:
+        raise ValueError(
+            "value_state has different `num_heads` or `vo_size` than value_heads\n"
+            f"\tExpected {value_state.shape[1:]}, got {value_heads.shape[1:]}"
+        )
