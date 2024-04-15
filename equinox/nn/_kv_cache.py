@@ -7,21 +7,6 @@ from .._module import field, Module
 from ._stateful import State, StateIndex
 
 
-"""        key_state, value_state, index, state = self._get_cache(
-            state, key_heads, value_heads
-        )
-        key_shape = key_state.shape
-        value_shape = value_state.shape
-        if key_shape != self.key_shape:
-            raise ValueError(f"Expected key shape {self.key_shape}, got {key_shape}")
-        if value_shape != self.value_shape:
-            raise ValueError(
-                f"Expected value shape {self.value_shape}, got {value_shape}"
-            )
-        return key_state, value_state, index, state
-"""
-
-
 class StandardKVCache(Module):
     key_shape: tuple[int, int, int] = field(static=True)
     value_shape: tuple[int, int, int] = field(static=True)
