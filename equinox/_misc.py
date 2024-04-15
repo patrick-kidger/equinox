@@ -18,3 +18,10 @@ def default_floating_dtype():
         return jnp.float64
     else:
         return jnp.float32
+
+
+def default_int_dtype():
+    if jax.config.jax_enable_x64:  # pyright: ignore
+        return jnp.int64
+    else:
+        return jnp.int32
