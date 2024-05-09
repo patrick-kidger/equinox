@@ -52,19 +52,7 @@ class _CountedIdDict:
 
 
 class _DistinctTuple:
-    def __init__(self, contents=()):
-        self.contents = tuple(contents)
-
-    def __eq__(self, other):
-        if isinstance(other, _DistinctTuple):
-            return self.contents == other.contents
-        return False
-
-    def __hash__(self):
-        return hash(self.contents)
-
-    def __repr__(self):
-        return "Distinct Tuple: " + repr(self.contents)
+    pass
 
 
 def tree_at(
@@ -153,9 +141,9 @@ def tree_at(
     # Whilst we're here: we also double-check that `where` is well-formed and doesn't
     # use leaf information. (As else `node_or_nodes` will be wrong.)
     pytree = jtu.tree_map(
-        lambda x: x if x != () else _DistinctTuple(),
+        lambda x: _DistinctTuple() if isinstance(x, tuple) and x == () else x,
         pytree,
-        is_leaf=lambda x: x == (),
+        is_leaf=lambda x: isinstance(x, tuple) and x == (),
     )
     node_or_nodes_nowrapper = where(pytree)
     pytree = jtu.tree_map(_LeafWrapper, pytree, is_leaf=is_leaf)
@@ -251,7 +239,7 @@ def tree_at(
                 "  ...             is_leaf=lambda x: x is None)"
             )
     out = jtu.tree_map(
-        lambda x: x if not isinstance(x, _DistinctTuple) else (),
+        lambda x: () if isinstance(x, _DistinctTuple) else x,
         out,
         is_leaf=lambda x: isinstance(x, _DistinctTuple),
     )
