@@ -31,22 +31,6 @@ def test_tree_at_replace(getkey):
     assert jnp.all(pytree2[-1].weight == true_pytree2[-1].weight)
     assert jnp.all(pytree2[-1].bias == true_pytree2[-1].bias)
 
-    pytree = [(), (), {"a": jnp.array([1.0, 2.0])}, eqx.nn.Linear(1, 2, key=key1)]
-    true_pytree1 = [1, (), {"a": "hi"}, eqx.nn.Linear(1, 2, key=key1)]
-    where1 = lambda tree: tree[0]
-    weight2 = true_pytree2[3].weight
-    bias2 = true_pytree2[3].bias
-    pytree1 = eqx.tree_at(where1, pytree, replace=1)
-
-    assert pytree1[:-2] == true_pytree1[:-2]
-    assert pytree2[:-2] == true_pytree2[:-2]
-    assert jnp.all(pytree1[-2]["a"] == true_pytree1[-2]["a"])
-    assert jnp.all(pytree2[-2]["a"] == true_pytree2[-2]["a"])
-    assert jnp.all(pytree1[-1].weight == true_pytree1[-1].weight)
-    assert jnp.all(pytree1[-1].bias == true_pytree1[-1].bias)
-    assert jnp.all(pytree2[-1].weight == true_pytree2[-1].weight)
-    assert jnp.all(pytree2[-1].bias == true_pytree2[-1].bias)
-
     true_pytree3 = ["hi", 2, {"a": 4}, eqx.nn.Linear(1, 2, key=key1)]
     where3 = lambda tree: (tree[0], tree[2]["a"])
     pytree3 = eqx.tree_at(where3, pytree, replace=("hi", 4))
@@ -58,6 +42,24 @@ def test_tree_at_replace(getkey):
         eqx.tree_at(where3, pytree, replace=4)
     with pytest.raises(ValueError):
         eqx.tree_at(where3, pytree, replace=(3, 4, 5))
+
+
+def test_tree_at_empty_tuple():
+    # Tuples are singletons, so we have a specific test for the wrapper
+    a = ()
+    b = (1,)
+    x1 = [a]
+    x2 = [a, a]
+    x3 = [(), ()]
+    x4 = [b]
+    x5 = [b, b]
+    x6 = [(1,), (1,)]
+
+    for x in (x1, x2, x3, x4, x5, x6):
+        new_x = eqx.tree_at(lambda xi: xi[0], x, "hello")
+        assert new_x[0] == "hello"
+        if len(new_x) != 1:
+            assert new_x[1] != "hello"
 
 
 def test_tree_at_replace_fn(getkey):
