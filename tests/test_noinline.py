@@ -34,9 +34,9 @@ def test_mlp(getkey):
 def test_vmap(getkey):
     mlp = eqx.nn.MLP(2, 2, 512, 2, key=getkey())
     mlp_noinline = eqx.internal.noinline(mlp)
-    mlp_vmap = jax.vmap(mlp)
+    mlp_vmap = eqx.filter_vmap(mlp)
     mlp_jit_vmap = eqx.filter_jit(mlp_vmap, donate="none")
-    mlp_vmap_noinline = jax.vmap(mlp_noinline)
+    mlp_vmap_noinline = eqx.filter_vmap(mlp_noinline)
     mlp_jit_vmap_noinline = eqx.filter_jit(mlp_vmap_noinline, donate="none")
     x = jr.normal(getkey(), (5, 2))
     o1 = mlp_vmap(x)
