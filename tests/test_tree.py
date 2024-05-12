@@ -1,3 +1,5 @@
+import collections as co
+
 import equinox as eqx
 import jax
 import jax.core
@@ -47,19 +49,33 @@ def test_tree_at_replace(getkey):
 def test_tree_at_empty_tuple():
     # Tuples are singletons, so we have a specific test for the wrapper
     a = ()
-    b = (1,)
     x1 = [a]
     x2 = [a, a]
     x3 = [(), ()]
+
+    b = (1,)
     x4 = [b]
     x5 = [b, b]
     x6 = [(1,), (1,)]
 
-    for x in (x1, x2, x3, x4, x5, x6):
+    Empty = co.namedtuple("Empty", [])
+    empty = Empty()
+    x7 = [empty]
+    x8 = [empty, empty]
+    x9 = [Empty(), Empty()]
+
+    for x in (x1, x2, x3, x4, x5, x6, x7, x8, x9):
         new_x = eqx.tree_at(lambda xi: xi[0], x, "hello")
         assert new_x[0] == "hello"
         if len(new_x) != 1:
             assert new_x[1] != "hello"
+
+
+def test_tree_at_empty_namedtuple():
+    Empty = co.namedtuple("Empty", [])
+    pytree = [Empty(), 5]
+    out = eqx.tree_at(lambda x: x[1], pytree, 4)
+    assert isinstance(out[0], Empty)
 
 
 def test_tree_at_replace_fn(getkey):

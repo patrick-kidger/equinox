@@ -140,10 +140,13 @@ def tree_at(
     #
     # Whilst we're here: we also double-check that `where` is well-formed and doesn't
     # use leaf information. (As else `node_or_nodes` will be wrong.)
+    is_empty_tuple = (
+        lambda x: isinstance(x, tuple) and not hasattr(x, "_fields") and x == ()
+    )
     pytree = jtu.tree_map(
-        lambda x: _DistinctTuple() if isinstance(x, tuple) and x == () else x,
+        lambda x: _DistinctTuple() if is_empty_tuple(x) else x,
         pytree,
-        is_leaf=lambda x: isinstance(x, tuple) and x == (),
+        is_leaf=is_empty_tuple,
     )
     node_or_nodes_nowrapper = where(pytree)
     pytree = jtu.tree_map(_LeafWrapper, pytree, is_leaf=is_leaf)
