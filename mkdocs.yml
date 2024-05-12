@@ -109,6 +109,7 @@ nav:
             - U-Net implementation: 'examples/unet.ipynb'
             - Vision transformer: 'examples/vision_transformer.ipynb'
             - Image GAN: 'examples/deep_convolutional_gan.ipynb'
+            - Mistral 7B: 'examples/mistral_7b.md'
         - Features:
             - Freezing parameters: 'examples/frozen_layer.ipynb'
             - Compatibility with init-apply libraries: 'examples/init_apply.ipynb'
