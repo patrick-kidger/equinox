@@ -383,9 +383,9 @@ class RMSNorm(Module, strict=True):
                 "to replace `rms_norm(x)` with `jax.vmap(rms_norm)(x)`.\n"
             )
         x_dtype = x.dtype
-        upscaled_x = x.astype(jnp.float32)
-        inv_rms = jax.lax.rsqrt(jnp.mean(upscaled_x**2) + self.eps)
-        out = (inv_rms * upscaled_x).astype(x_dtype)
+        upcasted_x = x.astype(jnp.float32)
+        inv_rms = jax.lax.rsqrt(jnp.mean(upcasted_x**2) + self.eps)
+        out = (inv_rms * upcasted_x).astype(x_dtype)
         if self.use_weight:
             out = self.weight * out
         if self.use_bias:
