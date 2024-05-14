@@ -382,10 +382,18 @@ class RMSNorm(Module, strict=True):
                 f"Received `shape={self.shape} and `x.shape={x.shape}`. You might need "
                 "to replace `rms_norm(x)` with `jax.vmap(rms_norm)(x)`.\n"
             )
-        x_dtype = x.dtype
-        upcasted_x = x.astype(jnp.float32)
-        inv_rms = jax.lax.rsqrt(jnp.mean(upcasted_x**2) + self.eps)
-        out = (inv_rms * upcasted_x).astype(x_dtype)
+
+        if x.dtype not in (jnp.float32, jnp.float64):
+            x_dtype = x.dtype
+            x = x.astype(jnp.float32)
+            inv_rms = jax.lax.rsqrt(jnp.mean(x**2) + self.eps)
+            out = (inv_rms * x).astype(x_dtype)
+        else:
+            # Duplicating to avoid one casting op per call when the input
+            # is already of the desired precision
+            inv_rms = jax.lax.rsqrt(jnp.mean(x**2) + self.eps)
+            out = inv_rms * x
+
         if self.use_weight:
             out = self.weight * out
         if self.use_bias:
