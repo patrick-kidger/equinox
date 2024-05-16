@@ -383,16 +383,11 @@ class RMSNorm(Module, strict=True):
                 "to replace `rms_norm(x)` with `jax.vmap(rms_norm)(x)`.\n"
             )
 
-        if x.dtype not in (jnp.float32, jnp.float64):
-            x_dtype = x.dtype
-            x = x.astype(jnp.float32)
-            inv_rms = jax.lax.rsqrt(jnp.mean(x**2) + self.eps)
-            out = (inv_rms * x).astype(x_dtype)
-        else:
-            # Duplicating to avoid one casting op per call when the input
-            # is already of the desired precision
-            inv_rms = jax.lax.rsqrt(jnp.mean(x**2) + self.eps)
-            out = inv_rms * x
+        with jax.numpy_dtype_promotion("standard"):
+            dtype = jnp.result_type(x.dtype, jnp.float32)
+
+        inv_rms = jax.lax.rsqrt(jnp.mean(x.astype(dtype) ** 2) + self.eps)
+        out = (inv_rms * x.astype(dtype)).astype(x.dtype)
 
         if self.use_weight:
             out = self.weight * out
