@@ -382,8 +382,13 @@ class RMSNorm(Module, strict=True):
                 f"Received `shape={self.shape} and `x.shape={x.shape}`. You might need "
                 "to replace `rms_norm(x)` with `jax.vmap(rms_norm)(x)`.\n"
             )
-        inv_rms = jax.lax.rsqrt(jnp.mean(x**2) + self.eps)
-        out = inv_rms * x
+
+        with jax.numpy_dtype_promotion("standard"):
+            dtype = jnp.result_type(x.dtype, jnp.float32)
+
+        inv_rms = jax.lax.rsqrt(jnp.mean(x.astype(dtype) ** 2) + self.eps)
+        out = (inv_rms * x.astype(dtype)).astype(x.dtype)
+
         if self.use_weight:
             out = self.weight * out
         if self.use_bias:
