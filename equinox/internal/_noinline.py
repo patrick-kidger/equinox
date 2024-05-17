@@ -362,7 +362,7 @@ def _noinline_mlir(ctx, *dynamic, treedef, static, flatten, **kwargs):
         vals_in,
         avals_in,
         ctx.avals_out,
-        False,
+        has_side_effect=False,
         sharding=None,
     )
     ctx.module_context.add_keepalive(keepalive)

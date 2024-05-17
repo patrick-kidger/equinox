@@ -277,7 +277,8 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
                 "hold, then consider using `__check_init__` instead. This is an "
                 "Equinox-specific extension that is always ran. See here for more "
                 "details: "
-                "https://docs.kidger.site/equinox/api/module/advanced_fields/#checking-invariants"  # noqa: E501
+                "https://docs.kidger.site/equinox/api/module/advanced_fields/#checking-invariants",  # noqa: E501
+                stacklevel=2,
             )
 
         # Add support for `eqx.field(converter=...)` when using `__post_init__`.
@@ -747,7 +748,8 @@ def __init__(self, ...):
 def __call__(self, ...):
     ... = self.vmap_linear(...)
 ```
-"""
+""",
+                    stacklevel=3,
                 )
                 break
 

@@ -58,7 +58,6 @@ def _filter_jit_cache(fun_names, jitkwargs):
 
 def _bind(signature, args, kwargs):
     bound = signature.bind(*args, **kwargs)
-    bound.apply_defaults()
     args = bound.args
     kwargs = bound.kwargs
     return args, kwargs

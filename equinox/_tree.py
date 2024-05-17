@@ -51,6 +51,10 @@ class _CountedIdDict:
         return self._count[id(item)]
 
 
+class _DistinctTuple:
+    pass
+
+
 def tree_at(
     where: Callable[[PyTree], Union[_Node, Sequence[_Node]]],
     pytree: PyTree,
@@ -136,6 +140,14 @@ def tree_at(
     #
     # Whilst we're here: we also double-check that `where` is well-formed and doesn't
     # use leaf information. (As else `node_or_nodes` will be wrong.)
+    is_empty_tuple = (
+        lambda x: isinstance(x, tuple) and not hasattr(x, "_fields") and x == ()
+    )
+    pytree = jtu.tree_map(
+        lambda x: _DistinctTuple() if is_empty_tuple(x) else x,
+        pytree,
+        is_leaf=is_empty_tuple,
+    )
     node_or_nodes_nowrapper = where(pytree)
     pytree = jtu.tree_map(_LeafWrapper, pytree, is_leaf=is_leaf)
     node_or_nodes = where(pytree)
@@ -229,7 +241,11 @@ def tree_at(
                 "  >>> eqx.tree_at(lambda t: t[0], (None, None, 1), True,\n"
                 "  ...             is_leaf=lambda x: x is None)"
             )
-
+    out = jtu.tree_map(
+        lambda x: () if isinstance(x, _DistinctTuple) else x,
+        out,
+        is_leaf=lambda x: isinstance(x, _DistinctTuple),
+    )
     return out
 
 

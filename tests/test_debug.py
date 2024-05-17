@@ -32,7 +32,7 @@ def test_backward_nan(capfd):
     text, _ = capfd.readouterr()
     assert (
         text
-        == "foo:\n   primals=array(1., dtype=float32)\ncotangents=array(nan, dtype=float32)\n"  # noqa: E501
+        == "foo:\n   primals=Array(1., dtype=float32)\ncotangents=Array(nan, dtype=float32)\n"  # noqa: E501
     )
 
     with pytest.raises(Exception):

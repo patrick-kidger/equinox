@@ -184,7 +184,7 @@ def test_grad_jit_old():
 
 
 def test_filter_jvp():
-    _map_is_array_like = lambda pytree: jax.tree_map(
+    _map_is_array_like = lambda pytree: jtu.tree_map(
         lambda x: jnp.array(x) if eqx.is_array_like(x) else x, pytree
     )
 
