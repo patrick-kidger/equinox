@@ -98,14 +98,12 @@ class LayerNorm(Module, strict=True):
         self.bias = jnp.zeros(shape, dtype=dtype) if use_bias else None
 
     @overload
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
-        ...
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array: ...
 
     @overload
     def __call__(
         self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
-    ) -> tuple[Array, State]:
-        ...
+    ) -> tuple[Array, State]: ...
 
     @jax.named_scope("eqx.nn.LayerNorm")
     def __call__(
@@ -228,14 +226,12 @@ class GroupNorm(Module, strict=True):
         self.bias = jnp.zeros(channels, dtype=dtype) if channelwise_affine else None
 
     @overload
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
-        ...
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array: ...
 
     @overload
     def __call__(
         self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
-    ) -> tuple[Array, State]:
-        ...
+    ) -> tuple[Array, State]: ...
 
     @jax.named_scope("eqx.nn.GroupNorm")
     def __call__(
@@ -343,14 +339,12 @@ class RMSNorm(Module, strict=True):
         self.bias = jnp.zeros(shape, dtype=dtype) if use_bias else None
 
     @overload
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
-        ...
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array: ...
 
     @overload
     def __call__(
         self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
-    ) -> tuple[Array, State]:
-        ...
+    ) -> tuple[Array, State]: ...
 
     @jax.named_scope("eqx.nn.RMSNorm")
     def __call__(

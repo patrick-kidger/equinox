@@ -244,8 +244,7 @@ def filter_jit(
     donate: Literal[
         "all", "all-except-first", "warn", "warn-except-first", "none"
     ] = "none",
-) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]:
-    ...
+) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]: ...
 
 
 @overload
@@ -255,8 +254,7 @@ def filter_jit(
     donate: Literal[
         "all", "all-except-first", "warn", "warn-except-first", "none"
     ] = "none",
-) -> Callable[_P, _T]:
-    ...
+) -> Callable[_P, _T]: ...
 
 
 @doc_remove_args("jitkwargs")

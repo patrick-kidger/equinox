@@ -86,16 +86,14 @@ class _AssertMaxTraces(Module):
 @overload
 def assert_max_traces(
     fn: Callable[_P, _T], *, max_traces: Optional[int]
-) -> Callable[_P, _T]:
-    ...
+) -> Callable[_P, _T]: ...
 
 
 @overload
 def assert_max_traces(
     *,
     max_traces: Optional[int],
-) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]:
-    ...
+) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]: ...
 
 
 def assert_max_traces(fn: Callable = sentinel, *, max_traces: Optional[int]):

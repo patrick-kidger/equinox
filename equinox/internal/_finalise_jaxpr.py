@@ -136,15 +136,13 @@ def finalise_fn(fn):
 @overload
 def finalise_make_jaxpr(
     fn, *, return_shape: Literal[False] = False
-) -> Callable[..., jax.core.ClosedJaxpr]:
-    ...
+) -> Callable[..., jax.core.ClosedJaxpr]: ...
 
 
 @overload
 def finalise_make_jaxpr(
     fn, *, return_shape: Literal[True] = True
-) -> Callable[..., tuple[jax.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct]]]:
-    ...
+) -> Callable[..., tuple[jax.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct]]]: ...
 
 
 @overload
@@ -155,8 +153,7 @@ def finalise_make_jaxpr(
     Union[
         jax.core.ClosedJaxpr, tuple[jax.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct]]
     ],
-]:
-    ...
+]: ...
 
 
 def finalise_make_jaxpr(fn, *, return_shape: bool = False):
@@ -213,7 +210,7 @@ def _stop_gradient_finalisation(x):
     return x
 
 
-primitive_finalisations[
-    jax.custom_derivatives.custom_jvp_call_p
-] = _jvp_call_p_finalisation
+primitive_finalisations[jax.custom_derivatives.custom_jvp_call_p] = (
+    _jvp_call_p_finalisation
+)
 primitive_finalisations[jax.lax.stop_gradient_p] = _stop_gradient_finalisation

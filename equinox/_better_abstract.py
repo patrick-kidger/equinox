@@ -5,6 +5,7 @@ Provides enhanced versions of `abc.ABCMeta` and `dataclasses.dataclass` that res
 this type annotation. (In practice the sole consumer of these is `equinox.Module`, which
 is the public API. But the two pieces aren't directly related under-the-hood.)
 """
+
 import abc
 import dataclasses
 from typing import (
