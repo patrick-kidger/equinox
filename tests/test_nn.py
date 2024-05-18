@@ -786,7 +786,9 @@ def test_multihead_attention(getkey):
     q = jrandom.uniform(getkey(), (19, 3))
     k = jrandom.uniform(getkey(), (23, 5))
     v = jrandom.uniform(getkey(), (23, 7))
-    assert attn(q, k, v).shape == (19, 11)
+    out = attn(q, k, v)
+    assert isinstance(out, jnp.ndarray)
+    assert out.shape == (19, 11)
 
     attn = eqx.nn.MultiheadAttention(num_heads=2, query_size=4, key=getkey())
     attn = eqx.tree_at(
