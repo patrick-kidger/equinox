@@ -114,15 +114,13 @@ _ScalarTy = TypeVar("_ScalarTy", bound=_Scalar)
 def filter_value_and_grad(
     *,
     has_aux: Literal[False] = False,
-) -> Callable[[Callable[_P, _ScalarTy]], Callable[_P, tuple[_ScalarTy, PyTree]]]:
-    ...
+) -> Callable[[Callable[_P, _ScalarTy]], Callable[_P, tuple[_ScalarTy, PyTree]]]: ...
 
 
 @overload
 def filter_value_and_grad(
     fun: Callable[_P, _ScalarTy], *, has_aux: Literal[False] = False
-) -> Callable[_P, tuple[_ScalarTy, PyTree]]:
-    ...
+) -> Callable[_P, tuple[_ScalarTy, PyTree]]: ...
 
 
 @overload
@@ -132,22 +130,19 @@ def filter_value_and_grad(
 ) -> Callable[
     [Callable[_P, tuple[_ScalarTy, _T]]],
     Callable[_P, tuple[tuple[_ScalarTy, _T], PyTree]],
-]:
-    ...
+]: ...
 
 
 @overload
 def filter_value_and_grad(
     fun: Callable[_P, tuple[_ScalarTy, _T]], *, has_aux: Literal[True] = True
-) -> Callable[_P, tuple[tuple[_ScalarTy, _T], PyTree]]:
-    ...
+) -> Callable[_P, tuple[tuple[_ScalarTy, _T], PyTree]]: ...
 
 
 @overload
 def filter_value_and_grad(
     fun: Callable[_P, _T], *, has_aux: bool = False
-) -> Callable[_P, tuple[_T, PyTree]]:
-    ...
+) -> Callable[_P, tuple[_T, PyTree]]: ...
 
 
 @doc_remove_args("gradkwargs")
@@ -197,15 +192,13 @@ def filter_value_and_grad(
 def filter_grad(
     *,
     has_aux: Literal[False] = False,
-) -> Callable[[Callable[_P, _Scalar]], Callable[_P, PyTree[Float[Array, "..."]]]]:
-    ...
+) -> Callable[[Callable[_P, _Scalar]], Callable[_P, PyTree[Float[Array, "..."]]]]: ...
 
 
 @overload
 def filter_grad(
     fun: Callable[_P, _Scalar], *, has_aux: Literal[False] = False
-) -> Callable[_P, PyTree[Float[Array, "..."]]]:
-    ...
+) -> Callable[_P, PyTree[Float[Array, "..."]]]: ...
 
 
 @overload
@@ -215,20 +208,19 @@ def filter_grad(
 ) -> Callable[
     [Callable[_P, tuple[_Scalar, _T]]],
     Callable[_P, tuple[PyTree[Float[Array, "..."]], _T]],
-]:
-    ...
+]: ...
 
 
 @overload
 def filter_grad(
     fun: Callable[_P, tuple[_Scalar, _T]], *, has_aux: Literal[True] = True
-) -> Callable[_P, tuple[PyTree[Float[Array, "..."]], _T]]:
-    ...
+) -> Callable[_P, tuple[PyTree[Float[Array, "..."]], _T]]: ...
 
 
 @overload
-def filter_grad(fun: Callable[_P, Any], *, has_aux: bool = False) -> Callable[_P, Any]:
-    ...
+def filter_grad(
+    fun: Callable[_P, Any], *, has_aux: bool = False
+) -> Callable[_P, Any]: ...
 
 
 @doc_remove_args("gradkwargs")
@@ -365,15 +357,13 @@ def filter_jvp(
 @overload
 def filter_vjp(
     fun: Callable[..., _T], *primals, has_aux: Literal[False] = False
-) -> tuple[_T, Callable[..., tuple[PyTree, ...]]]:
-    ...
+) -> tuple[_T, Callable[..., tuple[PyTree, ...]]]: ...
 
 
 @overload
 def filter_vjp(
     fun: Callable[..., tuple[_T, _S]], *primals, has_aux: Literal[True] = True
-) -> tuple[_T, Callable[..., tuple[PyTree, ...]], _S]:
-    ...
+) -> tuple[_T, Callable[..., tuple[PyTree, ...]], _S]: ...
 
 
 def filter_vjp(fun, *primals, has_aux: bool = False):
