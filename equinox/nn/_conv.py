@@ -487,6 +487,20 @@ class ConvTranspose(Module, strict=True):
             See [these animations](https://github.com/vdumoulin/conv_arithmetic/blob/af6f818b0bb396c26da79899554682a8a499101d/README.md#transposed-convolution-animations)
             and [this report](https://arxiv.org/abs/1603.07285) for a nice reference.
 
+        !!! faq "FAQ"
+
+            If you need to exactly transpose a convolutional layer, i.e. not just create an
+            operation with similar inductive biases but compute the actual linear transpose
+            of a specific CNN you can reshape the weights of the forward convolution
+            via the following:
+
+            ```python
+            cnn = eqx.Conv(...)
+            cnn_t = eqx.ConvTranspose(...)
+            cnn_t = eqx.tree_at(lambda x: x.weight, cnn_t, jnp.flip(cnn.weight,
+                                axis=tuple(range(2, cnn.weight.ndim))).swapaxes(0, 1))
+            ```
+
         !!! warning
 
             `padding_mode='CIRCULAR'` is only implemented for `output_padding=0` and
