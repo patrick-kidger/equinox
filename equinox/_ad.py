@@ -439,7 +439,10 @@ class _Jac(Module):
         else:
             jacobian = jax.jacfwd
         dynamic_out, (static_out, aux) = jacobian(_fun, has_aux=True)(diff_x)
-        out = combine(dynamic_out, static_out)
+        if static_out is None:
+            out = dynamic_out
+        else:
+            out = combine(dynamic_out, static_out)
         if self.has_aux:
             return out, aux
         else:
