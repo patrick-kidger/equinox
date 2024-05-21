@@ -132,11 +132,11 @@ class LSTMCell(Module, strict=True):
                 self.cell = LSTMCell(...)
 
             def __call__(self, xs):
-                scan_fn = lambda state, input: (cell(input, state), None)
+                scan_fn = lambda state, input: (self.cell(input, state), None)
                 init_state = (jnp.zeros(self.cell.hidden_size),
                               jnp.zeros(self.cell.hidden_size))
-                final_state, _ = jax.lax.scan(scan_fn, init_state, xs)
-                return final_state
+                (h, c), _ = jax.lax.scan(scan_fn, init_state, xs)
+                return h, c
         ```
     """
 
