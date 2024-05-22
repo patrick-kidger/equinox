@@ -1358,6 +1358,7 @@ def test_rope_embeddings_freqs_cis():
     # values are generated using
     # Metas Rope embedding code. See this gist which generates these
     # expected values: https://gist.github.com/Artur-Galstyan/8d0bb5743f00650aa6c0d7427595a0ff
+    theta = 10_000.0
     expected_freqs_cis = jnp.array(
         [
             [1.0000 + 0.0000j, 1.0000 + 0.0000j, 1.0000 + 0.0000j, 1.0000 + 0.0000j],
@@ -1381,7 +1382,7 @@ def test_rope_embeddings_freqs_cis():
     embedding_size = 8
     seq_length = 16
     freqs_cis = eqx.nn.RotaryPositionalEmbedding.precompute_freqs_cis(
-        embedding_size, seq_length
+        embedding_size, seq_length, theta
     )
     assert jnp.allclose(freqs_cis, expected_freqs_cis, atol=1e-4)
 
