@@ -429,20 +429,13 @@ class _Jac(Module):
                 _out, _aux = _out
             else:
                 _aux = None
-            _dynamic_out, _static_out = partition(
-                _out, lambda j: isinstance(j, ad.JVPTracer)
-            )
-            return _dynamic_out, (_static_out, _aux)
+            return _out, _aux
 
         if self.rev:
             jacobian = jax.jacrev
         else:
             jacobian = jax.jacfwd
-        dynamic_out, (static_out, aux) = jacobian(_fun, has_aux=True)(diff_x)
-        if static_out is None:
-            out = dynamic_out
-        else:
-            out = combine(dynamic_out, static_out)
+        out, aux = jacobian(_fun, has_aux=True)(diff_x)
         if self.has_aux:
             return out, aux
         else:
@@ -462,6 +455,11 @@ def filter_jacfwd(fun, has_aux: bool = False):
     **Returns:**
 
     A function with the same arguments as `fun`.
+
+    !!! warning
+
+        The outputs of `fun` must be jax types, the filtering is only applied
+        to the input not the output.
 
     If `has_aux is False` then this function returns just the Jacobian of `fun` with
     respect to its first argument.
@@ -486,6 +484,11 @@ def filter_jacrev(fun, has_aux: bool = False):
 
     A function with the same arguments as `fun`.
 
+    !!! warning
+
+        The outputs of `fun` must be jax types, the filtering is only applied
+        to the input not the output.
+
     If `has_aux is False` then this function returns just the Jacobian of `fun` with
     respect to its first argument.
 
@@ -505,6 +508,11 @@ def filter_hessian(fun, has_aux: bool = False):
     **Returns:**
 
     A function with the same arguments as `fun`.
+
+    !!! warning
+
+        The outputs of `fun` must be jax types, the filtering is only applied
+        to the input not the output.
 
     If `has_aux is False` then this function returns just the Hessian of `fun` with
     respect to its first argument.
