@@ -164,8 +164,8 @@ class RotaryPositionalEmbedding(Module, strict=True):
     theta: float = field(static=True)
 
     def __init__(self, embedding_size: int, theta: float = 10000.0):
-            self.embedding_size = embedding_size
-            self.theta = theta
+        self.embedding_size = embedding_size
+        self.theta = theta
 
     def __check_init__(self):
         if self.embedding_size < 0:
@@ -225,12 +225,16 @@ class RotaryPositionalEmbedding(Module, strict=True):
                 freqs_cis = internal_rope_embedding_cache[embedding_size]
                 freqs_cis_seq_len, _ = freqs_cis.shape
                 if seq_len > freqs_cis_seq_len:
-                    freqs_cis = self.precompute_freqs_cis(embedding_size, seq_len, self.theta)
+                    freqs_cis = self.precompute_freqs_cis(
+                        embedding_size, seq_len, self.theta
+                    )
                     internal_rope_embedding_cache[embedding_size] = freqs_cis
                 else:
                     freqs_cis = freqs_cis[:seq_len]
             else:
-                freqs_cis = self.precompute_freqs_cis(embedding_size, seq_len, self.theta)
+                freqs_cis = self.precompute_freqs_cis(
+                    embedding_size, seq_len, self.theta
+                )
                 internal_rope_embedding_cache[embedding_size] = freqs_cis
 
         freqs_real = jnp.tile(freqs_cis.real, (1, 2))
