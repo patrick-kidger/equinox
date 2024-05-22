@@ -161,11 +161,7 @@ class RotaryPositionalEmbedding(Module, strict=True):
     """
 
     embedding_size: int = field(static=True)
-    theta: float = field(static=True)
-
-    def __init__(self, embedding_size: int, theta: float = 10000.0):
-        self.embedding_size = embedding_size
-        self.theta = theta
+    theta: float = field(static=True, default=10_000.0)
 
     def __check_init__(self):
         if self.embedding_size < 0:
@@ -180,7 +176,7 @@ class RotaryPositionalEmbedding(Module, strict=True):
 
     @staticmethod
     def precompute_freqs_cis(
-        embedding_size: int, end: int, theta: float = 10000.0
+        embedding_size: int, end: int, theta: float
     ) -> Complex[Array, "end half_of_embedding_size"]:
         freqs = 1.0 / (
             theta
