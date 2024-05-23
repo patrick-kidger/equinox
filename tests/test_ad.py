@@ -483,6 +483,41 @@ def test_filter_hessian_and_jacfwd_and_jacrev():
     assert tree_allclose(jax_hess, eqx_hess)
 
 
+def test_pytree_jacfwd():
+    class NeuralNetwork(eqx.Module):
+        layers: list
+        extra_bias: jax.Array
+
+        def __init__(self, key):
+            key1, key2, key3 = jax.random.split(key, 3)
+            self.layers = [
+                eqx.nn.Linear(2, 8, key=key1),
+                eqx.nn.Linear(8, 8, key=key2),
+                eqx.nn.Linear(8, 2, key=key3),
+            ]
+            self.extra_bias = jax.numpy.ones(2)
+
+        def __call__(self, x):
+            for layer in self.layers[:-1]:
+                x = jax.nn.relu(layer(x))
+            return self.layers[-1](x) + self.extra_bias
+
+    def loss(model, x, y):
+        pred_y = jax.vmap(model)(x)
+        return jax.numpy.mean((y - pred_y) ** 2)
+
+    x_key, y_key, model_key = jax.random.split(jax.random.PRNGKey(0), 3)
+    x = jax.random.normal(x_key, (3, 2))
+    y = jax.random.normal(y_key, (3, 2))
+    model = NeuralNetwork(model_key)
+    assert tree_allclose(
+        eqx.filter_grad(loss)(model, x, y), eqx.filter_jacfwd(loss)(model, x, y)
+    )
+    assert tree_allclose(
+        eqx.filter_grad(loss)(model, x, y), eqx.filter_jacrev(loss)(model, x, y)
+    )
+
+
 def test_filter_custom_jvp_symbolic_zero():
     @eqx.filter_custom_jvp
     def f(x, y):
