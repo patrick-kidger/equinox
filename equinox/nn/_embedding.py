@@ -244,4 +244,8 @@ class RotaryPositionalEmbedding(Module, strict=True):
 RotaryPositionalEmbedding.__init__.__doc__ = """**Arguments:**
 
 - `embedding_size`: Size of the token embeddings. Must be non-negative and even.
+- `theta`: The base frequency for the sinusoidal functions. It defines the rate 
+   of oscillation for the sine and cosine waves that encode positional information 
+   into the embeddings. The larger, the slower the oscillations and vice versa.
+   Defaults to 10_000.0
 """
