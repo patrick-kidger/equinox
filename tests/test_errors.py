@@ -146,11 +146,15 @@ def test_traceback_runtime_eqx():
         tb = e.__traceback__
         code_stack = []
         while tb is not None:
-            code_stack.append(tb.tb_frame.f_code)
+            if not tb.tb_frame.f_globals["__name__"].startswith("jaxtyping"):
+                code_stack.append(tb.tb_frame.f_code)
             tb = tb.tb_next
-        assert len(code_stack) == 1
-        assert code_stack[0].co_filename.endswith("test_errors.py")
-        assert code_stack[0].co_name == "test_traceback_runtime_eqx"
+        assert len(code_stack) == 2
+        one, two = code_stack
+        assert one.co_filename.endswith("test_errors.py")
+        assert one.co_name == "test_traceback_runtime_eqx"
+        assert two.co_filename.endswith("equinox/_jit.py")
+        assert two.co_name == "_call"
 
 
 def test_traceback_runtime_custom():
@@ -177,7 +181,8 @@ def test_traceback_runtime_custom():
         tb = e.__traceback__
         code_stack = []
         while tb is not None:
-            code_stack.append(tb.tb_frame.f_code)
+            if not tb.tb_frame.f_globals["__name__"].startswith("jaxtyping"):
+                code_stack.append(tb.tb_frame.f_code)
             tb = tb.tb_next
         assert len(code_stack) == 4
         one, two, three, four = code_stack
