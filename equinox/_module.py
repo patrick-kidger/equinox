@@ -1061,6 +1061,12 @@ class BoundMethod(Module):
             self.__self__, type(self.__self__)
         )
 
+    # This should be unnecessary in principle. In practice something goes wrong on
+    # Python 3.9 and it returns the wrong thing.
+    @property
+    def __signature__(self):
+        return inspect.signature(self.__wrapped__)
+
 
 #
 # Part 3: some downstream pieces. These don't actually affect the core `Module`
