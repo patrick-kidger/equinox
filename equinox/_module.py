@@ -535,6 +535,7 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
 
     # This method is called whenever you initialise a module: `MyModule(...)`
     def __call__(cls, *args, **kwargs):
+        __tracebackhide__ = True
         if _is_force_abstract[cls]:
             # Any other is-abstract checks will be handled in super().__call__.
             raise TypeError("Cannot instantiate abstract `equinox.Module`.")
