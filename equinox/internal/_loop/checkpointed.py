@@ -1207,7 +1207,13 @@ def _resolve_perturb_val(final_val, body_fun, perturb_final_val, perturb_body_fu
 
             # Not `jax.jvp`, so as not to error if `body_fun` has any `custom_vjp`s.
             jax.linearize(_to_linearize, dynamic)
-            assert new_perturb_val is not sentinel
+            if new_perturb_val is sentinel:
+                # `_dynamic_out` in `_to_linearize` had no JVP tracers at all, despite
+                # `_dynamic` having them. Presumably the user's `_body_fun` has no
+                # differentiable dependency whatsoever.
+                # This can happen if all the autograd is happening through
+                # `perturb_body_fun`.
+                return Static(perturb_val)
             assert jtu.tree_structure(
                 perturb_val, is_leaf=_is_none
             ) == jtu.tree_structure(new_perturb_val, is_leaf=_is_none)
