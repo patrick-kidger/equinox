@@ -728,7 +728,7 @@ class filter_custom_jvp:
             # represented as a `None`.
             assert ty is None
             primal_out = call(x, y, fn=fn)
-            tangent_out = tx**2
+            tangent_out = 2 * tx
             return primal_out, tangent_out
 
         x = jnp.array(2.0)
