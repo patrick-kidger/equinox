@@ -448,19 +448,26 @@ def _check_kv_shapes(
     key_heads: Float[Array, "seq_length num_heads qk_size"],
     value_heads: Float[Array, "seq_length num_heads vo_size"],
 ) -> None:
-    if key_state.shape[0] != value_state.shape[0]:
+    key_state_length, key_num_heads, key_qk_size = key_state.shape
+    value_state_length, value_num_heads, value_vo_size = value_state.shape
+    key_heads_seq_len, key_heads_num_heads, key_heads_qk_size = key_heads.shape
+    value_heads_seq_len, value_heads_num_heads, value_heads_vo_size = value_heads.shape
+
+    if key_state_length != value_state_length:
         raise ValueError(
             "key_state and value_state have different state lengths: \n"
-            f"\t{key_state.shape[0]=} != {value_state.shape[0]=}"
+            f"{key_state_length=} != {value_state_length=}"
         )
-    if key_state.shape[1:] != key_heads.shape[1:]:
+    if (key_num_heads, key_qk_size) != (key_heads_num_heads, key_heads_qk_size):
         raise ValueError(
             "key_state has different `num_heads` or `qk_size` than key_heads\n"
-            f"\tExpected {key_state.shape[1:]}, got {key_heads.shape[1:]}"
+            f"Expected {(key_heads_num_heads, key_heads_qk_size)}"
+            f"got {(key_num_heads, key_qk_size)}, "
         )
 
-    if value_state.shape[1:] != value_heads.shape[1:]:
+    if (value_num_heads, value_vo_size) != (value_heads_num_heads, value_heads_vo_size):
         raise ValueError(
             "value_state has different `num_heads` or `vo_size` than value_heads\n"
-            f"\tExpected {value_state.shape[1:]}, got {value_heads.shape[1:]}"
+            f"Expected {(value_heads_num_heads, value_heads_vo_size)}"
+            f"got {(value_num_heads, value_vo_size)},"
         )
