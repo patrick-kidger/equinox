@@ -222,9 +222,7 @@ class MultiheadAttention(Module, strict=True):
         for states in range(state_length):
             x = jax.numpy.ones(shape=(seq_len, query_size))
             y, state = mha(x, x, x, mask="causal", state=state)
-
         ```
-
         """
         dtype = default_floating_dtype() if dtype is None else dtype
         qkey, kkey, vkey, okey = jrandom.split(key, 4)
@@ -351,8 +349,10 @@ class MultiheadAttention(Module, strict=True):
             )
 
         query_seq_length, _ = query.shape
+        kv_seq_length, _ = key_.shape
+        kv_seq_length2, _ = value.shape
 
-        if (kv_seq_length := key_.shape[0]) != value.shape[0]:
+        if kv_seq_length != kv_seq_length2:
             raise ValueError("key and value must both be sequences of equal length.")
 
         query_heads = self._project(self.query_proj, query)
@@ -377,8 +377,8 @@ class MultiheadAttention(Module, strict=True):
                 raise ValueError(
                     "process_heads must not change the shape of the heads."
                 )
-        state_length = None
         if state is None:
+            state_length = None
             causal_mask_offset = 0
         else:
             if self.kv_cache is None:
@@ -390,12 +390,12 @@ class MultiheadAttention(Module, strict=True):
                 )
 
             key_state, value_state, index, state = self.kv_cache(
-                state, key_heads, value_heads
+                key_heads, value_heads, state
             )
             _check_kv_shapes(key_state, value_state, key_heads, value_heads)
-            state_length = key_state.shape[0]
+            state_length, _, _ = key_state.shape
 
-            causal_mask_offset = index - kv_seq_length
+            causal_mask_offset = index
             key_heads = key_state
             value_heads = value_state
             kv_seq_length = state_length
@@ -404,7 +404,7 @@ class MultiheadAttention(Module, strict=True):
             query_indices = jnp.arange(query_seq_length)[:, None]
             kv_indices = jnp.arange(kv_seq_length)[None, :]
             mask = kv_indices <= query_indices + causal_mask_offset
-        if state is not None and state_length is not None:
+        if state_length is not None:
             # Also mask out the latter parts of the state we haven't written into yet.
             unwritten_mask = jnp.arange(state_length) < index  # pyright: ignore
             if mask is None:

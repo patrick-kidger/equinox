@@ -11,9 +11,9 @@ from ._stateful import State, StateIndex
 
 KVCacheCallable = Callable[
     [
-        State,
         Float[Array, "seq_length num_heads qk_size"],
         Float[Array, "seq_length num_heads vo_size"],
+        State,
     ],
     tuple[
         Float[Array, "state_length num_heads qk_size"],
@@ -46,9 +46,9 @@ class StandardKVCache(Module):
 
     def __call__(
         self,
-        state: State,
         key_heads: Float[Array, "seq_length num_heads qk_size"],
         value_heads: Float[Array, "seq_length num_heads vo_size"],
+        state: State,
     ) -> tuple[
         Float[Array, "state_length num_heads qk_size"],
         Float[Array, "state_length num_heads vo_size"],
@@ -62,6 +62,8 @@ class StandardKVCache(Module):
             value_state, value_heads, index, axis=0
         )
         index = index + kv_seq_length
-        state = state.set(self.autoregressive_index, (key_state, value_state, index))
+        state = state.set(
+            self.autoregressive_index, (key_state, value_state, index + kv_seq_length)
+        )
 
         return key_state, value_state, index, state
