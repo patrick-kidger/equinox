@@ -12,3 +12,6 @@ examples/CIFAR
 examples/MNIST
 examples/multipart_serialised.eqx
 .python-version
+.ruff_cache
+.pytest_cache
+.venv

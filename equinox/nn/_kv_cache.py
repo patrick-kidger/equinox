@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 import jax.lax as lax
 import jax.numpy as jnp
 from jaxtyping import Array, Float, Int
@@ -5,6 +7,21 @@ from jaxtyping import Array, Float, Int
 from .._misc import default_int_dtype
 from .._module import field, Module
 from ._stateful import State, StateIndex
+
+
+KVCacheCallable = Callable[
+    [
+        State,
+        Float[Array, "seq_length num_heads qk_size"],
+        Float[Array, "seq_length num_heads vo_size"],
+    ],
+    tuple[
+        Float[Array, "state_length num_heads qk_size"],
+        Float[Array, "state_length num_heads vo_size"],
+        Int[Array, ""],
+        State,
+    ],
+]
 
 
 class StandardKVCache(Module):
