@@ -32,17 +32,21 @@ class StandardKVCache(Module):
 
     def __init__(
         self,
-        key_shape: tuple[int, int, int],
-        value_shape: tuple[int, int, int],
+        state_length: int,
+        num_heads: int,
+        key_size: int,
+        value_size: int,
     ):
-        self.key_shape = key_shape
-        self.value_shape = value_shape
+        self.key_shape = state_length, num_heads, key_size
+        self.value_shape = state_length, num_heads, value_size
 
-        def _make_cache(**_):
-            _int = default_int_dtype()
-            return jnp.empty(key_shape), jnp.empty(value_shape), jnp.zeros((), _int)
-
-        self.autoregressive_index = StateIndex(_make_cache())
+        self.autoregressive_index = StateIndex(
+            (
+                lambda _: jnp.empty(self.key_shape),
+                jnp.empty(self.value_shape),
+                jnp.zeros((), default_int_dtype()),
+            ),
+        )
 
     def __call__(
         self,
