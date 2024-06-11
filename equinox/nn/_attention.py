@@ -193,15 +193,18 @@ class MultiheadAttention(Module, strict=True):
         !!! info
 
         The following shows an example of how to use `MultiheadAttention` for
-        autoregressive decoding with a `kv_cache` and `state`:
+        autoregressive decoding with a `kv_cache` and `state`
+        (see [`equinox.nn.StandardKVCache`][]):
         ```python
         import equinox as eqx
         import jax
 
-        query_size = 6
-        num_heads = 1
-        state_length = 8
+
         seq_len = 3
+
+        state_length = 8
+        num_heads = 1
+        query_size = 6
 
         standard_kv_cache = eqx.nn.StandardKVCache(
             key_shape=(state_length, num_heads, query_size),
@@ -212,12 +215,12 @@ class MultiheadAttention(Module, strict=True):
             query_size=query_size,
             num_heads=num_heads,
             kv_cache=standard_kv_cache,
-            key=jax.random.PRNGKey(0)
+            key=jax.random.key(0)
 
         )
 
         for states in range(state_length):
-            x = jax.numpy.ones(shape=(seq_len, query_size)) * (states + 1)
+            x = jax.numpy.ones(shape=(seq_len, query_size))
             y, state = mha(x, x, x, mask="causal", state=state)
 
         ```
