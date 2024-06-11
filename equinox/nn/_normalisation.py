@@ -98,14 +98,12 @@ class LayerNorm(Module, strict=True):
         self.bias = jnp.zeros(shape, dtype=dtype) if use_bias else None
 
     @overload
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
-        ...
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array: ...
 
     @overload
     def __call__(
         self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
-    ) -> tuple[Array, State]:
-        ...
+    ) -> tuple[Array, State]: ...
 
     @jax.named_scope("eqx.nn.LayerNorm")
     def __call__(
@@ -228,14 +226,12 @@ class GroupNorm(Module, strict=True):
         self.bias = jnp.zeros(channels, dtype=dtype) if channelwise_affine else None
 
     @overload
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
-        ...
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array: ...
 
     @overload
     def __call__(
         self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
-    ) -> tuple[Array, State]:
-        ...
+    ) -> tuple[Array, State]: ...
 
     @jax.named_scope("eqx.nn.GroupNorm")
     def __call__(
@@ -343,14 +339,12 @@ class RMSNorm(Module, strict=True):
         self.bias = jnp.zeros(shape, dtype=dtype) if use_bias else None
 
     @overload
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
-        ...
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array: ...
 
     @overload
     def __call__(
         self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
-    ) -> tuple[Array, State]:
-        ...
+    ) -> tuple[Array, State]: ...
 
     @jax.named_scope("eqx.nn.RMSNorm")
     def __call__(
@@ -382,8 +376,13 @@ class RMSNorm(Module, strict=True):
                 f"Received `shape={self.shape} and `x.shape={x.shape}`. You might need "
                 "to replace `rms_norm(x)` with `jax.vmap(rms_norm)(x)`.\n"
             )
-        inv_rms = jax.lax.rsqrt(jnp.mean(x**2) + self.eps)
-        out = inv_rms * x
+
+        with jax.numpy_dtype_promotion("standard"):
+            dtype = jnp.result_type(x.dtype, jnp.float32)
+
+        inv_rms = jax.lax.rsqrt(jnp.mean(x.astype(dtype) ** 2) + self.eps)
+        out = (inv_rms * x.astype(dtype)).astype(x.dtype)
+
         if self.use_weight:
             out = self.weight * out
         if self.use_bias:

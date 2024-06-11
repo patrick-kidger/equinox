@@ -114,15 +114,13 @@ _ScalarTy = TypeVar("_ScalarTy", bound=_Scalar)
 def filter_value_and_grad(
     *,
     has_aux: Literal[False] = False,
-) -> Callable[[Callable[_P, _ScalarTy]], Callable[_P, tuple[_ScalarTy, PyTree]]]:
-    ...
+) -> Callable[[Callable[_P, _ScalarTy]], Callable[_P, tuple[_ScalarTy, PyTree]]]: ...
 
 
 @overload
 def filter_value_and_grad(
     fun: Callable[_P, _ScalarTy], *, has_aux: Literal[False] = False
-) -> Callable[_P, tuple[_ScalarTy, PyTree]]:
-    ...
+) -> Callable[_P, tuple[_ScalarTy, PyTree]]: ...
 
 
 @overload
@@ -132,22 +130,19 @@ def filter_value_and_grad(
 ) -> Callable[
     [Callable[_P, tuple[_ScalarTy, _T]]],
     Callable[_P, tuple[tuple[_ScalarTy, _T], PyTree]],
-]:
-    ...
+]: ...
 
 
 @overload
 def filter_value_and_grad(
     fun: Callable[_P, tuple[_ScalarTy, _T]], *, has_aux: Literal[True] = True
-) -> Callable[_P, tuple[tuple[_ScalarTy, _T], PyTree]]:
-    ...
+) -> Callable[_P, tuple[tuple[_ScalarTy, _T], PyTree]]: ...
 
 
 @overload
 def filter_value_and_grad(
     fun: Callable[_P, _T], *, has_aux: bool = False
-) -> Callable[_P, tuple[_T, PyTree]]:
-    ...
+) -> Callable[_P, tuple[_T, PyTree]]: ...
 
 
 @doc_remove_args("gradkwargs")
@@ -197,15 +192,13 @@ def filter_value_and_grad(
 def filter_grad(
     *,
     has_aux: Literal[False] = False,
-) -> Callable[[Callable[_P, _Scalar]], Callable[_P, PyTree[Float[Array, "..."]]]]:
-    ...
+) -> Callable[[Callable[_P, _Scalar]], Callable[_P, PyTree[Float[Array, "..."]]]]: ...
 
 
 @overload
 def filter_grad(
     fun: Callable[_P, _Scalar], *, has_aux: Literal[False] = False
-) -> Callable[_P, PyTree[Float[Array, "..."]]]:
-    ...
+) -> Callable[_P, PyTree[Float[Array, "..."]]]: ...
 
 
 @overload
@@ -215,20 +208,19 @@ def filter_grad(
 ) -> Callable[
     [Callable[_P, tuple[_Scalar, _T]]],
     Callable[_P, tuple[PyTree[Float[Array, "..."]], _T]],
-]:
-    ...
+]: ...
 
 
 @overload
 def filter_grad(
     fun: Callable[_P, tuple[_Scalar, _T]], *, has_aux: Literal[True] = True
-) -> Callable[_P, tuple[PyTree[Float[Array, "..."]], _T]]:
-    ...
+) -> Callable[_P, tuple[PyTree[Float[Array, "..."]], _T]]: ...
 
 
 @overload
-def filter_grad(fun: Callable[_P, Any], *, has_aux: bool = False) -> Callable[_P, Any]:
-    ...
+def filter_grad(
+    fun: Callable[_P, Any], *, has_aux: bool = False
+) -> Callable[_P, Any]: ...
 
 
 @doc_remove_args("gradkwargs")
@@ -365,15 +357,13 @@ def filter_jvp(
 @overload
 def filter_vjp(
     fun: Callable[..., _T], *primals, has_aux: Literal[False] = False
-) -> tuple[_T, Callable[..., tuple[PyTree, ...]]]:
-    ...
+) -> tuple[_T, Callable[..., tuple[PyTree, ...]]]: ...
 
 
 @overload
 def filter_vjp(
     fun: Callable[..., tuple[_T, _S]], *primals, has_aux: Literal[True] = True
-) -> tuple[_T, Callable[..., tuple[PyTree, ...]], _S]:
-    ...
+) -> tuple[_T, Callable[..., tuple[PyTree, ...]], _S]: ...
 
 
 def filter_vjp(fun, *primals, has_aux: bool = False):
@@ -439,17 +429,13 @@ class _Jac(Module):
                 _out, _aux = _out
             else:
                 _aux = None
-            _dynamic_out, _static_out = partition(
-                _out, lambda j: isinstance(j, ad.JVPTracer)
-            )
-            return _dynamic_out, (_static_out, _aux)
+            return _out, _aux
 
         if self.rev:
             jacobian = jax.jacrev
         else:
             jacobian = jax.jacfwd
-        dynamic_out, (static_out, aux) = jacobian(_fun, has_aux=True)(diff_x)
-        out = combine(dynamic_out, static_out)
+        out, aux = jacobian(_fun, has_aux=True)(diff_x)
         if self.has_aux:
             return out, aux
         else:
@@ -469,6 +455,11 @@ def filter_jacfwd(fun, has_aux: bool = False):
     **Returns:**
 
     A function with the same arguments as `fun`.
+
+    !!! warning
+
+        The outputs of `fun` must be jax types, the filtering is only applied
+        to the input not the output.
 
     If `has_aux is False` then this function returns just the Jacobian of `fun` with
     respect to its first argument.
@@ -493,6 +484,11 @@ def filter_jacrev(fun, has_aux: bool = False):
 
     A function with the same arguments as `fun`.
 
+    !!! warning
+
+        The outputs of `fun` must be jax types, the filtering is only applied
+        to the input not the output.
+
     If `has_aux is False` then this function returns just the Jacobian of `fun` with
     respect to its first argument.
 
@@ -512,6 +508,11 @@ def filter_hessian(fun, has_aux: bool = False):
     **Returns:**
 
     A function with the same arguments as `fun`.
+
+    !!! warning
+
+        The outputs of `fun` must be jax types, the filtering is only applied
+        to the input not the output.
 
     If `has_aux is False` then this function returns just the Hessian of `fun` with
     respect to its first argument.
@@ -723,9 +724,18 @@ class filter_custom_jvp:
         def call_jvp(primals, tangents, *, fn):
             x, y = primals
             tx, ty = tangents
+            # `y` is not differentiated below, so it has a symbolic zero tangent,
+            # represented as a `None`.
+            assert ty is None
             primal_out = call(x, y, fn=fn)
-            tangent_out = tx**2 + ty
+            tangent_out = 2 * tx
             return primal_out, tangent_out
+
+        x = jnp.array(2.0)
+        y = jnp.array(2.0)
+        fn = lambda a, b: a + b
+        # This only computes gradients for the first argument `x`.
+        equinox.filter_grad(call)(x, y, fn=fn)
         ```
     """
 
@@ -758,11 +768,9 @@ class filter_custom_jvp:
         def fn_jvp_wrapper(static, dynamic, tangents):
             (dynamic,) = dynamic
             (tangents,) = tangents
-            d_args, _ = dynamic
-            t_args, t_kwargs = tangents
+            t_args, t_kwargs = jtu.tree_map(_drop_nondiff, tangents, dynamic)
             if len(jtu.tree_leaves(t_kwargs)) > 0:
                 raise ValueError("Received keyword tangent")
-            t_args = jtu.tree_map(_drop_nondiff, t_args, d_args)
             args, kwargs = combine(dynamic, static)
             out, t_out = fn_jvp(args, t_args, **kwargs)
             t_out = jtu.tree_map(_none_to_zero, t_out, out, is_leaf=_is_none)

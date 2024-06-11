@@ -11,8 +11,7 @@ if TYPE_CHECKING:
     # https://github.com/microsoft/pyright/issues/3450
     def all_sequences(
         x: Union[Sequence[Any], Sequence[_T]],
-    ) -> "te.TypeIs[Sequence[_T]]":
-        ...
+    ) -> "te.TypeIs[Sequence[_T]]": ...
 
 else:
     # beartype doesn't like StrictTypeGuard

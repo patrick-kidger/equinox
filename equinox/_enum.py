@@ -205,11 +205,9 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
     class _Sequence(type):
-        def __getitem__(cls, item) -> str:
-            ...
+        def __getitem__(cls, item) -> str: ...
 
-        def __len__(cls) -> int:
-            ...
+        def __len__(cls) -> int: ...
 
     class Enumeration(  # pyright: ignore
         enum.Enum, EnumerationItem, metaclass=_Sequence
@@ -219,12 +217,10 @@ if TYPE_CHECKING:
         _base_offsets: ClassVar[dict["Enumeration", int]]
 
         @classmethod
-        def promote(cls, item: "Enumeration") -> Self:
-            ...
+        def promote(cls, item: "Enumeration") -> Self: ...
 
         @classmethod
-        def where(cls, pred: Bool[ArrayLike, "..."], a: Self, b: Self) -> Self:
-            ...
+        def where(cls, pred: Bool[ArrayLike, "..."], a: Self, b: Self) -> Self: ...
 
 else:
     _Enumeration = doc_repr(Any, "Enumeration")

@@ -358,8 +358,7 @@ def make_with_state(make_model: Callable[_P, _T]) -> Callable[_P, tuple[_T, Stat
 
         def make_with_state_impl(
             *args: _P.args, **kwargs: _P.kwargs
-        ) -> tuple[_T, State]:
-            ...
+        ) -> tuple[_T, State]: ...
 
     else:
 

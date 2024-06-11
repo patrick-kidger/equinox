@@ -3,6 +3,7 @@
 This includes both the core dataclass+pytree combo, plus various related pieces of
 functionality.
 """
+
 import abc
 import dataclasses
 import functools as ft
@@ -534,6 +535,7 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
 
     # This method is called whenever you initialise a module: `MyModule(...)`
     def __call__(cls, *args, **kwargs):
+        __tracebackhide__ = True
         if _is_force_abstract[cls]:
             # Any other is-abstract checks will be handled in super().__call__.
             raise TypeError("Cannot instantiate abstract `equinox.Module`.")
@@ -1059,6 +1061,12 @@ class BoundMethod(Module):
         return self.__func__.__get__(  # pyright: ignore
             self.__self__, type(self.__self__)
         )
+
+    # This should be unnecessary in principle. In practice something goes wrong on
+    # Python 3.9 and it returns the wrong thing.
+    @property
+    def __signature__(self):
+        return inspect.signature(self.__wrapped__)
 
 
 #

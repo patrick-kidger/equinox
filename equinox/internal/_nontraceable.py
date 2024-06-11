@@ -1,6 +1,7 @@
 """This module provides operations to assert that a particular value is always
 unbatched, or not differentiated, etc.
 """
+
 import functools as ft
 from typing import Optional
 
@@ -93,12 +94,12 @@ _nondifferentiable_backward_impl = lambda x, *, msg, symbolic: x
 nondifferentiable_backward_p.def_impl(_nondifferentiable_backward_impl)
 nondifferentiable_backward_p.def_abstract_eval(_nondifferentiable_backward_impl)
 ad.primitive_jvps[nondifferentiable_backward_p] = _nondifferentiable_backward_jvp
-ad.primitive_transposes[
-    nondifferentiable_backward_p
-] = _nondifferentiable_backward_transpose
-batching.primitive_batchers[
-    nondifferentiable_backward_p
-] = _nondifferentiable_backward_batch
+ad.primitive_transposes[nondifferentiable_backward_p] = (
+    _nondifferentiable_backward_transpose
+)
+batching.primitive_batchers[nondifferentiable_backward_p] = (
+    _nondifferentiable_backward_batch
+)
 mlir.register_lowering(
     nondifferentiable_backward_p,
     mlir.lower_fun(_nondifferentiable_backward_impl, multiple_results=False),

@@ -14,8 +14,7 @@ else:
 def test_abstract_method():
     class A(eqx.Module):
         @abc.abstractmethod
-        def x(self):
-            ...
+        def x(self): ...
 
     class B(A):
         pass

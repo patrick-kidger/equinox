@@ -64,14 +64,12 @@ class Sequential(StatefulLayer, strict=StrictConfig(allow_method_override=True))
         )
 
     @overload
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
-        ...
+    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array: ...
 
     @overload
     def __call__(
         self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
-    ) -> tuple[Array, State]:
-        ...
+    ) -> tuple[Array, State]: ...
 
     @jax.named_scope("eqx.nn.Sequential")
     def __call__(

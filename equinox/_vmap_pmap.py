@@ -244,8 +244,7 @@ def filter_vmap(
     out_axes: PyTree[AxisSpec] = if_array(0),
     axis_name: Hashable = None,
     axis_size: Optional[int] = None,
-) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    ...
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
 
 
 @overload
@@ -256,8 +255,7 @@ def filter_vmap(
     out_axes: PyTree[AxisSpec] = if_array(0),
     axis_name: Hashable = None,
     axis_size: Optional[int] = None,
-) -> Callable[..., Any]:
-    ...
+) -> Callable[..., Any]: ...
 
 
 @doc_remove_args("vmapkwargs")
@@ -573,8 +571,7 @@ def filter_pmap(
     axis_name: Hashable = None,
     axis_size: Optional[int] = None,
     donate: Literal["all", "warn", "none"] = "none",
-) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    ...
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
 
 
 @overload
@@ -586,8 +583,7 @@ def filter_pmap(
     axis_name: Hashable = None,
     axis_size: Optional[int] = None,
     donate: Literal["all", "warn", "none"] = "none",
-) -> Callable[..., Any]:
-    ...
+) -> Callable[..., Any]: ...
 
 
 @doc_remove_args("pmapkwargs")
