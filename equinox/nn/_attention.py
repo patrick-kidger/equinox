@@ -8,11 +8,12 @@ from typing import cast, Literal, Optional, Union
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
-from jaxtyping import Array, Bool, Float, Int, PRNGKeyArray
+from jaxtyping import Array, Bool, Float, PRNGKeyArray
 
 from .._misc import default_floating_dtype
 from .._module import field, Module
 from ._dropout import Dropout
+from ._kv_cache import KVCacheCallable
 from ._linear import Linear
 from ._stateful import State
 
@@ -125,21 +126,7 @@ class MultiheadAttention(Module, strict=True):
     output_proj: Linear
     dropout: Dropout
 
-    kv_cache: Optional[
-        Callable[
-            [
-                State,
-                Float[Array, "seq_length num_heads qk_size"],
-                Float[Array, "seq_length num_heads vo_size"],
-            ],
-            tuple[
-                Float[Array, "state_length num_heads qk_size"],
-                Float[Array, "state_length num_heads vo_size"],
-                Int[Array, ""],
-                State,
-            ],
-        ]
-    ]
+    kv_cache: Optional[KVCacheCallable]
 
     num_heads: int = field(static=True)
     query_size: int = field(static=True)
@@ -169,21 +156,7 @@ class MultiheadAttention(Module, strict=True):
         dropout_p: float = 0.0,
         inference: bool = False,
         dtype=None,
-        kv_cache: Optional[
-            Callable[
-                [
-                    State,
-                    Float[Array, "seq_length num_heads qk_size"],
-                    Float[Array, "seq_length num_heads vo_size"],
-                ],
-                tuple[
-                    Float[Array, "state_length num_heads qk_size"],
-                    Float[Array, "state_length num_heads vo_size"],
-                    Int[Array, ""],
-                    State,
-                ],
-            ]
-        ] = None,
+        kv_cache: Optional[KVCacheCallable] = None,
         *,
         key: PRNGKeyArray,
     ):
