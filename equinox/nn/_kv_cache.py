@@ -59,7 +59,7 @@ class StandardKVCache(Module):
         Int[Array, ""],
         State,
     ]:
-        kv_seq_length = key_heads.shape[0]
+        kv_seq_length, _, _ = key_heads.shape
         key_state, value_state, index = state.get(self.autoregressive_index)
         key_state = lax.dynamic_update_slice_in_dim(key_state, key_heads, index, axis=0)
         value_state = lax.dynamic_update_slice_in_dim(
