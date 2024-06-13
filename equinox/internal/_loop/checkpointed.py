@@ -1244,7 +1244,9 @@ def _stop_gradient_on_unperturbed(init_val, final_val, body_fun):
 
 
 def _perturb_to_tang(t, p):
-    if p is None:
+    if t is None:
+        return None
+    elif p is None:
         return None
     elif p is False:
         return None
@@ -1265,5 +1267,7 @@ def _stop_gradient_on_unperturbed_jvp(primals, tangents):
     perturb_val = _resolve_perturb_val(
         init_val, body_fun, perturb_val, perturb_body_fun
     )
-    t_final_val = jtu.tree_map(_perturb_to_tang, t_final_val, perturb_val)
+    t_final_val = jtu.tree_map(
+        _perturb_to_tang, t_final_val, perturb_val, is_leaf=_is_none
+    )
     return final_val, t_final_val

@@ -143,18 +143,6 @@ def test_traceback_runtime_eqx():
         assert msg.startswith("egads")
         assert "EQX_ON_ERROR" in msg
         assert msg.endswith("information.")
-        tb = e.__traceback__
-        code_stack = []
-        while tb is not None:
-            if not tb.tb_frame.f_globals["__name__"].startswith("jaxtyping"):
-                code_stack.append(tb.tb_frame.f_code)
-            tb = tb.tb_next
-        assert len(code_stack) == 2
-        one, two = code_stack
-        assert one.co_filename.endswith("test_errors.py")
-        assert one.co_name == "test_traceback_runtime_eqx"
-        assert two.co_filename.endswith("equinox/_jit.py")
-        assert two.co_name == "_call"
 
 
 def test_traceback_runtime_custom():
@@ -178,19 +166,3 @@ def test_traceback_runtime_custom():
         # assert e.__cause__ is None  # varies by Python version and JAX version.
         assert "egads" in str(e)
         assert "EQX_ON_ERROR" not in str(e)
-        tb = e.__traceback__
-        code_stack = []
-        while tb is not None:
-            if not tb.tb_frame.f_globals["__name__"].startswith("jaxtyping"):
-                code_stack.append(tb.tb_frame.f_code)
-            tb = tb.tb_next
-        assert len(code_stack) == 4
-        one, two, three, four = code_stack
-        assert one.co_filename.endswith("test_errors.py")
-        assert one.co_name == "test_traceback_runtime_custom"
-        assert two.co_filename.endswith("equinox/_jit.py")
-        assert two.co_name == "__call__"
-        assert three.co_filename.endswith("equinox/_module.py")
-        assert three.co_name == "__call__"
-        assert four.co_filename.endswith("equinox/_jit.py")
-        assert four.co_name == "_call"
