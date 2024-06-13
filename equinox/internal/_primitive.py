@@ -77,7 +77,7 @@ def _replace_none(x):
 
 
 def _get_second(x, y):
-    return y
+    return None if x is None else y
 
 
 def _make_spec(x, y):
@@ -128,7 +128,7 @@ class Flatten:
                 assert treedef_out_old == treedef_out
                 assert tree_equal(static_out_old, static_out)
             like = jtu.tree_map(_replace_none, like, is_leaf=_is_none)
-            like = jtu.tree_map(_get_second, dynamic_out, like)
+            like = jtu.tree_map(_get_second, dynamic_out, like, is_leaf=_is_none)
             flat_like, treedef_like = jtu.tree_flatten(like)
             flat_like = [None if x is _dummy_none else x for x in flat_like]
             assert treedef_like == treedef_out
