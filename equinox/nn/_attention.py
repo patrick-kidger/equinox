@@ -199,7 +199,6 @@ class MultiheadAttention(Module, strict=True):
         import equinox as eqx
         import jax
 
-
         seq_len = 3
 
         state_length = 8
@@ -207,8 +206,10 @@ class MultiheadAttention(Module, strict=True):
         query_size = 6
 
         standard_kv_cache = eqx.nn.StandardKVCache(
-            key_shape=(state_length, num_heads, query_size),
-            value_shape=(state_length, num_heads, query_size),
+            state_length=state_length,
+            num_heads=num_heads,
+            key_size=query_size,
+            value_size=query_size
         )
 
         mha, state = eqx.nn.make_with_state(MultiheadAttention)(
