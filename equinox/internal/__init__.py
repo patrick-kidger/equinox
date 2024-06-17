@@ -13,6 +13,7 @@ from .._errors import (
     assert_dce as assert_dce,
     branched_error_if as branched_error_if,
     error_if as error_if,
+    warn_if as warn_if,
 )
 from .._eval_shape import cached_filter_eval_shape as cached_filter_eval_shape
 from .._misc import left_broadcast_to as left_broadcast_to

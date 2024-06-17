@@ -3,7 +3,7 @@ import traceback
 import types
 import warnings
 from collections.abc import Sequence
-from typing import Any, cast, Literal
+from typing import Any, cast, Final, Literal
 
 import jax
 import jax._src.traceback_util as traceback_util
@@ -364,3 +364,163 @@ def assert_dce(
     else:
         # Don't run if not JIT'ing, as without the compiler nothing will be DCE'd.
         return x
+
+
+# ------------------------------------
+
+
+def warn_if(
+    x: PyTree,
+    pred: Bool[ArrayLike, "..."],
+    msg: str,
+    *,
+    category: type[Warning] | None = None,
+    stacklevel: int = 1,
+) -> PyTree:
+    """Surfaces a warning based on runtime values. Works even under JIT.
+
+    **Arguments:**
+
+    - `x`: will be returned unchanged. This is used to determine where the
+      warning check happens in the overall computation: it will happen after `x`
+      is computed and before the return value is used. `x` can be any PyTree.
+    - `pred`: a boolean for whether to emit a warning. Can be an array of
+      bools; a warning will be raised if any of them are `True`. If vmap'd then
+      a warning will be raised if any batch element has `True`.
+    - `msg`: the string to display as a warning message.
+    - `category`: the warning category to use (defaults to `UserWarning` if
+      `None`).
+    - `stacklevel`: the stack level for the warning (passed to `warnings.warn`).
+
+    **Returns:**
+
+    The original argument `x` unchanged. Note that unlike `error_if`, the
+    warning check uses `jax.debug.callback` (an ordered effect), so it will
+    **not** be removed by dead code elimination even if the return value is
+    unused. It will only be eliminated if the entire `warn_if` call and all of
+    its inputs are provably dead (i.e. not connected to any live computation).
+
+    !!! Example
+
+        ```python
+        @jax.jit
+        def f(x):
+            x = warn_if(x, x < 0, "x must be >= 0")
+            # ...use x in your computation...
+            return x
+
+        f(jax.numpy.array(-1))
+        ```
+    """
+    index = 0
+    msgs = [msg]
+    leaves = jtu.tree_leaves((x, pred, index))
+    # This carefully does not perform any JAX operations if `pred` and `index`
+    # are a bool and an int. This ensures we can use `warn_if` before
+    # init_google.
+    return (_warn_if_impl_jit if any(map(is_array, leaves)) else _warn_if_impl)(
+        x, pred, index, msgs, category=category, stacklevel=stacklevel
+    )
+
+
+@filter_custom_jvp
+def _warn(
+    x: PyTree,
+    pred: Bool[ArrayLike, "..."],
+    index: Int[ArrayLike, "..."],
+    *,
+    msgs: Sequence[str],
+    category: type[Warning] | None,
+    stacklevel: int,
+) -> PyTree:
+    """Internal implementation for warn_if that handles Tracers."""
+
+    def handle_warning():  # pyright: ignore
+        msg = msgs[index.item() if isinstance(index, Array) else index]  # pyright: ignore[reportCallIssue, reportArgumentType]
+        jax.debug.callback(
+            warnings.warn, msg, category=category, stacklevel=stacklevel + 2
+        )
+        return x
+
+    return lax.cond(pred, handle_warning, lambda: x)
+
+
+@_warn.def_jvp
+def _warn_jvp(
+    primals: tuple[PyTree, Bool[ArrayLike, "..."], Int[ArrayLike, "..."]],
+    tangents: tuple[PyTree, Any, Any],
+    *,
+    msgs: Sequence[str],
+    category: type[Warning] | None,
+    stacklevel: int,
+) -> tuple[PyTree, PyTree]:
+    x, pred, index = primals
+    tx, _, _ = tangents
+    return (
+        _warn(x, pred, index, msgs=msgs, category=category, stacklevel=stacklevel),
+        tx,
+    )
+
+
+_WARN_IF_STATIC_PRED_TRACED_INDEX: Final[str] = (
+    "warn_if: `pred` is statically True but `index` is traced. "
+    "This would produce a warning only at trace time, which is "
+    "unreliable. Either make `index` static or convert this to "
+    "an error_if."
+)
+
+
+def _warn_if_impl(
+    x: PyTree,
+    pred: Bool[ArrayLike, "..."],
+    index: Int[ArrayLike, "..."],
+    msgs: Sequence[str],
+    *,
+    category: type[Warning] | None = None,
+    stacklevel: int = 1,
+) -> PyTree:
+    with jax.ensure_compile_time_eval():
+        # This carefully does not perform any JAX operations if `pred` and
+        # `index` are a bool and an int. This ensures we can use `warn_if`
+        # before init_google.
+        if not isinstance(pred, bool):
+            pred = unvmap_any(pred)
+        if not isinstance(index, int):
+            index = unvmap_max(index)
+        if not isinstance(pred, jax.core.Tracer):
+            if isinstance(pred, Array):
+                pred = pred.item()
+            assert type(pred) is bool
+            if not pred:  # Condition is False at trace time; no warning needed.
+                return x
+            if not isinstance(index, jax.core.Tracer):
+                if isinstance(index, Array):
+                    index = index.item()
+                assert type(index) is int
+                # Adjust stacklevel for direct call in eager mode
+                # +1 accounts for this function, +1 for warn_if
+                warnings.warn(msgs[index], category=category, stacklevel=stacklevel + 2)
+                return x
+            # pred is True but index is a Tracer. This would mean the warning
+            # fires only at trace/compile time, which is easy to miss (e.g.
+            # graph export, or "just run the last cell" handovers).  Unlike
+            # errors, a compile-time warning doesn't prevent the graph from
+            # being built, so surface this as an explicit error instead.
+            raise EquinoxTracetimeError(_WARN_IF_STATIC_PRED_TRACED_INDEX)
+
+    # Handle runtime case when pred is a Tracer (under JIT)
+    # Always use the callback path for consistency
+    dynamic_x, static_x = partition(x, is_array)
+    flat = jtu.tree_leaves(dynamic_x)
+    if len(flat) == 0:
+        # Early return if no arrays - callback was already called in eager path
+        return x
+    dynamic_x = _warn(
+        dynamic_x, pred, index, msgs=msgs, category=category, stacklevel=stacklevel
+    )
+    return combine(dynamic_x, static_x)
+
+
+# filter_jit does some work to produce nicer runtime warning messages. We also
+# place it here to ensure a consistent experience when using JAX in eager mode.
+_warn_if_impl_jit = _jit.filter_jit(_warn_if_impl)
