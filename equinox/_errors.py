@@ -103,7 +103,14 @@ def _get_message(
 
 @filter_custom_jvp
 def _error_inner(
-    dynamic_x, pred, *, static_x, msg: Callable[[PyTree], str], on_error, stack
+    dynamic_x,
+    pred,
+    *,
+    static_x,
+    msg: Callable[[PyTree], str],
+    on_error,
+    stack,
+    category,
 ):
     assert callable(msg)
 
@@ -149,6 +156,25 @@ def _error_inner(
 
         return lax.cond(unvmap_any(pred), handle_error, lambda: dynamic_x)
 
+    elif on_error == "warn":
+
+        def warn_callback(_dynamic_x, _pred):
+            msg_string = _get_message(_dynamic_x, static_x, _pred, msg)
+            # We don't offer `stacklevel` as an argument under JIT, as we don't have
+            # the same stack at runtime as we do at compiletime.
+            warnings.warn(msg_string, category=category)
+            return _dynamic_x
+
+        def handle_warning() -> PyTree:
+            return jax.pure_callback(
+                warn_callback,
+                dynamic_x,
+                dynamic_x,
+                pred,
+                vmap_method="broadcast_all",
+            )
+        return lax.cond(unvmap_any(pred), handle_warning, lambda: dynamic_x)
+
     elif on_error == "breakpoint":
 
         def display_msg(_dynamic_x, _pred):
@@ -183,11 +209,17 @@ def _error_inner(
 # zeros to non-symbolic-zeros, and we'd really like to avoid that, and (b) we need to
 # wrap our pure_callbacks in custom JVP rules.
 @_error_inner.def_jvp
-def _error_inner_jvp(primals, tangents, *, static_x, msg, on_error, stack):
+def _error_inner_jvp(primals, tangents, *, static_x, msg, on_error, stack, category):
     x, pred = primals
     tx, _ = tangents
     return _error_inner(
-        x, pred, static_x=static_x, msg=msg, on_error=on_error, stack=stack
+        x,
+        pred,
+        static_x=static_x,
+        msg=msg,
+        on_error=on_error,
+        stack=stack,
+        category=category,
     ), tx
 
 
@@ -196,7 +228,8 @@ def _error_outer(
     pred: Bool[ArrayLike, ""],
     msg: Callable[[PyTree], str],
     *,
-    on_error: Literal["default", "raise", "breakpoint", "off", "nan"],
+    on_error: Literal["default", "raise", "warn", "breakpoint", "off", "nan"],
+    category: type[Warning] | None,
 ) -> PyTree:
     if jnp.shape(pred) != ():
         raise ValueError("`equinox.error_if(..., pred=...)` must be a scalar.")
@@ -204,7 +237,7 @@ def _error_outer(
         raise ValueError("`equinox.error_if(..., pred=...)` must be a boolean.")
     if on_error == "default":
         on_error = EQX_ON_ERROR
-    if on_error not in ("raise", "breakpoint", "off", "nan"):
+    if on_error not in ("raise", "warn", "breakpoint", "off", "nan"):
         raise RuntimeError("Unrecognised value for `on_error`.")
     # Short-circuit if the predicate is known-falsey at compile time, no need to include
     # this in the graph.
@@ -237,7 +270,13 @@ def _error_outer(
     if len(flat) == 0:
         raise ValueError("No arrays to thread error on to.")
     dynamic_x = _error_inner(
-        dynamic_x, pred, static_x=static_x, msg=msg, on_error=on_error, stack=stack
+        dynamic_x,
+        pred,
+        static_x=static_x,
+        msg=msg,
+        on_error=on_error,
+        stack=stack,
+        category=category,
     )
     return combine(dynamic_x, static_x)
 
@@ -252,16 +291,17 @@ def _error_impl(
     pred: Bool[ArrayLike, ""],
     msg: Callable[[PyTree], str],
     *,
-    on_error: Literal["default", "raise", "breakpoint", "nan", "off"],
+    on_error: Literal["default", "raise", "warn", "breakpoint", "nan", "off"],
+    category: type[Warning] | None,
 ) -> PyTree:
     leaves = jtu.tree_leaves((x, pred))
     # This carefully does not perform any JAX operations if `pred` and `index` are
     # a bool and an int.
     # This ensures we can use `error_if` before init_google.
     if any(is_array(leaf) for leaf in leaves):
-        return _error_outer_jit(x, pred, msg, on_error=on_error)
+        return _error_outer_jit(x, pred, msg, on_error=on_error, category=category)
     else:
-        return _error_outer(x, pred, msg, on_error=on_error)
+        return _error_outer(x, pred, msg, on_error=on_error, category=category)
 
 
 if EQX_ON_ERROR == "breakpoint":
@@ -309,7 +349,9 @@ def error_if(
         least one array.
     - `pred`: a boolean for whether to raise an error. If vmap'd then an error will be
         raised if any batch element has `True`.
-    - `msg`: the string to display as an error message.
+    - `msg`: the string to display as an error message. If passed as a string then it
+        will be used directly. If passed as a callable then it will be called with `x`,
+        and should return a string.
 
     **Returns:**
 
@@ -356,7 +398,53 @@ def error_if(
     if isinstance(msg, str):
         old_msg = msg
         msg = lambda _: old_msg
-    return _error_impl(x, pred, msg, on_error=on_error)
+    return _error_impl(x, pred, msg, on_error=on_error, category=None)
+
+
+def warn_if(
+    x: PyTree,
+    pred: Bool[ArrayLike, ""],
+    msg: str | Callable[[PyTree], str],
+    *,
+    category: type[Warning] | None = None,
+) -> PyTree:
+    """Displays a warning based on runtime values. Works even under JIT.
+
+    **Arguments:**
+
+    - `x`: will be returned unchanged. This is used to determine where the warning
+        happens in the overall computation: it will happen after `x` is computed and
+        before the return value is used. `x` can be any PyTree, and it must contain at
+        least one array.
+    - `pred`: a boolean for whether to print hte warning. If vmap'd then a warning will
+        be printed if any batch element has `True`.
+    - `msg`: the string to display as the warning message. If passed as a string then it
+        will be used directly. If passed as a callable then it will be called with `x`,
+        and should return a string.
+    - `category`: the warning category to use; as `warnings.warn`.
+
+    **Returns:**
+
+    The original argument `x` unchanged. **If this return value is unused then the error
+    check will not be performed.** (It will be removed as part of dead code
+    elimination.)
+
+    !!! Example
+
+        ```python
+        @jax.jit
+        def f(x):
+            x = warn_if(x, x < 0, "x must be >= 0")
+            # ...use x in your computation...
+            return x
+
+        f(jax.numpy.array(-1))
+        ```
+    """
+    if isinstance(msg, str):
+        old_msg = msg
+        msg = lambda _: old_msg
+    return _error_impl(x, pred, msg, on_error="warn", category=category)
 
 
 @doc_remove_args("on_error")
@@ -394,7 +482,7 @@ def branched_error_if(
         raise ValueError("`branched_error_if(..., index=...)` must be a scalar.")
     if not jnp.issubdtype(jnp.result_type(index), jnp.integer):
         raise ValueError("`branched_error_if(..., index=...)` must have integer dtype.")
-    out, _ = _error_impl((x, index), pred, msg=msg, on_error=on_error)
+    out, _ = _error_impl((x, index), pred, msg=msg, on_error=on_error, category=None)
     return out
 
 
