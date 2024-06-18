@@ -472,7 +472,7 @@ def _generate_mask(
     ],
     query_seq_length: int,
     kv_seq_length: int,
-    causal_mask_offset: Array | Literal[0],
+    causal_mask_offset: Union[Array, Literal[0]],
 ) -> Optional[Array]:
     if mask == "causal":
         query_indices = jnp.arange(query_seq_length)[:, None]
