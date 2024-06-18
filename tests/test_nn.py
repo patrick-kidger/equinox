@@ -1444,7 +1444,7 @@ def test_rope_embeddings_values():
     assert jnp.allclose(res, expected_values, atol=1e-6)
 
 
-def test_kv_cache_without_rope():
+def test_kv_cache():
     # The expected values of this test come from
     # the LLaMA implementation. Here's the GH gist
     # https://gist.github.com/Artur-Galstyan/c41bf5b1311cfce0220adc14b2bddd89
