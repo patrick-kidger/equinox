@@ -389,10 +389,11 @@ class MultiheadAttention(Module, strict=True):
                     "`MultiheadAttention(..., kv_cache=...)`. "
                     "See `equinox.nn.StandardKVCache` for an example."
                 )
-
             key_state, value_state, index, state = self.kv_cache(
                 key_heads, value_heads, state
             )
+            print("key_state", key_state, key_state.shape)
+            print("value_state", value_state, value_state.shape)
             _check_kv_shapes(key_state, value_state, key_heads, value_heads)
             state_length, _, _ = key_state.shape
 
@@ -462,7 +463,7 @@ def _check_kv_shapes(
     if (key_num_heads, key_qk_size) != (key_heads_num_heads, key_heads_qk_size):
         raise ValueError(
             "key_state has different `num_heads` or `qk_size` than key_heads\n"
-            f"Expected {(key_heads_num_heads, key_heads_qk_size)}"
+            f"Expected {(key_heads_num_heads, key_heads_qk_size)} "
             f"got {(key_num_heads, key_qk_size)}, "
         )
 
