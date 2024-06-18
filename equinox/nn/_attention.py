@@ -392,8 +392,6 @@ class MultiheadAttention(Module, strict=True):
             key_state, value_state, index, state = self.kv_cache(
                 key_heads, value_heads, state
             )
-            print("key_state", key_state, key_state.shape)
-            print("value_state", value_state, value_state.shape)
             _check_kv_shapes(key_state, value_state, key_heads, value_heads)
             state_length, _, _ = key_state.shape
 
