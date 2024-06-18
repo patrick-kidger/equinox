@@ -1,11 +1,12 @@
 import warnings
-from typing import Union
+from typing import Optional, Union
 
 import equinox as eqx
 import jax
 import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
+import numpy as np
 import pytest
 
 
@@ -1441,3 +1442,188 @@ def test_rope_embeddings_values():
     res = rope_embeddings(x)
 
     assert jnp.allclose(res, expected_values, atol=1e-6)
+
+
+def test_kv_cache_without_rope():
+    # The expected values of this test come from
+    # the LLaMA implementation. Here's the GH gist
+    # https://gist.github.com/Artur-Galstyan/c41bf5b1311cfce0220adc14b2bddd89
+    # Note, that to get the same values, both attention modules'
+    # weight has been made the same
+
+    class ModelArgs:
+        dim: int = 16
+        n_layers: int = 6
+        n_heads: int = 4
+        n_kv_heads: Optional[int] = None
+        vocab_size: int = 16
+        multiple_of: int = 256
+        ffn_dim_multiplier: Optional[float] = None
+        norm_eps: float = 1e-5
+        rope_theta: float = 500000.0
+
+        max_batch_size: int = 32
+        max_seq_len: int = 8
+
+    seq_len = 5
+    model_args = ModelArgs()
+    tokens = jnp.ones(
+        shape=(seq_len, model_args.dim),
+        dtype=jnp.float32,
+    )
+
+    model_args = ModelArgs()
+
+    standard_kv_cache = eqx.nn.StandardKVCache(
+        state_length=model_args.max_seq_len,
+        num_heads=model_args.n_heads,
+        key_size=model_args.dim // model_args.n_heads,
+        value_size=model_args.dim // model_args.n_heads,
+    )
+
+    attention, state = eqx.nn.make_with_state(eqx.nn.MultiheadAttention)(
+        query_size=model_args.dim,
+        num_heads=model_args.n_heads,
+        kv_cache=standard_kv_cache,
+        key=jax.random.key(2),
+    )
+
+    np.random.seed(22)
+    new_weight = jnp.array(
+        np.random.uniform(size=(attention.query_proj.weight.shape), low=0.05, high=0.25)
+    )
+    where = lambda l: l.query_proj.weight
+    attention = eqx.tree_at(where, attention, new_weight)
+
+    where = lambda l: l.key_proj.weight
+    new_weight = jnp.array(
+        np.random.uniform(size=(attention.key_proj.weight.shape), low=0.05, high=0.25)
+    )
+    attention = eqx.tree_at(where, attention, new_weight)
+
+    new_weight = jnp.array(
+        np.random.uniform(
+            size=(attention.output_proj.weight.shape), low=0.05, high=0.25
+        )
+    )
+    where = lambda l: l.output_proj.weight
+    attention = eqx.tree_at(where, attention, new_weight)
+
+    new_weight = jnp.array(
+        np.random.uniform(size=(attention.value_proj.weight.shape), low=0.05, high=0.25)
+    )
+    where = lambda l: l.value_proj.weight
+    attention = eqx.tree_at(where, attention, new_weight)
+
+    out, state = attention(tokens, tokens, tokens, state=state)
+
+    v_expected = jnp.array(
+        [
+            [
+                [2.5410, 2.2716, 2.2248, 3.0523],
+                [2.5704, 2.0507, 2.2411, 2.2784],
+                [2.5581, 2.0207, 2.2550, 2.4552],
+                [2.5587, 2.2866, 2.5900, 2.2357],
+            ],
+            [
+                [2.5410, 2.2716, 2.2248, 3.0523],
+                [2.5704, 2.0507, 2.2411, 2.2784],
+                [2.5581, 2.0207, 2.2550, 2.4552],
+                [2.5587, 2.2866, 2.5900, 2.2357],
+            ],
+            [
+                [2.5410, 2.2716, 2.2248, 3.0523],
+                [2.5704, 2.0507, 2.2411, 2.2784],
+                [2.5581, 2.0207, 2.2550, 2.4552],
+                [2.5587, 2.2866, 2.5900, 2.2357],
+            ],
+            [
+                [2.5410, 2.2716, 2.2248, 3.0523],
+                [2.5704, 2.0507, 2.2411, 2.2784],
+                [2.5581, 2.0207, 2.2550, 2.4552],
+                [2.5587, 2.2866, 2.5900, 2.2357],
+            ],
+            [
+                [2.5410, 2.2716, 2.2248, 3.0523],
+                [2.5704, 2.0507, 2.2411, 2.2784],
+                [2.5581, 2.0207, 2.2550, 2.4552],
+                [2.5587, 2.2866, 2.5900, 2.2357],
+            ],
+            [
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+            ],
+            [
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+            ],
+            [
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+            ],
+        ]
+    )
+
+    k_expected = jnp.array(
+        [
+            [
+                [2.4393, 2.1424, 2.2050, 2.2842],
+                [2.1772, 2.3244, 2.0518, 2.4791],
+                [2.8260, 2.0493, 2.6937, 2.4621],
+                [2.2209, 2.3524, 2.2618, 2.6727],
+            ],
+            [
+                [2.4393, 2.1424, 2.2050, 2.2842],
+                [2.1772, 2.3244, 2.0518, 2.4791],
+                [2.8260, 2.0493, 2.6937, 2.4621],
+                [2.2209, 2.3524, 2.2618, 2.6727],
+            ],
+            [
+                [2.4393, 2.1424, 2.2050, 2.2842],
+                [2.1772, 2.3244, 2.0518, 2.4791],
+                [2.8260, 2.0493, 2.6937, 2.4621],
+                [2.2209, 2.3524, 2.2618, 2.6727],
+            ],
+            [
+                [2.4393, 2.1424, 2.2050, 2.2842],
+                [2.1772, 2.3244, 2.0518, 2.4791],
+                [2.8260, 2.0493, 2.6937, 2.4621],
+                [2.2209, 2.3524, 2.2618, 2.6727],
+            ],
+            [
+                [2.4393, 2.1424, 2.2050, 2.2842],
+                [2.1772, 2.3244, 2.0518, 2.4791],
+                [2.8260, 2.0493, 2.6937, 2.4621],
+                [2.2209, 2.3524, 2.2618, 2.6727],
+            ],
+            [
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+            ],
+            [
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+            ],
+            [
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+            ],
+        ]
+    )
+
+    k, v, index = state.get(attention.kv_cache.autoregressive_index)
+
+    assert jnp.allclose(k_expected, k, atol=1e-4)
+    assert jnp.allclose(v_expected, v, atol=1e-4)

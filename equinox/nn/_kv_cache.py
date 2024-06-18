@@ -59,7 +59,7 @@ class StandardKVCache(Module):
 
         self.autoregressive_index = StateIndex(
             (
-                lambda: jnp.empty(self.key_shape, dtype=dtype),
+                jnp.empty(self.key_shape, dtype=dtype),
                 jnp.empty(self.value_shape, dtype=dtype),
                 jnp.zeros((), default_int_dtype()),
             ),
