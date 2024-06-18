@@ -205,7 +205,7 @@ class _VmapWrapper(Module):
             _out_axes = _bind_main(_main, self._out_axes)
             _out_axes = _resolve_axes(_out, _out_axes)
             _none_axes = jtu.tree_map(_is_none, _out_axes, is_leaf=_is_none)
-            _nonvmapd, _vmapd = partition(_out, _none_axes)
+            _nonvmapd, _vmapd = partition(_out, _none_axes, is_leaf=_is_none)
             return _vmapd, Static((_nonvmapd, _out_axes))
 
         if len(jtu.tree_leaves(in_axes)) == 0 and self._axis_size is None:
@@ -444,10 +444,10 @@ def _filter_pmap_cache(
         jtu.tree_map(_check_map_out_axis, _out_axes)
         _pmapd = []
         for i in range(-max_out_size, max_out_size):
-            _i_axes = jtu.tree_map(lambda a: a == i, _out_axes)
-            _pmapd.append(filter(_out, _i_axes))
+            _i_axes = jtu.tree_map(lambda a: a == i, _out_axes, is_leaf=_is_none)
+            _pmapd.append(filter(_out, _i_axes, is_leaf=_is_none))
         _none_axes = jtu.tree_map(_is_none, _out_axes, is_leaf=_is_none)
-        _nonpmapd = filter(_out, _none_axes)
+        _nonpmapd = filter(_out, _none_axes, is_leaf=_is_none)
         _dynamic_nonpmapd, _static_nonpmapd = hashable_partition(_nonpmapd, is_array)
         return _pmapd, _dynamic_nonpmapd, Static(_static_nonpmapd)
 

@@ -25,7 +25,7 @@ def apply_updates(model: PyTree, updates: PyTree) -> PyTree:
     This is often useful when updating a model's parameters via stochastic gradient
     descent. (This function is essentially the same as `optax.apply_updates`, except
     that it understands `None`.) For example see the
-    [Train RNN example](../../../examples/train_rnn/).
+    [Train RNN example](../../examples/train_rnn/).
 
     **Arguments:**
 
