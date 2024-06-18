@@ -380,6 +380,7 @@ class MultiheadAttention(Module, strict=True):
                 )
         if state is None:
             state_length = None
+            index = None
             causal_mask_offset = 0
         else:
             if self.kv_cache is None:
@@ -400,20 +401,9 @@ class MultiheadAttention(Module, strict=True):
             value_heads = value_state
             kv_seq_length = state_length
 
-        if mask == "causal":
-            query_indices = jnp.arange(query_seq_length)[:, None]
-            kv_indices = jnp.arange(kv_seq_length)[None, :]
-            mask = kv_indices <= query_indices + causal_mask_offset
+        mask = _generate_mask(mask, query_seq_length, kv_seq_length, causal_mask_offset)
         if state_length is not None:
-            # Also mask out the latter parts of the state we haven't written into yet.
-            unwritten_mask = jnp.arange(state_length) < index  # pyright: ignore
-            if mask is None:
-                mask = jnp.broadcast_to(
-                    unwritten_mask, (query_seq_length, state_length)
-                )
-            else:
-                mask = mask & unwritten_mask
-
+            mask = _mask_unwritten_parts(state_length, query_seq_length, mask, index)
         attn_fn = partial(
             dot_product_attention, dropout=self.dropout, inference=inference
         )
@@ -471,3 +461,40 @@ def _check_kv_shapes(
             f"Expected {(value_heads_num_heads, value_heads_vo_size)}"
             f"got {(value_num_heads, value_vo_size)},"
         )
+
+
+def _generate_mask(
+    mask: Union[
+        None,
+        Bool[Array, "q_seq kv_seq"],
+        Bool[Array, "num_heads q_seq kv_seq"],
+        Literal["causal"],
+    ],
+    query_seq_length: int,
+    kv_seq_length: int,
+    causal_mask_offset: Array | Literal[0],
+) -> Optional[Array]:
+    if mask == "causal":
+        query_indices = jnp.arange(query_seq_length)[:, None]
+        kv_indices = jnp.arange(kv_seq_length)[None, :]
+        return kv_indices <= query_indices + causal_mask_offset
+    else:
+        return mask
+
+
+def _mask_unwritten_parts(
+    state_length: int,
+    query_seq_length: int,
+    mask: Union[
+        Optional[Bool[Array, "q_seq kv_seq"]],
+        Optional[Bool[Array, "num_heads q_seq kv_seq"]],
+    ],
+    index: Optional[Array],
+):
+    # Also mask out the latter parts of the state we haven't written into yet.
+    unwritten_mask = jnp.arange(state_length) < index  # pyright: ignore
+    if mask is None:
+        mask = jnp.broadcast_to(unwritten_mask, (query_seq_length, state_length))
+    else:
+        mask = mask & unwritten_mask.reshape(*mask.shape)
+    return mask

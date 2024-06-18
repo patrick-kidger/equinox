@@ -1,5 +1,5 @@
 import warnings
-from typing import Optional, Union
+from typing import Union
 
 import equinox as eqx
 import jax
@@ -1451,39 +1451,27 @@ def test_kv_cache():
     # Note, that to get the same values, both attention modules'
     # weight has been made the same
 
-    class ModelArgs:
-        dim: int = 16
-        n_layers: int = 6
-        n_heads: int = 4
-        n_kv_heads: Optional[int] = None
-        vocab_size: int = 16
-        multiple_of: int = 256
-        ffn_dim_multiplier: Optional[float] = None
-        norm_eps: float = 1e-5
-        rope_theta: float = 500000.0
-
-        max_batch_size: int = 32
-        max_seq_len: int = 8
+    dim: int = 16
+    n_heads: int = 4
+    max_seq_len: int = 8
 
     seq_len = 5
-    model_args = ModelArgs()
+
     tokens = jnp.ones(
-        shape=(seq_len, model_args.dim),
+        shape=(seq_len, dim),
         dtype=jnp.float32,
     )
 
-    model_args = ModelArgs()
-
     standard_kv_cache = eqx.nn.StandardKVCache(
-        state_length=model_args.max_seq_len,
-        num_heads=model_args.n_heads,
-        key_size=model_args.dim // model_args.n_heads,
-        value_size=model_args.dim // model_args.n_heads,
+        state_length=max_seq_len,
+        num_heads=n_heads,
+        key_size=dim // n_heads,
+        value_size=dim // n_heads,
     )
 
     attention, state = eqx.nn.make_with_state(eqx.nn.MultiheadAttention)(
-        query_size=model_args.dim,
-        num_heads=model_args.n_heads,
+        query_size=dim,
+        num_heads=n_heads,
         kv_cache=standard_kv_cache,
         key=jax.random.key(2),
     )
@@ -1627,3 +1615,30 @@ def test_kv_cache():
 
     assert jnp.allclose(k_expected, k, atol=1e-4)
     assert jnp.allclose(v_expected, v, atol=1e-4)
+
+
+def test_mask():
+    query_seq_length = 1
+    kv_seq_length = 4
+    causal_mask_offset = jnp.array(0, dtype=jnp.int32)
+    index = jnp.array(0, dtype=jnp.int32)
+    state_length = 4
+
+    expected_masks = [
+        jnp.array([False, False, False, False]),
+        jnp.array([True, False, False, False]),
+        jnp.array([True, True, False, False]),
+        jnp.array([True, True, True, False]),
+    ]
+
+    for i in range(4):
+        mask = "causal"
+        mask = eqx.nn._attention._generate_mask(
+            mask, query_seq_length, kv_seq_length, causal_mask_offset
+        )
+        mask = eqx.nn._attention._mask_unwritten_parts(
+            state_length, query_seq_length, mask, index
+        )
+        index += 1
+        causal_mask_offset += 1
+        assert jnp.all(mask == expected_masks[i].reshape(*mask.shape))
