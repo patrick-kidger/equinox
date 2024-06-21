@@ -30,10 +30,9 @@ def test_backward_nan(capfd):
     f(jnp.array(1.0), terminate=False)
     jax.effects_barrier()
     text, _ = capfd.readouterr()
-    assert (
-        text
-        == "foo:\n   primals=Array(1., dtype=float32)\ncotangents=Array(nan, dtype=float32)\n"  # noqa: E501
-    )
+    out_text1 = "foo:\n   primals=Array(1., dtype=float32)\ncotangents=Array(nan, dtype=float32)\n"  # noqa: E501
+    out_text2 = "foo:\n   primals=array(1., dtype=float32)\ncotangents=array(nan, dtype=float32)\n"  # noqa: E501
+    assert text in (out_text1, out_text2)
 
     with pytest.raises(Exception):
         f(jnp.array(1.0), terminate=True)
