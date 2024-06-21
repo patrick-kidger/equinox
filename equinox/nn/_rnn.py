@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array, PRNGKeyArray
 
-from .._misc import default_floating_dtype
+from .._misc import default_floating_dtype, default_init
 from .._module import field, Module
 
 
@@ -66,19 +66,13 @@ class GRUCell(Module, strict=True):
         ihkey, hhkey, bkey, bkey2 = jrandom.split(key, 4)
         lim = math.sqrt(1 / hidden_size)
 
-        self.weight_ih = jrandom.uniform(
-            ihkey, (3 * hidden_size, input_size), minval=-lim, maxval=lim, dtype=dtype
-        )
-        self.weight_hh = jrandom.uniform(
-            hhkey, (3 * hidden_size, hidden_size), minval=-lim, maxval=lim, dtype=dtype
-        )
+        ihshape = (3 * hidden_size, input_size)
+        self.weight_ih = default_init(ihkey, ihshape, dtype, lim)
+        hhshape = (3 * hidden_size, hidden_size)
+        self.weight_hh = default_init(hhkey, hhshape, dtype, lim)
         if use_bias:
-            self.bias = jrandom.uniform(
-                bkey, (3 * hidden_size,), minval=-lim, maxval=lim, dtype=dtype
-            )
-            self.bias_n = jrandom.uniform(
-                bkey2, (hidden_size,), minval=-lim, maxval=lim, dtype=dtype
-            )
+            self.bias = default_init(bkey, (3 * hidden_size,), dtype, lim)
+            self.bias_n = default_init(bkey2, (hidden_size,), dtype, lim)
         else:
             self.bias = None
             self.bias_n = None
@@ -172,18 +166,12 @@ class LSTMCell(Module, strict=True):
         ihkey, hhkey, bkey = jrandom.split(key, 3)
         lim = math.sqrt(1 / hidden_size)
 
-        self.weight_ih = jrandom.uniform(
-            ihkey, (4 * hidden_size, input_size), minval=-lim, maxval=lim, dtype=dtype
-        )
-        self.weight_hh = jrandom.uniform(
-            hhkey, (4 * hidden_size, hidden_size), minval=-lim, maxval=lim, dtype=dtype
-        )
-        if use_bias:
-            self.bias = jrandom.uniform(
-                bkey, (4 * hidden_size,), minval=-lim, maxval=lim, dtype=dtype
-            )
-        else:
-            self.bias = None
+        ihshape = (4 * hidden_size, input_size)
+        self.weight_ih = default_init(ihkey, ihshape, dtype, lim)
+        hhshape = (4 * hidden_size, hidden_size)
+        self.weight_hh = default_init(hhkey, hhshape, dtype, lim)
+        bshape = (4 * hidden_size,)
+        self.bias = default_init(bkey, bshape, dtype, lim) if use_bias else None
 
         self.input_size = input_size
         self.hidden_size = hidden_size

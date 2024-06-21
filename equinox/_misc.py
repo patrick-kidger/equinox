@@ -1,7 +1,10 @@
+from typing import Any
+
 import jax
 import jax.core
 import jax.numpy as jnp
-from jaxtyping import Array
+import jax.random as jrandom
+from jaxtyping import Array, PRNGKeyArray
 
 
 def left_broadcast_to(arr: Array, shape: tuple[int, ...]) -> Array:
@@ -18,3 +21,17 @@ def default_floating_dtype():
         return jnp.float64
     else:
         return jnp.float32
+
+
+def default_init(
+    key: PRNGKeyArray, shape: tuple[int, ...], dtype: Any, lim: float
+) -> jax.Array:
+    if jnp.issubdtype(dtype, jnp.complexfloating):
+        # only two possible complex dtypes, jnp.complex64 or jnp.complex128
+        real_dtype = jnp.float32 if dtype == jnp.complex64 else jnp.float64
+        rkey, ikey = jrandom.split(key, 2)
+        real = jrandom.uniform(rkey, shape, real_dtype, minval=-lim, maxval=lim)
+        imag = jrandom.uniform(ikey, shape, real_dtype, minval=-lim, maxval=lim)
+        return real.astype(dtype) + 1j * imag.astype(dtype)
+    else:
+        return jrandom.uniform(key, shape, dtype, minval=-lim, maxval=lim)
