@@ -10,9 +10,9 @@ import jax.random as jrandom
 import numpy as np
 from jaxtyping import Array, PRNGKeyArray
 
-from .._misc import default_floating_dtype, default_init
+from .._misc import default_floating_dtype
 from .._module import field, Module
-from ._misc import all_sequences
+from ._misc import all_sequences, default_init
 
 
 _T = TypeVar("_T")

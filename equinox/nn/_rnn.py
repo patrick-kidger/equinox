@@ -7,8 +7,9 @@ import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array, PRNGKeyArray
 
-from .._misc import default_floating_dtype, default_init
+from .._misc import default_floating_dtype
 from .._module import field, Module
+from ._misc import default_init
 
 
 class GRUCell(Module, strict=True):
