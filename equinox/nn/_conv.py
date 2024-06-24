@@ -12,7 +12,7 @@ from jaxtyping import Array, PRNGKeyArray
 
 from .._misc import default_floating_dtype
 from .._module import field, Module
-from ._misc import all_sequences
+from ._misc import all_sequences, default_init
 
 
 _T = TypeVar("_T")
@@ -153,8 +153,6 @@ class Conv(Module, strict=True):
                 case the padding is an odd number, then the extra padding is added at
                 the end for `'SAME'` and at the beginning for `'SAME_LOWER'`.
         """
-        dtype = default_floating_dtype() if dtype is None else dtype
-        wkey, bkey = jrandom.split(key, 2)
 
         parse = _ntuple(num_spatial_dims)
         kernel_size = parse(kernel_size)
@@ -167,25 +165,14 @@ class Conv(Module, strict=True):
                 f"by `groups` (={groups})."
             )
 
+        dtype = default_floating_dtype() if dtype is None else dtype
+        wkey, bkey = jrandom.split(key, 2)
         grouped_in_channels = in_channels // groups
-        lim = 1 / np.sqrt(grouped_in_channels * math.prod(kernel_size))
-        self.weight = jrandom.uniform(
-            wkey,
-            (out_channels, grouped_in_channels) + kernel_size,
-            minval=-lim,
-            maxval=lim,
-            dtype=dtype,
-        )
-        if use_bias:
-            self.bias = jrandom.uniform(
-                bkey,
-                (out_channels,) + (1,) * num_spatial_dims,
-                minval=-lim,
-                maxval=lim,
-                dtype=dtype,
-            )
-        else:
-            self.bias = None
+        lim = 1 / math.sqrt(grouped_in_channels * math.prod(kernel_size))
+        wshape = (out_channels, grouped_in_channels) + kernel_size
+        self.weight = default_init(wkey, wshape, dtype, lim)
+        bshape = (out_channels,) + (1,) * num_spatial_dims
+        self.bias = default_init(bkey, bshape, dtype, lim) if use_bias else None
 
         self.num_spatial_dims = num_spatial_dims
         self.in_channels = in_channels
@@ -520,24 +507,11 @@ class ConvTranspose(Module, strict=True):
                 raise ValueError("Must have `output_padding < stride` (elementwise).")
 
         grouped_in_channels = in_channels // groups
-        lim = 1 / np.sqrt(grouped_in_channels * math.prod(kernel_size))
-        self.weight = jrandom.uniform(
-            wkey,
-            (out_channels, grouped_in_channels) + kernel_size,
-            minval=-lim,
-            maxval=lim,
-            dtype=dtype,
-        )
-        if use_bias:
-            self.bias = jrandom.uniform(
-                bkey,
-                (out_channels,) + (1,) * num_spatial_dims,
-                minval=-lim,
-                maxval=lim,
-                dtype=dtype,
-            )
-        else:
-            self.bias = None
+        lim = 1 / math.sqrt(grouped_in_channels * math.prod(kernel_size))
+        wshape = (out_channels, grouped_in_channels) + kernel_size
+        self.weight = default_init(wkey, wshape, dtype, lim)
+        bshape = (out_channels,) + (1,) * num_spatial_dims
+        self.bias = default_init(bkey, bshape, dtype, lim) if use_bias else None
 
         padding = _padding_init(padding, num_spatial_dims)
         padding_mode = _padding_mode_init(padding_mode)

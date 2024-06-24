@@ -2,10 +2,11 @@ import equinox as eqx
 import jax
 import jax.random as jr
 import jax.tree_util as jtu
+from jax.sharding import Mesh, PartitionSpec
 
 
 [cpu] = jax.local_devices(backend="cpu")
-sharding = jax.sharding.PositionalSharding([cpu])
+sharding = jax.sharding.NamedSharding(Mesh([cpu], "x"), PartitionSpec("x"))
 
 
 def test_sharding():

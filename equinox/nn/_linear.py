@@ -8,6 +8,7 @@ from jaxtyping import Array, PRNGKeyArray
 
 from .._misc import default_floating_dtype
 from .._module import field, Module
+from ._misc import default_init
 
 
 class Linear(Module, strict=True):
@@ -47,23 +48,15 @@ class Linear(Module, strict=True):
         Likewise `out_features` can also be a string `"scalar"`, in which case the
         output from the layer will have shape `()`.
         """
+        dtype = default_floating_dtype() if dtype is None else dtype
         wkey, bkey = jrandom.split(key, 2)
         in_features_ = 1 if in_features == "scalar" else in_features
         out_features_ = 1 if out_features == "scalar" else out_features
         lim = 1 / math.sqrt(in_features_)
-
-        if dtype is None:
-            dtype = default_floating_dtype()
-
-        self.weight = jrandom.uniform(
-            wkey, (out_features_, in_features_), minval=-lim, maxval=lim, dtype=dtype
-        )
-        if use_bias:
-            self.bias = jrandom.uniform(
-                bkey, (out_features_,), minval=-lim, maxval=lim, dtype=dtype
-            )
-        else:
-            self.bias = None
+        wshape = (out_features_, in_features_)
+        self.weight = default_init(wkey, wshape, dtype, lim)
+        bshape = (out_features_,)
+        self.bias = default_init(bkey, bshape, dtype, lim) if use_bias else None
 
         self.in_features = in_features
         self.out_features = out_features
