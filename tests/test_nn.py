@@ -48,6 +48,10 @@ def test_linear(getkey):
     x = jrandom.normal(getkey(), (2,), dtype=jnp.float16)
     assert linear(x).dtype == jnp.float16
 
+    linear = eqx.nn.Linear(2, "scalar", key=getkey(), dtype=jnp.complex64)
+    x = jrandom.normal(getkey(), (2,), dtype=jnp.complex64)
+    assert linear(x).dtype == jnp.complex64
+
 
 def test_identity(getkey):
     identity1 = eqx.nn.Identity()
@@ -342,6 +346,18 @@ def test_conv2d(getkey):
     assert new_bias.shape == conv.bias.shape  # pyright: ignore
     conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
     answer = jnp.array([-37, -31, -9, 25, 61, 49, 23, 41, 27]).reshape(1, 3, 3)
+    assert jnp.allclose(conv(data), answer)
+
+    # Test complex value matches
+    conv = eqx.nn.Conv2d(1, 1, 3, padding=1, dtype=jnp.complex64, key=getkey())
+    new_weight = jnp.arange(9, dtype=jnp.complex64).reshape(1, 1, 3, 3)
+    new_bias = jnp.array([1 + 1j], dtype=jnp.complex64).reshape(1, 1, 1)
+    data = (1 + 1j) * jnp.arange(-4, 5, dtype=jnp.complex64).reshape(1, 3, 3)
+    assert new_weight.shape == conv.weight.shape
+    assert new_bias.shape == conv.bias.shape  # pyright: ignore
+    conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
+    answer = jnp.array([-37, -31, -9, 25, 61, 49, 23, 41, 27]).reshape(1, 3, 3)
+    answer = (1 + 1j) * answer.astype(jnp.complex64)
     assert jnp.allclose(conv(data), answer)
 
     # Test groups
