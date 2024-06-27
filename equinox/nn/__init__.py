@@ -17,6 +17,7 @@ from ._embedding import (
     RotaryPositionalEmbedding as RotaryPositionalEmbedding,
 )
 from ._inference import inference_mode as inference_mode
+from ._kv_cache import StandardKVCache as StandardKVCache
 from ._linear import Identity as Identity, Linear as Linear
 from ._mlp import MLP as MLP
 from ._normalisation import (
