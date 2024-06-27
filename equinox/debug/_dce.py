@@ -25,7 +25,7 @@ def _register_alive(name: Hashable, tag: object):
 
 def store_dce(x: PyTree, name: Hashable = None):
     """Used to check whether a PyTree is DCE'd. (That is, whether this code has been
-    removed in the compiler, due to dead code eliminitation.)
+    removed in the compiler, due to dead code elimination.)
 
     `store_dce` must be used within a JIT'd function, and acts as the identity
     function. When the JIT'd function is called, then whether each array got DCE'd or
@@ -38,11 +38,11 @@ def store_dce(x: PyTree, name: Hashable = None):
         ```python
         @jax.jit
         def f(x):
-            a, _ = eqxi.store_dce((x**2, x + 1))
+            a, _ = eqx.debug.store_dce((x**2, x + 1))
             return a
 
         f(1)
-        eqxi.inspect_dce()
+        eqx.debug.inspect_dce()
         # Found 1 call to `equinox.debug.store_dce`.
         # Entry 0:
         # (i32[], <DCE'd>)
