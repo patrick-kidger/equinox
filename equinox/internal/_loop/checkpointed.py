@@ -767,7 +767,11 @@ def _checkpointed_while_loop_bwd(
     )
     del cond_fun, perturbed
     num_steps, init_residual_steps, init_residuals, filled_buffers = remainders
-    num_steps, init_residual_steps = nonbatchable((num_steps, init_residual_steps))
+    # `allow_constant_across_batch` to handle
+    # https://github.com/patrick-kidger/optimistix/issues/67
+    num_steps, init_residual_steps = nonbatchable(
+        (num_steps, init_residual_steps), allow_constant_across_batch=True
+    )
 
     def _cond_fun(carry):
         _, step_grad_val, *_ = carry

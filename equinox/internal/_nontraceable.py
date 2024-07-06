@@ -131,7 +131,7 @@ def _cannot_batch(x, b, *, msg, allow_constant_across_batch):
         return x, b
     else:
         if allow_constant_across_batch:
-            x = error_if(x, jnp.min(x) != jnp.max(x), msg)
+            x = error_if(x, jnp.min(x, axis=b) != jnp.max(x, axis=b), msg)
             return jnp.take(x, 0, axis=b), batching.not_mapped
         else:
             raise ValueError(msg)
