@@ -199,10 +199,10 @@ def error_if(
             permanently fixing this value is not recommended.
         - You will need to also pass the `-s` flag to `pytest`, if you are
             also using that.
-        - This will sometimes raise a trace-time error due to JAX bug
-            [#16732](https://github.com/google/jax/issues/16732). (Bugs whilst debugging
-            bugs, eek!) If this happens, then it can be worked around by additionally
-            setting the `EQX_ON_ERROR_BREAKPOINT_FRAMES` variable to a small integer,
+        - By default this only allows you to see a single frame in the debugger. This is
+            to work around JAX bug [#16732](https://github.com/google/jax/issues/16732).
+            (Bugs whilst debugging bugs, eek!) In practice you may like to set the
+            `EQX_ON_ERROR_BREAKPOINT_FRAMES` environment variable to a small integer,
             which specifies how many frames upwards the debugger should capture. The
             JAX bug is triggered when taking too many frames.
 
