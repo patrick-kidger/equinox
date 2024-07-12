@@ -360,6 +360,8 @@ class MultiheadAttention(Module, strict=True):
         key_heads = self._project(self.key_proj, key_)
         value_heads = self._project(self.value_proj, value)
 
+        # TODO: Apply RoPE somehow, somewhere here
+
         if process_heads is not None:
             q_shape, k_shape, v_shape = (
                 query_heads.shape,
@@ -367,7 +369,9 @@ class MultiheadAttention(Module, strict=True):
                 value_heads.shape,
             )
             query_heads, key_heads, value_heads = process_heads(
-                query_heads, key_heads, value_heads
+                query_heads,
+                key_heads,
+                value_heads,
             )
 
             if (
@@ -378,6 +382,7 @@ class MultiheadAttention(Module, strict=True):
                 raise ValueError(
                     "process_heads must not change the shape of the heads."
                 )
+
         if state is None:
             state_length = None
             index = None
@@ -390,6 +395,7 @@ class MultiheadAttention(Module, strict=True):
                     "`MultiheadAttention(..., kv_cache=...)`. "
                     "See `equinox.nn.StandardKVCache` for an example."
                 )
+
             key_state, value_state, index, state = self.kv_cache(
                 key_heads, value_heads, state
             )

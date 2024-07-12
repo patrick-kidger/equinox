@@ -1355,12 +1355,15 @@ def test_prelu(getkey):
 
 def test_rope_embeddings_shapes(getkey):
     embedding_size = 32
-    rope_embeddings = eqx.nn.RotaryPositionalEmbedding(embedding_size)
 
     n_heads = 4
     seq_length = 8
     query_size = 32
     key_size = 32
+
+    rope_embeddings = eqx.nn.RotaryPositionalEmbedding(
+        embedding_size, max_seq_length=seq_length
+    )
 
     query_heads = jax.random.normal(
         key=getkey(), shape=(seq_length, n_heads, query_size)
@@ -1438,7 +1441,9 @@ def test_rope_embeddings_values():
         seq_length, embedding_size
     )
 
-    rope_embeddings = eqx.nn.RotaryPositionalEmbedding(embedding_size)
+    rope_embeddings = eqx.nn.RotaryPositionalEmbedding(
+        embedding_size, max_seq_length=seq_length
+    )
     res = rope_embeddings(x)
 
     assert jnp.allclose(res, expected_values, atol=1e-6)
