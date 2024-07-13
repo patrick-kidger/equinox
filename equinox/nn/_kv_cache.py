@@ -5,7 +5,7 @@ import jax.lax as lax
 import jax.numpy as jnp
 from jaxtyping import Array, Float, Int
 
-from .._misc import default_floating_dtype, default_int_dtype
+from .._misc import default_floating_dtype
 from .._module import field, Module
 from ._stateful import State, StateIndex
 
@@ -14,12 +14,12 @@ KVCacheCallable = Callable[
     [
         Float[Array, "seq_length num_heads qk_size"],
         Float[Array, "seq_length num_heads vo_size"],
+        Int[Array, ""],
         State,
     ],
     tuple[
         Float[Array, "state_length num_heads qk_size"],
         Float[Array, "state_length num_heads vo_size"],
-        Int[Array, ""],
         State,
     ],
 ]
@@ -61,7 +61,6 @@ class StandardKVCache(Module):
             (
                 jnp.empty(self.key_shape, dtype=dtype),
                 jnp.empty(self.value_shape, dtype=dtype),
-                jnp.zeros((), default_int_dtype()),
             ),
         )
 
@@ -70,11 +69,11 @@ class StandardKVCache(Module):
         self,
         key_heads: Float[Array, "seq_length num_heads qk_size"],
         value_heads: Float[Array, "seq_length num_heads vo_size"],
+        index: Int[Array, ""],
         state: State,
     ) -> tuple[
         Float[Array, "state_length num_heads qk_size"],
         Float[Array, "state_length num_heads vo_size"],
-        Int[Array, ""],
         State,
     ]:
         """**Arguments:**
@@ -92,13 +91,11 @@ class StandardKVCache(Module):
 
         """
         kv_seq_length, _, _ = key_heads.shape
-        key_state, value_state, index = state.get(self.autoregressive_index)
+        key_state, value_state = state.get(self.autoregressive_index)
         key_state = lax.dynamic_update_slice_in_dim(key_state, key_heads, index, axis=0)
         value_state = lax.dynamic_update_slice_in_dim(
             value_state, value_heads, index, axis=0
         )
-        state = state.set(
-            self.autoregressive_index, (key_state, value_state, index + kv_seq_length)
-        )
+        state = state.set(self.autoregressive_index, (key_state, value_state))
 
-        return key_state, value_state, index, state
+        return key_state, value_state, state

@@ -1,3 +1,4 @@
+import functools
 import warnings
 from typing import Union
 
@@ -8,6 +9,7 @@ import jax.numpy as jnp
 import jax.random as jrandom
 import numpy as np
 import pytest
+from equinox.nn._embedding import RotaryPositionalEmbedding
 
 
 def test_custom_init():
@@ -1616,7 +1618,7 @@ def test_kv_cache():
         ]
     )
 
-    k, v, index = state.get(attention.kv_cache.autoregressive_index)
+    k, v = state.get(attention.kv_cache.autoregressive_index)
 
     assert jnp.allclose(k_expected, k, atol=1e-4)
     assert jnp.allclose(v_expected, v, atol=1e-4)
@@ -1647,3 +1649,303 @@ def test_mask():
         index += 1
         causal_mask_offset += 1
         assert jnp.all(mask == expected_masks[i].reshape(*mask.shape))
+
+
+def test_kv_cache_with_rope():
+    dim: int = 16
+    n_heads: int = 4
+    max_seq_len: int = 8
+
+    seq_len = 4
+
+    tokens = jnp.ones(
+        shape=(seq_len, dim),
+        dtype=jnp.float32,
+    )
+
+    standard_kv_cache = eqx.nn.StandardKVCache(
+        state_length=max_seq_len,
+        num_heads=n_heads,
+        key_size=dim // n_heads,
+        value_size=dim // n_heads,
+    )
+
+    attention, state = eqx.nn.make_with_state(eqx.nn.MultiheadAttention)(
+        query_size=dim,
+        num_heads=n_heads,
+        kv_cache=standard_kv_cache,
+        key=jax.random.key(2),
+    )
+
+    np.random.seed(22)
+    new_weight = jnp.array(
+        np.random.uniform(size=(attention.query_proj.weight.shape), low=0.05, high=0.25)
+    )
+    where = lambda l: l.query_proj.weight
+    attention = eqx.tree_at(where, attention, new_weight)
+
+    where = lambda l: l.key_proj.weight
+    new_weight = jnp.array(
+        np.random.uniform(size=(attention.key_proj.weight.shape), low=0.05, high=0.25)
+    )
+    attention = eqx.tree_at(where, attention, new_weight)
+
+    new_weight = jnp.array(
+        np.random.uniform(
+            size=(attention.output_proj.weight.shape), low=0.05, high=0.25
+        )
+    )
+    where = lambda l: l.output_proj.weight
+    attention = eqx.tree_at(where, attention, new_weight)
+
+    new_weight = jnp.array(
+        np.random.uniform(size=(attention.value_proj.weight.shape), low=0.05, high=0.25)
+    )
+    where = lambda l: l.value_proj.weight
+    attention = eqx.tree_at(where, attention, new_weight)
+
+    rope_embeddings = RotaryPositionalEmbedding(
+        embedding_size=dim // n_heads, max_seq_length=max_seq_len
+    )
+
+    def process_heads(query_heads, key_heads, value_heads, index):
+        rope_partial = functools.partial(rope_embeddings, offset=index)
+        query_heads = jax.vmap(rope_partial, in_axes=1, out_axes=1)(query_heads)
+        key_heads = jax.vmap(rope_partial, in_axes=1, out_axes=1)(key_heads)
+
+        return query_heads, key_heads, value_heads
+
+    out, state = attention(
+        tokens, tokens, tokens, state=state, process_heads=process_heads
+    )
+
+    v_expected = jnp.array(
+        [
+            [
+                [2.5410, 2.2716, 2.2248, 3.0523],
+                [2.5704, 2.0507, 2.2411, 2.2784],
+                [2.5581, 2.0207, 2.2550, 2.4552],
+                [2.5587, 2.2866, 2.5900, 2.2357],
+            ],
+            [
+                [2.5410, 2.2716, 2.2248, 3.0523],
+                [2.5704, 2.0507, 2.2411, 2.2784],
+                [2.5581, 2.0207, 2.2550, 2.4552],
+                [2.5587, 2.2866, 2.5900, 2.2357],
+            ],
+            [
+                [2.5410, 2.2716, 2.2248, 3.0523],
+                [2.5704, 2.0507, 2.2411, 2.2784],
+                [2.5581, 2.0207, 2.2550, 2.4552],
+                [2.5587, 2.2866, 2.5900, 2.2357],
+            ],
+            [
+                [2.5410, 2.2716, 2.2248, 3.0523],
+                [2.5704, 2.0507, 2.2411, 2.2784],
+                [2.5581, 2.0207, 2.2550, 2.4552],
+                [2.5587, 2.2866, 2.5900, 2.2357],
+            ],
+            [
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+            ],
+            [
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+            ],
+            [
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+            ],
+            [
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+            ],
+        ]
+    )
+
+    k_expected_without_rope = jnp.array(
+        [
+            [
+                [2.4393, 2.1424, 2.2050, 2.2842],
+                [2.1772, 2.3244, 2.0518, 2.4791],
+                [2.8260, 2.0493, 2.6937, 2.4621],
+                [2.2209, 2.3524, 2.2618, 2.6727],
+            ],
+            [
+                [2.4393, 2.1424, 2.2050, 2.2842],
+                [2.1772, 2.3244, 2.0518, 2.4791],
+                [2.8260, 2.0493, 2.6937, 2.4621],
+                [2.2209, 2.3524, 2.2618, 2.6727],
+            ],
+            [
+                [2.4393, 2.1424, 2.2050, 2.2842],
+                [2.1772, 2.3244, 2.0518, 2.4791],
+                [2.8260, 2.0493, 2.6937, 2.4621],
+                [2.2209, 2.3524, 2.2618, 2.6727],
+            ],
+            [
+                [2.4393, 2.1424, 2.2050, 2.2842],
+                [2.1772, 2.3244, 2.0518, 2.4791],
+                [2.8260, 2.0493, 2.6937, 2.4621],
+                [2.2209, 2.3524, 2.2618, 2.6727],
+            ],
+            [
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+            ],
+            [
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+            ],
+            [
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+            ],
+            [
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+                [0.0000, 0.0000, 0.0000, 0.0000],
+            ],
+        ]
+    )
+
+    rope_partial = functools.partial(rope_embeddings, offset=jnp.array(0))
+    k_expected = jax.vmap(rope_partial, in_axes=1, out_axes=1)(k_expected_without_rope)
+
+    k, v = state.get(attention.kv_cache.autoregressive_index)
+
+    assert jnp.allclose(k_expected, k, atol=1e-4)
+    assert jnp.allclose(v_expected, v, atol=1e-4)
+
+    k_expected_without_rope = jnp.array(
+        [
+            [
+                [2.4393, 2.1424, 2.2050, 2.2842],
+                [2.1772, 2.3244, 2.0518, 2.4791],
+                [2.8260, 2.0493, 2.6937, 2.4621],
+                [2.2209, 2.3524, 2.2618, 2.6727],
+            ],
+            [
+                [2.4393, 2.1424, 2.2050, 2.2842],
+                [2.1772, 2.3244, 2.0518, 2.4791],
+                [2.8260, 2.0493, 2.6937, 2.4621],
+                [2.2209, 2.3524, 2.2618, 2.6727],
+            ],
+            [
+                [2.4393, 2.1424, 2.2050, 2.2842],
+                [2.1772, 2.3244, 2.0518, 2.4791],
+                [2.8260, 2.0493, 2.6937, 2.4621],
+                [2.2209, 2.3524, 2.2618, 2.6727],
+            ],
+            [
+                [2.4393, 2.1424, 2.2050, 2.2842],
+                [2.1772, 2.3244, 2.0518, 2.4791],
+                [2.8260, 2.0493, 2.6937, 2.4621],
+                [2.2209, 2.3524, 2.2618, 2.6727],
+            ],
+            [
+                [2.4393, 2.1424, 2.2050, 2.2842],
+                [2.1772, 2.3244, 2.0518, 2.4791],
+                [2.8260, 2.0493, 2.6937, 2.4621],
+                [2.2209, 2.3524, 2.2618, 2.6727],
+            ],
+            [
+                [2.4393, 2.1424, 2.2050, 2.2842],
+                [2.1772, 2.3244, 2.0518, 2.4791],
+                [2.8260, 2.0493, 2.6937, 2.4621],
+                [2.2209, 2.3524, 2.2618, 2.6727],
+            ],
+            [
+                [2.4393, 2.1424, 2.2050, 2.2842],
+                [2.1772, 2.3244, 2.0518, 2.4791],
+                [2.8260, 2.0493, 2.6937, 2.4621],
+                [2.2209, 2.3524, 2.2618, 2.6727],
+            ],
+            [
+                [2.4393, 2.1424, 2.2050, 2.2842],
+                [2.1772, 2.3244, 2.0518, 2.4791],
+                [2.8260, 2.0493, 2.6937, 2.4621],
+                [2.2209, 2.3524, 2.2618, 2.6727],
+            ],
+        ]
+    )
+
+    v_expected = jnp.array(
+        [
+            [
+                [2.5410, 2.2716, 2.2248, 3.0523],
+                [2.5704, 2.0507, 2.2411, 2.2784],
+                [2.5581, 2.0207, 2.2550, 2.4552],
+                [2.5587, 2.2866, 2.5900, 2.2357],
+            ],
+            [
+                [2.5410, 2.2716, 2.2248, 3.0523],
+                [2.5704, 2.0507, 2.2411, 2.2784],
+                [2.5581, 2.0207, 2.2550, 2.4552],
+                [2.5587, 2.2866, 2.5900, 2.2357],
+            ],
+            [
+                [2.5410, 2.2716, 2.2248, 3.0523],
+                [2.5704, 2.0507, 2.2411, 2.2784],
+                [2.5581, 2.0207, 2.2550, 2.4552],
+                [2.5587, 2.2866, 2.5900, 2.2357],
+            ],
+            [
+                [2.5410, 2.2716, 2.2248, 3.0523],
+                [2.5704, 2.0507, 2.2411, 2.2784],
+                [2.5581, 2.0207, 2.2550, 2.4552],
+                [2.5587, 2.2866, 2.5900, 2.2357],
+            ],
+            [
+                [2.5410, 2.2716, 2.2248, 3.0523],
+                [2.5704, 2.0507, 2.2411, 2.2784],
+                [2.5581, 2.0207, 2.2550, 2.4552],
+                [2.5587, 2.2866, 2.5900, 2.2357],
+            ],
+            [
+                [2.5410, 2.2716, 2.2248, 3.0523],
+                [2.5704, 2.0507, 2.2411, 2.2784],
+                [2.5581, 2.0207, 2.2550, 2.4552],
+                [2.5587, 2.2866, 2.5900, 2.2357],
+            ],
+            [
+                [2.5410, 2.2716, 2.2248, 3.0523],
+                [2.5704, 2.0507, 2.2411, 2.2784],
+                [2.5581, 2.0207, 2.2550, 2.4552],
+                [2.5587, 2.2866, 2.5900, 2.2357],
+            ],
+            [
+                [2.5410, 2.2716, 2.2248, 3.0523],
+                [2.5704, 2.0507, 2.2411, 2.2784],
+                [2.5581, 2.0207, 2.2550, 2.4552],
+                [2.5587, 2.2866, 2.5900, 2.2357],
+            ],
+        ]
+    )
+
+    out, state = attention(
+        tokens, tokens, tokens, state=state, process_heads=process_heads
+    )
+    rope_partial = functools.partial(rope_embeddings, offset=jnp.array(seq_len))
+    k_expected = jax.vmap(rope_partial, in_axes=1, out_axes=1)(k_expected_without_rope)
+
+    k, v = state.get(attention.kv_cache.autoregressive_index)
+
+    assert jnp.allclose(k_expected, k, atol=1e-4)
+    assert jnp.allclose(v_expected, v, atol=1e-4)

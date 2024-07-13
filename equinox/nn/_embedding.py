@@ -127,19 +127,21 @@ class RotaryPositionalEmbedding(Module, strict=True):
                     query_heads: Float[Array, "seq_length num_heads qk_size"],
                     key_heads: Float[Array, "seq_length num_heads qk_size"],
                     value_heads: Float[Array, "seq_length num_heads vo_size"],
-                    **kwargs
+                    index: Int[Array, ""]
                 ) -> tuple[
                     Float[Array, "seq_length num_heads qk_size"],
                     Float[Array, "seq_length num_heads qk_size"],
                     Float[Array, "seq_length num_heads vo_size"]
                 ]:
-                    offset = kwargs.get("offset", 0)
-                    query_heads = jax.vmap(self.rope_embeddings,
-                                           in_axes=(1, None)
-                                           out_axes=1)(query_heads, offset)
-                    key_heads = jax.vmap(self.rope_embeddings,
-                                         in_axes=(1, None),
-                                         out_axes=1)(key_heads, offset)
+                    # index is the autoregressive index of the current token
+                    rope_partial = functools.partial(
+                                        rope_embeddings,
+                                        offset=index
+                                    )
+                    query_heads = jax.vmap(rope_partial, in_axes=1, out_axes=1)
+                        (query_heads)
+                    key_heads = jax.vmap(rope_partial, in_axes=1, out_axes=1)
+                        (key_heads)
 
                     return query_heads, key_heads, value_heads
 
@@ -215,6 +217,7 @@ class RotaryPositionalEmbedding(Module, strict=True):
         A JAX array of shape `(seq_length, embedding_size)`, with the rotary positional
         encoding applied to the input.
         """
+
         seq_len, embedding_size = x.shape
         if embedding_size != self.embedding_size:
             raise ValueError(

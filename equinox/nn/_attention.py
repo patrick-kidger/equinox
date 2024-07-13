@@ -8,14 +8,14 @@ from typing import cast, Literal, Optional, Union
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
-from jaxtyping import Array, Bool, Float, PRNGKeyArray
+from jaxtyping import Array, Bool, Float, Int, PRNGKeyArray
 
-from .._misc import default_floating_dtype
+from .._misc import default_floating_dtype, default_int_dtype
 from .._module import field, Module
 from ._dropout import Dropout
 from ._kv_cache import KVCacheCallable
 from ._linear import Linear
-from ._stateful import State
+from ._stateful import State, StateIndex
 
 
 def dot_product_attention_weights(
@@ -127,6 +127,7 @@ class MultiheadAttention(Module, strict=True):
     dropout: Dropout
 
     kv_cache: Optional[KVCacheCallable]
+    index: Optional[StateIndex]
 
     num_heads: int = field(static=True)
     query_size: int = field(static=True)
@@ -277,6 +278,12 @@ class MultiheadAttention(Module, strict=True):
         self.use_value_bias = use_value_bias
         self.use_output_bias = use_output_bias
         self.kv_cache = kv_cache
+        if self.kv_cache is not None:
+            self.index = StateIndex(
+                jnp.zeros((), default_int_dtype()),
+            )
+        else:
+            self.index = None
 
     @jax.named_scope("eqx.nn.MultiheadAttention")
     def __call__(
@@ -301,6 +308,7 @@ class MultiheadAttention(Module, strict=True):
                     Float[Array, "seq_length num_heads qk_size"],
                     Float[Array, "seq_length num_heads qk_size"],
                     Float[Array, "seq_length num_heads vo_size"],
+                    Int[Array, ""],
                 ],
                 tuple[
                     Float[Array, "seq_length num_heads qk_size"],
@@ -332,16 +340,16 @@ class MultiheadAttention(Module, strict=True):
         - `inference`: As [`equinox.nn.Dropout.__call__`][]. (Keyword only
             argument.)
         - `deterministic`: (Deprecated in favour of `inference`.)
-        - `process_heads`: A function that takes in the query, key, and value heads and
-            returns new query, key, and value heads. For example, this can be
-            used to implement relative positional embeddings -
-            see e.g. `RotaryPositionalEmbedding`for an example. (Keyword only argument.)
+        - `process_heads`: A function that takes in the query, key, value heads as well
+            as the current autoregressive index and returns new query, key, and value
+            heads. For example, this can be used to implement relative positional
+            embeddings - see e.g. `RotaryPositionalEmbedding`for an example.
+            (Keyword only argument.)
 
         **Returns:**
 
         A JAX array of shape `(query_seq_length, output_size)`.
         """
-
         if deterministic is not None:
             inference = deterministic
             warnings.warn(
@@ -349,67 +357,27 @@ class MultiheadAttention(Module, strict=True):
                 "in favour of MultiheadAttention()(inference=...)"
             )
 
-        query_seq_length, _ = query.shape
-        kv_seq_length, _ = key_.shape
-        kv_seq_length2, _ = value.shape
+        query_seq_length, kv_seq_length = self._get_query_and_kv_seq_lengths(
+            query, key_, value
+        )
 
-        if kv_seq_length != kv_seq_length2:
-            raise ValueError("key and value must both be sequences of equal length.")
-
-        query_heads = self._project(self.query_proj, query)
-        key_heads = self._project(self.key_proj, key_)
-        value_heads = self._project(self.value_proj, value)
-
-        # TODO: Apply RoPE somehow, somewhere here
+        query_heads, key_heads, value_heads = self._project_heads(query, key_, value)
+        index = self._get_start_index(state)
 
         if process_heads is not None:
-            q_shape, k_shape, v_shape = (
-                query_heads.shape,
-                key_heads.shape,
-                value_heads.shape,
-            )
-            query_heads, key_heads, value_heads = process_heads(
-                query_heads,
-                key_heads,
-                value_heads,
+            query_heads, key_heads, value_heads = _process_heads(
+                process_heads, query_heads, key_heads, value_heads, index
             )
 
-            if (
-                query_heads.shape != q_shape
-                or key_heads.shape != k_shape
-                or value_heads.shape != v_shape
-            ):
-                raise ValueError(
-                    "process_heads must not change the shape of the heads."
-                )
-
-        if state is None:
-            state_length = None
-            index = None
-            causal_mask_offset = 0
-        else:
-            if self.kv_cache is None:
-                raise ValueError(
-                    "State was provided, but cannot use autoregressive decoding "
-                    "without specifying "
-                    "`MultiheadAttention(..., kv_cache=...)`. "
-                    "See `equinox.nn.StandardKVCache` for an example."
-                )
-
-            key_state, value_state, index, state = self.kv_cache(
-                key_heads, value_heads, state
+        if state:
+            key_heads, value_heads, kv_seq_length, state = self._handle_kv_cache(
+                key_heads, value_heads, index, query_seq_length, state
             )
-            _check_kv_shapes(key_state, value_state, key_heads, value_heads)
-            state_length, _, _ = key_state.shape
 
-            causal_mask_offset = index
-            key_heads = key_state
-            value_heads = value_state
-            kv_seq_length = state_length
+        mask = _generate_mask(mask, query_seq_length, kv_seq_length, index)
+        if self.kv_cache is not None:
+            mask = _mask_unwritten_parts(kv_seq_length, query_seq_length, mask, index)
 
-        mask = _generate_mask(mask, query_seq_length, kv_seq_length, causal_mask_offset)
-        if state_length is not None:
-            mask = _mask_unwritten_parts(state_length, query_seq_length, mask, index)
         attn_fn = partial(
             dot_product_attention, dropout=self.dropout, inference=inference
         )
@@ -431,6 +399,49 @@ class MultiheadAttention(Module, strict=True):
             return out
         else:
             return out, state
+
+    def _get_query_and_kv_seq_lengths(self, query, key_, value):
+        query_seq_length, _ = query.shape
+        kv_seq_length, _ = key_.shape
+        kv_seq_length2, _ = value.shape
+
+        if kv_seq_length != kv_seq_length2:
+            raise ValueError("key and value must both be sequences of equal length.")
+
+        return query_seq_length, kv_seq_length
+
+    def _handle_kv_cache(self, key_heads, value_heads, index, query_seq_length, state):
+        if self.kv_cache is None:
+            raise ValueError(
+                "State was provided, but cannot use autoregressive decoding "
+                "without specifying "
+                "`MultiheadAttention(..., kv_cache=...)`. "
+                "See `equinox.nn.StandardKVCache` for an example."
+            )
+
+        key_state, value_state, state = self.kv_cache(
+            key_heads, value_heads, index, state
+        )
+        _check_kv_shapes(key_state, value_state, key_heads, value_heads)
+        kv_seq_length, _, _ = key_state.shape
+
+        assert self.index is not None
+        state = state.set(self.index, index + query_seq_length)
+        return key_state, value_state, kv_seq_length, state
+
+    def _get_start_index(self, state):
+        if state is not None and self.index is not None:
+            index = state.get(self.index)
+        else:
+            index = jnp.array(0, dtype=default_int_dtype())
+
+        return index
+
+    def _project_heads(self, query, key_, value):
+        query_heads = self._project(self.query_proj, query)
+        key_heads = self._project(self.key_proj, key_)
+        value_heads = self._project(self.value_proj, value)
+        return query_heads, key_heads, value_heads
 
     def _project(self, proj, x):
         seq_length, _ = x.shape
@@ -489,7 +500,7 @@ def _generate_mask(
 
 
 def _mask_unwritten_parts(
-    state_length: int,
+    kv_seq_length: int,
     query_seq_length: int,
     mask: Union[
         Optional[Bool[Array, "q_seq kv_seq"]],
@@ -498,9 +509,23 @@ def _mask_unwritten_parts(
     index: Optional[Array],
 ):
     # Also mask out the latter parts of the state we haven't written into yet.
-    unwritten_mask = jnp.arange(state_length) < index  # pyright: ignore
+    unwritten_mask = jnp.arange(kv_seq_length) < index  # pyright: ignore
     if mask is None:
-        mask = jnp.broadcast_to(unwritten_mask, (query_seq_length, state_length))
+        mask = jnp.broadcast_to(unwritten_mask, (query_seq_length, kv_seq_length))
     else:
         mask = mask & unwritten_mask.reshape(*mask.shape)
     return mask
+
+
+def _process_heads(process_heads, query_heads, key_heads, value_heads, index):
+    q_shape, k_shape, v_shape = (
+        query_heads.shape,
+        key_heads.shape,
+        value_heads.shape,
+    )
+    qs, ks, vs = process_heads(query_heads, key_heads, value_heads, index)
+
+    if qs.shape != q_shape or ks.shape != k_shape or vs.shape != v_shape:
+        raise ValueError("process_heads must not change the shape of the heads.")
+
+    return qs, ks, vs
