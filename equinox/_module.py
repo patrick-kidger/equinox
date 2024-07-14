@@ -477,10 +477,33 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
                     if not has_abstract_name:
                         # Invariant: abstract classes have names beginning with
                         # `Abstract`.
+                        inner = " "
+                        if len(cls.__abstractmethods__) > 0:
+                            inner = (
+                                inner
+                                + f"abstract methods: {list(cls.__abstractmethods__)}"
+                            )
+                        if len(cls.__abstractvars__) > 0:
+                            if len(inner) > 2:
+                                inner = inner + ", "
+                            inner = (
+                                inner
+                                + f"abstract variables: {list(cls.__abstractvars__)}"
+                            )
+                        if len(cls.__abstractclassvars__) > 0:
+                            if len(inner) > 2:
+                                inner = inner + ", "
+                            inner = (
+                                inner
+                                + f"abstract class variables: \
+                                {list(cls.__abstractclassvars__)}"
+                            )
+                        inner = inner + "."
                         raise TypeError(
                             "Abstract strict `eqx.Module`s must be named starting "
                             f"with 'Abstract' or '_Abstract'. Got {name} when defining "
-                            f"{cls.__module__}.{cls.__qualname__}.",
+                            f"{cls.__module__}.{cls.__qualname__}. For concrete "
+                            f"moduels, {name} has" + inner
                         )
                 else:
                     if has_abstract_name:
