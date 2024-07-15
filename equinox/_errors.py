@@ -1,5 +1,7 @@
 import functools as ft
 import inspect
+import traceback
+import types
 import warnings
 from collections.abc import Sequence
 from typing import Literal, Union
@@ -50,6 +52,57 @@ You will need to manually kill this job and/or restart the runtime.
 """
 
 
+_on_error_msg = """
+---------------------------------------------------------------------------
+
+An error occurred during the runtime of your JAX program.
+
+---------------------------------------------------------------------------
+
+Traceback:
+
+{stack}
+
+---------------------------------------------------------------------------
+
+Error message:
+
+{msg}
+
+---------------------------------------------------------------------------
+
+You have a few options to try and debug this issue.
+
+1) Setting the environment variable `EQX_ON_ERROR=breakpoint` is usually the most useful
+way to debug such errors. This can be interacted with using most of the usual commands
+for the Python debugger: `u` and `d` to move up and down frames, the name of a variable
+to print its value, etc.
+
+If taking this approach, then it is recommended to also set
+`EQX_ON_ERROR_BREAKPOINT_FRAMES=<some number>`, corresponding to the number of frames to
+add to the debugger.
+
+If you get trace-time errors from JAX then try reducing the value of
+`EQX_ON_ERROR_BREAKPOINT_FRAMES`. See
+`https://docs.kidger.site/equinox/api/errors/#equinox.error_if` for more information.
+
+2) You may also like to try setting `JAX_DISABLE_JIT=1`. This will mean that you can
+(mostly) inspect the state of your program as if it was normal Python.
+
+3) For more suggestions, see `https://docs.kidger.site/equinox/api/debug/`.
+"""
+
+
+_frames_msg = f"""
+Opening a breakpoint with {EQX_ON_ERROR_BREAKPOINT_FRAMES} frames.
+You can control this value by setting the environment variable
+`EQX_ON_ERROR_BREAKPOINT_FRAMES=<some number>`.
+
+Note that setting large values of this number may lead to crashes at trace time; see
+`https://docs.kidger.site/equinox/api/errors/#equinox.error_if` for more information.
+"""
+
+
 # This is never actually surfaced to an end user -- it always becomes an XlaRuntimeError
 class EqxRuntimeError(RuntimeError):
     pass
@@ -63,11 +116,13 @@ EquinoxTracetimeError.__module__ = "equinox"
 
 
 @filter_custom_jvp
-def _error(x, pred, index, *, msgs, on_error):
+def _error(x, pred, index, *, msgs, on_error, stack):
     if on_error == "raise":
 
         def raises(_index):
-            raise EqxRuntimeError(msgs[_index.item()])
+            raise EqxRuntimeError(
+                _on_error_msg.format(stack=stack, msg=msgs[_index.item()])
+            )
 
         def tpu_msg(_out, _index):
             msg = msgs[_index.item()]
@@ -92,6 +147,7 @@ def _error(x, pred, index, *, msgs, on_error):
     elif on_error == "breakpoint":
 
         def display_msg(_index):
+            print(_frames_msg)
             print(msgs[_index.item()])
             return _index
 
@@ -134,10 +190,10 @@ def _error(x, pred, index, *, msgs, on_error):
 # zeros to non-symbolic-zeros, and we'd really like to avoid that, and (b) we need to
 # wrap our pure_callbacks in custom JVP rules.
 @_error.def_jvp
-def _error_jvp(primals, tangents, *, msgs, on_error):
+def _error_jvp(primals, tangents, *, msgs, on_error, stack):
     x, pred, index = primals
     tx, _, _ = tangents
-    return _error(x, pred, index, msgs=msgs, on_error=on_error), tx
+    return _error(x, pred, index, msgs=msgs, on_error=on_error, stack=stack), tx
 
 
 if EQX_ON_ERROR == "breakpoint":
@@ -299,11 +355,19 @@ def branched_error_if_impl(
             else:
                 return x
 
+    tb = None
+    frames = list(traceback.walk_stack(None))
+    for f, lineno in reversed(frames):
+        if traceback_util.include_frame(f):
+            tb = types.TracebackType(tb, f, f.f_lasti, lineno)
+    stack = "\n".join(traceback.format_tb(tb))
     dynamic_x, static_x = partition(x, is_array)
     flat = jtu.tree_leaves(dynamic_x)
     if len(flat) == 0:
         raise ValueError("No arrays to thread error on to.")
-    dynamic_x = _error(dynamic_x, pred, index, msgs=msgs, on_error=on_error)
+    dynamic_x = _error(
+        dynamic_x, pred, index, msgs=msgs, on_error=on_error, stack=stack
+    )
     return combine(dynamic_x, static_x)
 
 

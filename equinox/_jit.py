@@ -110,16 +110,6 @@ except Exception:
         pass
 
 
-_eqx_on_error_msg = """
--------
-This error occurred during the runtime of your JAX program. Setting the environment
-variable `EQX_ON_ERROR=breakpoint` is usually the most useful way to debug such errors.
-(This can be interacted with using most of the usual commands for the Python debugger:
-the name of a variable to print its value, etc.) It is recommended to read
-`https://docs.kidger.site/equinox/api/errors/#equinox.error_if` for more information.
-"""
-
-
 def _modify_traceback(e: Exception):
     # Remove JAX's UnfilteredStackTrace, with its huge error messages.
     e.__cause__ = None
@@ -211,7 +201,6 @@ class _JitWrapper(Module):
             if "EqxRuntimeError: " in msg:
                 _, msg = msg.split("EqxRuntimeError: ", 1)
                 msg, *_ = msg.rsplit("\n\nAt:\n", 1)
-                msg = msg + _eqx_on_error_msg
                 e.args = (msg,)
                 if jax.config.jax_traceback_filtering in (  # pyright: ignore
                     None,

@@ -140,9 +140,8 @@ def test_traceback_runtime_eqx():
     except Exception as e:
         assert e.__cause__ is None
         msg = str(e).strip()
-        assert msg.startswith("egads")
+        assert "egads" in msg
         assert "EQX_ON_ERROR" in msg
-        assert msg.endswith("information.")
 
 
 def test_traceback_runtime_custom():
