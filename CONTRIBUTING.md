@@ -16,14 +16,14 @@ cd equinox
 pip install -e .
 ```
 
-Then install the pre-commit hook:
+Then install the pre-commit hooks:
 
 ```bash
 pip install pre-commit
 pre-commit install
 ```
 
-These hooks use Black and isort to format the code, and flake8 to lint it.
+These hooks use ruff to format and lint the code, and pyright to typecheck it.
 
 ---
 
