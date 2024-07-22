@@ -479,7 +479,7 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
                         # `Abstract`.
                         main = (
                             "Abstract strict `eqx.Module`s must be named starting "
-                            f"with 'Abstract' or '_Abstract'. Got {name} when defining"
+                            f"with 'Abstract' or '_Abstract'. Got {name} when defining "
                             f"{cls.__module__}.{cls.__qualname__}."
                         )
                         if _is_force_abstract[cls]:
