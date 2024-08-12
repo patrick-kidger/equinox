@@ -24,7 +24,7 @@ from jaxtyping import Array, Bool, PyTreeDef
 from ._better_abstract import ABCMeta, dataclass
 from ._caches import cache_clears
 from ._doc_utils import doc_repr
-from ._filters import is_array_like
+from ._filters import is_array, is_array_like
 from ._pretty_print import tree_pformat
 from ._tree import tree_equal
 
@@ -856,6 +856,8 @@ def _convert_fields(module, init: bool):
     for field in dataclasses.fields(module):
         if field.init is init:
             try:
+                if field.type is jax.Array and field.metadata.get("static", False):
+                    raise ValueError("Cannot set JAX arrays as static values!")
                 converter = field.metadata["converter"]
             except KeyError:
                 pass
@@ -1235,6 +1237,8 @@ class Static(Module):
         # By flattening, we handle pytrees without `__eq__` methods.
         # When comparing static metadata for equality, this means we never actually
         # call `value.__eq__`.
+        if is_array(value):
+            raise ValueError("JAX arrays cannot be set as Static!")
         self._leaves, self._treedef = jtu.tree_flatten(value)
 
     @property
