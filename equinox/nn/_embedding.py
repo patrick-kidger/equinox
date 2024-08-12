@@ -126,18 +126,22 @@ class RotaryPositionalEmbedding(Module, strict=True):
                 def process_heads(
                     query_heads: Float[Array, "seq_length num_heads qk_size"],
                     key_heads: Float[Array, "seq_length num_heads qk_size"],
-                    value_heads: Float[Array, "seq_length num_heads vo_size"]
+                    value_heads: Float[Array, "seq_length num_heads vo_size"],
+                    index: Int[Array, ""]
                 ) -> tuple[
                     Float[Array, "seq_length num_heads qk_size"],
                     Float[Array, "seq_length num_heads qk_size"],
                     Float[Array, "seq_length num_heads vo_size"]
                 ]:
-                    query_heads = jax.vmap(self.rope_embeddings,
-                                           in_axes=1,
-                                           out_axes=1)(query_heads)
-                    key_heads = jax.vmap(self.rope_embeddings,
-                                         in_axes=1,
-                                         out_axes=1)(key_heads)
+                    # index is the autoregressive index of the current token
+                    rope_partial = functools.partial(
+                                        rope_embeddings,
+                                        offset=index
+                                    )
+                    query_heads = jax.vmap(rope_partial, in_axes=1, out_axes=1)
+                        (query_heads)
+                    key_heads = jax.vmap(rope_partial, in_axes=1, out_axes=1)
+                        (key_heads)
 
                     return query_heads, key_heads, value_heads
 
@@ -161,6 +165,7 @@ class RotaryPositionalEmbedding(Module, strict=True):
     """
 
     embedding_size: int = field(static=True)
+    max_seq_length: int = field(static=True)
     theta: float = field(static=True, default=10_000.0)
 
     def __check_init__(self):
@@ -168,6 +173,8 @@ class RotaryPositionalEmbedding(Module, strict=True):
             raise ValueError("`embedding_size` must not be negative.")
         if (self.embedding_size % 2) != 0:
             raise ValueError("`embedding_size` must be even.")
+        if self.max_seq_length < 0:
+            raise ValueError("`max_seq_length` must not be negative.")
 
     @staticmethod
     def rotate_half(x: Float[Array, "seq_length embedding_size"]):
@@ -194,12 +201,14 @@ class RotaryPositionalEmbedding(Module, strict=True):
     def __call__(
         self,
         x: Float[Array, "seq_length embedding_size"],
+        offset: Int[Array, ""] = jnp.array(0),
         *,
         key: Optional[PRNGKeyArray] = None,
     ) -> Float[Array, "seq_length embedding_size"]:
         """**Arguments:**
 
         - `x`: A JAX array of shape `(seq_length, embedding_size)`.
+        - `offset`: The offset to apply to the positional encoding.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
 
@@ -215,28 +224,36 @@ class RotaryPositionalEmbedding(Module, strict=True):
                 f"x.shape[-1] must match self.embedding_size, "
                 f"but {x.shape[-1]} != {self.embedding_size}"
             )
+        if seq_len > self.max_seq_length:
+            raise ValueError(
+                f"seq_len must be less than or equal to self.max_seq_length, "
+                f"but {seq_len} > {self.max_seq_length}"
+            )
 
         with jax.ensure_compile_time_eval():
             if embedding_size in internal_rope_embedding_cache:
                 freqs_cis = internal_rope_embedding_cache[embedding_size]
                 freqs_cis_seq_len, _ = freqs_cis.shape
-                if seq_len > freqs_cis_seq_len:
+                if self.max_seq_length > freqs_cis_seq_len:
                     freqs_cis = self.precompute_freqs_cis(
-                        embedding_size, seq_len, self.theta
+                        embedding_size, self.max_seq_length, self.theta
                     )
                     internal_rope_embedding_cache[embedding_size] = freqs_cis
                 else:
-                    freqs_cis = freqs_cis[:seq_len]
+                    freqs_cis = freqs_cis[: self.max_seq_length]
             else:
                 freqs_cis = self.precompute_freqs_cis(
-                    embedding_size, seq_len, self.theta
+                    embedding_size, self.max_seq_length, self.theta
                 )
                 internal_rope_embedding_cache[embedding_size] = freqs_cis
+
+        freqs_cis = jax.lax.dynamic_slice_in_dim(freqs_cis, offset, seq_len)
 
         freqs_real = jnp.tile(freqs_cis.real, (1, 2))
         freqs_imag = jnp.tile(freqs_cis.imag, (1, 2))
 
         rotate_x = self.rotate_half(x)
+
         x_rope = (x * freqs_real) + (rotate_x * freqs_imag)
         return x_rope
 
@@ -244,8 +261,11 @@ class RotaryPositionalEmbedding(Module, strict=True):
 RotaryPositionalEmbedding.__init__.__doc__ = """**Arguments:**
 
 - `embedding_size`: Size of the token embeddings. Must be non-negative and even.
-- `theta`: The base frequency for the sinusoidal functions. It defines the rate 
-   of oscillation for the sine and cosine waves that encode positional information 
+- `theta`: The base frequency for the sinusoidal functions. It defines the rate
+   of oscillation for the sine and cosine waves that encode positional information
    into the embeddings. The larger the theta value, the slower the oscillations
    and vice versa. Defaults to 10_000.0
+- `max_seq_length`: The maximum sequence length for which to precompute the
+   positional encodings. This is used to determine the size of the precomputed
+   positional encodings.
 """
