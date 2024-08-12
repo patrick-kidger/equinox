@@ -239,8 +239,8 @@ def test_mlp_learnt_activation():
         key=jrandom.PRNGKey(5678),
     )
     x = jnp.array([0.5, 0.7])
-    assert mlp.activation.negative_slope.shape == (2, 8)
-    assert mlp.final_activation.negative_slope.shape == (5,)
+    assert mlp.activation.negative_slope.shape == (2, 8)  # pyright: ignore
+    assert mlp.final_activation.negative_slope.shape == (5,)  # pyright: ignore
 
     @eqx.filter_jit
     @eqx.filter_grad
@@ -1353,12 +1353,13 @@ def test_prelu(getkey):
 
 def test_rope_embeddings_shapes(getkey):
     embedding_size = 32
-    rope_embeddings = eqx.nn.RotaryPositionalEmbedding(embedding_size)
 
     n_heads = 4
     seq_length = 8
     query_size = 32
     key_size = 32
+
+    rope_embeddings = eqx.nn.RotaryPositionalEmbedding(embedding_size)
 
     query_heads = jax.random.normal(
         key=getkey(), shape=(seq_length, n_heads, query_size)
@@ -1450,6 +1451,10 @@ def test_rope_embeddings_values():
     rope_embeddings = eqx.nn.RotaryPositionalEmbedding(
         embedding_size, dtype=jnp.float32
     )
+    res = rope_embeddings(x)
+
+    assert jnp.allclose(res, expected_values, atol=1e-6)
+
     res = rope_embeddings(x)
 
     assert jnp.allclose(res, expected_values, atol=1e-6)
