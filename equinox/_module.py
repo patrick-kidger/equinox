@@ -24,7 +24,7 @@ from jaxtyping import Array, Bool, PyTreeDef
 from ._better_abstract import ABCMeta, dataclass
 from ._caches import cache_clears
 from ._doc_utils import doc_repr
-from ._filters import is_array, is_array_like
+from ._filters import is_array_like
 from ._pretty_print import tree_pformat
 from ._tree import tree_equal
 
@@ -1237,7 +1237,10 @@ class Static(Module):
         # By flattening, we handle pytrees without `__eq__` methods.
         # When comparing static metadata for equality, this means we never actually
         # call `value.__eq__`.
-        if is_array(value):
+        # if is_array(value):
+        try:
+            hash(value)
+        except Exception as _:
             raise ValueError("JAX arrays cannot be set as Static!")
         self._leaves, self._treedef = jtu.tree_flatten(value)
 
