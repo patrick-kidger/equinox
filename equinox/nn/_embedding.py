@@ -118,35 +118,76 @@ class RotaryPositionalEmbedding(Module, strict=True):
         ```python
         class TransformerBlock(eqx.Module):
             rope_embeddings: RotaryPositionalEmbedding
+            mha_attention: MultiheadAttention
 
-            def __init__(...):
-                self.rope_embeddings = RotaryPositionalEmbedding(...)
+            def __init__(self, embedding_size, max_seq_length, num_heads, query_size):
+                self.rope_embeddings = RotaryPositionalEmbedding(
+                    embedding_size, max_seq_length
+                )
+                self.mha_attention = MultiheadAttention(
+                    num_heads=num_heads, query_size=query_size, key=jax.random.key(0)
+                )
 
-            def __call__(...):
+            def __call__(self, query, key_, value, index):
                 def process_heads(
                     query_heads: Float[Array, "seq_length num_heads qk_size"],
                     key_heads: Float[Array, "seq_length num_heads qk_size"],
                     value_heads: Float[Array, "seq_length num_heads vo_size"],
-                    index: Int[Array, ""]
+                    index: Int[Array, ""],
                 ) -> tuple[
                     Float[Array, "seq_length num_heads qk_size"],
                     Float[Array, "seq_length num_heads qk_size"],
-                    Float[Array, "seq_length num_heads vo_size"]
+                    Float[Array, "seq_length num_heads vo_size"],
                 ]:
                     # index is the autoregressive index of the current token
-                    rope_partial = functools.partial(
-                                        rope_embeddings,
-                                        offset=index
-                                    )
-                    query_heads = jax.vmap(rope_partial, in_axes=1, out_axes=1)
-                        (query_heads)
-                    key_heads = jax.vmap(rope_partial, in_axes=1, out_axes=1)
-                        (key_heads)
+                    rope_p = functools.partial(self.rope_embeddings, offset=index)
+                    query_heads = jax.vmap(rope_p, in_axes=1, out_axes=1)(query_heads)
+                    key_heads = jax.vmap(rope_p, in_axes=1, out_axes=1)(key_heads)
 
                     return query_heads, key_heads, value_heads
 
-                x = self.mha_attention(... process_heads=process_heads)
-                ...
+                x = self.mha_attention(
+                    query=query,
+                    key_=key_,
+                    value=value,
+                    process_heads=functools.partial(process_heads, index=index),
+                )
+
+                return x
+
+        embedding_size = 32
+        max_seq_length = 8
+        seq_length = 4
+        num_heads = 2
+        query_size = 64
+
+        transformer_block = eqx.filter_jit(
+            TransformerBlock(embedding_size, max_seq_length, num_heads, query_size)
+        )
+
+        q = jnp.ones(shape=(seq_length, query_size))
+        k = jnp.ones(shape=(seq_length, query_size))
+        v = jnp.ones(shape=(seq_length, query_size))
+
+        out = transformer_block(q, k, v, jnp.array(0))
+        out = transformer_block(q, k, v, jnp.array(1)) # no re-JITing
+        ```
+
+        If you're training a transformer, you likely don't want to use any offset. In
+        those cases, it can be helpful to use `functools.partial` like so:
+        ```python
+        embedding_size = 32
+        max_seq_length = 8
+
+        rot_emb = RotaryPositionalEmbedding(
+            embedding_size=embedding_size, max_seq_length=max_seq_length
+        )
+        rot_emb = eqx.filter_jit(rot_emb)
+        rot_emb_no_offset = functools.partial(rot_emb, offset=jnp.array(0))
+
+        x = jnp.ones(shape=(max_seq_length, embedding_size))
+
+        assert jnp.allclose(rot_emb(x, offset=jnp.array(0)), rot_emb_no_offset(x))
         ```
 
     ??? cite
@@ -201,7 +242,7 @@ class RotaryPositionalEmbedding(Module, strict=True):
     def __call__(
         self,
         x: Float[Array, "seq_length embedding_size"],
-        offset: Int[Array, ""] = jnp.array(0),
+        offset: Int[Array, ""],
         *,
         key: Optional[PRNGKeyArray] = None,
     ) -> Float[Array, "seq_length embedding_size"]:
@@ -217,7 +258,7 @@ class RotaryPositionalEmbedding(Module, strict=True):
         A JAX array of shape `(seq_length, embedding_size)`, with the rotary positional
         encoding applied to the input.
         """
-
+        print("JIT ROPE")
         seq_len, embedding_size = x.shape
         if embedding_size != self.embedding_size:
             raise ValueError(

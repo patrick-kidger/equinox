@@ -1,3 +1,4 @@
+import functools
 import warnings
 from typing import Union
 
@@ -1361,6 +1362,7 @@ def test_rope_embeddings_shapes(getkey):
     rope_embeddings = eqx.nn.RotaryPositionalEmbedding(
         embedding_size, max_seq_length=seq_length
     )
+    rope_embeddings = functools.partial(rope_embeddings, offset=jnp.array(0))
 
     query_heads = jax.random.normal(
         key=getkey(), shape=(seq_length, n_heads, query_size)
@@ -1441,6 +1443,7 @@ def test_rope_embeddings_values():
     rope_embeddings = eqx.nn.RotaryPositionalEmbedding(
         embedding_size, max_seq_length=seq_length
     )
+    rope_embeddings = functools.partial(rope_embeddings, offset=jnp.array(0))
     res = rope_embeddings(x)
 
     assert jnp.allclose(res, expected_values, atol=1e-6)
