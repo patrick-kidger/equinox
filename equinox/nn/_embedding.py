@@ -120,13 +120,11 @@ class RotaryPositionalEmbedding(Module, strict=True):
             rope_embeddings: RotaryPositionalEmbedding
             mha_attention: MultiheadAttention
 
-            def __init__(self, embedding_size, max_seq_length, num_heads, query_size):
+            def __init__(self, embedding_size, max_seq_length, ...):
                 self.rope_embeddings = RotaryPositionalEmbedding(
                     embedding_size, max_seq_length
                 )
-                self.mha_attention = MultiheadAttention(
-                    num_heads=num_heads, query_size=query_size, key=jax.random.key(0)
-                )
+                self.mha_attention = MultiheadAttention(...)
 
             def __call__(self, query, key_, value, index):
                 def process_heads(
@@ -155,11 +153,6 @@ class RotaryPositionalEmbedding(Module, strict=True):
 
                 return x
 
-        embedding_size = 32
-        max_seq_length = 8
-        seq_length = 4
-        num_heads = 2
-        query_size = 64
 
         transformer_block = eqx.filter_jit(
             TransformerBlock(embedding_size, max_seq_length, num_heads, query_size)
@@ -170,24 +163,7 @@ class RotaryPositionalEmbedding(Module, strict=True):
         v = jnp.ones(shape=(seq_length, query_size))
 
         out = transformer_block(q, k, v, jnp.array(0))
-        out = transformer_block(q, k, v, jnp.array(1)) # no re-JITing
-        ```
-
-        If you're training a transformer, you likely don't want to use any offset. In
-        those cases, it can be helpful to use `functools.partial` like so:
-        ```python
-        embedding_size = 32
-        max_seq_length = 8
-
-        rot_emb = RotaryPositionalEmbedding(
-            embedding_size=embedding_size, max_seq_length=max_seq_length
-        )
-        rot_emb = eqx.filter_jit(rot_emb)
-        rot_emb_no_offset = functools.partial(rot_emb, offset=jnp.array(0))
-
-        x = jnp.ones(shape=(max_seq_length, embedding_size))
-
-        assert jnp.allclose(rot_emb(x, offset=jnp.array(0)), rot_emb_no_offset(x))
+        out = transformer_block(q, k, v, jnp.array(1))
         ```
 
     ??? cite
