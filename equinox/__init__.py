@@ -36,7 +36,7 @@ from ._filters import (
     is_inexact_array_like as is_inexact_array_like,
     partition as partition,
 )
-from ._jit import filter_jit as filter_jit
+from ._jit import EquinoxRuntimeError as EquinoxRuntimeError, filter_jit as filter_jit
 from ._make_jaxpr import filter_make_jaxpr as filter_make_jaxpr
 from ._module import (
     field as field,

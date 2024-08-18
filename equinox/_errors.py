@@ -15,11 +15,11 @@ import jax.tree_util as jtu
 import numpy as np
 from jaxtyping import Array, ArrayLike, Bool, Int, PyTree
 
+from . import _jit
 from ._ad import filter_custom_jvp
 from ._config import EQX_ON_ERROR, EQX_ON_ERROR_BREAKPOINT_FRAMES
 from ._doc_utils import doc_remove_args
 from ._filters import combine, is_array, partition
-from ._jit import filter_jit
 from ._misc import currently_jitting
 from ._unvmap import unvmap_any, unvmap_max
 
@@ -52,59 +52,24 @@ You will need to manually kill this job and/or restart the runtime.
 """
 
 
-_on_error_msg = """
----------------------------------------------------------------------------
-
-An error occurred during the runtime of your JAX program.
-
----------------------------------------------------------------------------
-
-Traceback:
-
-{stack}
-
----------------------------------------------------------------------------
-
-Error message:
-
-{msg}
-
----------------------------------------------------------------------------
-
-You have a few options to try and debug this issue.
-
-1) Setting the environment variable `EQX_ON_ERROR=breakpoint` is usually the most useful
-way to debug such errors. This can be interacted with using most of the usual commands
-for the Python debugger: `u` and `d` to move up and down frames, the name of a variable
-to print its value, etc.
-
-If taking this approach, then it is recommended to also set
-`EQX_ON_ERROR_BREAKPOINT_FRAMES=<some number>`, corresponding to the number of frames to
-add to the debugger.
-
-If you get trace-time errors from JAX then try reducing the value of
-`EQX_ON_ERROR_BREAKPOINT_FRAMES`. See
-`https://docs.kidger.site/equinox/api/errors/#equinox.error_if` for more information.
-
-2) You may also like to try setting `JAX_DISABLE_JIT=1`. This will mean that you can
-(mostly) inspect the state of your program as if it was normal Python.
-
-3) For more suggestions, see `https://docs.kidger.site/equinox/api/debug/`.
-"""
-
-
 _frames_msg = f"""
-Opening a breakpoint with {EQX_ON_ERROR_BREAKPOINT_FRAMES} frames.
-You can control this value by setting the environment variable
-`EQX_ON_ERROR_BREAKPOINT_FRAMES=<some number>`.
+-------------------
 
-Note that setting large values of this number may lead to crashes at trace time; see
-`https://docs.kidger.site/equinox/api/errors/#equinox.error_if` for more information.
+Opening a breakpoint with {EQX_ON_ERROR_BREAKPOINT_FRAMES} frames. You can control this 
+value by setting the environment variable `EQX_ON_ERROR_BREAKPOINT_FRAMES=<some value>`.
+(Note that setting large values of this number may lead to crashes at trace time; see
+`https://docs.kidger.site/equinox/api/errors/#equinox.error_if` for more information.)
 """
 
 
-# This is never actually surfaced to an end user -- it always becomes an XlaRuntimeError
-class EqxRuntimeError(RuntimeError):
+# The name of this is looked for in `_jit.py` in order to determine if we have a
+# runtime error -- and if so then the custom reporting will engage.
+#
+# Note that this is *not* the class that is raised at runtime to a user: this is an
+# internal implementation detail of Equinox. It is caught by `equinox.filter_jit` and
+# replaced with the actual run time error. (Without any of the misleading baggage that
+# XLA would otherwise attach.)
+class _EquinoxRuntimeError(RuntimeError):
     pass
 
 
@@ -112,16 +77,25 @@ class EquinoxTracetimeError(RuntimeError):
     pass
 
 
-EquinoxTracetimeError.__module__ = "equinox"
-
-
 @filter_custom_jvp
 def _error(x, pred, index, *, msgs, on_error, stack):
     if on_error == "raise":
 
         def raises(_index):
-            raise EqxRuntimeError(
-                _on_error_msg.format(stack=stack, msg=msgs[_index.item()])
+            # Sneakily smuggle out the information about the error. Inspired by
+            # `sys.last_value`.
+            _jit.last_msg = msg = msgs[_index.item()]
+            _jit.last_stack = stack
+            raise _EquinoxRuntimeError(
+                f"{msg}\n\n\n"
+                "--------------------\n"
+                "An error occurred during the runtime of your JAX program! "
+                "Unfortunately you do not appear to be using `equinox.filter_jit` "
+                "(perhaps you are using `jax.jit` instead?) and so further information "
+                "about the error cannot be displayed. (Probably you are seeing a very "
+                "large but uninformative error message right now.) Please wrap your "
+                "program with `equinox.filter_jit`.\n"
+                "--------------------\n"
             )
 
         def tpu_msg(_out, _index):
@@ -148,7 +122,7 @@ def _error(x, pred, index, *, msgs, on_error, stack):
 
         def display_msg(_index):
             print(_frames_msg)
-            print(msgs[_index.item()])
+            print("equinox.EquinoxRuntimeError: " + msgs[_index.item()])
             return _index
 
         def to_nan(_index):
@@ -356,11 +330,12 @@ def branched_error_if_impl(
                 return x
 
     tb = None
-    frames = list(traceback.walk_stack(None))
-    for f, lineno in reversed(frames):
+    for f, lineno in traceback.walk_stack(None):
+        if f.f_locals.get("__equinox_filter_jit__", False):
+            break
         if traceback_util.include_frame(f):
             tb = types.TracebackType(tb, f, f.f_lasti, lineno)
-    stack = "\n".join(traceback.format_tb(tb))
+    stack = "".join(traceback.format_tb(tb)).rstrip()
     dynamic_x, static_x = partition(x, is_array)
     flat = jtu.tree_leaves(dynamic_x)
     if len(flat) == 0:
@@ -373,7 +348,7 @@ def branched_error_if_impl(
 
 # filter_jit does some work to produce nicer runtime error messages.
 # We also place it here to ensure a consistent experience when using JAX in eager mode.
-branched_error_if_impl_jit = filter_jit(branched_error_if_impl)
+branched_error_if_impl_jit = _jit.filter_jit(branched_error_if_impl)
 
 
 def assert_dce(

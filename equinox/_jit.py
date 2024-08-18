@@ -1,5 +1,6 @@
 import functools as ft
 import inspect
+import sys
 import warnings
 from collections.abc import Callable
 from typing import Any, Literal, overload, TypeVar
@@ -22,6 +23,7 @@ from ._custom_types import sentinel
 from ._deprecate import deprecated_0_10
 from ._doc_utils import doc_remove_args
 from ._filters import combine, is_array, partition
+from ._misc import currently_jitting
 from ._module import field, Module, module_update_wrapper, Partial, Static
 
 
@@ -110,38 +112,54 @@ except Exception:
         pass
 
 
-def _modify_traceback(e: Exception):
-    # Remove JAX's UnfilteredStackTrace, with its huge error messages.
-    e.__cause__ = None
-    # Remove _JitWrapper.__call__ and _JitWrapper._call and Method.__call__ from the
-    # traceback
-    tb = e.__traceback__ = e.__traceback__.tb_next.tb_next.tb_next  # pyright: ignore
-    try:
-        # See https://github.com/google/jax/blob/69cd3ebe99ce12a9f22e50009c00803a095737c7/jax/_src/traceback_util.py#L190  # noqa: E501
-        jax.lib.xla_extension.replace_thread_exc_traceback(tb)  # pyright: ignore
-    except AttributeError:
-        pass
-    # IPython ignores __tracebackhide__ directives for the frame that actually raises
-    # the error. We fix that here.
-    try:
-        get_ipython()  # pyright: ignore
-    except NameError:
-        pass
-    else:
-        import IPython  # pyright: ignore
+# This is the class we use to raise runtime errors from `eqx.error_if`.
+class EquinoxRuntimeError(RuntimeError):
+    pass
 
-        # Check that IPython supports __tracebackhide__
-        if IPython.version_info[:2] >= (7, 17):  # pyright: ignore
-            tb_stack = []
-            while tb is not None:
-                tb_stack.append(tb)
-                tb = tb.tb_next
-            for tb in reversed(tb_stack):
-                if not tb.tb_frame.f_locals.get("__tracebackhide__", False):
-                    tb.tb_next = None
-                    break
-            else:
-                e.__traceback__ = None
+
+# Magic value that means error messages are displayed as `{__qualname__}: ...` rather
+# than `{__module__}.{__qualname__}`. (At least, I checked the default Python
+# interpreter, the default Python REPL, ptpython, ipython, pdb, and ipdb.)
+EquinoxRuntimeError.__module__ = "builtins"
+# Note that we don't also override `__name__` or `__qualname__`. Suppressing the
+# `equinox._jit` module bit is useful for readability, but we don't want to go so far as
+# deleting the name altogether. (Or even e.g. setting it to the 'Above is the stack...'
+# first section of our error message below!) The reason is that whilst that gives a
+# nicer displayed error in default Python, it doesn't necessarily do as well with other
+# tools, e.g. debuggers. So what we have here is a compromise.
+
+
+last_msg = None
+last_stack = None
+
+
+_on_error_msg = """Above is the stack outside of JIT. Below is the stack inside of JIT:
+{stack}
+equinox.EquinoxRuntimeError: {msg}
+
+-------------------
+
+An error occurred during the runtime of your JAX program.
+
+1) Setting the environment variable `EQX_ON_ERROR=breakpoint` is usually the most useful
+way to debug such errors. This can be interacted with using most of the usual commands
+for the Python debugger: `u` and `d` to move up and down frames, the name of a variable
+to print its value, etc.
+
+2) You may also like to try setting `JAX_DISABLE_JIT=1`. This will mean that you can
+(mostly) inspect the state of your program as if it was normal Python.
+
+3) See `https://docs.kidger.site/equinox/api/debug/` for more suggestions.
+"""
+
+
+class _FilteredStderr:
+    def __init__(self, stderr):
+        self.stderr = stderr
+
+    def write(self, data: str):
+        if "_EquinoxRuntimeError" not in data:
+            self.stderr.write(data)
 
 
 class _JitWrapper(Module):
@@ -160,6 +178,9 @@ class _JitWrapper(Module):
 
     def _call(self, is_lower, args, kwargs):
         __tracebackhide__ = True
+        # Used by our error messages when figuring out where to stop walking the stack.
+        if not currently_jitting():
+            __equinox_filter_jit__ = True  # noqa: F841
         info = (
             self._signature,
             self._dynamic_fun,
@@ -178,49 +199,58 @@ class _JitWrapper(Module):
                 _postprocess,  # pyright: ignore
             )
         else:
-            if self.filter_warning:
-                with warnings.catch_warnings():
-                    warnings.filterwarnings(
-                        "ignore", message="Some donated buffers were not usable*"
-                    )
+            # Filter stderr to remove our default "you don't seem to be using
+            # `equinox.filter_jit`" message. (Which also comes with a misleading stack
+            # trace from XLA.)
+            stderr = sys.stderr
+            sys.stderr = _FilteredStderr(stderr)
+            try:
+                if self.filter_warning:
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings(
+                            "ignore", message="Some donated buffers were not usable*"
+                        )
+                        out = self._cached(dynamic_donate, dynamic_nodonate, static)
+                else:
                     out = self._cached(dynamic_donate, dynamic_nodonate, static)
-            else:
-                out = self._cached(dynamic_donate, dynamic_nodonate, static)
+            except XlaRuntimeError as e:
+                # Catch Equinox's runtime errors, and re-raise them with actually useful
+                # information. (By default XlaRuntimeError produces a lot of terrifying
+                # but useless information.)
+                if (
+                    last_msg is not None
+                    and last_stack is not None
+                    and "_EquinoxRuntimeError: " in str(e)
+                ):
+                    # We check `last_msg` and `last_stack` just in case. I'm not sure
+                    # what happens in distributed/multiprocess environments. Is the
+                    # callback necessarily executed in the same interpreter as we are in
+                    # here?
+                    raise EquinoxRuntimeError(
+                        _on_error_msg.format(msg=last_msg, stack=last_stack)
+                    ) from None
+                    # `from None` to hide the large but uninformative XlaRuntimeError.
+                else:
+                    raise
+            finally:
+                sys.stderr = stderr
             return _postprocess(out)
 
     def __call__(self, /, *args, **kwargs):
         __tracebackhide__ = True
         try:
             return self._call(False, args, kwargs)
-        except XlaRuntimeError as e:
-            # Catch Equinox's runtime errors, and strip the more intimidating parts of
-            # the error message.
-            if len(e.args) != 1 or not isinstance(e.args[0], str):
-                raise  # No idea if this ever happens. But if it does, just bail.
-            (msg,) = e.args
-            if "EqxRuntimeError: " in msg:
-                _, msg = msg.split("EqxRuntimeError: ", 1)
-                msg, *_ = msg.rsplit("\n\nAt:\n", 1)
-                e.args = (msg,)
-                if jax.config.jax_traceback_filtering in (  # pyright: ignore
-                    None,
-                    "auto",
-                ):
-                    _modify_traceback(e)
+        except EquinoxRuntimeError as e:
+            # Use a two-part try/except here and in `_call` to delete the
+            # `raise EquinoxRuntimeError` line from the stack trace.
+            e.__traceback__ = None
             raise
-        # I considered also catching `Exception`, and removing the terrifying-looking
-        # JAX exception that occurs by default.
-        # This ends up being difficult to get working reliably (e.g. KeyError has a
-        # different __str__ so modifying the `.args` is hard/undefined; JAX errors have
-        # a different __init__ so overwriting __str__ in a new class ends up requiring
-        # magic; taking a different approach and overwriting sys.excepthook is ignored
-        # under IPython, ...)
-        # All in all, not worth it.
 
     def lower(self, /, *args, **kwargs) -> Lowered:
         return self._call(True, args, kwargs)
 
     def __get__(self, instance, owner):
+        del owner
         if instance is None:
             return self
         return Partial(self, instance)
