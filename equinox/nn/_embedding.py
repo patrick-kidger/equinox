@@ -258,7 +258,7 @@ class RotaryPositionalEmbedding(Module, strict=True):
         A JAX array of shape `(seq_length, embedding_size)`, with the rotary positional
         encoding applied to the input.
         """
-        print("JIT ROPE")
+
         seq_len, embedding_size = x.shape
         if embedding_size != self.embedding_size:
             raise ValueError(
