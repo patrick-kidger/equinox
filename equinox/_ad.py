@@ -349,9 +349,7 @@ def filter_jvp(
 
     primal_out, tangent_out = jax.jvp(_fn, flat_dynamic_primals, flat_tangents)
     dynamic_primal_out, arr_primal_out, static_primal_out = primal_out
-    primal_out = combine(
-        dynamic_primal_out, combine(arr_primal_out, static_primal_out.value)
-    )
+    primal_out = combine(dynamic_primal_out, arr_primal_out, static_primal_out.value)
     tangent_out, _, _ = tangent_out
 
     return primal_out, tangent_out
