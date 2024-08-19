@@ -1158,8 +1158,14 @@ def test_no_jax_array_static():
 
     Valid((), jnp.ones(2))
 
-    with pytest.raises(ValueError, match="JAX Arrays cannot be marked as static!"):
+    with pytest.warns(
+        UserWarning,
+        match="A JAX array is being set as static!",
+    ):
         InvalidTuple((jnp.ones(10),), jnp.ones(10))
 
-    with pytest.raises(ValueError, match="JAX Arrays cannot be marked as static!"):
+    with pytest.warns(
+        UserWarning,
+        match="A JAX array is being set as static!",
+    ):
         InvalidArr((), jnp.ones(10))

@@ -592,7 +592,11 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
                         is_array, jtu.tree_flatten(getattr(self, field.name))[0]
                     )
                 ):
-                    raise ValueError("JAX Arrays cannot be marked as static!")
+                    warnings.warn(
+                        "A JAX array is being set as static! This can result "
+                        "in unexpected behavior and is usually a mistake to do.",
+                        stacklevel=2,
+                    )
         # Freeze.
         object.__setattr__(self, "__class__", cls)
         # [Step 4] Run any custom validators. (After freezing; as they run
