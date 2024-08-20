@@ -42,9 +42,8 @@ edit_uri: ""  # No edit button, as some of our pages are in /docs and some in /e
 strict: true  # Don't allow warnings during the build process
 
 extra_javascript: 
-    # The below three make MathJax work, see https://squidfunk.github.io/mkdocs-material/reference/mathjax/
+    # The below two make MathJax work, see https://squidfunk.github.io/mkdocs-material/reference/mathjax/
     - _static/mathjax.js
-    - https://polyfill.io/v3/polyfill.min.js?features=es6
     - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
 extra_css:
