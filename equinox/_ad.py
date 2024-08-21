@@ -344,12 +344,13 @@ def filter_jvp(
         _in = combine(_dynamic, static_primals)
         _out = fn(*_in, **kwargs)
         _dynamic_out, _static_out = partition(_out, _is_jvp_tracer(_main))
-        return _dynamic_out, Static(_static_out)
+        _arr_out, _non_arr_out = partition(_static_out, is_array)
+        return _dynamic_out, _arr_out, Static(_non_arr_out)
 
     primal_out, tangent_out = jax.jvp(_fn, flat_dynamic_primals, flat_tangents)
-    dynamic_primal_out, static_primal_out = primal_out
-    primal_out = combine(dynamic_primal_out, static_primal_out.value)
-    tangent_out, _ = tangent_out
+    dynamic_primal_out, arr_primal_out, static_primal_out = primal_out
+    primal_out = combine(dynamic_primal_out, arr_primal_out, static_primal_out.value)
+    tangent_out, _, _ = tangent_out
 
     return primal_out, tangent_out
 

@@ -24,7 +24,7 @@ from jaxtyping import Array, Bool, PyTreeDef
 from ._better_abstract import ABCMeta, dataclass
 from ._caches import cache_clears
 from ._doc_utils import doc_repr
-from ._filters import is_array_like
+from ._filters import is_array, is_array_like
 from ._pretty_print import tree_pformat
 from ._tree import tree_equal
 
@@ -584,6 +584,19 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
                 f"The following fields were not initialised during __init__: "
                 f"{missing_names}"
             )
+        # [Step 3.5] Prevent arrays from being marked as static
+        for field in dataclasses.fields(self):
+            if field.metadata.get("static", False):
+                if any(
+                    jtu.tree_map(
+                        is_array, jtu.tree_flatten(getattr(self, field.name))[0]
+                    )
+                ):
+                    warnings.warn(
+                        "A JAX array is being set as static! This can result "
+                        "in unexpected behavior and is usually a mistake to do.",
+                        stacklevel=2,
+                    )
         # Freeze.
         object.__setattr__(self, "__class__", cls)
         # [Step 4] Run any custom validators. (After freezing; as they run

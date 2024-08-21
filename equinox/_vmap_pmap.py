@@ -206,25 +206,28 @@ class _VmapWrapper(Module):
             _out_axes = _resolve_axes(_out, _out_axes)
             _none_axes = jtu.tree_map(_is_none, _out_axes, is_leaf=_is_none)
             _nonvmapd, _vmapd = partition(_out, _none_axes, is_leaf=_is_none)
-            return _vmapd, Static((_nonvmapd, _out_axes))
+            _nonvmapd_arr, _nonvmapd_static = partition(_nonvmapd, is_array)
+            return _vmapd, _nonvmapd_arr, Static((_nonvmapd_static, _out_axes))
 
         if len(jtu.tree_leaves(in_axes)) == 0 and self._axis_size is None:
-            vmapd, static = _fun_wrapper(dynamic_args)
+            vmapd, nonvmapd_arr, static = _fun_wrapper(dynamic_args)
             if len(jtu.tree_leaves(vmapd)) != 0:
                 raise ValueError(
                     "Cannot resolve batch dimension. Non-`None` `out_axes` requires "
                     "either `in_axes` or `axis_size` to be not `None`."
                 )
         else:
-            vmapd, static = jax.vmap(
+            vmapd, nonvmapd_arr, static = jax.vmap(
                 _fun_wrapper,
                 in_axes=(in_axes,),
-                out_axes=(0, None),
+                out_axes=(0, None, None),
                 axis_name=self._axis_name,
                 axis_size=self._axis_size,
                 **self._vmapkwargs,
             )(dynamic_args)
-        nonvmapd, out_axes = static.value
+
+        nonvmapd_static, out_axes = static.value
+        nonvmapd = combine(nonvmapd_arr, nonvmapd_static)
 
         assert jtu.tree_structure(vmapd) == jtu.tree_structure(out_axes)
         vmapd = jtu.tree_map(_swapaxes, vmapd, out_axes)

@@ -1141,3 +1141,31 @@ def test_converter_annotations():
     assert Foo1.__init__.__annotations__["x"] is Any
     assert Foo2.__init__.__annotations__["x"] is int
     assert Foo3.__init__.__annotations__["x"] is bool
+
+
+def test_no_jax_array_static():
+    class Valid(eqx.Module):
+        a: tuple
+        b: jax.Array
+
+    class InvalidTuple(eqx.Module):
+        a: tuple = eqx.field(static=True)
+        b: jax.Array
+
+    class InvalidArr(eqx.Module):
+        a: tuple
+        b: jax.Array = eqx.field(static=True)
+
+    Valid((), jnp.ones(2))
+
+    with pytest.warns(
+        UserWarning,
+        match="A JAX array is being set as static!",
+    ):
+        InvalidTuple((jnp.ones(10),), jnp.ones(10))
+
+    with pytest.warns(
+        UserWarning,
+        match="A JAX array is being set as static!",
+    ):
+        InvalidArr((), jnp.ones(10))
