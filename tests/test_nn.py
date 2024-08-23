@@ -1359,9 +1359,7 @@ def test_rope_embeddings_shapes(getkey):
     query_size = 32
     key_size = 32
 
-    rope_embeddings = eqx.nn.RotaryPositionalEmbedding(
-        embedding_size, max_seq_length=seq_length
-    )
+    rope_embeddings = eqx.nn.RotaryPositionalEmbedding(embedding_size)
     rope_embeddings = functools.partial(rope_embeddings, offset=jnp.array(0))
 
     query_heads = jax.random.normal(
@@ -1440,9 +1438,7 @@ def test_rope_embeddings_values():
         seq_length, embedding_size
     )
 
-    rope_embeddings = eqx.nn.RotaryPositionalEmbedding(
-        embedding_size, max_seq_length=seq_length
-    )
+    rope_embeddings = eqx.nn.RotaryPositionalEmbedding(embedding_size)
     rope_embeddings = functools.partial(rope_embeddings, offset=jnp.array(0))
     res = rope_embeddings(x)
 
