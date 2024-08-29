@@ -65,10 +65,16 @@ def test_tree_at_empty_tuple():
     x9 = [Empty(), Empty()]
 
     for x in (x1, x2, x3, x4, x5, x6, x7, x8, x9):
+        # Test with replace
         new_x = eqx.tree_at(lambda xi: xi[0], x, "hello")
         assert new_x[0] == "hello"
         if len(new_x) != 1:
             assert new_x[1] != "hello"
+
+        # Test with replace fn
+        expected = len(x[0])
+        new_x_replace = eqx.tree_at(lambda xi: xi[0], x, replace_fn=len)
+        assert new_x_replace[0] == expected
 
 
 def test_tree_at_empty_namedtuple():

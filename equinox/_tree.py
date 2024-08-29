@@ -51,7 +51,7 @@ class _CountedIdDict:
         return self._count[id(item)]
 
 
-class _DistinctTuple:
+class _DistinctTuple(tuple):
     pass
 
 
