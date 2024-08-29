@@ -73,8 +73,8 @@ def test_tree_at_empty_tuple():
 
         # Test with replace fn
         expected = len(x[0])
-        new_x_replace = eqx.tree_at(lambda xi: xi[0], x, replace_fn=len)
-        assert new_x_replace[0] == expected
+        new_x = eqx.tree_at(lambda xi: xi[0], x, replace_fn=len)
+        assert new_x[0] == expected
 
 
 def test_tree_at_empty_namedtuple():
@@ -82,6 +82,11 @@ def test_tree_at_empty_namedtuple():
     pytree = [Empty(), 5]
     out = eqx.tree_at(lambda x: x[1], pytree, 4)
     assert isinstance(out[0], Empty)
+
+    # Test with replace fn
+    expected = str(pytree[0])
+    out = eqx.tree_at(lambda x: x[0], pytree, replace_fn=str)
+    assert out[0] == expected
 
 
 def test_tree_at_replace_fn(getkey):
