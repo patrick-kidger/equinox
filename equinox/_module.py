@@ -176,7 +176,7 @@ manner. If you are starting a new codebase you should not have need of them.
 
 # Inherits from ABCMeta to support `eqx.{AbstractVar, AbstractClassVar}` and
 # `abc.abstractmethod`.
-class _ModuleMeta(ABCMeta):  # pyright: ignore
+class _ActualModuleMeta(ABCMeta):  # pyright: ignore
     # This method is called whenever you definite a module: `class Foo(eqx.Module): ...`
     def __new__(
         mcs,
@@ -569,7 +569,7 @@ class _ModuleMeta(ABCMeta):  # pyright: ignore
         post_init = getattr(cls, "__post_init__", None)
         initable_cls = _make_initable(cls, cls.__init__, post_init, wraps=False)
         # [Step 2] Instantiate the class as normal.
-        self = super(_ModuleMeta, initable_cls).__call__(*args, **kwargs)
+        self = super(_ActualModuleMeta, initable_cls).__call__(*args, **kwargs)
         assert not _is_abstract(cls)
         # [Step 3] Check that all fields are occupied.
         missing_names = {
@@ -638,6 +638,8 @@ if TYPE_CHECKING:
     class _ModuleMeta(abc.ABCMeta):
         __abstractvars__: frozenset[str]
         __abstractclassvars__: frozenset[str]
+else:
+    _ModuleMeta = _ActualModuleMeta
 
 
 def _is_special_form(cls):
@@ -791,7 +793,9 @@ def __call__(self, ...):
 
 
 @ft.lru_cache(maxsize=128)
-def _make_initable(cls: _ModuleMeta, init, post_init, wraps: bool) -> _ModuleMeta:
+def _make_initable(
+    cls: _ActualModuleMeta, init, post_init, wraps: bool
+) -> _ActualModuleMeta:
     # Used as part of the key. Don't cache if these have changed.
     # In practice, monkey-patching these on the class -- after you've already
     # instantiated it somewhere! -- is an *ahem*, adventurous, thing to do. But never
