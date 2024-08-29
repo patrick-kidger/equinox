@@ -42,7 +42,6 @@ src = []
 [tool.ruff.lint]
 fixable = ["I001", "F401"]
 ignore = ["E402", "E721", "E731", "E741", "F722"]
-ignore-init-module-imports = true
 select = ["E", "F", "I001"]
 
 [tool.ruff.lint.isort]
