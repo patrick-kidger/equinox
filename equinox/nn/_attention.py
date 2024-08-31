@@ -118,9 +118,6 @@ class MultiheadAttention(Module, strict=True):
         refer to it as "$d_\text{model}$".
     """
 
-    query_proj: Linear
-    key_proj: Linear
-    value_proj: Linear
     output_proj: Linear
     dropout: Dropout
 
@@ -135,6 +132,11 @@ class MultiheadAttention(Module, strict=True):
     use_key_bias: bool = field(static=True)
     use_value_bias: bool = field(static=True)
     use_output_bias: bool = field(static=True)
+
+    qkv_proj: Linear | None = None
+    query_proj: Linear | None = None
+    key_proj: Linear | None = None
+    value_proj: Linear | None = None
 
     def __init__(
         self,
@@ -151,6 +153,7 @@ class MultiheadAttention(Module, strict=True):
         use_output_bias: bool = False,
         dropout_p: float = 0.0,
         inference: bool = False,
+        fuse_qkv: bool = True,
         dtype=None,
         *,
         key: PRNGKeyArray,
@@ -176,6 +179,8 @@ class MultiheadAttention(Module, strict=True):
             is not applied. If `False` then dropout is applied. This may be toggled
             with [`equinox.nn.inference_mode`][] or overridden during
             [`equinox.nn.MultiheadAttention.__call__`][].
+        - `fuse_qkv`: Whether to fuse the QKV projection optimization for better
+            performance. Requires query, key sequence lengths to be equal.
         - `dtype`: The dtype to use for all trainable parameters in this layer.
             Defaults to either `jax.numpy.float32` or `jax.numpy.float64` depending
             on whether JAX is in 64-bit mode.
@@ -196,23 +201,40 @@ class MultiheadAttention(Module, strict=True):
         if output_size is None:
             output_size = query_size
 
-        self.query_proj = Linear(
-            query_size,
-            num_heads * qk_size,
-            use_bias=use_query_bias,
-            dtype=dtype,
-            key=qkey,
-        )
-        self.key_proj = Linear(
-            key_size, num_heads * qk_size, use_bias=use_key_bias, dtype=dtype, key=kkey
-        )
-        self.value_proj = Linear(
-            value_size,
-            num_heads * vo_size,
-            use_bias=use_value_bias,
-            dtype=dtype,
-            key=vkey,
-        )
+        if fuse_qkv:
+            qkv_input_size = query_size + key_size + value_size
+            qkv_output_size = num_heads * (qk_size * 2 + vo_size)
+
+            self.qkv_proj = Linear(
+                qkv_input_size,
+                qkv_output_size,
+                use_bias=use_query_bias & use_key_bias & use_value_bias,
+                dtype=dtype,
+                key=key,
+            )
+        else:
+            self.query_proj = Linear(
+                query_size,
+                num_heads * qk_size,
+                use_bias=use_query_bias,
+                dtype=dtype,
+                key=qkey,
+            )
+            self.key_proj = Linear(
+                key_size,
+                num_heads * qk_size,
+                use_bias=use_key_bias,
+                dtype=dtype,
+                key=kkey,
+            )
+            self.value_proj = Linear(
+                value_size,
+                num_heads * vo_size,
+                use_bias=use_value_bias,
+                dtype=dtype,
+                key=vkey,
+            )
+
         self.output_proj = Linear(
             num_heads * vo_size,
             output_size,
@@ -303,9 +325,24 @@ class MultiheadAttention(Module, strict=True):
             # query length can be different
             raise ValueError("key and value must both be sequences of equal length.")
 
-        query_heads = self._project(self.query_proj, query)
-        key_heads = self._project(self.key_proj, key_)
-        value_heads = self._project(self.value_proj, value)
+        # Fused QKV projection
+        if self.qkv_proj is not None:
+            assert (
+                query_seq_length == kv_seq_length
+            ), "Query and Key should have same sequence length when using fused QKV"
+
+            qkv_input = jnp.concatenate([query, key_, value], axis=-1)
+            qkv_output = self._project(self.qkv_proj, qkv_input)
+
+            query_heads, key_heads, value_heads = jnp.split(
+                qkv_output,
+                3,
+                axis=-1,
+            )
+        else:
+            query_heads = self._project(self.query_proj, query)
+            key_heads = self._project(self.key_proj, key_)
+            value_heads = self._project(self.value_proj, value)
 
         if process_heads is not None:
             q_shape, k_shape, v_shape = (

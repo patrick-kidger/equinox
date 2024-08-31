@@ -781,6 +781,7 @@ def test_multihead_attention(getkey):
         output_size=11,
         qk_size=13,
         vo_size=17,
+        fuse_qkv=False,
         key=getkey(),
     )
     q = jrandom.uniform(getkey(), (19, 3))
@@ -788,7 +789,9 @@ def test_multihead_attention(getkey):
     v = jrandom.uniform(getkey(), (23, 7))
     assert attn(q, k, v).shape == (19, 11)
 
-    attn = eqx.nn.MultiheadAttention(num_heads=2, query_size=4, key=getkey())
+    attn = eqx.nn.MultiheadAttention(
+        num_heads=2, query_size=4, fuse_qkv=False, key=getkey()
+    )
     attn = eqx.tree_at(
         lambda x: (
             x.query_proj.weight,
@@ -814,6 +817,44 @@ def test_multihead_attention(getkey):
         attn(x, x, x, mask),
         jnp.broadcast_to(jnp.array([[680.0, 1960.0, 3240.0, 4520.0]]), (3, 4)),
     )
+
+
+def test_fused_multihead_attention_error(getkey):
+    attn = eqx.nn.MultiheadAttention(
+        num_heads=2,
+        query_size=3,
+        key_size=5,
+        value_size=7,
+        output_size=11,
+        qk_size=13,
+        vo_size=17,
+        key=getkey(),
+    )
+    q = jrandom.uniform(getkey(), (19, 3))
+    k = jrandom.uniform(getkey(), (23, 5))
+    v = jrandom.uniform(getkey(), (23, 7))
+
+    with pytest.raises(AssertionError):
+        assert attn(q, k, v).shape == (19, 11)
+
+    attn = eqx.nn.MultiheadAttention(
+        num_heads=2, query_size=4, fuse_qkv=False, key=getkey()
+    )
+    attn = eqx.tree_at(
+        lambda x: (
+            x.query_proj.weight,
+            x.key_proj.weight,
+            x.value_proj.weight,
+            x.output_proj.weight,
+        ),
+        attn,
+        [jnp.arange(16.0).reshape(4, 4) for _ in range(4)],
+    )
+    x = jnp.array([[1.0, 2.0, 3.0, 4.0]])
+
+    # Ensure it triggers our guard against mismatched QKV `seqlen`s
+    attn(x, x, x)
+    assert jnp.allclose(attn(x, x, x), jnp.array([[680.0, 1960.0, 3240.0, 4520.0]]))
 
 
 def test_multihead_attention_inference(getkey):
