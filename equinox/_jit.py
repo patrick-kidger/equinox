@@ -161,6 +161,10 @@ class _FilteredStderr:
         if "_EquinoxRuntimeError" not in data:
             self.stderr.write(data)
 
+    # Needed for the PyCharm debugger, see #827.
+    def flush(self):
+        self.stderr.flush()
+
 
 class _JitWrapper(Module):
     fn: str  # this attribute exists solely to give a nice repr
