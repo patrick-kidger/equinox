@@ -124,7 +124,7 @@ class RotaryPositionalEmbedding(Module, strict=True):
                 self.rope_embeddings = RotaryPositionalEmbedding(embedding_size)
                 self.mha_attention = MultiheadAttention(...)
 
-            def __call__(self, query, key_, value, index):
+            def __call__(..., index: Int[Array, ""]):
                 def process_heads(
                     query_heads: Float[Array, "seq_length num_heads qk_size"],
                     key_heads: Float[Array, "seq_length num_heads qk_size"],
@@ -143,25 +143,11 @@ class RotaryPositionalEmbedding(Module, strict=True):
                     return query_heads, key_heads, value_heads
 
                 x = self.mha_attention(
-                    query=query,
-                    key_=key_,
-                    value=value,
+                    ...,
                     process_heads=functools.partial(process_heads, index=index),
                 )
 
                 return x
-
-
-        transformer_block = eqx.filter_jit(
-            TransformerBlock(embedding_size, ...)
-        )
-
-        q = jnp.ones(shape=(seq_length, query_size))
-        k = jnp.ones(shape=(seq_length, query_size))
-        v = jnp.ones(shape=(seq_length, query_size))
-
-        out = transformer_block(q, k, v, jnp.array(0))
-        out = transformer_block(q, k, v, jnp.array(1))
         ```
 
     ??? cite
