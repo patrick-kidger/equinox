@@ -14,11 +14,10 @@ from ._stateful import State, StateIndex
 
 
 def _power_iteration(forward, transpose, v_prev, eps):
-    u = forward(v_prev)
-    u_norm = jnp.sqrt(jnp.sum(u**2))
-    u = u / jnp.maximum(eps, u_norm)
-
-    v = transpose(u)[0]
+    _, tangents_out = jax.jvp(forward, (v_prev,), (v_prev,))
+    u_norm = jnp.sqrt(jnp.sum(tangents_out**2))
+    u = tangents_out / jnp.maximum(eps, u_norm)
+    _, v = jax.jvp(lambda x: transpose(x)[0], (u,), (u,))
     v_norm = jnp.sqrt(jnp.sum(v**2))
     v = v / jnp.maximum(eps, v_norm)
 
@@ -197,7 +196,8 @@ class SpectralNorm(StatefulLayer, Generic[_Layer], strict=True):
             else:
                 layer = self.layer
             assert callable(layer)  # checked in __init__ but pyright wants it here too
-            σ = jnp.sum(u * layer(v))
+            _, tangents_out = jax.jvp(layer, (v,), (v,))
+            σ = jnp.sum(u * tangents_out)
             σ_weight = weight / σ
         else:
             weight_shape = weight.shape

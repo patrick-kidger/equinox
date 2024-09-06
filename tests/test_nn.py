@@ -1072,20 +1072,21 @@ def test_spectral_norm(getkey):
 def test_spectral_norm_exact(getkey):
     def λ1():
         u, v = state.get(spectral.uv_index)
-        σ = jnp.sum(u * spectral.layer(v))
+        _, tangents_out = jax.jvp(spectral.layer, (v,), (v,))
+        σ = jnp.sum(u * tangents_out)
         _, s, _ = jnp.linalg.svd(spectral.layer.weight / σ)  # pyright: ignore
         return s[0]
 
     x = jrandom.normal(getkey(), (5,))
     spectral = eqx.nn.SpectralNorm(
-        eqx.nn.Linear(5, 6, key=getkey(), use_bias=False),
+        eqx.nn.Linear(5, 6, key=getkey(), use_bias=True),
         "weight",
         exact=True,
         input_shape=jax.ShapeDtypeStruct(x.shape, x.dtype),
         key=getkey(),
     )
     state = eqx.nn.State(spectral)
-    for _ in range(20):
+    for _ in range(200):
         _, state = spectral(x, state)
     assert jnp.allclose(λ1(), 1)
 
