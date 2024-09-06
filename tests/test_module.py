@@ -1169,3 +1169,39 @@ def test_no_jax_array_static():
         match="A JAX array is being set as static!",
     ):
         InvalidArr((), jnp.ones(10))
+
+
+def test_multiple_inheritance():
+    class A(eqx.Module):
+        def __post_init__(self) -> None:
+            if hasattr(super(), "__post_init__"):
+                super().__post_init__()  # pyright: ignore
+
+    class B(A):
+        x: jax.Array = eqx.field(init=False)
+
+        def __post_init__(self) -> None:
+            super().__post_init__()
+            self.x = jnp.zeros(())
+
+    class C(A):
+        pass
+
+    class D(C, A):
+        def __post_init__(self) -> None:
+            super().__post_init__()
+
+    class E(D, B):
+        pass
+
+    E()
+
+
+def test_init_despite_post_init_in_super():
+    class A(eqx.Module):
+        def __post_init__(self) -> None:
+            pass
+
+    class B(A):
+        def __init__(self) -> None:
+            pass

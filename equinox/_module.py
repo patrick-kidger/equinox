@@ -250,11 +250,12 @@ class _ActualModuleMeta(ABCMeta):  # pyright: ignore
             else:
                 assert name == "Module"
                 has_dataclass_init = True  # eqx.Module itself
+        has_dataclass_post_init = "__post_init__" in cls.__dict__
 
         # Check for a common error. (Check for `_Initable` to avoid duplicate warnings.)
         if (
             not has_dataclass_init
-            and hasattr(cls, "__post_init__")
+            and has_dataclass_post_init
             and not issubclass(cls, _Initable)
         ):
             warnings.warn(
@@ -284,7 +285,7 @@ class _ActualModuleMeta(ABCMeta):  # pyright: ignore
 
         # Add support for `eqx.field(converter=...)` when using `__post_init__`.
         # (Scenario (c) above. Scenarios (a) and (b) are handled later.)
-        if has_dataclass_init and hasattr(cls, "__post_init__"):
+        if has_dataclass_init and has_dataclass_post_init:
             post_init = cls.__post_init__
 
             @ft.wraps(post_init)  # pyright: ignore
