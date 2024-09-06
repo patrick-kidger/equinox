@@ -1036,7 +1036,7 @@ def test_spectral_norm(getkey):
         eqx.nn.Linear(5, 6, key=getkey()), "weight", key=getkey()
     )
     state = eqx.nn.State(spectral)
-    for _ in range(100):
+    for _ in range(200):
         _, state = spectral(x, state)
     assert jnp.allclose(λ1(), 1)
 
