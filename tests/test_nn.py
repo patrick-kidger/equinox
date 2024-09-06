@@ -1085,10 +1085,8 @@ def test_spectral_norm_exact(getkey):
         key=getkey(),
     )
     state = eqx.nn.State(spectral)
-    print("init", λ1())
     for _ in range(20):
         _, state = spectral(x, state)
-        print(λ1())
     assert jnp.allclose(λ1(), 1)
 
     # "gradient descent"
