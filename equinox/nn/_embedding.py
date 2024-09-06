@@ -181,14 +181,14 @@ class RotaryPositionalEmbedding(Module, strict=True):
 
     @staticmethod
     def precompute_freqs_cis(
-        embedding_size: int, end: int, theta: float
+        embedding_size: int, end: Int[ArrayLike, ""], theta: float
     ) -> Complex[Array, "end half_of_embedding_size"]:
         freqs = 1.0 / (
             theta
             ** (jnp.arange(0.0, embedding_size, 2)[jnp.newaxis, :] / embedding_size)
         )
 
-        t = jnp.arange(float(end))
+        t = jnp.arange(end / 1.0)  # promote to float
         freqs_outer = jnp.outer(t, freqs)
         with jax.numpy_dtype_promotion("standard"):
             freqs_cis = jnp.cos(freqs_outer) + jnp.sin(freqs_outer) * 1j
@@ -199,7 +199,7 @@ class RotaryPositionalEmbedding(Module, strict=True):
     def __call__(
         self,
         x: Float[Array, "seq_length embedding_size"],
-        offset: Int[Array, ""],
+        offset: Int[ArrayLike, ""] = 0,
         *,
         key: Optional[PRNGKeyArray] = None,
     ) -> Float[Array, "seq_length embedding_size"]:
@@ -224,30 +224,37 @@ class RotaryPositionalEmbedding(Module, strict=True):
             )
 
         with jax.ensure_compile_time_eval():
+            min_required_seq_len = offset + seq_len  # pyright: ignore TODO: fix typing
             if embedding_size in internal_rope_embedding_cache:
                 freqs_cis = internal_rope_embedding_cache[embedding_size]
                 freqs_cis_seq_len, _ = freqs_cis.shape
-                if seq_len > freqs_cis_seq_len:
+                if min_required_seq_len > freqs_cis_seq_len:  # pyright: ignore TODO: fix typing
                     freqs_cis = self.precompute_freqs_cis(
-                        embedding_size, seq_len, self.theta
+                        embedding_size, min_required_seq_len, self.theta
                     )
                     internal_rope_embedding_cache[embedding_size] = freqs_cis
                 else:
-                    freqs_cis = freqs_cis[:seq_len]
+                    freqs_cis = freqs_cis[:min_required_seq_len]
             else:
                 freqs_cis = self.precompute_freqs_cis(
-                    embedding_size, seq_len, self.theta
+                    embedding_size, min_required_seq_len, self.theta
                 )
                 internal_rope_embedding_cache[embedding_size] = freqs_cis
-
         freqs_cis = jax.lax.dynamic_slice_in_dim(freqs_cis, offset, seq_len)
 
-        freqs_real = jnp.tile(freqs_cis.real, (1, 2))
-        freqs_imag = jnp.tile(freqs_cis.imag, (1, 2))
+        half_size = embedding_size // 2
+        freqs_cos = freqs_cis.real[:, :half_size]
+        freqs_sin = freqs_cis.imag[:, :half_size]
 
-        rotate_x = self.rotate_half(x)
+        x_cos, x_sin = x[..., :half_size], x[..., half_size:]
 
-        x_rope = (x * freqs_real) + (rotate_x * freqs_imag)
+        x_rope_cos = x_cos * freqs_cos - x_sin * freqs_sin
+        x_rope_sin = x_cos * freqs_sin + x_sin * freqs_cos
+
+        x_rope = jnp.stack([x_rope_cos, x_rope_sin], axis=-1).reshape(
+            seq_len, embedding_size
+        )
+
         return x_rope
 
 
