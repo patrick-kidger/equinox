@@ -1069,6 +1069,52 @@ def test_spectral_norm(getkey):
     assert out.shape == (4, 6, 6, 6)
 
 
+def test_spectral_norm_exact(getkey):
+    def λ1():
+        u, v = state.get(spectral.uv_index)
+        σ = jnp.sum(u * spectral.layer(v))
+        _, s, _ = jnp.linalg.svd(spectral.layer.weight / σ)  # pyright: ignore
+        return s[0]
+
+    x = jrandom.normal(getkey(), (5,))
+    spectral = eqx.nn.SpectralNorm(
+        eqx.nn.Linear(5, 6, key=getkey(), use_bias=False),
+        "weight",
+        exact=True,
+        input_shape=jax.ShapeDtypeStruct(x.shape, x.dtype),
+        key=getkey(),
+    )
+    state = eqx.nn.State(spectral)
+    for _ in range(100):
+        _, state = spectral(x, state)
+    assert jnp.allclose(λ1(), 1)
+
+    # Test not updated at inference time
+    spectral = eqx.tree_at(
+        lambda s: s.layer.weight, spectral, spectral.layer.weight + 1
+    )
+    spectral = eqx.nn.inference_mode(spectral, value=True)
+    assert not jnp.allclose(λ1(), 1)
+    for _ in range(100):
+        _, state = spectral(x, state)
+    assert not jnp.allclose(λ1(), 1)
+
+    # Test >2 dimensional input
+
+    x = jrandom.normal(getkey(), (5, 8, 8, 8))
+    conv = eqx.nn.Conv3d(5, 4, 3, key=getkey(), use_bias=False)
+    spectral = eqx.nn.SpectralNorm(
+        conv,
+        "weight",
+        exact=True,
+        input_shape=jax.ShapeDtypeStruct(x.shape, x.dtype),
+        key=getkey(),
+    )
+    state = eqx.nn.State(spectral)
+    out, _ = spectral(x, state)
+    assert out.shape == (4, 6, 6, 6)
+
+
 def test_weight_norm(getkey):
     # Linear
     linear = eqx.nn.Linear(4, 4, key=getkey())

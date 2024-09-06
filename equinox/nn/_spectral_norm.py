@@ -1,4 +1,4 @@
-from typing import Generic, Optional, TypeVar
+from typing import Callable, Generic, Optional, TypeVar
 
 import jax
 import jax.lax as lax
@@ -6,18 +6,31 @@ import jax.numpy as jnp
 import jax.random as jr
 from jaxtyping import Array, Float, PRNGKeyArray
 
+from .._eval_shape import filter_eval_shape
 from .._module import field
 from .._tree import tree_at
 from ._sequential import StatefulLayer
 from ._stateful import State, StateIndex
 
 
-def _power_iteration(weight, u, v, eps):
+def _power_iteration_old(weight, u, v, eps):
     u = weight @ v
     u_norm = jnp.sqrt(jnp.sum(u**2))
     u = u / jnp.maximum(eps, u_norm)
 
     v = weight.T @ u
+    v_norm = jnp.sqrt(jnp.sum(v**2))
+    v = v / jnp.maximum(eps, v_norm)
+
+    return u, v
+
+
+def _power_iteration(forward, transpose, v_prev, eps):
+    u = forward(v_prev)
+    u_norm = jnp.sqrt(jnp.sum(u**2))
+    u = u / jnp.maximum(eps, u_norm)
+
+    v = transpose(u)[0]
     v_norm = jnp.sqrt(jnp.sum(v**2))
     v = v / jnp.maximum(eps, v_norm)
 
@@ -42,6 +55,12 @@ class SpectralNorm(StatefulLayer, Generic[_Layer], strict=True):
     [Spectral Normalization for Generative Adversarial Networks](https://arxiv.org/abs/1802.05957)
     for more details and motivation.
 
+    Default approaches to spectral normalization rely on inaccurate approximations to the
+    spectral norm, although it often perform better; see
+    [Why Spectral Normalization Stabilizes GANs: Analysis and Improvements](https://arxiv.org/abs/2009.02773),
+    and [Generalizable Adversarial Training via Spectral Normalization](https://arxiv.org/abs/1811.07457).
+    Equinox offers functionality for both exact and approximate spectral norms.
+
     !!! example
 
         See [this example](../../examples/stateful.ipynb) for example usage.
@@ -53,6 +72,8 @@ class SpectralNorm(StatefulLayer, Generic[_Layer], strict=True):
     """  # noqa: E501
 
     layer: _Layer
+    reverse: Optional[Callable]
+    exact: bool
     weight_name: str = field(static=True)
     uv_index: StateIndex[tuple[Float[Array, " u_size"], Float[Array, " v_size"]]]
     num_power_iterations: int = field(static=True)
@@ -66,6 +87,8 @@ class SpectralNorm(StatefulLayer, Generic[_Layer], strict=True):
         num_power_iterations: int = 1,
         eps: float = 1e-12,
         inference: bool = False,
+        exact: bool = False,
+        input_shape: Optional[jax.ShapeDtypeStruct] = None,
         *,
         key: PRNGKeyArray,
     ):
@@ -81,6 +104,11 @@ class SpectralNorm(StatefulLayer, Generic[_Layer], strict=True):
         - `inference`: Whether this is in inference mode, at which time no power
             iterations are performed.  This may be toggled with
             [`equinox.nn.inference_mode`][].
+        - `exact`: Whether or not to compute the exact linear transpose for power series
+            iteration. Traditional approaches rely on reshaping >2D linear operators,
+            rather than doing the linear transpose in >2D.
+        - `input_shape`: If `exact` is true, the input structure to the layer must be
+            specified
         - `key`: A `jax.random.PRNGKey` used to provide randomness for initialisation.
             (Keyword only argument.)
 
@@ -90,6 +118,13 @@ class SpectralNorm(StatefulLayer, Generic[_Layer], strict=True):
             The `dtype` of the weight array of the `layer` input is applied to all
             parameters in this layer.
 
+
+        !!! Caution
+
+            If `exact` is true, it computes the transpose via `jax.linear_transpose` of
+            the layer. This includes all operations of the layer call, which means for
+            layers with a bias, this can result in the incorrect spectral value.
+
         """
         self.layer = layer
         self.weight_name = weight_name
@@ -98,17 +133,32 @@ class SpectralNorm(StatefulLayer, Generic[_Layer], strict=True):
         self.inference = inference
 
         weight = getattr(layer, weight_name)
-        if weight.ndim < 2:
-            raise ValueError("`weight` must be at least two-dimensional")
-        weight = jnp.reshape(weight, (weight.shape[0], -1))
-        dtype = weight.dtype
-        u_len, v_len = weight.shape
         ukey, vkey = jr.split(key)
-        u0 = jr.normal(ukey, (u_len,), dtype=dtype)
-        v0 = jr.normal(vkey, (v_len,), dtype=dtype)
-        for _ in range(15):
-            u0, v0 = _power_iteration(weight, u0, v0, eps)
+
+        if not exact:
+            if weight.ndim < 2:
+                raise ValueError("`weight` must be at least two-dimensional")
+            weight = jnp.reshape(weight, (weight.shape[0], -1))
+            dtype = weight.dtype
+            u_len, v_len = weight.shape
+            self.reverse = None
+            u0 = jr.normal(ukey, (u_len,), dtype=dtype)
+            v0 = jr.normal(vkey, (v_len,), dtype=dtype)
+            for _ in range(15):
+                u0, v0 = _power_iteration_old(weight, u0, v0, eps)
+        else:
+            assert (
+                input_shape is not None
+            ), "Must specify `input_shape` to use exact spectral norm!"
+            assert isinstance(self.layer, Callable)
+            u_shape = filter_eval_shape(self.layer, input_shape)
+            u0 = jr.normal(ukey, u_shape.shape, dtype=u_shape.dtype)
+            v0 = jr.normal(vkey, input_shape.shape, dtype=input_shape.dtype)
+            self.reverse = jax.linear_transpose(self.layer, input_shape)
+            for _ in range(15):
+                u0, v0 = _power_iteration(self.layer, self.reverse, v0, self.eps)
         self.uv_index = StateIndex((u0, v0))
+        self.exact = exact
 
     @jax.named_scope("eqx.nn.SpectralNorm")
     def __call__(
@@ -141,17 +191,40 @@ class SpectralNorm(StatefulLayer, Generic[_Layer], strict=True):
 
         u, v = state.get(self.uv_index)
         weight = getattr(self.layer, self.weight_name)
-        weight_shape = weight.shape
-        weight = jnp.reshape(weight, (weight.shape[0], -1))
-        if inference is None:
-            inference = self.inference
-        if not inference:
-            stop_weight = lax.stop_gradient(weight)
-            for _ in range(self.num_power_iterations):
-                u, v = _power_iteration(stop_weight, u, v, self.eps)
-            state = state.set(self.uv_index, (u, v))
-        σ = jnp.einsum("i,ij,j->", u, weight, v)
-        σ_weight = jnp.reshape(weight / σ, weight_shape)
-        layer = tree_at(lambda l: getattr(l, self.weight_name), self.layer, σ_weight)
-        out = layer(x)
+        if not self.exact:
+            weight_shape = weight.shape
+            weight = jnp.reshape(weight, (weight.shape[0], -1))
+            if inference is None:
+                inference = self.inference
+            if not inference:
+                stop_weight = lax.stop_gradient(weight)
+                for _ in range(self.num_power_iterations):
+                    u, v = _power_iteration_old(stop_weight, u, v, self.eps)
+                state = state.set(self.uv_index, (u, v))
+            σ = jnp.einsum("i,ij,j->", u, weight, v)
+            σ_weight = jnp.reshape(weight / σ, weight_shape)
+            layer = tree_at(
+                lambda l: getattr(l, self.weight_name), self.layer, σ_weight
+            )
+            out = layer(x)
+        else:
+            if inference is None:
+                inference = self.inference
+            if not inference:
+                stop_weight = lax.stop_gradient(weight)
+                layer = tree_at(
+                    lambda l: getattr(l, self.weight_name), self.layer, stop_weight
+                )
+                for _ in range(self.num_power_iterations):
+                    u, v = _power_iteration(layer, self.reverse, v, self.eps)
+                state = state.set(self.uv_index, (u, v))
+            else:
+                layer = self.layer
+            assert callable(layer)
+            σ = jnp.sum(u * layer(v))
+            σ_weight = weight / σ
+            layer = tree_at(
+                lambda l: getattr(l, self.weight_name), self.layer, σ_weight
+            )
+            out = layer(x)
         return out, state
