@@ -1085,7 +1085,18 @@ def test_spectral_norm_exact(getkey):
         key=getkey(),
     )
     state = eqx.nn.State(spectral)
-    for _ in range(200):
+    print("init", λ1())
+    for _ in range(20):
+        _, state = spectral(x, state)
+        print(λ1())
+    assert jnp.allclose(λ1(), 1)
+
+    # "gradient descent"
+    spectral = eqx.tree_at(
+        lambda s: s.layer.weight, spectral, spectral.layer.weight + 1
+    )
+    assert not jnp.allclose(λ1(), 1)
+    for _ in range(100):
         _, state = spectral(x, state)
     assert jnp.allclose(λ1(), 1)
 
