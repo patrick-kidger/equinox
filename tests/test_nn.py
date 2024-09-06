@@ -1085,7 +1085,7 @@ def test_spectral_norm_exact(getkey):
         key=getkey(),
     )
     state = eqx.nn.State(spectral)
-    for _ in range(100):
+    for _ in range(200):
         _, state = spectral(x, state)
     assert jnp.allclose(λ1(), 1)
 
