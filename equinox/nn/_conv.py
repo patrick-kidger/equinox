@@ -39,23 +39,22 @@ def _padding_init(
 ) -> Union[str, tuple[tuple[int, int], ...]]:
     if isinstance(padding, str):
         padding = padding.upper()
-        if padding not in ("SAME", "SAME_LOWER", "VALID"):
-            raise ValueError(
-                "`padding` string must be `'SAME'`, `'SAME_LOWER'`, or `'VALID'`."
-            )
+        if padding in ("SAME", "SAME_LOWER", "VALID"):
+            return padding
+        raise ValueError(
+            "`padding` string must be `'SAME'`, `'SAME_LOWER'`, or `'VALID'`."
+        )
     elif isinstance(padding, int):
-        padding = tuple((padding, padding) for _ in range(num_spatial_dims))
+        return tuple((padding, padding) for _ in range(num_spatial_dims))
     elif isinstance(padding, Sequence) and len(padding) == num_spatial_dims:
         if all_sequences(padding):
-            padding = tuple(padding)
+            return tuple(padding)  # pyright: ignore - infers type incorrectly
         else:
-            padding = tuple((p, p) for p in padding)
-    else:
-        raise ValueError(
-            "`padding` must either be a string, an int, or tuple of length "
-            f"{num_spatial_dims} containing ints or tuples of length 2."
-        )
-    return padding
+            return tuple((p, p) for p in padding)
+    raise ValueError(
+        "`padding` must either be a string, an int, or tuple of length "
+        f"{num_spatial_dims} containing ints or tuples of length 2."
+    )
 
 
 def _padding_mode_init(padding_mode: str) -> str:

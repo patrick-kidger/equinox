@@ -209,11 +209,9 @@ if TYPE_CHECKING:
 
         def __len__(cls) -> int: ...
 
-    class Enumeration(  # pyright: ignore
-        enum.Enum, EnumerationItem, metaclass=_Sequence
-    ):
-        _name_to_item: ClassVar[dict[str, EnumerationItem]]
-        _index_to_message: ClassVar[list[str]]
+    class Enumeration(enum.Enum, EnumerationItem, metaclass=_Sequence):  # pyright: ignore
+        _name_to_item: ClassVar[dict[str, EnumerationItem]]  # pyright: ignore
+        _index_to_message: ClassVar[list[str]]  # pyright: ignore
         _base_offsets: ClassVar[dict["Enumeration", int]]
 
         @classmethod
