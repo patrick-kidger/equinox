@@ -1,9 +1,9 @@
-from typing import Optional
+from typing import Any, Optional
 
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
-from jaxtyping import Array, ArrayLike, Complex, Float, Int, PRNGKeyArray
+from jaxtyping import Array, ArrayLike, Float, Int, PRNGKeyArray
 
 from .._caches import cache_clears
 from .._filters import is_array_like
@@ -11,7 +11,7 @@ from .._misc import default_floating_dtype
 from .._module import field, Module
 
 
-internal_rope_embedding_cache: dict[int, Array] = {}
+internal_rope_embedding_cache: dict[tuple[int, Any], tuple[Array, Array]] = {}
 cache_clears.append(internal_rope_embedding_cache.clear)
 
 
@@ -110,6 +110,15 @@ class RotaryPositionalEmbedding(Module, strict=True):
     can be used in any context, it is particularly useful for providing positional
     information to transformer models.
 
+    `RotaryPositionalEmbedding` should be initialised with:
+
+    - `embedding_size`: Size of each embedding vector. Must be non-negative.
+    - `theta`: Specifies how quickly the inner-product will decay with relative
+        distance. Chosen as 10_000 by default, as in the original paper.
+    - `dtype`: The dtype to use for the precomputed frequencies. Defaults to either
+        `jax.numpy.float32` or `jax.numpy.float64` depending on whether JAX is in
+        64-bit mode.
+
     !!! Example
 
         The following example demonstrates how to use `RotaryPositionalEmbedding` in
@@ -162,6 +171,11 @@ class RotaryPositionalEmbedding(Module, strict=True):
 
     embedding_size: int = field(static=True)
     theta: float = field(static=True, default=10_000.0)
+    dtype: Any = field(static=True, default=None)
+
+    def __post_init__(self):
+        if self.dtype is None:
+            self.dtype = default_floating_dtype()
 
     def __check_init__(self):
         if self.embedding_size < 0:
@@ -176,15 +190,15 @@ class RotaryPositionalEmbedding(Module, strict=True):
 
     @staticmethod
     def precompute_freqs_cis(
-        embedding_size: int, end: int, theta: float
-    ) -> tuple[Float[Array, "end half_of_embedding_size"], Float[Array, "end half_of_embedding_size"]]:
+        embedding_size: int, end: int, theta: float, dtype: Any
+    ) -> tuple[Float[Array, "end half_emb_size"], Float[Array, "end half_emb_size"]]:
         freqs = 1.0 / (
             theta
             ** (jnp.arange(0.0, embedding_size, 2)[jnp.newaxis, :] / embedding_size)
         )
 
         t = jnp.arange(float(end))
-        freqs_outer = jnp.outer(t, freqs)
+        freqs_outer = jnp.outer(t, freqs).astype(dtype)
 
         return jnp.cos(freqs_outer), jnp.sin(freqs_outer)
 
@@ -215,25 +229,29 @@ class RotaryPositionalEmbedding(Module, strict=True):
             )
 
         with jax.ensure_compile_time_eval():
-            if embedding_size in internal_rope_embedding_cache:
-                freqs_cis_real, freq_cis_imag = internal_rope_embedding_cache[embedding_size]
-                freqs_cis_seq_len, _ = freqs_cis_real.shape
+            if (embedding_size, self.dtype) in internal_rope_embedding_cache:
+                freqs_pair = internal_rope_embedding_cache[(embedding_size, self.dtype)]
+                freqs_cis_seq_len, _ = freqs_pair[0].shape
                 if seq_len > freqs_cis_seq_len:
-                    freqs_cis_real, freqs_cis_imag = self.precompute_freqs_cis(
-                        embedding_size, seq_len, self.theta
+                    freqs_pair = self.precompute_freqs_cis(
+                        embedding_size, seq_len, self.theta, self.dtype
                     )
-                    internal_rope_embedding_cache[embedding_size] = (freqs_cis_real, freqs_cis_imag)
+                    internal_rope_embedding_cache[(embedding_size, self.dtype)] = (
+                        freqs_pair
+                    )
                 else:
-                    freqs_cis_real = freqs_cis_real[:seq_len]
-                    freqs_cis_imag = freqs_cis_imag[:seq_len]
+                    freqs_pair = (
+                        freqs_pair[0][:seq_len],
+                        freqs_pair[1][:seq_len],
+                    )
             else:
-                freqs_cis_real, freq_cis_imag = self.precompute_freqs_cis(
-                    embedding_size, seq_len, self.theta
+                freqs_pair = self.precompute_freqs_cis(
+                    embedding_size, seq_len, self.theta, self.dtype
                 )
-                internal_rope_embedding_cache[embedding_size] = (freqs_cis_real, freqs_cis_imag)
+                internal_rope_embedding_cache[(embedding_size, self.dtype)] = freqs_pair
 
-        freqs_real = jnp.tile(freqs_cis_real, (1, 2))
-        freqs_imag = jnp.tile(freqs_cis_imag, (1, 2))
+        freqs_real = jnp.tile(freqs_pair[0], (1, 2))
+        freqs_imag = jnp.tile(freqs_pair[1], (1, 2))
 
         rotate_x = self.rotate_half(x)
         x_rope = (x * freqs_real) + (rotate_x * freqs_imag)
@@ -243,8 +261,8 @@ class RotaryPositionalEmbedding(Module, strict=True):
 RotaryPositionalEmbedding.__init__.__doc__ = """**Arguments:**
 
 - `embedding_size`: Size of the token embeddings. Must be non-negative and even.
-- `theta`: The base frequency for the sinusoidal functions. It defines the rate 
-   of oscillation for the sine and cosine waves that encode positional information 
+- `theta`: The base frequency for the sinusoidal functions. It defines the rate
+   of oscillation for the sine and cosine waves that encode positional information
    into the embeddings. The larger the theta value, the slower the oscillations
    and vice versa. Defaults to 10_000.0
 """
