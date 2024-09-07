@@ -110,15 +110,6 @@ class RotaryPositionalEmbedding(Module, strict=True):
     can be used in any context, it is particularly useful for providing positional
     information to transformer models.
 
-    `RotaryPositionalEmbedding` should be initialised with:
-
-    - `embedding_size`: Size of each embedding vector. Must be non-negative.
-    - `theta`: Specifies how quickly the inner-product will decay with relative
-        distance. Chosen as 10_000 by default, as in the original paper.
-    - `dtype`: The dtype to use for the precomputed frequencies. Defaults to either
-        `jax.numpy.float32` or `jax.numpy.float64` depending on whether JAX is in
-        64-bit mode.
-
     !!! Example
 
         The following example demonstrates how to use `RotaryPositionalEmbedding` in
@@ -260,9 +251,12 @@ class RotaryPositionalEmbedding(Module, strict=True):
 
 RotaryPositionalEmbedding.__init__.__doc__ = """**Arguments:**
 
-- `embedding_size`: Size of the token embeddings. Must be non-negative and even.
-- `theta`: The base frequency for the sinusoidal functions. It defines the rate
-   of oscillation for the sine and cosine waves that encode positional information
-   into the embeddings. The larger the theta value, the slower the oscillations
-   and vice versa. Defaults to 10_000.0
+- `embedding_size`: Size of each embedding vector. Must be non-negative and even.
+- `theta`: The base frequency for the sinusoidal functions used in positional encoding.
+    Specifies how quickly the inner-product will decay with relative distance between
+    tokens. Larger values of theta will result in slower oscillations. Default is
+    10_000, as per the original paper.
+- `dtype`: The dtype to use for the precomputed frequencies. Defaults to either
+    `jax.numpy.float32` or `jax.numpy.float64` depending on whether JAX is in
+    64-bit mode.
 """
