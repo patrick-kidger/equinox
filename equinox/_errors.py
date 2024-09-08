@@ -55,7 +55,7 @@ You will need to manually kill this job and/or restart the runtime.
 _frames_msg = f"""
 -------------------
 
-Opening a breakpoint with {EQX_ON_ERROR_BREAKPOINT_FRAMES} frames. You can control this 
+Opening a breakpoint with {EQX_ON_ERROR_BREAKPOINT_FRAMES} frames. You can control this
 value by setting the environment variable `EQX_ON_ERROR_BREAKPOINT_FRAMES=<some value>`.
 (Note that setting large values of this number may lead to crashes at trace time; see
 `https://docs.kidger.site/equinox/api/errors/#equinox.error_if` for more information.)
@@ -109,11 +109,11 @@ def _error(x, pred, index, *, msgs, on_error, stack):
             return jtu.tree_map(_nan_like, _out)
 
         def handle_error():  # pyright: ignore
-            out = jax.pure_callback(raises, struct, index)  # pyright: ignore
+            out = jax.pure_callback(raises, struct, index)
             # If we make it this far then we're on the TPU, which squelches runtime
             # errors and returns dummy values instead.
             # Fortunately, we're able to outsmart it!
-            return jax.pure_callback(tpu_msg, struct, out, index)  # pyright: ignore
+            return jax.pure_callback(tpu_msg, struct, out, index)
 
         struct = jax.eval_shape(lambda: x)
         return lax.cond(pred, handle_error, lambda: x)
@@ -131,7 +131,7 @@ def _error(x, pred, index, *, msgs, on_error, stack):
 
         def handle_error():
             index_struct = jax.eval_shape(lambda: index)
-            _index = jax.pure_callback(  # pyright: ignore
+            _index = jax.pure_callback(
                 display_msg, index_struct, index, vectorized=True
             )
             # Support JAX with and without DCE behaviour on breakpoints.
@@ -146,9 +146,7 @@ def _error(x, pred, index, *, msgs, on_error, stack):
             if EQX_ON_ERROR_BREAKPOINT_FRAMES is not None:
                 breakpoint_kwargs["num_frames"] = EQX_ON_ERROR_BREAKPOINT_FRAMES
             _index = jax.debug.breakpoint(**breakpoint_kwargs)
-            return jax.pure_callback(  # pyright: ignore
-                to_nan, struct, _index, vectorized=True
-            )
+            return jax.pure_callback(to_nan, struct, _index, vectorized=True)
 
         struct = jax.eval_shape(lambda: x)
         return lax.cond(pred, handle_error, lambda: x)

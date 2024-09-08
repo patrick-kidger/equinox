@@ -83,7 +83,7 @@ class Pool(Module, strict=True):
             self.padding = tuple((padding, padding) for _ in range(num_spatial_dims))
         elif isinstance(padding, Sequence) and len(padding) == num_spatial_dims:
             if all_sequences(padding):
-                self.padding = tuple(padding)  # pyright: ignore - infers type incorrectly
+                self.padding = tuple(padding)  # pyright: ignore
             else:
                 self.padding = tuple((p, p) for p in padding)
         else:

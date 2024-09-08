@@ -62,9 +62,7 @@ def _backward_nan_bwd(residuals, grad_x, perturbed, x, name, terminate):
     msg = "   primals={x}\ncotangents={grad_x}"
     if name is not None:
         msg = f"{name}:\n" + msg
-    jax.debug.print(  # pyright: ignore
-        msg, x=_LongRepr(x), grad_x=_LongRepr(grad_x), ordered=True
-    )
+    jax.debug.print(msg, x=_LongRepr(x), grad_x=_LongRepr(grad_x), ordered=True)
     if terminate:
         nans = [
             jnp.isnan(a).any() for a in jtu.tree_leaves(filter(grad_x, is_array_like))

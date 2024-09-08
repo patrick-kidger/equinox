@@ -40,7 +40,7 @@ class _MakeJaxpr(Module):
             _out_dynamic, _out_static = partition(_out, is_array)
             return _out_dynamic, Static(_out_static)
 
-        jaxpr, out_struct = jax.make_jaxpr(_fn, return_shape=True)(*dynamic_flat)  # pyright: ignore
+        jaxpr, out_struct = jax.make_jaxpr(_fn, return_shape=True)(*dynamic_flat)
         dynamic_out_struct, static_out = out_struct
         static_out = static_out.value
         return jaxpr, dynamic_out_struct, static_out

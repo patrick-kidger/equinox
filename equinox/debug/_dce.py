@@ -70,9 +70,7 @@ def store_dce(x: PyTree, name: Hashable = None):
         tag_store = _dce_store[name] = {}
     tag_store[tag] = ({}, treedef, static)
     leaves = [
-        jax.pure_callback(  # pyright: ignore
-            _register_alive(name, tag), x, i, x, vectorized=True
-        )
+        jax.pure_callback(_register_alive(name, tag), x, i, x, vectorized=True)
         for i, x in enumerate(leaves)
     ]
     dynamic_out = jtu.tree_unflatten(treedef, leaves)

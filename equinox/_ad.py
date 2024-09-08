@@ -668,7 +668,7 @@ def filter_closure_convert(fn: Callable[_P, _T], *args, **kwargs) -> Callable[_P
     else:
         fn = cast(Callable[_P, _T], fn)
         closed_jaxpr, out_dynamic_struct, out_static = filter_make_jaxpr(fn)(
-            *args,  # pyright: ignore
+            *args,
             **kwargs,
         )
         jaxpr = closed_jaxpr.jaxpr

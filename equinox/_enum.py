@@ -150,7 +150,7 @@ class EnumerationItem(Module):
         def __init__(self, x):
             pass
 
-    def __eq__(self, other) -> Bool[Array, ""]:  # pyright: ignore
+    def __eq__(self, other) -> Bool[Array, ""]:
         if isinstance(other, EnumerationItem):
             if self._enumeration is other._enumeration:
                 with jax.ensure_compile_time_eval():

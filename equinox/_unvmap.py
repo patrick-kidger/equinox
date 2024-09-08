@@ -23,7 +23,7 @@ def _unvmap_all_impl(x):
 
 
 def _unvmap_all_abstract_eval(x):
-    return jax.core.ShapedArray(shape=(), dtype=jax.numpy.bool_.dtype)  # pyright: ignore
+    return jax.core.ShapedArray(shape=(), dtype=jax.numpy.bool_.dtype)
 
 
 def _unvmap_all_batch(x, batch_axes):
@@ -33,7 +33,7 @@ def _unvmap_all_batch(x, batch_axes):
 
 unvmap_all_p.def_impl(_unvmap_all_impl)
 unvmap_all_p.def_abstract_eval(_unvmap_all_abstract_eval)
-batching.primitive_batchers[unvmap_all_p] = _unvmap_all_batch  # pyright: ignore
+batching.primitive_batchers[unvmap_all_p] = _unvmap_all_batch
 mlir.register_lowering(
     unvmap_all_p,
     mlir.lower_fun(_unvmap_all_impl, multiple_results=False),
@@ -54,7 +54,7 @@ def _unvmap_any_impl(x):
 
 
 def _unvmap_any_abstract_eval(x):
-    return jax.core.ShapedArray(shape=(), dtype=jax.numpy.bool_.dtype)  # pyright: ignore
+    return jax.core.ShapedArray(shape=(), dtype=jax.numpy.bool_.dtype)
 
 
 def _unvmap_any_batch(x, batch_axes):
@@ -64,7 +64,7 @@ def _unvmap_any_batch(x, batch_axes):
 
 unvmap_any_p.def_impl(_unvmap_any_impl)
 unvmap_any_p.def_abstract_eval(_unvmap_any_abstract_eval)
-batching.primitive_batchers[unvmap_any_p] = _unvmap_any_batch  # pyright: ignore
+batching.primitive_batchers[unvmap_any_p] = _unvmap_any_batch
 mlir.register_lowering(
     unvmap_any_p,
     mlir.lower_fun(_unvmap_any_impl, multiple_results=False),
@@ -95,7 +95,7 @@ def _unvmap_max_batch(x, batch_axes):
 
 unvmap_max_p.def_impl(_unvmap_max_impl)
 unvmap_max_p.def_abstract_eval(_unvmap_max_abstract_eval)
-batching.primitive_batchers[unvmap_max_p] = _unvmap_max_batch  # pyright: ignore
+batching.primitive_batchers[unvmap_max_p] = _unvmap_max_batch
 mlir.register_lowering(
     unvmap_max_p,
     mlir.lower_fun(_unvmap_max_impl, multiple_results=False),
