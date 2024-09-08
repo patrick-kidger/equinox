@@ -111,7 +111,7 @@ def filter(
         `pytree`. Each of its leaves should either be:
         - `True`, in which case the leaf or subtree is kept;
         - `False`, in which case the leaf or subtree is replaced with `replace`;
-        - a callable `Leaf -> bool`, in which case this is evaluted on the leaf or
+        - a callable `Leaf -> bool`, in which case this is evaluated on the leaf or
             mapped over the subtree, and the leaf kept or replaced as appropriate.
     - `inverse` switches the truthy/falsey behaviour: falsey results are kept and
         truthy results are replaced.

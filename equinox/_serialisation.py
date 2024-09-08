@@ -310,7 +310,7 @@ def tree_deserialise_leaves(
 
         `filter_spec` should typically be a function `(File, Any) -> Any`, which takes
         a file handle and a leaf from `like`, and either returns the corresponding
-        loaded leaf, or retuns the leaf from `like` unchanged.
+        loaded leaf, or returns the leaf from `like` unchanged.
 
         It can also be a PyTree of such functions, in which case the PyTree structure
         should be a prefix of `pytree`, and each function will be mapped over the

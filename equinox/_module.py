@@ -377,7 +377,7 @@ class _ActualModuleMeta(ABCMeta):
 
             cls.__init__ = __init__
 
-        # Assign `__doc__` in case it has been manually overriden:
+        # Assign `__doc__` in case it has been manually overridden:
         # ```
         # class Foo(eqx.Module):
         #     x: int

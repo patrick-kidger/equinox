@@ -64,7 +64,7 @@ else:
         !!! Info
 
             `AbstractVar` does not create a dataclass field. This affects the order of
-            `__init__` argments. E.g.
+            `__init__` arguments. E.g.
             ```python
             class AbstractX(Module):
                 attr1: AbstractVar[bool]
@@ -109,7 +109,7 @@ else:
         !!! Info
 
             `AbstractClassVar` does not create a dataclass field. This affects the order
-            of `__init__` argments. E.g.
+            of `__init__` arguments. E.g.
             ```python
             class AbstractX(Module):
                 attr1: AbstractClassVar[bool]

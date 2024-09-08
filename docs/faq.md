@@ -196,7 +196,7 @@ Use [`equinox.debug.assert_max_traces`][], for example
 def your_function(x, y, z):
     ...
 ```
-will raise an error if it is compiled more than once, and tell you which argment caused the recompilation. (A function will be recompiled every time the shape or dtype of one of its array-valued inputs change, or if any of its static (non-array) inputs change (as measured by `__eq__`).)
+will raise an error if it is compiled more than once, and tell you which argument caused the recompilation. (A function will be recompiled every time the shape or dtype of one of its array-valued inputs change, or if any of its static (non-array) inputs change (as measured by `__eq__`).)
 
 As an alternative, a quick check for announcing each time your function is compiled can be achieved with a print statement:
 ```python
