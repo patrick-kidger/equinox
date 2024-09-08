@@ -253,7 +253,7 @@ def filter_primitive_bind(prim: jax.core.Primitive, *args) -> PyTree:
     functions above.
     """
     assert prim.multiple_results
-    # If `args` constains a Jaxpr or ClosedJaxpr in its leaves, then it ends up as a
+    # If `args` contains a Jaxpr or ClosedJaxpr in its leaves, then it ends up as a
     # member of the `static` tuple. This is important to ensure that jaxpr-rewriting
     # passes are able to find it.
     # (E.g. if `eqx.filter_closure_convert(...)` is an argument and we apply

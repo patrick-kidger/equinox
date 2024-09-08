@@ -61,7 +61,7 @@ class Module(eqx.Module):
 ```
 as this is used to accomplish something different: this creates two separate layers, that are initialised with the same values for their parameters. After making some gradient updates, you'll find that `self.linear1` and `self.linear2` are now different.
 
-The reason for this is that in Equinox+JAX, models are Py*Trees*, not DAGs. (Directed acyclic graphs.) JAX follows a functional-programming-like style, in which the *identity* of an object (whether tha be a layer, a weight, or whatever) doesn't matter. Only its *value* matters. (This is known as referential transparency.)
+The reason for this is that in Equinox+JAX, models are Py*Trees*, not DAGs. (Directed acyclic graphs.) JAX follows a functional-programming-like style, in which the *identity* of an object (whether that be a layer, a weight, or whatever) doesn't matter. Only its *value* matters. (This is known as referential transparency.)
 
  See also the [`equinox.tree_check`][] function, which can be ran on a model to check if you have duplicate nodes.
 
@@ -153,20 +153,20 @@ def rollout(mlp, xs):
         val = mlp(x)
         carry = mlp
         return carry, [val]
-    
+
     _, scan_out = jax.lax.scan(
         step,
         [mlp],
         xs
     )
-    
+
     return scan_out
 
 key, subkey = jax.random.split(key)
 vals = rollout(mlp, jax.random.normal(key=subkey, shape=(200, 3)))
 ```
 
-will error. To fix this, you can explicitly capture the static elements via 
+will error. To fix this, you can explicitly capture the static elements via
 
 ```python
 def rollout(mlp, xs):
@@ -176,7 +176,7 @@ def rollout(mlp, xs):
         val = mlp(x)
         carry, _ = eqx.partition(mlp, eqx.is_array)
         return carry, [val]
-    
+
     _, scan_out = jax.lax.scan(
         step,
         arr,
