@@ -242,7 +242,7 @@ class RotaryPositionalEmbedding(Module, strict=True):
 
         rotate_x = self.rotate_half(x)
         x_rope = (x * freqs_cos) + (rotate_x * freqs_sin)
-        return x_rope
+        return x_rope.astype(x.dtype)
 
 
 RotaryPositionalEmbedding.__init__.__doc__ = """**Arguments:**
