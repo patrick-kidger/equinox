@@ -1408,9 +1408,9 @@ def test_rope_embeddings_freqs_cis():
         embedding_size, seq_length, theta, jnp.float16
     )
     assert jnp.allclose(
-        freqs_cis[0], expected_freqs_cis.real.astype(jnp.float16), rtol=1e-2
+        freqs_cis[0].astype(jnp.float32), expected_freqs_cis.real, rtol=1e-2
     ) and jnp.allclose(
-        freqs_cis[1], expected_freqs_cis.imag.astype(jnp.float16), rtol=1e-2
+        freqs_cis[1].astype(jnp.float32), expected_freqs_cis.imag, rtol=1e-2
     )
 
 
@@ -1446,10 +1446,22 @@ def test_rope_embeddings_values():
         seq_length, embedding_size
     )
 
-    rope_embeddings = eqx.nn.RotaryPositionalEmbedding(embedding_size)
+    rope_embeddings = eqx.nn.RotaryPositionalEmbedding(
+        embedding_size, dtype=jnp.float32
+    )
     res = rope_embeddings(x)
 
     assert jnp.allclose(res, expected_values, atol=1e-6)
+
+    with jax.numpy_dtype_promotion("standard"):
+        # Test that high precision rope on low precision input is more
+        # accurate than low precision rope on low precision input
+        res = rope_embeddings(x.astype(jnp.float16))
+        assert jnp.allclose(
+            res.astype(jnp.float16),
+            expected_values.astype(jnp.float16),
+            rtol=1e-3,
+        )
 
     rope_embeddings = eqx.nn.RotaryPositionalEmbedding(
         embedding_size, dtype=jnp.float16
@@ -1457,6 +1469,6 @@ def test_rope_embeddings_values():
     res = rope_embeddings(x.astype(jnp.float16))
 
     assert (
-        jnp.allclose(res, expected_values.astype(jnp.float16), rtol=1e-2)
+        jnp.allclose(res.astype(jnp.float32), expected_values, rtol=1e-2)
         and res.dtype == jnp.float16
     )

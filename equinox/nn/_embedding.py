@@ -185,16 +185,13 @@ class RotaryPositionalEmbedding(Module, strict=True):
     ) -> tuple[Float[Array, "end half_emb_size"], Float[Array, "end half_emb_size"]]:
         freqs = 1.0 / (
             theta
-            ** (
-                jnp.arange(0.0, embedding_size, 2, dtype=dtype)[jnp.newaxis, :]
-                / embedding_size
-            )
+            ** (jnp.arange(0.0, embedding_size, 2)[jnp.newaxis, :] / embedding_size)
         )
 
-        t = jnp.arange(float(end), dtype=dtype)
+        t = jnp.arange(float(end))
         freqs_outer = jnp.outer(t, freqs)
 
-        return jnp.cos(freqs_outer), jnp.sin(freqs_outer)
+        return jnp.cos(freqs_outer).astype(dtype), jnp.sin(freqs_outer).astype(dtype)
 
     @jax.named_scope("eqx.nn.RotaryPositionalEmbedding")
     def __call__(
@@ -223,32 +220,28 @@ class RotaryPositionalEmbedding(Module, strict=True):
             )
 
         with jax.ensure_compile_time_eval():
-            if (embedding_size, self.dtype) in internal_rope_embedding_cache:
-                freqs_pair = internal_rope_embedding_cache[(embedding_size, self.dtype)]
-                freqs_cis_seq_len, _ = freqs_pair[0].shape
-                if seq_len > freqs_cis_seq_len:
-                    freqs_pair = self.precompute_freqs_cis(
-                        embedding_size, seq_len, self.theta, self.dtype
-                    )
-                    internal_rope_embedding_cache[(embedding_size, self.dtype)] = (
-                        freqs_pair
-                    )
-                else:
-                    freqs_pair = (
-                        freqs_pair[0][:seq_len],
-                        freqs_pair[1][:seq_len],
-                    )
-            else:
-                freqs_pair = self.precompute_freqs_cis(
+            cache_key = (embedding_size, self.dtype)
+            if cache_key not in internal_rope_embedding_cache:
+                internal_rope_embedding_cache[cache_key] = self.precompute_freqs_cis(
                     embedding_size, seq_len, self.theta, self.dtype
                 )
-                internal_rope_embedding_cache[(embedding_size, self.dtype)] = freqs_pair
 
-        freqs_real = jnp.tile(freqs_pair[0], (1, 2))
-        freqs_imag = jnp.tile(freqs_pair[1], (1, 2))
+            freqs_cos, freqs_sin = internal_rope_embedding_cache[cache_key]
+            freqs_seq_len, _ = freqs_cos.shape
+            if seq_len > freqs_seq_len:
+                internal_rope_embedding_cache[cache_key] = self.precompute_freqs_cis(
+                    embedding_size, seq_len, self.theta, self.dtype
+                )
+                freqs_cos, freqs_sin = internal_rope_embedding_cache[cache_key]
+
+            freqs_cos = freqs_cos[:seq_len]
+            freqs_sin = freqs_sin[:seq_len]
+
+        freqs_cos = jnp.tile(freqs_cos, (1, 2))
+        freqs_sin = jnp.tile(freqs_sin, (1, 2))
 
         rotate_x = self.rotate_half(x)
-        x_rope = (x * freqs_real) + (rotate_x * freqs_imag)
+        x_rope = (x * freqs_cos) + (rotate_x * freqs_sin)
         return x_rope
 
 
