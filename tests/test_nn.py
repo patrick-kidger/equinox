@@ -7,6 +7,7 @@ import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
 import pytest
+from jax._src.dtypes import TypePromotionError
 
 
 def test_custom_init():
@@ -1462,6 +1463,10 @@ def test_rope_embeddings_values():
             expected_values.astype(jnp.float16),
             rtol=1e-3,
         )
+
+    # check that without dtype promotion we throw an error
+    with pytest.raises(TypePromotionError):
+        rope_embeddings(x.astype(jnp.float16))
 
     rope_embeddings = eqx.nn.RotaryPositionalEmbedding(
         embedding_size, dtype=jnp.float16

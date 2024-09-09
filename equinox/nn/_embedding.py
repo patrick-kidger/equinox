@@ -3,6 +3,7 @@ from typing import Any, Optional
 import jax
 import jax.numpy as jnp
 import jax.random as jrandom
+from jax._src.dtypes import TypePromotionError
 from jaxtyping import Array, ArrayLike, Float, Int, PRNGKeyArray
 
 from .._caches import cache_clears
@@ -162,11 +163,7 @@ class RotaryPositionalEmbedding(Module, strict=True):
 
     embedding_size: int = field(static=True)
     theta: float = field(static=True, default=10_000.0)
-    dtype: Any = field(static=True, default=None)
-
-    def __post_init__(self):
-        if self.dtype is None:
-            self.dtype = default_floating_dtype()
+    dtype: Any = field(static=True, default_factory=default_floating_dtype)
 
     def __check_init__(self):
         if self.embedding_size < 0:
@@ -191,6 +188,7 @@ class RotaryPositionalEmbedding(Module, strict=True):
         t = jnp.arange(float(end))
         freqs_outer = jnp.outer(t, freqs)
 
+        # we assign the type at the very end to minimize the loss of precision
         return jnp.cos(freqs_outer).astype(dtype), jnp.sin(freqs_outer).astype(dtype)
 
     @jax.named_scope("eqx.nn.RotaryPositionalEmbedding")
@@ -241,7 +239,18 @@ class RotaryPositionalEmbedding(Module, strict=True):
         freqs_sin = jnp.tile(freqs_sin, (1, 2))
 
         rotate_x = self.rotate_half(x)
-        x_rope = (x * freqs_cos) + (rotate_x * freqs_sin)
+        try:
+            x_rope = (x * freqs_cos) + (rotate_x * freqs_sin)
+        except TypePromotionError as e:
+            inp_dtype = jnp.dtype(x.dtype)
+            rope_dtype = jnp.dtype(self.dtype)
+            raise TypePromotionError(
+                f"The type of the passed value differs from the type "
+                f"of the rotary embeddings ({inp_dtype} != {rope_dtype}), thus leading "
+                "to a conflict when numpy_dtype_promotion is set to strict. To avoid "
+                f"this error, either initialiaze RoPE module with {inp_dtype} "
+                f"dtype, or explicitly cast the input argument to {rope_dtype}."
+            ) from e
         return x_rope.astype(x.dtype)
 
 
