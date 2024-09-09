@@ -181,7 +181,7 @@ class _MetaTransposeTransform(Module):
 
 
 class _MetaBatchTransform(Module):
-    batch_axes: PyTree[Union[batching.NotMapped, int]]
+    batch_axes: PyTree[Union[batching.NotMapped, int]]  # pyright: ignore
 
     def __call__(self, static_fn):
         return filter_vmap(static_fn, in_axes=(self.batch_axes,))

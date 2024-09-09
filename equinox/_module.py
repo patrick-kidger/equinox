@@ -176,7 +176,7 @@ manner. If you are starting a new codebase you should not have need of them.
 
 # Inherits from ABCMeta to support `eqx.{AbstractVar, AbstractClassVar}` and
 # `abc.abstractmethod`.
-class _ActualModuleMeta(ABCMeta):  # pyright: ignore
+class _ActualModuleMeta(ABCMeta):
     # This method is called whenever you definite a module: `class Foo(eqx.Module): ...`
     def __new__(
         mcs,
@@ -366,7 +366,7 @@ class _ActualModuleMeta(ABCMeta):  # pyright: ignore
         if post_init is None:
             init = cls.__init__
 
-            @ft.wraps(init)  # pyright: ignore
+            @ft.wraps(init)
             def __init__(self, *args, **kwargs):
                 __tracebackhide__ = True
                 init(self, *args, **kwargs)
@@ -377,7 +377,7 @@ class _ActualModuleMeta(ABCMeta):  # pyright: ignore
 
             cls.__init__ = __init__
 
-        # Assign `__doc__` in case it has been manually overriden:
+        # Assign `__doc__` in case it has been manually overridden:
         # ```
         # class Foo(eqx.Module):
         #     x: int
@@ -803,9 +803,9 @@ def _make_initable(
     if wraps:
         field_names = _wrapper_field_names
     else:
-        field_names = {field.name for field in dataclasses.fields(cls)}  # pyright: ignore
+        field_names = {field.name for field in dataclasses.fields(cls)}
 
-    class _InitableModule(cls, _Initable):  # pyright: ignore
+    class _InitableModule(cls, _Initable):
         pass
 
     def __setattr__(self, name, value):

@@ -138,7 +138,7 @@ Finally, Equinox offers a number of more advanced goodies, like serialisation, d
 
 **Equinox integrates smoothly with JAX**
 
-Equinox introduces a powerful yet straightforward way to build neural networks, without introducing lots of new notions or tieing you into a framework. Indeed Equinox is a *library*, not a *framework* -- this means that anything you write in Equinox is fully compatible with anything else in the JAX ecosystem.
+Equinox introduces a powerful yet straightforward way to build neural networks, without introducing lots of new notions or tying you into a framework. Indeed Equinox is a *library*, not a *framework* -- this means that anything you write in Equinox is fully compatible with anything else in the JAX ecosystem.
 
 Equinox is all just regular JAX: PyTrees and transformations. Together, these two pieces allow us to specify complex models in JAX-friendly ways.
 

@@ -161,9 +161,9 @@ In practice, we argue that's a good idea! This rule means that when you see code
 def foo(interp: AbstractPolynomialInterpolation)
     ... = interp.degree()
 ```
-you know that it is calling precisely `AbstractPolynomialInterpolation.degree`, and not an override in some subclass. This is excellent for code readability. Thus we get the rule that no method should be overriden. (And this rule will also be checked via the `strict=True` flag.)
+you know that it is calling precisely `AbstractPolynomialInterpolation.degree`, and not an override in some subclass. This is excellent for code readability. Thus we get the rule that no method should be overridden. (And this rule will also be checked via the `strict=True` flag.)
 
-If we assume this, then we now find ourselves arriving at a conclusion: concrete means final. That is, once we have a concrete class (every abstract method/attribute defined in our ABCs is now overriden with an implementation, so we can instantiate this class), then it is now final (we're not allowed to re-override things, so subclassing is pointless). This is how we arrive at the abstract-or-final rule itself!
+If we assume this, then we now find ourselves arriving at a conclusion: concrete means final. That is, once we have a concrete class (every abstract method/attribute defined in our ABCs is now overridden with an implementation, so we can instantiate this class), then it is now final (we're not allowed to re-override things, so subclassing is pointless). This is how we arrive at the abstract-or-final rule itself!
 
 What about when you have an existing concrete class that you want to tweak just-a-little-bit? In this case, prefer composition over inheritance. Write a wrapper that forwards each method as appropriate. This is just as expressive, and means we keep these readable type-safe rules.
 

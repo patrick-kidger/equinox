@@ -29,13 +29,8 @@ def to_onnx(fn):
 
     def _to_onnx(*args):
         finalised_fn = finalise_fn(fn)
-        tf_fn = tf.function(
-            jax2tf.convert(finalised_fn, enable_xla=False)  # pyright: ignore
-        )
-        tf_args = [
-            tf.TensorSpec(jnp.shape(x), jnp.result_type(x))  # pyright: ignore
-            for x in args
-        ]
+        tf_fn = tf.function(jax2tf.convert(finalised_fn, enable_xla=False))
+        tf_args = [tf.TensorSpec(jnp.shape(x), jnp.result_type(x)) for x in args]  # pyright: ignore
         onnx_fn = tf2onnx.convert.from_function(tf_fn, input_signature=tf_args)
         return onnx_fn
 

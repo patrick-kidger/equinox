@@ -151,7 +151,7 @@ def assert_max_traces(fn: Callable = sentinel, *, max_traces: Optional[int]):
         the above code.
     """
     if fn is sentinel:
-        return ft.partial(assert_max_traces, max_traces=max_traces)  # pyright: ignore
+        return ft.partial(assert_max_traces, max_traces=max_traces)
     return module_update_wrapper(_AssertMaxTraces(fn, max_traces))
 
 

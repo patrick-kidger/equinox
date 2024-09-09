@@ -634,7 +634,7 @@ def filter_closure_convert(fn: Callable[_P, _T], *args, **kwargs) -> Callable[_P
 
     - `fn`: The function to call. Will be called as `fun(*args, **kwargs)`.
     - `args`, `kwargs`: Example arguments at which to call the function. The function is
-        not actually evaluated on these arguments; all JAX arrays are subsituted for
+        not actually evaluated on these arguments; all JAX arrays are substituted for
         tracers. Note that Python builtins (`bool`, `int`, `float`, `complex`) are
         not substituted for tracers and are passed through as-is.
 
@@ -668,7 +668,7 @@ def filter_closure_convert(fn: Callable[_P, _T], *args, **kwargs) -> Callable[_P
     else:
         fn = cast(Callable[_P, _T], fn)
         closed_jaxpr, out_dynamic_struct, out_static = filter_make_jaxpr(fn)(
-            *args,  # pyright: ignore
+            *args,
             **kwargs,
         )
         jaxpr = closed_jaxpr.jaxpr

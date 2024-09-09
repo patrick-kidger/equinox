@@ -312,7 +312,7 @@ def delete_init_state(model: PyTree) -> PyTree:
 
     **Returns:**
 
-    A copy of `model`, with all the initial states stripped out. (As in the exampels
+    A copy of `model`, with all the initial states stripped out. (As in the examples
     above, you should then dispose of the original `model` object.)
     """
     return jtu.tree_map(_delete_init_state, model, is_leaf=_is_index)

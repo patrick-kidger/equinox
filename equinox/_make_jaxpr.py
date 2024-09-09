@@ -40,7 +40,7 @@ class _MakeJaxpr(Module):
             _out_dynamic, _out_static = partition(_out, is_array)
             return _out_dynamic, Static(_out_static)
 
-        jaxpr, out_struct = jax.make_jaxpr(_fn, return_shape=True)(*dynamic_flat)  # pyright: ignore
+        jaxpr, out_struct = jax.make_jaxpr(_fn, return_shape=True)(*dynamic_flat)
         dynamic_out_struct, static_out = out_struct
         static_out = static_out.value
         return jaxpr, dynamic_out_struct, static_out
@@ -70,7 +70,7 @@ def filter_make_jaxpr(
 
     The example arguments to be traced may be anything with `.shape` and `.dtype`
     fields (typically JAX arrays, NumPy arrays, of `jax.ShapeDtypeStruct`s). All
-    other argments are treated statically. In particular, Python builtins (`bool`,
+    other arguments are treated statically. In particular, Python builtins (`bool`,
     `int`, `float`, `complex`) are treated as static inputs; wrap them in JAX/NumPy
     arrays if you would like them to be traced.
     """

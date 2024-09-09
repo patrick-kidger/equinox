@@ -136,7 +136,7 @@ def _named_in_axes(fun, in_axes, args):
         default = if_array(0)
         params = inspect.signature(fun).parameters
         # We may have that len(args) < len(params) due to default arguments.
-        # Truncate to considering just the argments that have been passed.
+        # Truncate to considering just the arguments that have been passed.
         #
         # (If len(args) > len(params) then we'll get the usual error later when
         # attempting to call with the wrong number of arguments.)
@@ -287,7 +287,7 @@ def filter_vmap(
         It should be a PyTree of `None`, `int`, or callables `Leaf -> Union[None, int]`.
         Its tree structure should either be:
         1. a prefix of the input tuple of `args`.
-        2. a dictionary, in which case the named argments will use the specified indices
+        2. a dictionary, in which case the named arguments use the specified indices
             to vectorise over, and all other arguments will have the default
             `eqx.if_array(0)`.
     - `out_axes` indicates which axis of the output arrays the mapped axis should appear
@@ -628,7 +628,7 @@ def filter_pmap(
         It should be a PyTree of `None`, `int`, or callables `Leaf -> Union[None, int]`.
         Its tree structure should either be:
         1. a prefix of the input tuple of `args`.
-        2. a dictionary, in which case the named argments will use the specified indices
+        2. a dictionary, in which case the named arguments use the specified indices
             to parallelise over, and all other arguments will have the default
             `eqx.if_array(0)`.
     - `out_axes` indicates which axis of the output arrays the mapped axis should appear

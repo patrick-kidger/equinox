@@ -8,7 +8,7 @@ from jaxtyping import PRNGKeyArray
 from .._config import EQX_GETKEY_SEED
 
 
-# This offers reproducability -- the initial seed is printed in the repr so we can see
+# This offers reproducibility -- the initial seed is printed in the repr so we can see
 # it when a test fails.
 # Note the `eq=False`, which means that `GetKey `objects have `__eq__` and `__hash__`
 # based on object identity.

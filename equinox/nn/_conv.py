@@ -47,7 +47,7 @@ def _padding_init(
         padding = tuple((padding, padding) for _ in range(num_spatial_dims))
     elif isinstance(padding, Sequence) and len(padding) == num_spatial_dims:
         if all_sequences(padding):
-            padding = tuple(padding)
+            padding = tuple(padding)  # pyright: ignore
         else:
             padding = tuple((p, p) for p in padding)
     else:
@@ -55,7 +55,7 @@ def _padding_init(
             "`padding` must either be a string, an int, or tuple of length "
             f"{num_spatial_dims} containing ints or tuples of length 2."
         )
-    return padding
+    return padding  # pyright: ignore
 
 
 def _padding_mode_init(padding_mode: str) -> str:
