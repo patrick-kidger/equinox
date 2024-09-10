@@ -188,7 +188,7 @@ class RotaryPositionalEmbedding(Module, strict=True):
             ** (jnp.arange(0.0, embedding_size, 2)[jnp.newaxis, :] / embedding_size)
         )
 
-        t = jnp.arange(end / 1.0)  # promote to float
+        t = jnp.arange(float(end))  # pyright: ignore
         freqs_outer = jnp.outer(t, freqs)
         with jax.numpy_dtype_promotion("standard"):
             freqs_cis = jnp.cos(freqs_outer) + jnp.sin(freqs_outer) * 1j
@@ -224,11 +224,11 @@ class RotaryPositionalEmbedding(Module, strict=True):
             )
 
         with jax.ensure_compile_time_eval():
-            min_required_seq_len = offset + seq_len  # pyright: ignore TODO: fix typing
+            min_required_seq_len = offset + seq_len  # pyright: ignore
             if embedding_size in internal_rope_embedding_cache:
                 freqs_cis = internal_rope_embedding_cache[embedding_size]
                 freqs_cis_seq_len, _ = freqs_cis.shape
-                if min_required_seq_len > freqs_cis_seq_len:  # pyright: ignore TODO: fix typing
+                if min_required_seq_len > freqs_cis_seq_len:  # pyright: ignore
                     freqs_cis = self.precompute_freqs_cis(
                         embedding_size, min_required_seq_len, self.theta
                     )
@@ -242,19 +242,11 @@ class RotaryPositionalEmbedding(Module, strict=True):
                 internal_rope_embedding_cache[embedding_size] = freqs_cis
         freqs_cis = jax.lax.dynamic_slice_in_dim(freqs_cis, offset, seq_len)
 
-        half_size = embedding_size // 2
-        freqs_cos = freqs_cis.real[:, :half_size]
-        freqs_sin = freqs_cis.imag[:, :half_size]
+        freqs_real = jnp.tile(freqs_cis.real, (1, 2))
+        freqs_imag = jnp.tile(freqs_cis.imag, (1, 2))
 
-        x_cos, x_sin = x[..., :half_size], x[..., half_size:]
-
-        x_rope_cos = x_cos * freqs_cos - x_sin * freqs_sin
-        x_rope_sin = x_cos * freqs_sin + x_sin * freqs_cos
-
-        x_rope = jnp.stack([x_rope_cos, x_rope_sin], axis=-1).reshape(
-            seq_len, embedding_size
-        )
-
+        rotate_x = self.rotate_half(x)
+        x_rope = (x * freqs_real) + (rotate_x * freqs_imag)
         return x_rope
 
 
