@@ -324,7 +324,8 @@ def make_with_state(make_model: Callable[_P, _T]) -> Callable[_P, tuple[_T, Stat
 
     `eqx.nn.make_with_state(Model)(*args, **kwargs)` simply calls
     `model_with_state = Model(*args, **kwargs)`, and then partitions the resulting
-    PyTree into two pieces: the parameters, and the state.
+    PyTree into two pieces: the parameters, and the state, then calls
+    [`equinox.nn.delete_init_state`][] on the parameters.
 
     **Arguments:**
 
@@ -344,6 +345,9 @@ def make_with_state(make_model: Callable[_P, _T]) -> Callable[_P, tuple[_T, Stat
 
         ```python
         class Model(eqx.Module):
+            some_state_index: eqx.nn.StateIndex
+            ...
+
             def __init__(self, foo, bar):
                 ...
 
