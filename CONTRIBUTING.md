@@ -34,7 +34,7 @@ Now make your changes. Make sure to include additional tests if necessary.
 Next verify the tests all pass:
 
 ```bash
-pip install -e .[test]
+pip install -e ".[tests]"
 pytest
 ```
 

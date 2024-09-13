@@ -57,7 +57,7 @@ reportFunctionMemberAccess = false
 include = ["equinox", "tests"]
 
 [project.optional-dependencies]
-test = [
+tests = [
     "pytest",
     "beartype",
     "optax"
