@@ -126,7 +126,7 @@ def test_assert_dce():
         g(1.0)
 
 
-def test_traceback_runtime_eqx():
+def test_traceback_runtime_eqx(caplog):
     @eqx.filter_jit
     def f(x):
         return g(x)
@@ -138,8 +138,10 @@ def test_traceback_runtime_eqx():
     try:
         f(jnp.array(1.0))
     except Exception as e:
+        assert caplog.text == ""
         assert e.__cause__ is None
         msg = str(e).strip()
+        assert msg.startswith("Above is the stack outside of JIT")
         assert "egads" in msg
         assert "EQX_ON_ERROR" in msg
 
