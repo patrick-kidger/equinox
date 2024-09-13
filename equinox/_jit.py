@@ -1,6 +1,6 @@
 import functools as ft
 import inspect
-import sys
+import logging
 import warnings
 from collections.abc import Callable
 from typing import Any, Literal, overload, TypeVar
@@ -153,17 +153,12 @@ to print its value, etc.
 """
 
 
-class _FilteredStderr:
-    def __init__(self, stderr):
-        self.stderr = stderr
-
-    def write(self, data: str):
-        if "_EquinoxRuntimeError" not in data:
-            self.stderr.write(data)
-
-    # Needed for the PyCharm debugger, see #827.
-    def flush(self):
-        self.stderr.flush()
+class _FilterCallback(logging.Filterer):
+    def filter(self, record: logging.LogRecord):
+        return not (
+            record.name == "jax._src.callback"
+            and record.getMessage() == "jax.pure_callback failed"
+        )
 
 
 class _JitWrapper(Module):
@@ -203,11 +198,9 @@ class _JitWrapper(Module):
                 _postprocess,  # pyright: ignore
             )
         else:
-            # Filter stderr to remove our default "you don't seem to be using
-            # `equinox.filter_jit`" message. (Which also comes with a misleading stack
-            # trace from XLA.)
-            stderr = sys.stderr
-            sys.stderr = _FilteredStderr(stderr)
+            filter = _FilterCallback()
+            callback_logger = logging.getLogger("jax._src.callback")
+            callback_logger.addFilter(filter)
             try:
                 if self.filter_warning:
                     with warnings.catch_warnings():
@@ -237,7 +230,7 @@ class _JitWrapper(Module):
                 else:
                     raise
             finally:
-                sys.stderr = stderr
+                callback_logger.removeFilter(filter)
             return _postprocess(out)
 
     def __call__(self, /, *args, **kwargs):
