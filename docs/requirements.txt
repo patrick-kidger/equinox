@@ -8,6 +8,8 @@ mkdocs_include_exclude_files==0.0.1  # Tweak which files are included/excluded
 jinja2==3.0.3            # Older version. After 3.1.0 seems to be incompatible with current versions of mkdocstrings.
 pygments==2.14.0
 nbconvert==6.5.0         # Fix https://github.com/patrick-kidger/equinox/issues/428
+mkdocs-autorefs==1.0.1
+mkdocs-material-extensions==1.3.1
 
 # Dependencies of Equinox itself.
 # Always use most up-to-date versions.
