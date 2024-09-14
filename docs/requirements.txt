@@ -1,4 +1,5 @@
 mkdocs==1.3.0            # Main documentation generator.
+mkdocs-autorefs==1.1.0   # 1.2 incompatible with mkdocs 1.3.0
 mkdocs-material==7.3.6   # Theme
 pymdown-extensions==9.4  # Markdown extensions e.g. to handle LaTeX.
 mkdocstrings==0.17.0     # Autogenerate documentation from docstrings.
