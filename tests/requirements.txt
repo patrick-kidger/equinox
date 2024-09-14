@@ -1,0 +1,4 @@
+jaxlib
+optax
+pytest
+beartype

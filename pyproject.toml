@@ -55,10 +55,3 @@ reportIncompatibleMethodOverride = true
 reportIncompatibleVariableOverride = false  # Incompatible with eqx.AbstractVar
 reportFunctionMemberAccess = false
 include = ["equinox", "tests"]
-
-[project.optional-dependencies]
-tests = [
-    "pytest",
-    "beartype",
-    "optax"
-]
