@@ -35,6 +35,7 @@ from ._filters import (
 )
 from ._make_jaxpr import filter_make_jaxpr
 from ._module import field, Module, module_update_wrapper, Partial, Static
+from ._pretty_print import tree_pformat
 from ._tree import tree_equal
 
 
@@ -546,12 +547,16 @@ def _check_closure_convert_input(self, args, kwargs):
     if tree_equal(in_dynamic_struct, self_in_dynamic_struct) is not True:
         raise ValueError(
             "Closure-converted function called with different dynamic arguments to "
-            "the example arguments provided."
+            "the example arguments provided:\n\n"
+            f"Called with: {tree_pformat(in_dynamic)}\n\n"
+            f"Closure-converted with: {tree_pformat(self_in_dynamic_struct)}"
         )
     if tree_equal(in_static, self_in_static) is not True:
         raise ValueError(
             "Closure-converted function called with different static arguments to "
-            "the example arguments provided."
+            "the example arguments provided:\n\n"
+            f"Called with: {tree_pformat(in_static)}\n\n"
+            f"Closure-converted with: {tree_pformat(self_in_static)}"
         )
     return in_dynamic
 
