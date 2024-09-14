@@ -119,9 +119,8 @@ class State:
             if _is_index(leaf):
                 if leaf.init is _sentinel:
                     raise ValueError(
-                        "Cannot call `eqx.nn.State(eqx.nn.delete_init_state(model))`. "
-                        "You should call `eqx.nn.State(model)`, using the original "
-                        "model."
+                        "Do not call `eqx.nn.State(model)` directly. You should call "
+                        "`eqx.nn.make_with_state(ModelClass)(...args...)` instead."
                     )
                 state[leaf.marker] = jtu.tree_map(jnp.asarray, leaf.init)
         self._state = state
