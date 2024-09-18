@@ -1204,3 +1204,20 @@ def test_cooperative_multiple_inheritance():
     assert called_a
     assert called_b
     assert called_d
+
+
+# https://github.com/patrick-kidger/equinox/issues/858
+def test_init_subclass_and_abstract_class_var():
+    class Parent(eqx.Module):
+        abs_cls_var: eqx.AbstractClassVar[str]
+
+        def __init__(self):
+            pass
+
+        def __init_subclass__(cls):
+            cls.abs_cls_var
+
+    class Child(Parent):
+        abs_cls_var = "foo"
+
+    Child()  # pyright: ignore[reportCallIssue]

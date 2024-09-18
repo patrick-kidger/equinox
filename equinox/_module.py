@@ -698,7 +698,10 @@ _wrapper_field_names = {
 
 
 class _Initable:
-    pass
+    # Prevent `__init_subclass__` from triggering when creating initable versions of
+    # classes.
+    def __init_subclass__(cls, **kwargs):
+        del kwargs
 
 
 _transform_types = {
@@ -805,7 +808,7 @@ def _make_initable(
     else:
         field_names = {field.name for field in dataclasses.fields(cls)}
 
-    class _InitableModule(cls, _Initable):
+    class _InitableModule(_Initable, cls):
         pass
 
     def __setattr__(self, name, value):
