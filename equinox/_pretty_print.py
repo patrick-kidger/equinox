@@ -138,6 +138,9 @@ def _pformat_array(
         else:
             dtype = obj.dtype.name
             if isinstance(obj, (jax.Array, jax.ShapeDtypeStruct)):
+                # Added in JAX 0.4.32 to `ShapeDtypeStruct`
+                if getattr(obj, "weak_type", False):
+                    dtype = f"weak_{dtype}"
                 kind = None
             elif isinstance(obj, np.ndarray):
                 kind = "numpy"
