@@ -1455,10 +1455,6 @@ def test_rope_embeddings_values():
 
     assert jnp.allclose(res, expected_values, atol=1e-6)
 
-    res = rope_embeddings(x)
-
-    assert jnp.allclose(res, expected_values, atol=1e-6)
-
     with jax.numpy_dtype_promotion("standard"):
         # Test that high precision rope on low precision input is more
         # accurate than low precision rope on low precision input
