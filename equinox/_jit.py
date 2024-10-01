@@ -11,6 +11,7 @@ import jax
 import jax._src.dispatch
 import jax._src.traceback_util as traceback_util
 import jax.core
+import jax.errors
 import jax.numpy as jnp
 from jaxtyping import PyTree
 
@@ -108,12 +109,20 @@ def _postprocess(out):
 
 
 try:
-    # Not public API, so wrap in a try-except for forward compatibility.
-    XlaRuntimeError = jax.lib.xla_extension.XlaRuntimeError  # pyright: ignore
-except Exception:
-    # Unused dummy
-    class XlaRuntimeError(Exception):
-        pass
+    # Added in JAX 0.4.34.
+    JaxRuntimeError = jax.errors.JaxRuntimeError  # pyright: ignore[reportAttributeAccessIssue]
+except AttributeError:
+    try:
+        # Forward compatibility in case they ever decide to fix the capitalization.
+        JaxRuntimeError = jax.errors.JAXRuntimeError  # pyright: ignore[reportAttributeAccessIssue]
+    except AttributeError:
+        # Not public API, so wrap in a try-except for forward compatibility.
+        try:
+            JaxRuntimeError = jax.lib.xla_extension.XlaRuntimeError  # pyright: ignore
+        except Exception:
+            # Unused dummy
+            class JaxRuntimeError(Exception):
+                pass
 
 
 try:
@@ -125,7 +134,7 @@ else:
     def wait_for_tokens2():
         try:
             wait_for_tokens()
-        except XlaRuntimeError:
+        except JaxRuntimeError:
             pass
 
     atexit.unregister(wait_for_tokens)
@@ -237,7 +246,7 @@ class _JitWrapper(Module):
                     )
                 if not jitting:
                     marker.block_until_ready()
-            except XlaRuntimeError as e:
+            except JaxRuntimeError as e:
                 # Catch Equinox's runtime errors, and re-raise them with actually useful
                 # information. (By default XlaRuntimeError produces a lot of terrifying
                 # but useless information.)
