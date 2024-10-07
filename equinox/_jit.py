@@ -110,11 +110,11 @@ def _postprocess(out):
 
 try:
     # Added in JAX 0.4.34.
-    JaxRuntimeError = jax.errors.JaxRuntimeError  # pyright: ignore[reportAttributeAccessIssue]
+    JaxRuntimeError = jax.errors.JaxRuntimeError  # pyright: ignore
 except AttributeError:
     try:
         # Forward compatibility in case they ever decide to fix the capitalization.
-        JaxRuntimeError = jax.errors.JAXRuntimeError  # pyright: ignore[reportAttributeAccessIssue]
+        JaxRuntimeError = jax.errors.JAXRuntimeError  # pyright: ignore
     except AttributeError:
         # Not public API, so wrap in a try-except for forward compatibility.
         try:

@@ -878,9 +878,13 @@ def _none_to_zero(ct, x):
         if x is None:
             return None
         else:
-            # No raising-to-vspace. JAX is internally inconsistent, and expects integers
-            # to have integer tangents from custom_{jvp,vjp} rules
-            aval = jax.core.raise_to_shaped(jax.core.get_aval(x))  # .at_least_vspace()
+            aval = jax.core.raise_to_shaped(jax.core.get_aval(x))
+            if hasattr(aval, "to_tangent_aval"):
+                # Earlier versions of JAX were internally inconsistent, and expected
+                # e.g. integer primals to have integer tangents from `custom_{jvp,vjp}`
+                # rules.
+                # That changed in JAX 0.4.34.
+                aval = aval.to_tangent_aval()  # pyright: ignore
             return jax.custom_derivatives.SymbolicZero(aval)
     else:
         return ct
