@@ -143,8 +143,24 @@ def test_partition_and_combine(getkey):
 
 
 def test_partition_subtree():
-    a, b = eqx.partition([(1,), 2], [True, False])
-    eqx.combine(a, b)
+    pytree = [(1,), 2]
+
+    a, b = eqx.partition(pytree, [True, False])
+
+    assert eqx.combine(a, b) == pytree
+
+
+def test_partition_multi():
+    pytree = [(1,), 2, (3.0, "four")]
+
+    partitions = eqx.partition(
+        pytree,
+        [True, False, False],
+        [False, False, (False, True)],
+        lambda x: isinstance(x, float),
+    )
+
+    assert eqx.combine(*partitions) == pytree
 
 
 def test_is_leaf():

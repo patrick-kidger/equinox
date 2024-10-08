@@ -135,21 +135,45 @@ def filter(
 def partition(
     pytree: PyTree,
     filter_spec: PyTree[AxisSpec],
+    *filter_specs: PyTree[AxisSpec],
     replace: Any = None,
     is_leaf: Optional[Callable[[Any], bool]] = None,
 ) -> tuple[PyTree, PyTree]:
     """Splits a PyTree into two pieces. Equivalent to
     `filter(...), filter(..., inverse=True)`, but slightly more efficient.
 
+    More generally, provide $N$ filter specifications to split the tree into $N + 1$
+    non-overlapping partitions.
+
     !!! info
 
         See also [`equinox.combine`][] to reconstitute the PyTree again.
     """
 
-    filter_tree = jtu.tree_map(_make_filter_tree(is_leaf), filter_spec, pytree)
-    left = jtu.tree_map(lambda mask, x: x if mask else replace, filter_tree, pytree)
-    right = jtu.tree_map(lambda mask, x: replace if mask else x, filter_tree, pytree)
-    return left, right
+    filter_trees = [
+        jtu.tree_map(_make_filter_tree(is_leaf), spec, pytree)
+        for spec in (filter_spec, *filter_specs)
+    ]
+
+    partitions = []
+
+    for i in range(len(filter_trees)):
+        partition = jtu.tree_map(
+            lambda x, curr, *prev: x if curr and not any(prev) else replace,
+            pytree,
+            filter_trees[i],
+            *filter_trees[:i],
+        )
+
+        partitions.append(partition)
+
+    rest = jtu.tree_map(
+        lambda x, prev: replace if any(prev) else x,
+        pytree,
+        *filter_trees,
+    )
+
+    return *partitions, rest
 
 
 def _combine(*args):
