@@ -68,6 +68,13 @@ def tree_at(
     The modified PyTree is returned and the original input is left unchanged. Make sure
     to use the return value from this function!
 
+    !!! info
+
+        The nodes are modifieds without any call to `__init__` or `__check_init__`.
+        As a result, any check or post-processing (e.g., similarly to what `field(converter=...)`
+        could do) logic should be performed, by you, after calling `tree_at`.
+        
+
     **Arguments:**
 
     - `where`: A callable `PyTree -> Node` or `PyTree -> tuple[Node, ...]`. It should
