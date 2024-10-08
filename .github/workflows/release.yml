@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Release
-        uses: patrick-kidger/action_update_python_project@v2
+        uses: patrick-kidger/action_update_python_project@v4
         with:
             python-version: "3.11"
             test-script: |
@@ -21,7 +21,3 @@ jobs:
             pypi-token: ${{ secrets.pypi_token }}
             github-user: patrick-kidger
             github-token: ${{ github.token }}
-            email-user: ${{ secrets.email_user }}
-            email-token: ${{ secrets.email_token }}
-            email-server: ${{ secrets.email_server }}
-            email-target: ${{ secrets.email_target }}
