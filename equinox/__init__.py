@@ -25,6 +25,7 @@ from ._errors import (
     branched_error_if as branched_error_if,
     EquinoxTracetimeError as EquinoxTracetimeError,
     error_if as error_if,
+    warn_if as warn_if,
 )
 from ._eval_shape import filter_eval_shape as filter_eval_shape
 from ._filters import (
