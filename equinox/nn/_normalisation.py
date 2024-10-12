@@ -94,6 +94,10 @@ class LayerNorm(Module, strict=True):
             )
         self.use_weight = use_weight
         self.use_bias = use_bias
+
+        with jax.numpy_dtype_promotion("standard"):
+            dtype = jnp.result_type(dtype, jnp.float32)
+
         self.weight = jnp.ones(shape, dtype=dtype) if use_weight else None
         self.bias = jnp.zeros(shape, dtype=dtype) if use_bias else None
 
@@ -227,6 +231,10 @@ class GroupNorm(Module, strict=True):
         self.channels = channels
         self.eps = eps
         self.channelwise_affine = channelwise_affine
+
+        with jax.numpy_dtype_promotion("standard"):
+            dtype = jnp.result_type(dtype, jnp.float32)
+
         self.weight = jnp.ones(channels, dtype=dtype) if channelwise_affine else None
         self.bias = jnp.zeros(channels, dtype=dtype) if channelwise_affine else None
 
@@ -346,6 +354,10 @@ class RMSNorm(Module, strict=True):
         self.eps = eps
         self.use_weight = use_weight
         self.use_bias = use_bias
+
+        with jax.numpy_dtype_promotion("standard"):
+            dtype = jnp.result_type(dtype, jnp.float32)
+
         self.weight = jnp.ones(shape, dtype=dtype) if use_weight else None
         self.bias = jnp.zeros(shape, dtype=dtype) if use_bias else None
 
@@ -388,17 +400,20 @@ class RMSNorm(Module, strict=True):
                 "to replace `rms_norm(x)` with `jax.vmap(rms_norm)(x)`.\n"
             )
 
+        orig_dtype = x.dtype
+
         with jax.numpy_dtype_promotion("standard"):
             dtype = jnp.result_type(x.dtype, jnp.float32)
 
-        inv_rms = jax.lax.rsqrt(jnp.mean(x.astype(dtype) ** 2) + self.eps)
-        out = (inv_rms * x.astype(dtype)).astype(x.dtype)
+        x = x.astype(dtype)
+        inv_rms = jax.lax.rsqrt(jnp.mean(x**2) + self.eps)
+        out = inv_rms * x
 
         if self.use_weight:
             out = self.weight * out
         if self.use_bias:
             out = out + self.bias
         if state is sentinel:
-            return out
+            return out.astype(orig_dtype)
         else:
-            return out, state
+            return out.astype(orig_dtype), state
