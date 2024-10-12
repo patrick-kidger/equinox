@@ -140,6 +140,11 @@ class LayerNorm(Module, strict=True):
                 "`x.shape` ended with `shape`. However, this turned out to be a "
                 "frequent source of bugs, so we made the check stricter!"
             )
+        orig_dtype = x.dtype
+        with jax.numpy_dtype_promotion("standard"):
+            dtype = jnp.result_type(x.dtype, jnp.float32)
+
+        x = x.astype(dtype)
         mean = jnp.mean(x, keepdims=True)
         variance = jnp.var(x, keepdims=True)
         variance = jnp.maximum(0.0, variance)
@@ -150,9 +155,9 @@ class LayerNorm(Module, strict=True):
         if self.use_bias:
             out = out + self.bias
         if state is sentinel:
-            return out
+            return out.astype(orig_dtype)
         else:
-            return out, state
+            return out.astype(orig_dtype), state
 
 
 class GroupNorm(Module, strict=True):
@@ -253,6 +258,12 @@ class GroupNorm(Module, strict=True):
         is passed through unchanged. If `state` is not passed, then just the output is
         returned.
         """
+
+        orig_dtype = x.dtype
+        with jax.numpy_dtype_promotion("standard"):
+            dtype = jnp.result_type(x.dtype, jnp.float32)
+
+        x = x.astype(dtype)
         channels = x.shape[0]
         y = x.reshape(self.groups, channels // self.groups, *x.shape[1:])
         mean = jax.vmap(ft.partial(jnp.mean, keepdims=True))(y)
@@ -266,9 +277,9 @@ class GroupNorm(Module, strict=True):
             bias = left_broadcast_to(self.bias, out.shape)  # pyright: ignore
             out = weight * out + bias
         if state is sentinel:
-            return out
+            return out.astype(orig_dtype)
         else:
-            return out, state
+            return out.astype(orig_dtype), state
 
 
 class RMSNorm(Module, strict=True):
