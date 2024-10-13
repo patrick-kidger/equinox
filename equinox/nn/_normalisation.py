@@ -94,10 +94,6 @@ class LayerNorm(Module, strict=True):
             )
         self.use_weight = use_weight
         self.use_bias = use_bias
-
-        with jax.numpy_dtype_promotion("standard"):
-            dtype = jnp.result_type(dtype, jnp.float32)
-
         self.weight = jnp.ones(shape, dtype=dtype) if use_weight else None
         self.bias = jnp.zeros(shape, dtype=dtype) if use_bias else None
 
