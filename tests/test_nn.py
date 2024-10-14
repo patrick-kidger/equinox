@@ -886,11 +886,19 @@ def test_layer_norm(getkey):
     assert jnp.allclose(ln(x1), ln(x2), atol=1e-4)
     assert jnp.allclose(ln(x1), x3, atol=1e-4)
 
+    ln = eqx.nn.LayerNorm(128, dtype=jnp.bfloat16)
+    x = jrandom.uniform(getkey(), (128,), dtype=jnp.bfloat16)
+    assert ln(x).dtype == jnp.bfloat16
+
 
 def test_group_norm(getkey):
     gn = eqx.nn.GroupNorm(groups=4, channels=128)
     x = jrandom.uniform(getkey(), (128,))
     assert gn(x).shape == (128,)
+
+    gn = eqx.nn.GroupNorm(groups=4, channels=128, dtype=jnp.bfloat16)
+    x = jrandom.uniform(getkey(), (128,), dtype=jnp.bfloat16)
+    assert gn(x).dtype == jnp.bfloat16
 
     gn = eqx.nn.GroupNorm(groups=4, channels=128)
     x = jrandom.uniform(getkey(), (128, 4, 5))
