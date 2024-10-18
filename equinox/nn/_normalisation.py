@@ -116,7 +116,7 @@ class LayerNorm(Module, strict=True):
         """**Arguments:**
 
         - `x`: A JAX array, with the same shape as the `shape` passed to `__init__`.
-        - `state`: Ignored; provided for interchangability with the
+        - `state`: Ignored; provided for interchangeability with the
             [`equinox.nn.BatchNorm`][] API.
         - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
             (Keyword only argument.)
@@ -140,19 +140,24 @@ class LayerNorm(Module, strict=True):
                 "`x.shape` ended with `shape`. However, this turned out to be a "
                 "frequent source of bugs, so we made the check stricter!"
             )
+        orig_dtype = x.dtype
+        with jax.numpy_dtype_promotion("standard"):
+            dtype = jnp.result_type(x.dtype, jnp.float32)
+
+        x = x.astype(dtype)
         mean = jnp.mean(x, keepdims=True)
         variance = jnp.var(x, keepdims=True)
         variance = jnp.maximum(0.0, variance)
         inv = jax.lax.rsqrt(variance + self.eps)
         out = (x - mean) * inv
         if self.use_weight:
-            out = self.weight * out
+            out = self.weight.astype(dtype) * out  # pyright: ignore
         if self.use_bias:
-            out = out + self.bias
+            out = out + self.bias.astype(dtype)  # pyright: ignore
         if state is sentinel:
-            return out
+            return out.astype(orig_dtype)
         else:
-            return out, state
+            return out.astype(orig_dtype), state
 
 
 class GroupNorm(Module, strict=True):
@@ -253,6 +258,12 @@ class GroupNorm(Module, strict=True):
         is passed through unchanged. If `state` is not passed, then just the output is
         returned.
         """
+
+        orig_dtype = x.dtype
+        with jax.numpy_dtype_promotion("standard"):
+            dtype = jnp.result_type(x.dtype, jnp.float32)
+
+        x = x.astype(dtype)
         channels = x.shape[0]
         y = x.reshape(self.groups, channels // self.groups, *x.shape[1:])
         mean = jax.vmap(ft.partial(jnp.mean, keepdims=True))(y)
@@ -264,11 +275,11 @@ class GroupNorm(Module, strict=True):
         if self.channelwise_affine:
             weight = left_broadcast_to(self.weight, out.shape)  # pyright: ignore
             bias = left_broadcast_to(self.bias, out.shape)  # pyright: ignore
-            out = weight * out + bias
+            out = weight.astype(dtype) * out + bias.astype(dtype)
         if state is sentinel:
-            return out
+            return out.astype(orig_dtype)
         else:
-            return out, state
+            return out.astype(orig_dtype), state
 
 
 class RMSNorm(Module, strict=True):
@@ -377,17 +388,20 @@ class RMSNorm(Module, strict=True):
                 "to replace `rms_norm(x)` with `jax.vmap(rms_norm)(x)`.\n"
             )
 
+        orig_dtype = x.dtype
+
         with jax.numpy_dtype_promotion("standard"):
             dtype = jnp.result_type(x.dtype, jnp.float32)
 
-        inv_rms = jax.lax.rsqrt(jnp.mean(x.astype(dtype) ** 2) + self.eps)
-        out = (inv_rms * x.astype(dtype)).astype(x.dtype)
+        x = x.astype(dtype)
+        inv_rms = jax.lax.rsqrt(jnp.mean(x**2) + self.eps)
+        out = inv_rms * x
 
         if self.use_weight:
-            out = self.weight * out
+            out = self.weight.astype(dtype) * out  # pyright: ignore
         if self.use_bias:
-            out = out + self.bias
+            out = out + self.bias.astype(dtype)  # pyright: ignore
         if state is sentinel:
-            return out
+            return out.astype(orig_dtype)
         else:
-            return out, state
+            return out.astype(orig_dtype), state
