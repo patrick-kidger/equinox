@@ -87,7 +87,8 @@ If you found this library to be useful in academic work, then please cite: ([arX
 **Deep learning**  
 [Optax](https://github.com/deepmind/optax): first-order gradient (SGD, Adam, ...) optimisers.  
 [Orbax](https://github.com/google/orbax): checkpointing (async/multi-host/multi-device).  
-[Levanter](https://github.com/stanford-crfm/levanter): scalable+reliable training of foundation models (e.g. LLMs).  
+[Levanter](https://github.com/stanford-crfm/levanter): scalable+reliable training of foundation models (e.g. LLMs).
+[Memorax](https://github.com/smorad/memorax): recurrent neural networks and and sequence modeling
 
 **Scientific computing**  
 [Diffrax](https://github.com/patrick-kidger/diffrax): numerical differential equation solvers.  
