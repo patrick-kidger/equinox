@@ -46,7 +46,7 @@ class Linear(eqx.Module):
         return self.weight @ x + self.bias
 ```
 
-and fully compatible with normal JAX operations:
+and are fully compatible with normal JAX operations:
 
 ```python
 @jax.jit
