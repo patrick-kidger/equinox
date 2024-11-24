@@ -175,3 +175,16 @@ def test_double_if_mapped():
         assert b.shape == (3, 1)
 
     eqx.filter_vmap(f)(jnp.arange(6).reshape(2, 3, 1))
+
+
+# https://github.com/patrick-kidger/equinox/issues/900
+@pytest.mark.parametrize("out_axes", (0, 1, 2, -1, -2, -3))
+def test_out_axes_with_at_least_three_dimensions(out_axes):
+    def foo(x):
+        return x * 2
+
+    x = jnp.arange(24).reshape((2, 3, 4))
+    y = jax.vmap(foo, out_axes=out_axes)(x)
+    z = eqx.filter_vmap(foo, out_axes=out_axes)(x)
+    assert y.shape == z.shape
+    assert (y == z).all()
