@@ -125,8 +125,8 @@ def _bind_main(main, out_axes):
     return jtu.tree_map(_bind, out_axes)
 
 
-def _swapaxes(array, axis):
-    return jnp.swapaxes(array, 0, axis)
+def _moveaxis(array, axis):
+    return jnp.moveaxis(array, 0, axis)
 
 
 def _named_in_axes(fun, in_axes, args):
@@ -230,7 +230,7 @@ class _VmapWrapper(Module):
         nonvmapd = combine(nonvmapd_arr, nonvmapd_static)
 
         assert jtu.tree_structure(vmapd) == jtu.tree_structure(out_axes)
-        vmapd = jtu.tree_map(_swapaxes, vmapd, out_axes)
+        vmapd = jtu.tree_map(_moveaxis, vmapd, out_axes)
 
         return combine(vmapd, nonvmapd)
 

@@ -287,3 +287,18 @@ def test_double_if_mapped():
         assert b.shape == (3, 1)
 
     filter_pmap(f)(jnp.arange(3).reshape(1, 3, 1))
+
+
+# https://github.com/patrick-kidger/equinox/issues/900
+# Unlike the vmap case we only test nonnegative integers, as pmap does not support
+# negative indexing for `in_axes` or `out_axes`.
+@pytest.mark.parametrize("out_axes", (0, 1, 2))
+def test_out_axes_with_at_least_three_dimensions(out_axes):
+    def foo(x):
+        return x * 2
+
+    x = jnp.arange(24).reshape((1, 2, 3, 4))
+    y = jax.pmap(foo, out_axes=out_axes)(x)
+    z = filter_pmap(foo, out_axes=out_axes)(x)
+    assert y.shape == z.shape
+    assert (y == z).all()
