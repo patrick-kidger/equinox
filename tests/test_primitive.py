@@ -136,11 +136,11 @@ def test_call():
 def test_vprim():
     def impl(x):
         assert x.shape == (2,)
-        return 2 * x, jnp.concatenate([x, jnp.flip(x)])
+        return [2 * x, jnp.concatenate([x, jnp.flip(x)])]
 
     def abstract(x):
         assert type(x) is jax.core.ShapedArray
-        return x, jax.core.ShapedArray((4,), x.dtype)
+        return [x, jax.core.ShapedArray((4,), x.dtype)]
 
     def jvp(primals, tangents):
         (x,) = primals

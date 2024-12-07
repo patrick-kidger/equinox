@@ -83,17 +83,26 @@ def _select_if_vmap_batch(axis_size, axis_name, trace, inputs, batch_axes):
     bp, bx, by = batch_axes
     if bp is batching.not_mapped:
         if bx is batching.not_mapped:
-            x = jnp.broadcast_to(x, (axis_size,) + x.shape)
+            if by is batching.not_mapped:
+                out_axis = None
+            else:
+                x = jnp.broadcast_to(x, (axis_size,) + x.shape)
+                y = jnp.moveaxis(y, by, 0)
+                out_axis = 0
         else:
-            x = jnp.moveaxis(x, bx, 0)
-        if by is batching.not_mapped:
-            y = jnp.broadcast_to(y, (axis_size,) + y.shape)
-        else:
-            y = jnp.moveaxis(y, by, 0)
+            if by is batching.not_mapped:
+                x = jnp.moveaxis(x, bx, 0)
+                y = jnp.broadcast_to(y, (axis_size,) + y.shape)
+                out_axis = 0
+            else:
+                x = jnp.moveaxis(x, bx, 0)
+                y = jnp.moveaxis(y, by, 0)
+                out_axis = 0
         out = _select_if_vmap(pred, x, y, makes_false_steps=False)
     else:
         out = jax.vmap(lax.select, in_axes=(bp, bx, by))(pred, x, y)
-    return out, 0
+        out_axis = 0
+    return out, out_axis
 
 
 select_if_vmap_p = jax.core.Primitive("select_if_vmap")
