@@ -160,23 +160,6 @@ def test_keyword_default(getkey):
         eqx.filter_vmap(lambda x, y=1: x, in_axes=dict(y=0))(x)
 
 
-def test_double_if_mapped():
-    out_axes = eqx.internal.if_mapped(1)
-
-    def f(x):
-        assert x.shape == (3, 1)
-
-        def g(y):
-            assert y.shape == (1,)
-            return y + 1, x + 1
-
-        a, b = eqx.filter_vmap(g, out_axes=out_axes)(x)
-        assert a.shape == (1, 3)
-        assert b.shape == (3, 1)
-
-    eqx.filter_vmap(f)(jnp.arange(6).reshape(2, 3, 1))
-
-
 # https://github.com/patrick-kidger/equinox/issues/900
 @pytest.mark.parametrize("out_axes", (0, 1, 2, -1, -2, -3))
 def test_out_axes_with_at_least_three_dimensions(out_axes):

@@ -340,7 +340,9 @@ def filter_jvp(
     flat_tangents = jtu.tree_leaves(tangents)  # all non-None tangents are dynamic
 
     def _fn(*_flat_dynamic):
-        _main = jax.core.find_top_trace(_flat_dynamic).main
+        _top_trace = jax.core.find_top_trace(_flat_dynamic)
+        assert _top_trace is not None
+        _main = _top_trace.main
         _dynamic = jtu.tree_unflatten(treedef, _flat_dynamic)
         _in = combine(_dynamic, static_primals)
         _out = fn(*_in, **kwargs)
