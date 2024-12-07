@@ -30,7 +30,6 @@ from .._unvmap import (
     unvmap_max as unvmap_max,
     unvmap_max_p as unvmap_max_p,
 )
-from .._vmap_pmap import if_mapped as if_mapped
 
 # Backward compatibility: expose via `equinox.internal`. Now available under
 # `equinox.debug`.

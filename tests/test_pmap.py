@@ -272,23 +272,6 @@ def test_aot_compilation(donate):
     compiled(x, y)
 
 
-def test_double_if_mapped():
-    out_axes = eqx.internal.if_mapped(1)
-
-    def f(x):
-        assert x.shape == (3, 1)
-
-        def g(y):
-            assert y.shape == (1,)
-            return y + 1, x + 1
-
-        a, b = eqx.filter_vmap(g, out_axes=out_axes)(x)
-        assert a.shape == (1, 3)
-        assert b.shape == (3, 1)
-
-    filter_pmap(f)(jnp.arange(3).reshape(1, 3, 1))
-
-
 # https://github.com/patrick-kidger/equinox/issues/900
 # Unlike the vmap case we only test nonnegative integers, as pmap does not support
 # negative indexing for `in_axes` or `out_axes`.
