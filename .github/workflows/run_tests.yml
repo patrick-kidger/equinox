@@ -7,7 +7,8 @@ jobs:
   run-test:
     strategy:
       matrix:
-        python-version: [ 3.9, 3.11 ]
+        # must match the `language_version` in `.pre-commit-config.yaml`
+        python-version: [ 3.11 ]
         os: [ ubuntu-latest ]
       fail-fast: false
     runs-on: ${{ matrix.os }}

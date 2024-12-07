@@ -306,16 +306,20 @@ def create_vprim(name: str, impl, abstract_eval, jvp, transpose):
 
     def batch_rule(axis_size, axis_name, trace_type, inputs, batch_axes, **params):
         del trace_type
-        # delegates batching to `_vprim_p`
-        out = _vprim_p.bind(
-            *inputs,
-            prim=prim,
-            __axis_size=axis_size,
-            __axis_name=axis_name,
-            __batch_axes=batch_axes,
-            params=params,
-        )
-        batch_axes_out = jtu.tree_map(lambda _: 0, out)
+        if all(b is batching.not_mapped for b in jtu.tree_leaves(batch_axes)):
+            out = prim.bind(*inputs, **params)
+            batch_axes_out = jtu.tree_map(lambda _: batching.not_mapped, out)
+        else:
+            # delegates batching to `_vprim_p`
+            out = _vprim_p.bind(
+                *inputs,
+                prim=prim,
+                __axis_size=axis_size,
+                __axis_name=axis_name,
+                __batch_axes=batch_axes,
+                params=params,
+            )
+            batch_axes_out = jtu.tree_map(lambda _: 0, out)
         return out, batch_axes_out
 
     prim.def_impl(impl)
