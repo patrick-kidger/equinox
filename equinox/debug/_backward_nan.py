@@ -3,7 +3,6 @@ from typing import Any
 import jax
 import jax._src.traceback_util as traceback_util
 import jax.core
-import jax.extend
 import jax.numpy as jnp
 import jax.tree_util as jtu
 

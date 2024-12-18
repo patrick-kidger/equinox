@@ -11,7 +11,6 @@ import jax
 import jax._src.dispatch
 import jax._src.traceback_util as traceback_util
 import jax.core
-import jax.extend
 import jax.errors
 import jax.numpy as jnp
 from jaxtyping import PyTree

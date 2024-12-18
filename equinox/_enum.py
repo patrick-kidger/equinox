@@ -3,7 +3,6 @@ from typing import Any, cast, TYPE_CHECKING, Union
 
 import jax._src.traceback_util as traceback_util
 import jax.core
-import jax.extend
 import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, ArrayLike, Bool, Int
