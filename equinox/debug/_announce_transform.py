@@ -3,6 +3,7 @@ from typing import Any
 
 import jax
 import jax.core
+import jax.extend
 import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
@@ -124,7 +125,7 @@ def _mlir(*x, stack, name, intermediates, announce):
     return x
 
 
-announce_jaxpr_p = jax.core.Primitive("announce_jaxpr")
+announce_jaxpr_p = jax.extend.core.Primitive("announce_jaxpr")
 announce_jaxpr_p.multiple_results = True
 announce_jaxpr_p.def_impl(_impl)
 announce_jaxpr_p.def_abstract_eval(_abstract)
