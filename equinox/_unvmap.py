@@ -1,7 +1,6 @@
 from typing import cast
 
 import jax
-import jax.extend
 import jax.core
 import jax.extend
 import jax.interpreters.batching as batching
