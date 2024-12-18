@@ -18,6 +18,7 @@ from typing_extensions import ParamSpec
 import jax
 import jax._src.traceback_util as traceback_util
 import jax.core
+import jax.extend
 import jax.interpreters.ad as ad
 import jax.numpy as jnp
 import jax.tree_util as jtu

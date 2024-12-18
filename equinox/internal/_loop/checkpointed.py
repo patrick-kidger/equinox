@@ -54,6 +54,7 @@ from typing import Any, cast, Optional, TypeVar, Union
 
 import jax
 import jax.core
+import jax.extend
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.tree_util as jtu

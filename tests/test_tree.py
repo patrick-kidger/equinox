@@ -3,6 +3,7 @@ import collections as co
 import equinox as eqx
 import jax
 import jax.core
+import jax.extend
 import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom

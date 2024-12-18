@@ -2,6 +2,7 @@ from collections.abc import Hashable
 
 import jax
 import jax.core
+import jax.extend
 import jax.numpy as jnp
 import jax.tree_util as jtu
 from jaxtyping import PyTree
