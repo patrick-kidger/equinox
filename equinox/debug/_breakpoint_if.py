@@ -1,7 +1,6 @@
 import jax
 import jax._src.traceback_util as traceback_util
 import jax.core
-import jax.extend
 import jax.lax as lax
 from jaxtyping import Array, Bool
 
