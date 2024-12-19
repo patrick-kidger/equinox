@@ -22,6 +22,7 @@ from typing import Any, cast, Literal, overload, Union
 import jax
 import jax.core
 import jax.custom_derivatives
+import jax.extend.core
 import jax.tree_util as jtu
 from jaxtyping import PyTree
 
@@ -36,13 +37,13 @@ def _safe_map(f, *args):
 
 def _maybe_finalise_jaxpr(val: Any):
     is_open_jaxpr = False
-    if isinstance(val, jax.core.Jaxpr):
+    if isinstance(val, jax.extend.core.Jaxpr):
         if len(val.constvars) == 0:
             is_open_jaxpr = True
-            val = jax.core.ClosedJaxpr(val, [])
+            val = jax.extend.core.ClosedJaxpr(val, [])
         else:
             return val
-    if isinstance(val, jax.core.ClosedJaxpr):
+    if isinstance(val, jax.extend.core.ClosedJaxpr):
         val = finalise_jaxpr(val)
     if is_open_jaxpr:
         val = val.jaxpr
@@ -60,33 +61,33 @@ def _finalise_jaxprs_in_params(params):
     return new_params
 
 
-def _default_finalisation(prim: jax.core.Primitive, *args, **kwargs):
+def _default_finalisation(prim: jax.extend.core.Primitive, *args, **kwargs):
     return prim.bind(*args, **kwargs)
 
 
-def _impl_finalisation(prim: jax.core.Primitive, *args, **kwargs):
+def _impl_finalisation(prim: jax.extend.core.Primitive, *args, **kwargs):
     return prim.impl(*args, **kwargs)
 
 
 primitive_finalisations = {}
 
 
-def register_impl_finalisation(prim: jax.core.Primitive):
+def register_impl_finalisation(prim: jax.extend.core.Primitive):
     primitive_finalisations[prim] = ft.partial(_impl_finalisation, prim)
 
 
-def finalise_eval_jaxpr(jaxpr: jax.core.Jaxpr, consts, *args):
+def finalise_eval_jaxpr(jaxpr: jax.extend.core.Jaxpr, consts, *args):
     """As jax.core.eval_jaxpr, but finalises (typically by calling `impl` rather than
     `bind` for custom primitives).
     """
 
     def read(v: jax.core.Atom) -> Any:
-        return v.val if isinstance(v, jax.core.Literal) else env[v]
+        return v.val if isinstance(v, jax.extend.core.Literal) else env[v]
 
-    def write(v: jax.core.Var, val: Any) -> None:
+    def write(v: jax.extend.core.Var, val: Any) -> None:
         env[v] = val
 
-    env: dict[jax.core.Var, Any] = {}
+    env: dict[jax.extend.core.Var, Any] = {}
     _safe_map(write, jaxpr.constvars, consts)
     _safe_map(write, jaxpr.invars, args)
     for eqn in jaxpr.eqns:
@@ -104,18 +105,18 @@ def finalise_eval_jaxpr(jaxpr: jax.core.Jaxpr, consts, *args):
     return _safe_map(read, jaxpr.outvars)
 
 
-def finalise_jaxpr_as_fn(jaxpr: jax.core.ClosedJaxpr):
+def finalise_jaxpr_as_fn(jaxpr: jax.extend.core.ClosedJaxpr):
     """As `jax.core.jaxpr_as_fn`, but the result is finalised."""
     return ft.partial(finalise_eval_jaxpr, jaxpr.jaxpr, jaxpr.consts)
 
 
-def finalise_jaxpr(jaxpr: jax.core.ClosedJaxpr) -> jax.core.ClosedJaxpr:
+def finalise_jaxpr(jaxpr: jax.extend.core.ClosedJaxpr) -> jax.extend.core.ClosedJaxpr:
     """A jaxpr-to-jaxpr transformation that performs finalisation."""
     fn = finalise_jaxpr_as_fn(jaxpr)
     args = [
         jax.ShapeDtypeStruct(x.aval.shape, x.aval.dtype) for x in jaxpr.jaxpr.invars
     ]
-    return cast(jax.core.ClosedJaxpr, jax.make_jaxpr(fn)(*args))
+    return cast(jax.extend.core.ClosedJaxpr, jax.make_jaxpr(fn)(*args))
 
 
 def finalise_fn(fn):
@@ -136,13 +137,15 @@ def finalise_fn(fn):
 @overload
 def finalise_make_jaxpr(
     fn, *, return_shape: Literal[False] = False
-) -> Callable[..., jax.core.ClosedJaxpr]: ...
+) -> Callable[..., jax.extend.core.ClosedJaxpr]: ...
 
 
 @overload
 def finalise_make_jaxpr(
     fn, *, return_shape: Literal[True] = True
-) -> Callable[..., tuple[jax.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct]]]: ...
+) -> Callable[
+    ..., tuple[jax.extend.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct]]
+]: ...
 
 
 @overload
@@ -151,7 +154,8 @@ def finalise_make_jaxpr(
 ) -> Callable[
     ...,
     Union[
-        jax.core.ClosedJaxpr, tuple[jax.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct]]
+        jax.extend.core.ClosedJaxpr,
+        tuple[jax.extend.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct]],
     ],
 ]: ...
 
@@ -164,12 +168,12 @@ def finalise_make_jaxpr(fn, *, return_shape: bool = False):
             *args
         )
         if return_shape:
-            jaxpr_struct = cast(tuple[jax.core.ClosedJaxpr, Any], jaxpr_struct)
+            jaxpr_struct = cast(tuple[jax.extend.core.ClosedJaxpr, Any], jaxpr_struct)
             jaxpr, struct = jaxpr_struct
             jaxpr = finalise_jaxpr(jaxpr)
             return jaxpr, struct
         else:
-            jaxpr_struct = cast(jax.core.ClosedJaxpr, jaxpr_struct)
+            jaxpr_struct = cast(jax.extend.core.ClosedJaxpr, jaxpr_struct)
             jaxpr = finalise_jaxpr(jaxpr_struct)
             return jaxpr
 

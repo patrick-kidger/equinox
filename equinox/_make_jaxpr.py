@@ -4,7 +4,7 @@ from typing_extensions import ParamSpec
 
 import jax
 import jax._src.traceback_util as traceback_util
-import jax.core
+import jax.extend.core
 import jax.tree_util as jtu
 from jaxtyping import PyTree
 
@@ -49,7 +49,7 @@ class _MakeJaxpr(Module):
 def filter_make_jaxpr(
     fun: Callable[_P, Any],
 ) -> Callable[
-    _P, tuple[jax.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct], PyTree[Any]]
+    _P, tuple[jax.extend.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct], PyTree[Any]]
 ]:
     """As `jax.make_jaxpr`, but accepts arbitrary PyTrees as input and output.
 

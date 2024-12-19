@@ -18,6 +18,7 @@ from typing_extensions import ParamSpec
 import jax
 import jax._src.traceback_util as traceback_util
 import jax.core
+import jax.extend.core
 import jax.interpreters.ad as ad
 import jax.numpy as jnp
 import jax.tree_util as jtu
@@ -598,7 +599,7 @@ class _ClosureConvert(Module):
     # Important that `jaxpr` be a leaf (and not static), so that it is a tuple element
     # when passing through `filter_primitive_bind` and thus visible to
     # `jax.core.subjaxprs`
-    jaxpr: jax.core.Jaxpr
+    jaxpr: jax.extend.core.Jaxpr
     consts: PyTree[ArrayLike]  # Captured in the PyTree structure of _ClosureConvert
     in_dynamic_struct: _FlatPyTree[jax.ShapeDtypeStruct] = field(static=True)
     out_dynamic_struct: _FlatPyTree[jax.ShapeDtypeStruct] = field(static=True)

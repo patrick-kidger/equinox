@@ -81,8 +81,9 @@ plugins:
                     - import jaxtyping
                     - jaxtyping.set_array_name_format("array")
                     - import jax
+                    - import jax.extend.core
                     - jax.ShapeDtypeStruct.__module__ = "jax"
-                    - jax.core.ClosedJaxpr.__module__ = "jax.core"
+                    - jax.extend.core.ClosedJaxpr.__module__ = "jax.core"
 
                 selection:
                     inherited_members: true  # Allow looking up inherited methods

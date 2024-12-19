@@ -4,6 +4,7 @@ from typing import Any, Optional, Union
 
 import jax
 import jax.core
+import jax.extend.core
 import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
@@ -330,7 +331,7 @@ def _noinline_mlir(ctx, *dynamic, treedef, static, flatten, **kwargs):
     return result
 
 
-noinline_p = jax.core.Primitive("noinline")
+noinline_p = jax.extend.core.Primitive("noinline")
 noinline_p.multiple_results = True
 noinline_p.def_impl(_noinline_impl)
 noinline_p.def_abstract_eval(_noinline_abstract)

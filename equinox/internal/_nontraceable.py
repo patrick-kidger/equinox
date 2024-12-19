@@ -6,7 +6,7 @@ import functools as ft
 from typing import Optional
 
 import jax
-import jax.core
+import jax.extend.core
 import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
@@ -29,7 +29,7 @@ def _make_error(opname):
     return _error
 
 
-nontraceable_p = jax.core.Primitive("nontraceable")
+nontraceable_p = jax.extend.core.Primitive("nontraceable")
 nontraceable_p.def_impl(_nontraceable_impl)
 nontraceable_p.def_abstract_eval(_nontraceable_impl)
 ad.primitive_jvps[nontraceable_p] = _make_error("differentiation")
@@ -53,7 +53,7 @@ def nontraceable(x, *, name="nontraceable operation"):
     return combine(dynamic, static)
 
 
-nondifferentiable_backward_p = jax.core.Primitive("nondifferentiable_backward")
+nondifferentiable_backward_p = jax.extend.core.Primitive("nondifferentiable_backward")
 
 
 def _nondifferentiable_backward_batch(x, batch_axes, *, msg, symbolic):
@@ -137,7 +137,7 @@ def _cannot_batch(x, b, *, msg, allow_constant_across_batch):
             raise ValueError(msg)
 
 
-nonbatchable_p = jax.core.Primitive("nonbatchable")
+nonbatchable_p = jax.extend.core.Primitive("nonbatchable")
 nonbatchable_p.def_impl(lambda x, *, msg, allow_constant_across_batch: x)
 nonbatchable_p.def_abstract_eval(lambda x, *, msg, allow_constant_across_batch: x)
 batching.primitive_batchers[nonbatchable_p] = _cannot_batch

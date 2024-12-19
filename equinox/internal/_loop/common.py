@@ -2,7 +2,7 @@ import itertools as it
 from typing import Any, TYPE_CHECKING, Union
 
 import jax
-import jax.core
+import jax.extend.core
 import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
@@ -105,7 +105,7 @@ def _select_if_vmap_batch(axis_size, axis_name, trace, inputs, batch_axes):
     return out, out_axis
 
 
-select_if_vmap_p = jax.core.Primitive("select_if_vmap")
+select_if_vmap_p = jax.extend.core.Primitive("select_if_vmap")
 select_if_vmap_p.def_impl(_select_if_vmap_impl)
 select_if_vmap_p.def_abstract_eval(_select_if_vmap_abstract)
 ad.primitive_jvps[select_if_vmap_p] = _select_if_vmap_jvp
