@@ -3,6 +3,7 @@ from typing import cast
 import equinox.internal as eqxi
 import jax
 import jax.core
+import jax.extend.core
 import jax.lax as lax
 import jax.numpy as jnp
 
@@ -23,7 +24,9 @@ def _assert_vars_equal(obj1, obj2, varnames):
             assert a.aval.strip_weak_type() == b.aval.strip_weak_type()
 
 
-def _assert_jaxpr_equal(jaxpr1: jax.core.ClosedJaxpr, jaxpr2: jax.core.ClosedJaxpr):
+def _assert_jaxpr_equal(
+    jaxpr1: jax.extend.core.ClosedJaxpr, jaxpr2: jax.extend.core.ClosedJaxpr
+):
     assert jaxpr1.consts == jaxpr2.consts
     jaxpr1 = jaxpr1.jaxpr
     jaxpr2 = jaxpr2.jaxpr
@@ -41,7 +44,7 @@ def test_jaxpr2jaxpr_nocustom_idempotent():
         x = x * 2
         return x
 
-    jaxpr = cast(jax.core.ClosedJaxpr, jax.make_jaxpr(fn)(1))
+    jaxpr = cast(jax.extend.core.ClosedJaxpr, jax.make_jaxpr(fn)(1))
     jaxpr2 = eqxi.finalise_jaxpr(jaxpr)
     _assert_jaxpr_equal(jaxpr, jaxpr2)
 
@@ -53,13 +56,13 @@ def test_jaxpr2jaxpr_custom_idempotent():
         x = jnp.invert(x)
         return x
 
-    jaxpr = cast(jax.core.ClosedJaxpr, jax.make_jaxpr(fn)(True))
+    jaxpr = cast(jax.extend.core.ClosedJaxpr, jax.make_jaxpr(fn)(True))
     jaxpr2 = eqxi.finalise_jaxpr(jaxpr)
     jaxpr3 = eqxi.finalise_jaxpr(jaxpr2)
     _assert_jaxpr_equal(jaxpr2, jaxpr3)
 
     jaxpr = jax.make_jaxpr(jax.vmap(fn))(jnp.array([True, False]))
-    jaxpr = cast(jax.core.ClosedJaxpr, jaxpr)
+    jaxpr = cast(jax.extend.core.ClosedJaxpr, jaxpr)
     jaxpr2 = eqxi.finalise_jaxpr(jaxpr)
     jaxpr3 = eqxi.finalise_jaxpr(jaxpr2)
     _assert_jaxpr_equal(jaxpr2, jaxpr3)
@@ -78,9 +81,9 @@ def test_fn2fn_nocustom_idempotent():
     assert tree_allclose(fn(-1), finalised_fn(-1))
 
     jaxpr = jax.make_jaxpr(fn)(1)
-    jaxpr = cast(jax.core.ClosedJaxpr, jaxpr)
+    jaxpr = cast(jax.extend.core.ClosedJaxpr, jaxpr)
     finalised_jaxpr = jax.make_jaxpr(finalised_fn)(1)
-    finalised_jaxpr = cast(jax.core.ClosedJaxpr, finalised_jaxpr)
+    finalised_jaxpr = cast(jax.extend.core.ClosedJaxpr, finalised_jaxpr)
     _assert_jaxpr_equal(finalised_jaxpr, jaxpr)
 
 
@@ -96,9 +99,11 @@ def test_fn2fn_custom_idempotent():
     assert tree_allclose(fn(True), finalised_fn(True))
 
     finalised_jaxpr = jax.make_jaxpr(finalised_fn)(True)
-    finalised_jaxpr = cast(jax.core.ClosedJaxpr, finalised_jaxpr)
+    finalised_jaxpr = cast(jax.extend.core.ClosedJaxpr, finalised_jaxpr)
     finalised_finalised_jaxpr = jax.make_jaxpr(eqxi.finalise_fn(finalised_fn))(True)
-    finalised_finalised_jaxpr = cast(jax.core.ClosedJaxpr, finalised_finalised_jaxpr)
+    finalised_finalised_jaxpr = cast(
+        jax.extend.core.ClosedJaxpr, finalised_finalised_jaxpr
+    )
     _assert_jaxpr_equal(finalised_jaxpr, finalised_finalised_jaxpr)
     for eqn in finalised_jaxpr.eqns:
         assert eqn.primitive != eqxi.unvmap_any_p
@@ -114,19 +119,19 @@ def test_fn2fn_custom_idempotent():
         assert tree_allclose(vmap_fn(arg), finalised_vmap_fn(arg))
 
     finalised_vmap_jaxpr = jax.make_jaxpr(finalised_vmap_fn)(jnp.array([False, False]))
-    finalised_vmap_jaxpr = cast(jax.core.ClosedJaxpr, finalised_vmap_jaxpr)
+    finalised_vmap_jaxpr = cast(jax.extend.core.ClosedJaxpr, finalised_vmap_jaxpr)
     finalised_finalised_vmap_jaxpr = jax.make_jaxpr(
         eqxi.finalise_fn(finalised_vmap_fn)
     )(jnp.array([False, False]))
     finalised_finalised_vmap_jaxpr = cast(
-        jax.core.ClosedJaxpr, finalised_finalised_vmap_jaxpr
+        jax.extend.core.ClosedJaxpr, finalised_finalised_vmap_jaxpr
     )
     for eqn in finalised_vmap_jaxpr.eqns:
         assert eqn.primitive != eqxi.unvmap_any_p
     _assert_jaxpr_equal(finalised_vmap_jaxpr, finalised_finalised_vmap_jaxpr)
 
 
-def _assert_no_unvmap(jaxpr: jax.core.Jaxpr):
+def _assert_no_unvmap(jaxpr: jax.extend.core.Jaxpr):
     for eqn in jaxpr.eqns:
         assert eqn.primitive not in (eqxi.unvmap_any_p, eqxi.unvmap_all_p)
     for subjaxpr in jax.core.subjaxprs(jaxpr):
