@@ -4,6 +4,7 @@ import equinox as eqx
 import equinox.internal as eqxi
 import jax
 import jax.core
+import jax.extend.core
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import pytest
@@ -73,7 +74,7 @@ def test_nontraceable(getkey):
         jax.vmap(run, in_axes=(0, None))(dynamic_batch, static)
 
     jaxpr = jax.make_jaxpr(run, static_argnums=1)(dynamic, static)
-    jaxpr = cast(jax.core.ClosedJaxpr, jaxpr)
+    jaxpr = cast(jax.extend.core.ClosedJaxpr, jaxpr)
     run2 = jax.core.jaxpr_as_fun(jaxpr)
 
     run2(*dynamic_flat)  # pyright: ignore

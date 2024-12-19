@@ -3,6 +3,7 @@ from typing import Any
 
 import jax
 import jax.core
+import jax.extend.core
 import jax.interpreters.ad as ad
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
@@ -255,7 +256,7 @@ def filter_primitive_batching(rule):
     return _wrapper
 
 
-def filter_primitive_bind(prim: jax.core.Primitive, *args) -> PyTree:
+def filter_primitive_bind(prim: jax.extend.core.Primitive, *args) -> PyTree:
     """Calls a primitive that has had its rules defined using the filter
     functions above.
     """
@@ -301,7 +302,7 @@ _vprim_transpose_registry = {}
 
 
 def create_vprim(name: str, impl, abstract_eval, jvp, transpose):
-    prim = jax.core.Primitive(name)
+    prim = jax.extend.core.Primitive(name)
     prim.multiple_results = True
 
     def batch_rule(axis_size, axis_name, trace_type, inputs, batch_axes, **params):
