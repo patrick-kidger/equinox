@@ -14,10 +14,10 @@ from .._pretty_print import pformat_short_array_text, tree_pprint
 _dce_store = {}
 
 
-def _register_alive(name: Hashable, tag: object):
-    def _register_alive_impl(i, x):
+def _register_alive(name: Hashable, tag: object, i: int):
+    def _register_alive_impl(x):
         leaves, _, _ = _dce_store[name][tag]
-        leaves[i.item()] = (x.shape, x.dtype.name)
+        leaves[i] = (x.shape, x.dtype.name)
         return x
 
     return _register_alive_impl
@@ -70,7 +70,9 @@ def store_dce(x: PyTree, name: Hashable = None):
         tag_store = _dce_store[name] = {}
     tag_store[tag] = ({}, treedef, static)
     leaves = [
-        jax.pure_callback(_register_alive(name, tag), x, i, x, vectorized=True)
+        jax.pure_callback(
+            _register_alive(name, tag, i), x, x, vmap_method="expand_dims"
+        )
         for i, x in enumerate(leaves)
     ]
     dynamic_out = jtu.tree_unflatten(treedef, leaves)

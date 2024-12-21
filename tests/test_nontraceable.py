@@ -75,7 +75,7 @@ def test_nontraceable(getkey):
 
     jaxpr = jax.make_jaxpr(run, static_argnums=1)(dynamic, static)
     jaxpr = cast(jax.extend.core.ClosedJaxpr, jaxpr)
-    run2 = jax.core.jaxpr_as_fun(jaxpr)
+    run2 = jax.extend.core.jaxpr_as_fun(jaxpr)
 
     run2(*dynamic_flat)  # pyright: ignore
     jax.jit(run2)(*dynamic_flat)  # pyright: ignore
