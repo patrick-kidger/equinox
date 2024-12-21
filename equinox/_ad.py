@@ -881,13 +881,15 @@ def _none_to_zero(ct, x):
         if x is None:
             return None
         else:
-            aval = jax.core.raise_to_shaped(jax.core.get_aval(x))
+            aval = jax.core.get_aval(x)
             if hasattr(aval, "to_tangent_aval"):
                 # Earlier versions of JAX were internally inconsistent, and expected
                 # e.g. integer primals to have integer tangents from `custom_{jvp,vjp}`
                 # rules.
                 # That changed in JAX 0.4.34.
                 aval = aval.to_tangent_aval()  # pyright: ignore
+            else:
+                aval = jax.core.raise_to_shaped(aval)  # pyright: ignore
             return jax.custom_derivatives.SymbolicZero(aval)
     else:
         return ct
