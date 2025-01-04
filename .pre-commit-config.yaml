@@ -24,4 +24,5 @@ repos:
             tensorflow,
             tf2onnx,
             typing_extensions,
+            wadler_lindig,
           ]
