@@ -21,7 +21,6 @@ from .._errors import (
 from .._eval_shape import cached_filter_eval_shape as cached_filter_eval_shape
 from .._misc import left_broadcast_to as left_broadcast_to
 from .._module import Static as Static
-from .._pretty_print import tree_pp as tree_pp
 from .._unvmap import (
     unvmap_all as unvmap_all,
     unvmap_all_p as unvmap_all_p,

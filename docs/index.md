@@ -19,7 +19,7 @@ _Coming from [Flax](https://github.com/google/flax) or [Haiku](https://github.co
 pip install equinox
 ```
 
-Requires Python 3.9+ and JAX 0.4.13+.
+Requires Python 3.10+.
 
 ## Quick example
 

@@ -20,4 +20,5 @@ repos:
             optax,
             pytest,
             typing_extensions,
+            wadler_lindig,
           ]

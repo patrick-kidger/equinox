@@ -6,10 +6,11 @@ from typing_extensions import ParamSpec
 import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
+import wadler_lindig as wl
 from jaxtyping import PyTree
 
 from .._module import field, Module
-from .._pretty_print import bracketed, named_objs, text, tree_pformat
+from .._pretty_print import tree_pformat
 from .._tree import tree_at, tree_equal
 
 
@@ -244,23 +245,23 @@ class State:
     def __repr__(self):
         return tree_pformat(self)
 
-    def __tree_pp__(self, **kwargs):
+    def __pdoc__(self, **kwargs):
         if isinstance(self._state, _Sentinel):
-            return text("State(~old~)")
+            return wl.TextDoc("State(~old~)")
         else:
-            objs = named_objs(
+            docs = wl.named_objs(
                 [
                     (hex(id(key)), value)
                     for key, value in self._state.items()  # pyright: ignore
                 ],
                 **kwargs,
             )
-            return bracketed(
-                name=text("State"),
+            return wl.bracketed(
+                begin=wl.TextDoc("State("),
+                docs=docs,
+                sep=wl.comma,
+                end=wl.TextDoc(")"),
                 indent=kwargs["indent"],
-                objs=objs,
-                lbracket="(",
-                rbracket=")",
             )
 
     def tree_flatten(self):

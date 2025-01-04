@@ -4,11 +4,12 @@ import jax
 import jax.core
 import jax.numpy as jnp
 import jax.tree_util as jtu
+import wadler_lindig as wl
 from jaxtyping import PyTree
 
 from .._doc_utils import WithRepr
 from .._filters import combine, is_array, partition
-from .._pretty_print import pformat_short_array_text, tree_pprint
+from .._pretty_print import tree_pprint
 
 
 _dce_store = {}
@@ -105,7 +106,7 @@ def inspect_dce(name: Hashable = None):
             except KeyError:
                 value = "<DCE'd>"
             else:
-                value = pformat_short_array_text(shape, dtype)
+                value = wl.array_summary(shape, dtype, kind=None).text
             new_leaves.append(WithRepr(None, value))
         tree = combine(jtu.tree_unflatten(treedef, new_leaves), static)
         print(f"Entry {i}:")
