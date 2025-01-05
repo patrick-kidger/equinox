@@ -24,8 +24,8 @@ def to_onnx(fn):
         ```
     """
     import jax.experimental.jax2tf as jax2tf
-    import tensorflow as tf
-    import tf2onnx
+    import tensorflow as tf  # pyright: ignore[reportMissingImports]
+    import tf2onnx  # pyright: ignore[reportMissingImports]
 
     def _to_onnx(*args):
         finalised_fn = finalise_fn(fn)

@@ -11,8 +11,6 @@ repos:
     rev: v1.1.379
     hooks:
       - id: pyright
-        # must match the Python version used in CI
-        language_version: python3.11
         additional_dependencies:
           [
             beartype,
@@ -21,7 +19,5 @@ repos:
             jaxtyping,
             optax,
             pytest,
-            tensorflow,
-            tf2onnx,
             typing_extensions,
           ]
