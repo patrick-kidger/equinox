@@ -140,7 +140,7 @@ following entries:
 
 
 class EnumerationItem(Module):
-    _value: Int[Union[Array, np.ndarray], ""]
+    _value: Int[Union[Array, np.ndarray[Any, np.dtype[np.signedinteger]]], ""]
     # Should have annotation `"type[Enumeration]"`, but this fails due to beartype bug
     # #289.
     _enumeration: Any = field(static=True)
