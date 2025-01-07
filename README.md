@@ -15,11 +15,13 @@ _Coming from [Flax](https://github.com/google/flax) or [Haiku](https://github.co
 
 ## Installation
 
+Requires Python 3.10+.
+
 ```bash
 pip install equinox
 ```
 
-Requires Python 3.10+.
+Equinox is also available through a community-supported build on [conda-forge](https://github.com/conda-forge/equinox-feedstock).
 
 ## Documentation
 
