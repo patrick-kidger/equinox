@@ -239,12 +239,16 @@ def test_stateful(tmp_path):
         norm1: eqx.nn.BatchNorm
         norm2: eqx.nn.BatchNorm
 
-    model = Model(eqx.nn.BatchNorm(3, "hi"), eqx.nn.BatchNorm(4, "bye"))
+    model = Model(
+        eqx.nn.BatchNorm(3, "hi", mode="ema"), eqx.nn.BatchNorm(4, "bye", mode="ema")
+    )
     state = eqx.nn.State(model)
 
     eqx.tree_serialise_leaves(tmp_path, (model, state))
 
-    model2 = Model(eqx.nn.BatchNorm(3, "hi"), eqx.nn.BatchNorm(4, "bye"))
+    model2 = Model(
+        eqx.nn.BatchNorm(3, "hi", mode="ema"), eqx.nn.BatchNorm(4, "bye", mode="ema")
+    )
     state2 = eqx.nn.State(model2)
 
     eqx.tree_deserialise_leaves(tmp_path, (model2, state2))
