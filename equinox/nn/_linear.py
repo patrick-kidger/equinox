@@ -52,7 +52,10 @@ class Linear(Module, strict=True):
         wkey, bkey = jrandom.split(key, 2)
         in_features_ = 1 if in_features == "scalar" else in_features
         out_features_ = 1 if out_features == "scalar" else out_features
-        lim = 1 / math.sqrt(in_features_)
+        if in_features_ == 0:
+            lim = 1.0
+        else:
+            lim = 1 / math.sqrt(in_features_)
         wshape = (out_features_, in_features_)
         self.weight = default_init(wkey, wshape, dtype, lim)
         bshape = (out_features_,)
