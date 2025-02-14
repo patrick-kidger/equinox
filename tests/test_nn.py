@@ -22,6 +22,16 @@ def test_custom_init():
 
 
 def test_linear(getkey):
+    # Zero input shape
+    linear = eqx.nn.Linear(0, 4, key=getkey())
+    x = jrandom.normal(getkey(), (0,))
+    assert linear(x).shape == (4,)
+
+    # Zero output shape
+    linear = eqx.nn.Linear(4, 0, key=getkey())
+    x = jrandom.normal(getkey(), (4,))
+    assert linear(x).shape == (0,)
+
     # Positional arguments
     linear = eqx.nn.Linear(3, 4, key=getkey())
     x = jrandom.normal(getkey(), (3,))
