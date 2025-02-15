@@ -103,18 +103,18 @@ nav:
         - Introductory:
             - CNN on MNIST: 'examples/mnist.ipynb'
             - Train RNN: 'examples/train_rnn.ipynb'
+        - Advanced:
+            - Generative score-based diffusion: 'examples/score_based_diffusion.ipynb'
+            - BERT language model: 'examples/bert.ipynb'
+            - U-Net implementation: 'examples/unet.ipynb'
+            - Vision transformer: 'examples/vision_transformer.ipynb'
+            - Image GAN: 'examples/deep_convolutional_gan.ipynb'
         - Features:
             - Freezing parameters: 'examples/frozen_layer.ipynb'
             - Compatibility with init-apply libraries: 'examples/init_apply.ipynb'
             - Stateful operations (e.g. BatchNorm): 'examples/stateful.ipynb'
             - Autoparallelism (e.g. multi-GPU): 'examples/parallelism.ipynb'
             - Serialisation (with hyperparameters): 'examples/serialisation.ipynb'
-        - Advanced (Notebooks):
-            - Generative score-based diffusion: 'examples/score_based_diffusion.ipynb'
-            - BERT language model: 'examples/bert.ipynb'
-            - U-Net implementation: 'examples/unet.ipynb'
-            - Vision transformer: 'examples/vision_transformer.ipynb'
-            - Image GAN: 'examples/deep_convolutional_gan.ipynb'
         - Awesome list: 'awesome-list.md'
     - Basic API:
         - Modules:
