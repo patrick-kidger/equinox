@@ -1,34 +1,34 @@
 theme:
-  name: material
-  features:
-    - navigation.sections # Sections are included in the navigation on the left.
-    - toc.integrate # Table of contents is integrated on the left; does not appear separately on the right.
-    - header.autohide # header disappears as you scroll
-  palette:
-    # Light mode / dark mode
-    # We deliberately don't automatically use `media` to check a user's preferences. We default to light mode as
-    # (a) it looks more professional, and (b) is more obvious about the fact that it offers a (dark mode) toggle.
-    - scheme: default
-      primary: white
-      accent: amber
-      toggle:
-        icon: material/weather-night
-        name: Switch to dark mode
-    - scheme: slate
-      primary: black
-      accent: amber
-      toggle:
-        icon: material/weather-sunny
-        name: Switch to light mode
-  icon:
-    repo: fontawesome/brands/github # GitHub logo in top right
-    logo: "material/circle-opacity" # Equinox logo in top left
-  favicon: "_static/favicon.png"
-  custom_dir: "docs/_overrides" # Overriding part of the HTML
+    name: material
+    features:
+        - navigation.sections  # Sections are included in the navigation on the left.
+        - toc.integrate  # Table of contents is integrated on the left; does not appear separately on the right.
+        - header.autohide  # header disappears as you scroll
+    palette:
+        # Light mode / dark mode
+        # We deliberately don't automatically use `media` to check a user's preferences. We default to light mode as
+        # (a) it looks more professional, and (b) is more obvious about the fact that it offers a (dark mode) toggle.
+        - scheme: default
+          primary: white
+          accent: amber
+          toggle:
+             icon: material/weather-night
+             name: Switch to dark mode
+        - scheme: slate
+          primary: black
+          accent: amber
+          toggle:
+             icon: material/weather-sunny
+             name: Switch to light mode
+    icon:
+        repo: fontawesome/brands/github  # GitHub logo in top right
+        logo: "material/circle-opacity"  # Equinox logo in top left
+    favicon: "_static/favicon.png"
+    custom_dir: "docs/_overrides"  # Overriding part of the HTML
 
-  # These additions are my own custom ones, having overridden a partial.
-  twitter_name: "@PatrickKidger"
-  twitter_url: "https://twitter.com/PatrickKidger"
+    # These additions are my own custom ones, having overridden a partial.
+    twitter_name: "@PatrickKidger"
+    twitter_url: "https://twitter.com/PatrickKidger"
 
 site_name: Equinox
 site_description: The documentation for the Equinox software library.
@@ -37,116 +37,116 @@ site_url: https://docs.kidger.site/equinox
 
 repo_url: https://github.com/patrick-kidger/equinox
 repo_name: patrick-kidger/equinox
-edit_uri: "" # No edit button, as some of our pages are in /docs and some in /examples via symlink, so it's impossible for them all to be accurate
+edit_uri: ""  # No edit button, as some of our pages are in /docs and some in /examples via symlink, so it's impossible for them all to be accurate
 
-strict: true # Don't allow warnings during the build process
+strict: true  # Don't allow warnings during the build process
 
-extra_javascript:
-  # The below two make MathJax work, see https://squidfunk.github.io/mkdocs-material/reference/mathjax/
-  - _static/mathjax.js
-  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+extra_javascript: 
+    # The below two make MathJax work, see https://squidfunk.github.io/mkdocs-material/reference/mathjax/
+    - _static/mathjax.js
+    - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
 extra_css:
-  - _static/custom_css.css
+    - _static/custom_css.css
 
 markdown_extensions:
-  - pymdownx.arithmatex: # Render LaTeX via MathJax
-      generic: true
-  - pymdownx.superfences # Seems to enable syntax highlighting when used with the Material theme.
-  - pymdownx.details # Allowing hidden expandable regions denoted by ???
-  - pymdownx.snippets: # Include one Markdown file into another
-      base_path: docs
-  - admonition
-  - toc:
-      permalink: "¤" # Adds a clickable permalink to each section heading
-      toc_depth: 4
+    - pymdownx.arithmatex:  # Render LaTeX via MathJax
+        generic: true
+    - pymdownx.superfences  # Seems to enable syntax highlighting when used with the Material theme.
+    - pymdownx.details  # Allowing hidden expandable regions denoted by ???
+    - pymdownx.snippets:  # Include one Markdown file into another
+        base_path: docs
+    - admonition
+    - toc:
+        permalink: "¤"  # Adds a clickable permalink to each section heading
+        toc_depth: 4
 
 plugins:
-  - search # default search plugin; needs manually re-enabling when using any other plugins
-  - autorefs # Cross-links to headings
-  - include_exclude_files:
-      include:
-        - ".htaccess"
-      exclude:
-        - "_overrides"
-        - "examples/MNIST"
-        - "examples/bert_checkpoint.eqx"
-  - mknotebooks # Jupyter notebooks
-  - mkdocstrings:
-      handlers:
-        python:
-          setup_commands:
-            - import pytkdocs_tweaks
-            - pytkdocs_tweaks.main()
-            - import jaxtyping
-            - jaxtyping.set_array_name_format("array")
-            - import jax
-            - import jax.extend.core
-            - jax.ShapeDtypeStruct.__module__ = "jax"
-            - jax.extend.core.ClosedJaxpr.__module__ = "jax.extend.core"
+    - search  # default search plugin; needs manually re-enabling when using any other plugins
+    - autorefs  # Cross-links to headings
+    - include_exclude_files:
+        include:
+            - ".htaccess"
+        exclude:
+            - "_overrides"
+            - "examples/MNIST"
+            - "examples/bert_checkpoint.eqx"
+    - mknotebooks  # Jupyter notebooks
+    - mkdocstrings:
+        handlers:
+            python:
+                setup_commands:
+                    - import pytkdocs_tweaks
+                    - pytkdocs_tweaks.main()
+                    - import jaxtyping
+                    - jaxtyping.set_array_name_format("array")
+                    - import jax
+                    - import jax.extend.core
+                    - jax.ShapeDtypeStruct.__module__ = "jax"
+                    - jax.extend.core.ClosedJaxpr.__module__ = "jax.extend.core"
 
-          selection:
-            inherited_members: true # Allow looking up inherited methods
-          rendering:
-            show_root_heading: true # actually display anything at all...
-            show_root_full_path: true # display "diffrax.asdf" not just "asdf"
-            show_if_no_docstring: true
-            show_signature_annotations: true
-            show_source: false # don't include source code
-            members_order: source # order methods according to their order of definition in the source code, not alphabetical order
-            heading_level: 4
+                selection:
+                    inherited_members: true  # Allow looking up inherited methods
+                rendering:
+                    show_root_heading: true  # actually display anything at all...
+                    show_root_full_path: true  # display "diffrax.asdf" not just "asdf"
+                    show_if_no_docstring: true
+                    show_signature_annotations: true
+                    show_source: false  # don't include source code
+                    members_order: source  # order methods according to their order of definition in the source code, not alphabetical order
+                    heading_level: 4
 
 nav:
-  - "index.md"
-  - "all-of-equinox.md"
-  - Examples:
-      - Introductory:
-          - CNN on MNIST: "examples/mnist.ipynb"
-          - Train RNN: "examples/train_rnn.ipynb"
-          - AlexNet: "examples/alexnet.ipynb"
-      - Advanced:
-          - Generative score-based diffusion: "examples/score_based_diffusion.ipynb"
-          - BERT language model: "examples/bert.ipynb"
-          - U-Net implementation: "examples/unet.ipynb"
-          - Vision transformer: "examples/vision_transformer.ipynb"
-          - Image GAN: "examples/deep_convolutional_gan.ipynb"
-      - Features:
-          - Freezing parameters: "examples/frozen_layer.ipynb"
-          - Compatibility with init-apply libraries: "examples/init_apply.ipynb"
-          - Stateful operations (e.g. BatchNorm): "examples/stateful.ipynb"
-          - Autoparallelism (e.g. multi-GPU): "examples/parallelism.ipynb"
-          - Serialisation (with hyperparameters): "examples/serialisation.ipynb"
-      - Awesome list: "awesome-list.md"
-  - Basic API:
-      - Modules:
-          - "api/module/module.md"
-          - "api/module/advanced_fields.md"
-      - Neural network layers:
-          - "api/nn/linear.md"
-          - "api/nn/conv.md"
-          - "api/nn/rnn.md"
-          - "api/nn/attention.md"
-          - "api/nn/activations.md"
-          - "api/nn/pool.md"
-          - "api/nn/dropout.md"
-          - "api/nn/normalisation.md"
-          - "api/nn/embedding.md"
-          - "api/nn/mlp.md"
-          - "api/nn/sequential.md"
-          - "api/nn/inference.md"
-          - "api/nn/shared.md"
-          - "api/nn/stateful.md"
-      - "api/transformations.md"
-      - "api/manipulation.md"
-  - Advanced API:
-      - "api/caches.md"
-      - "api/debug.md"
-      - "api/enumerations.md"
-      - "api/errors.md"
-      - "api/pretty-printing.md"
-      - "api/serialisation.md"
-  - Misc:
-      - "faq.md"
-      - "tricks.md"
-      # - 'pattern.md'
-      - "citation.md"
+    - 'index.md'
+    - 'all-of-equinox.md'
+    - Examples:
+        - Introductory:
+            - CNN on MNIST: 'examples/mnist.ipynb'
+            - Train RNN: 'examples/train_rnn.ipynb'
+            - AlexNet: 'examples/alexnet.ipynb'
+        - Advanced:
+            - Generative score-based diffusion: 'examples/score_based_diffusion.ipynb'
+            - BERT language model: 'examples/bert.ipynb'
+            - U-Net implementation: 'examples/unet.ipynb'
+            - Vision transformer: 'examples/vision_transformer.ipynb'
+            - Image GAN: 'examples/deep_convolutional_gan.ipynb'
+        - Features:
+            - Freezing parameters: 'examples/frozen_layer.ipynb'
+            - Compatibility with init-apply libraries: 'examples/init_apply.ipynb'
+            - Stateful operations (e.g. BatchNorm): 'examples/stateful.ipynb'
+            - Autoparallelism (e.g. multi-GPU): 'examples/parallelism.ipynb'
+            - Serialisation (with hyperparameters): 'examples/serialisation.ipynb'
+        - Awesome list: 'awesome-list.md'
+    - Basic API:
+        - Modules:
+            - 'api/module/module.md'
+            - 'api/module/advanced_fields.md'
+        - Neural network layers:
+            - 'api/nn/linear.md'
+            - 'api/nn/conv.md'
+            - 'api/nn/rnn.md'
+            - 'api/nn/attention.md'
+            - 'api/nn/activations.md'
+            - 'api/nn/pool.md'
+            - 'api/nn/dropout.md'
+            - 'api/nn/normalisation.md'
+            - 'api/nn/embedding.md'
+            - 'api/nn/mlp.md'
+            - 'api/nn/sequential.md'
+            - 'api/nn/inference.md'
+            - 'api/nn/shared.md'
+            - 'api/nn/stateful.md'
+        - 'api/transformations.md'
+        - 'api/manipulation.md'
+    - Advanced API:
+        - 'api/caches.md'
+        - 'api/debug.md'
+        - 'api/enumerations.md'
+        - 'api/errors.md'
+        - 'api/pretty-printing.md'
+        - 'api/serialisation.md'
+    - Misc:
+        - 'faq.md'
+        - 'tricks.md'
+        # - 'pattern.md'
+        - 'citation.md'
