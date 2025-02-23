@@ -27,8 +27,9 @@ theme:
     custom_dir: "docs/_overrides"  # Overriding part of the HTML
 
     # These additions are my own custom ones, having overridden a partial.
-    twitter_name: "@PatrickKidger"
+    twitter_bluesky_name: "@PatrickKidger"
     twitter_url: "https://twitter.com/PatrickKidger"
+    bluesky_url: "https://PatrickKidger.bsky.social"
 
 site_name: Equinox
 site_description: The documentation for the Equinox software library.
