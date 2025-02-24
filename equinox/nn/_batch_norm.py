@@ -154,11 +154,11 @@ class BatchNorm(StatefulLayer, strict=True):
             self.batch_counter = StateIndex(jnp.array(0))
             init_hidden = (
                 jnp.zeros((input_size,), dtype=dtype),
-                jnp.zeros((input_size,), dtype=dtype),
+                jnp.ones((input_size,), dtype=dtype),
             )
             init_avg = (
                 jnp.zeros((input_size,), dtype=dtype),
-                jnp.zeros((input_size,), dtype=dtype),
+                jnp.ones((input_size,), dtype=dtype),
             )
             self.batch_state_index = StateIndex((init_hidden, init_avg))
             self.ema_first_time_index = None
