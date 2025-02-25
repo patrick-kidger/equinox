@@ -1,14 +1,13 @@
 import math
 from typing import Any, Literal, Optional, TypeVar, Union
 
-import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array, PRNGKeyArray
 
 from .._misc import default_floating_dtype
 from .._module import field, Module
-from ._misc import default_init
+from ._misc import default_init, named_scope
 
 
 class Linear(Module, strict=True):
@@ -65,7 +64,7 @@ class Linear(Module, strict=True):
         self.out_features = out_features
         self.use_bias = use_bias
 
-    @jax.named_scope("eqx.nn.Linear")
+    @named_scope("eqx.nn.Linear")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
@@ -115,7 +114,7 @@ class Identity(Module, strict=True):
     def __init__(self, *args: Any, **kwargs: Any):
         """Consumes arbitrary `*args` and `**kwargs` but ignores them."""
 
-    @jax.named_scope("eqx.nn.Identity")
+    @named_scope("eqx.nn.Identity")
     def __call__(self, x: _T, *, key: Optional[PRNGKeyArray] = None) -> _T:
         """**Arguments:**
 

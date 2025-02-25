@@ -5,7 +5,6 @@ from typing import (
     Union,
 )
 
-import jax
 import jax.nn as jnn
 import jax.random as jrandom
 import jax.tree_util as jtu
@@ -17,6 +16,7 @@ from .._misc import default_floating_dtype
 from .._module import field, Module
 from .._vmap_pmap import filter_vmap
 from ._linear import Linear
+from ._misc import named_scope
 
 
 _identity = doc_repr(lambda x: x, "lambda x: x")
@@ -125,7 +125,7 @@ class MLP(Module, strict=True):
         self.use_bias = use_bias
         self.use_final_bias = use_final_bias
 
-    @jax.named_scope("eqx.nn.MLP")
+    @named_scope("eqx.nn.MLP")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 

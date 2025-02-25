@@ -14,6 +14,7 @@ from .._misc import default_floating_dtype
 from .._module import field, Module
 from ._dropout import Dropout
 from ._linear import Linear
+from ._misc import named_scope
 
 
 def dot_product_attention_weights(
@@ -234,7 +235,7 @@ class MultiheadAttention(Module, strict=True):
         self.use_value_bias = use_value_bias
         self.use_output_bias = use_output_bias
 
-    @jax.named_scope("eqx.nn.MultiheadAttention")
+    @named_scope("eqx.nn.MultiheadAttention")
     def __call__(
         self,
         query: Float[Array, "q_seq q_size"],

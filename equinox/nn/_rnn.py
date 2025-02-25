@@ -1,7 +1,6 @@
 import math
 from typing import Optional
 
-import jax
 import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
@@ -9,7 +8,7 @@ from jaxtyping import Array, PRNGKeyArray
 
 from .._misc import default_floating_dtype
 from .._module import field, Module
-from ._misc import default_init
+from ._misc import default_init, named_scope
 
 
 class GRUCell(Module, strict=True):
@@ -82,7 +81,7 @@ class GRUCell(Module, strict=True):
         self.hidden_size = hidden_size
         self.use_bias = use_bias
 
-    @jax.named_scope("eqx.nn.GRUCell")
+    @named_scope("eqx.nn.GRUCell")
     def __call__(
         self, input: Array, hidden: Array, *, key: Optional[PRNGKeyArray] = None
     ):
@@ -178,7 +177,7 @@ class LSTMCell(Module, strict=True):
         self.hidden_size = hidden_size
         self.use_bias = use_bias
 
-    @jax.named_scope("eqx.nn.LSTMCell")
+    @named_scope("eqx.nn.LSTMCell")
     def __call__(self, input, hidden, *, key=None):
         """**Arguments:**
 

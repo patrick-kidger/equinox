@@ -10,6 +10,7 @@ from .._caches import cache_clears
 from .._filters import is_array_like
 from .._misc import default_floating_dtype
 from .._module import field, Module
+from ._misc import named_scope
 
 
 internal_rope_embedding_cache: dict[tuple[int, Any], tuple[Array, Array]] = {}
@@ -81,7 +82,7 @@ class Embedding(Module, strict=True):
         self.num_embeddings = num_embeddings
         self.embedding_size = embedding_size
 
-    @jax.named_scope("eqx.nn.Embedding")
+    @named_scope("eqx.nn.Embedding")
     def __call__(
         self, x: Int[ArrayLike, ""], *, key: Optional[PRNGKeyArray] = None
     ) -> Array:
@@ -191,7 +192,7 @@ class RotaryPositionalEmbedding(Module, strict=True):
         # we assign the type at the very end to minimize the loss of precision
         return jnp.cos(freqs_outer).astype(dtype), jnp.sin(freqs_outer).astype(dtype)
 
-    @jax.named_scope("eqx.nn.RotaryPositionalEmbedding")
+    @named_scope("eqx.nn.RotaryPositionalEmbedding")
     def __call__(
         self,
         x: Float[Array, "seq_length embedding_size"],

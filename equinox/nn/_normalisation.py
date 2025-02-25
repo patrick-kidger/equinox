@@ -10,6 +10,7 @@ from jaxtyping import Array, Float, PRNGKeyArray
 from .._custom_types import sentinel
 from .._misc import default_floating_dtype, left_broadcast_to
 from .._module import field, Module
+from ._misc import named_scope
 from ._stateful import State
 
 
@@ -105,7 +106,7 @@ class LayerNorm(Module, strict=True):
         self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
     ) -> tuple[Array, State]: ...
 
-    @jax.named_scope("eqx.nn.LayerNorm")
+    @named_scope("eqx.nn.LayerNorm")
     def __call__(
         self,
         x: Float[Array, "*shape"],
@@ -238,7 +239,7 @@ class GroupNorm(Module, strict=True):
         self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
     ) -> tuple[Array, State]: ...
 
-    @jax.named_scope("eqx.nn.GroupNorm")
+    @named_scope("eqx.nn.GroupNorm")
     def __call__(
         self, x: Array, state: State = sentinel, *, key: Optional[PRNGKeyArray] = None
     ) -> Union[Array, tuple[Array, State]]:
@@ -357,7 +358,7 @@ class RMSNorm(Module, strict=True):
         self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
     ) -> tuple[Array, State]: ...
 
-    @jax.named_scope("eqx.nn.RMSNorm")
+    @named_scope("eqx.nn.RMSNorm")
     def __call__(
         self,
         x: Float[Array, "*shape"],

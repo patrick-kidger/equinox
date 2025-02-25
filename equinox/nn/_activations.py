@@ -5,6 +5,7 @@ import jax.numpy as jnp
 from jaxtyping import Array
 
 from .._module import Module
+from ._misc import named_scope
 
 
 class PReLU(Module, strict=True):
@@ -30,7 +31,7 @@ class PReLU(Module, strict=True):
 
         self.negative_slope = jnp.asarray(init_alpha)
 
-    @jax.named_scope("eqx.nn.PReLU")
+    @named_scope("eqx.nn.PReLU")
     def __call__(self, x: Array) -> Array:
         r"""**Arguments:**
 

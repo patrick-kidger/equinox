@@ -1,5 +1,5 @@
 import typing_extensions as te
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any, TYPE_CHECKING, TypeVar, Union
 
 import jax
@@ -18,10 +18,16 @@ if TYPE_CHECKING:
         x: Union[Sequence[Any], Sequence[_T]],
     ) -> "te.TypeIs[Sequence[_T]]": ...
 
+    _S = TypeVar("_S")
+
+    def named_scope(name: str) -> Callable[[_S], _S]: ...
+
 else:
     # beartype doesn't like StrictTypeGuard
     def all_sequences(x: Union[Sequence[Any], Sequence[_T]]) -> bool:
         return all(isinstance(xi, Sequence) for xi in x)
+
+    named_scope = jax.named_scope
 
 
 def default_init(
