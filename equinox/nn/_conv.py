@@ -3,7 +3,6 @@ import math
 from collections.abc import Callable, Sequence
 from typing import Optional, TypeVar, Union
 
-import jax
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.random as jrandom
@@ -12,7 +11,7 @@ from jaxtyping import Array, PRNGKeyArray
 
 from .._misc import default_floating_dtype
 from .._module import field, Module
-from ._misc import all_sequences, default_init
+from ._misc import all_sequences, default_init, named_scope
 
 
 _T = TypeVar("_T")
@@ -208,7 +207,7 @@ class Conv(Module, strict=True):
         x = jnp.pad(x, [(0, 0)] + padding, mode)
         return x
 
-    @jax.named_scope("eqx.nn.Conv")
+    @named_scope("eqx.nn.Conv")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
@@ -580,7 +579,7 @@ class ConvTranspose(Module, strict=True):
         padding_t = tuple((p[0].item(), p[1].item()) for p in padding_t % stride)
         return x, padding_t
 
-    @jax.named_scope("eqx.nn.ConvTranspose")
+    @named_scope("eqx.nn.ConvTranspose")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 

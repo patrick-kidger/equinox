@@ -1,13 +1,13 @@
 from collections.abc import Callable, Sequence
 from typing import Any, Optional, overload, Union
 
-import jax
 import jax.random as jr
 from jaxtyping import Array, PRNGKeyArray
 
 from .._better_abstract import AbstractClassVar
 from .._custom_types import sentinel
 from .._module import Module, StrictConfig
+from ._misc import named_scope
 from ._stateful import State
 
 
@@ -71,7 +71,7 @@ class Sequential(StatefulLayer, strict=StrictConfig(allow_method_override=True))
         self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
     ) -> tuple[Array, State]: ...
 
-    @jax.named_scope("eqx.nn.Sequential")
+    @named_scope("eqx.nn.Sequential")
     def __call__(
         self,
         x: Array,

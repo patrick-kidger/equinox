@@ -9,7 +9,7 @@ import jax.random
 from jaxtyping import Array, PRNGKeyArray
 
 from .._module import field, Module
-from ._misc import all_sequences
+from ._misc import all_sequences, named_scope
 
 
 class Pool(Module, strict=True):
@@ -114,7 +114,7 @@ class Pool(Module, strict=True):
                     f"{kernel_size}."
                 )
 
-    @jax.named_scope("eqx.nn.Pool")
+    @named_scope("eqx.nn.Pool")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
@@ -186,7 +186,7 @@ class AvgPool1d(Pool):
             use_ceil=use_ceil,
         )
 
-    @jax.named_scope("eqx.nn.AvgPool1d")
+    @named_scope("eqx.nn.AvgPool1d")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
@@ -234,7 +234,7 @@ class MaxPool1d(Pool):
         )
 
     # Redefined to get them in the right order in docs
-    @jax.named_scope("eqx.nn.MaxPool1d")
+    @named_scope("eqx.nn.MaxPool1d")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
@@ -281,7 +281,7 @@ class AvgPool2d(Pool):
             use_ceil=use_ceil,
         )
 
-    @jax.named_scope("eqx.nn.AvgPool2d")
+    @named_scope("eqx.nn.AvgPool2d")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
@@ -329,7 +329,7 @@ class MaxPool2d(Pool):
         )
 
     # Redefined to get them in the right order in docs
-    @jax.named_scope("eqx.nn.MaxPool2d")
+    @named_scope("eqx.nn.MaxPool2d")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
@@ -376,7 +376,7 @@ class AvgPool3d(Pool):
             use_ceil=use_ceil,
         )
 
-    @jax.named_scope("eqx.nn.AvgPool3d")
+    @named_scope("eqx.nn.AvgPool3d")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
@@ -424,7 +424,7 @@ class MaxPool3d(Pool):
             use_ceil=use_ceil,
         )
 
-    @jax.named_scope("eqx.nn.MaxPool3d")
+    @named_scope("eqx.nn.MaxPool3d")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
@@ -502,7 +502,7 @@ class AdaptivePool(Module, strict=True):
                 f"{num_spatial_dims} containing ints."
             )
 
-    @jax.named_scope("eqx.nn.AdaptivePool")
+    @named_scope("eqx.nn.AdaptivePool")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 

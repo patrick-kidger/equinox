@@ -8,6 +8,7 @@ from jaxtyping import Array, Bool, Float, PRNGKeyArray
 
 from .._misc import default_floating_dtype
 from .._module import field
+from ._misc import named_scope
 from ._sequential import StatefulLayer
 from ._stateful import State, StateIndex
 
@@ -106,7 +107,7 @@ class BatchNorm(StatefulLayer, strict=True):
         self.channelwise_affine = channelwise_affine
         self.momentum = momentum
 
-    @jax.named_scope("eqx.nn.BatchNorm")
+    @named_scope("eqx.nn.BatchNorm")
     def __call__(
         self,
         x: Array,

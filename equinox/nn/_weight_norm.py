@@ -8,6 +8,7 @@ from jaxtyping import Array, PRNGKeyArray, Scalar
 
 from .._module import field, Module
 from .._tree import tree_at
+from ._misc import named_scope
 
 
 _Layer = TypeVar("_Layer")
@@ -94,7 +95,7 @@ class WeightNorm(Module, Generic[_Layer], strict=True):
         )
         self.g = self._norm(getattr(layer, weight_name))
 
-    @jax.named_scope("eqx.nn.WeightNorm")
+    @named_scope("eqx.nn.WeightNorm")
     def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
         """**Arguments:**
 
