@@ -64,7 +64,7 @@ markdown_extensions:
 
 plugins:
     - search  # default search plugin; needs manually re-enabling when using any other plugins
-    - autorefs  # Cross-links to headings
+#    - autorefs  # Cross-links to headings
     - include_exclude_files:
         include:
             - ".htaccess"
@@ -72,30 +72,30 @@ plugins:
             - "_overrides"
             - "examples/MNIST"
             - "examples/bert_checkpoint.eqx"
-    - mknotebooks  # Jupyter notebooks
-    - mkdocstrings:
-        handlers:
-            python:
-                setup_commands:
-                    - import pytkdocs_tweaks
-                    - pytkdocs_tweaks.main()
-                    - import jaxtyping
-                    - jaxtyping.set_array_name_format("array")
-                    - import jax
-                    - import jax.extend.core
-                    - jax.ShapeDtypeStruct.__module__ = "jax"
-                    - jax.extend.core.ClosedJaxpr.__module__ = "jax.extend.core"
-
-                selection:
-                    inherited_members: true  # Allow looking up inherited methods
-                rendering:
-                    show_root_heading: true  # actually display anything at all...
-                    show_root_full_path: true  # display "diffrax.asdf" not just "asdf"
-                    show_if_no_docstring: true
-                    show_signature_annotations: true
-                    show_source: false  # don't include source code
-                    members_order: source  # order methods according to their order of definition in the source code, not alphabetical order
-                    heading_level: 4
+#     - mknotebooks  # Jupyter notebooks
+#     - mkdocstrings:
+#         handlers:
+#             python:
+#                 setup_commands:
+#                     - import pytkdocs_tweaks
+#                     - pytkdocs_tweaks.main()
+#                     - import jaxtyping
+#                     - jaxtyping.set_array_name_format("array")
+#                     - import jax
+#                     - import jax.extend.core
+#                     - jax.ShapeDtypeStruct.__module__ = "jax"
+#                     - jax.extend.core.ClosedJaxpr.__module__ = "jax.extend.core"
+# 
+#                 selection:
+#                     inherited_members: true  # Allow looking up inherited methods
+#                 rendering:
+#                     show_root_heading: true  # actually display anything at all...
+#                     show_root_full_path: true  # display "diffrax.asdf" not just "asdf"
+#                     show_if_no_docstring: true
+#                     show_signature_annotations: true
+#                     show_source: false  # don't include source code
+#                     members_order: source  # order methods according to their order of definition in the source code, not alphabetical order
+#                     heading_level: 4
 
 nav:
     - 'index.md'

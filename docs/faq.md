@@ -228,7 +228,7 @@ These are two very different libraries, with very different target audiences. Ke
 - Flax introduces multiple new abstractions (`flax.linen.Module`, `flax.linen.Variable`, `Module.setup` vs `flax.linen.compact`, `flax.struct.dataclass`, etc.). Equinox tries to avoid adding new abstractions to core JAX; everything is always just a PyTree.
 - Flax is a DSL: it is generally incompatible with non-Flax code, and requires using wrapped `flax.linen.{vmap, scan, ...}` rather than the native `jax.{vmap, ...}`. In contrast, Equinox allows you to use native JAX operations and aims to be compatible with arbitrary JAX code.
 - Bound methods of `eqx.Module` are just PyTrees. In Flax this isn't the case -- passing around bound methods will either result in errors or recompilations, depending what you do. Likewise, `eqx.Module` handles inheritance correctly, including propagating metadata like docstrings. The equivalent `flax.struct.dataclass` silently misbehaves. Overall Equinox seems to have fewer footguns.
-- Equinox offers several advanced features (like [runtime errors](../api/errors/) or [PyTree manipulation](../api/manipulation/#equinox.tree_at)) not found in other libraries.
+- Equinox offers several advanced features (like [runtime errors](api/errors.md) or [PyTree manipulation](api/manipulation.md#equinox.tree_at)) not found in other libraries.
 
 See also the [Equinox paper](https://arxiv.org/abs/2111.00254).
 

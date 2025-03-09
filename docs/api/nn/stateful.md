@@ -70,7 +70,7 @@ print(f"Called {num_calls} times.")  # 2
 
 ## Vmap'd stateful layers
 
-This is an advanced thing to do! Here we'll build on [the ensembling guide](../../../tricks/#ensembling), and see how how we can create vmap'd stateful layers.
+This is an advanced thing to do! Here we'll build on [the ensembling guide](../../tricks.md#ensembling), and see how how we can create vmap'd stateful layers.
 
 This follows on from the previous example, in which we define `Counter`.
 ```python

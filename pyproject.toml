@@ -25,6 +25,14 @@ classifiers = [
 urls = {repository = "https://github.com/patrick-kidger/equinox" }
 dependencies = ["jax>=0.4.38", "jaxtyping>=0.2.20", "typing_extensions>=4.5.0", "wadler_lindig>=0.1.0"]
 
+[project.optional-dependencies]
+docs = [
+  "mkdocs==1.6.1",
+  "mkdocs-include-exclude-files==0.1.0",
+  "mkdocs-material==9.6.7",
+  "pymdown-extensions==10.14.3",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
