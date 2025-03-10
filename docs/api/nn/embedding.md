@@ -1,7 +1,7 @@
 # Embeddings
 
 ::: equinox.nn.Embedding
-    selection:
+    options:
         members:
             - __init__
             - __call__

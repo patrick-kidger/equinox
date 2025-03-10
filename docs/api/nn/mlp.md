@@ -1,7 +1,7 @@
 # Multi-layer perceptron
 
 ::: equinox.nn.MLP
-    selection:
+    options:
         members:
             - __init__
             - __call__

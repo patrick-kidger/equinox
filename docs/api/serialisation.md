@@ -1,6 +1,6 @@
 # Serialisation
 
-See also the [serialisation example](../../examples/serialisation/) for a worked example combining both parameters and hyperparameters together.
+See also the [serialisation example](../examples/serialisation/) for a worked example combining both parameters and hyperparameters together.
 
 ---
 

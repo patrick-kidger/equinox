@@ -1,7 +1,7 @@
 # Attention
 
 ::: equinox.nn.MultiheadAttention
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -9,7 +9,7 @@
 ---
 
 ::: equinox.nn.RotaryPositionalEmbedding
-    selection:
+    options:
         members:
             - __init__
             - __call__

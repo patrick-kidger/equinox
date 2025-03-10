@@ -1,7 +1,7 @@
 # Pooling
 
 ::: equinox.nn.Pool
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -9,7 +9,7 @@
 ---
 
 ::: equinox.nn.AvgPool1d
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -17,7 +17,7 @@
 ---
 
 ::: equinox.nn.AvgPool2d
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -25,7 +25,7 @@
 ---
 
 ::: equinox.nn.AvgPool3d
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -33,7 +33,7 @@
 ---
 
 ::: equinox.nn.MaxPool1d
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -41,7 +41,7 @@
 ---
 
 ::: equinox.nn.MaxPool2d
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -49,7 +49,7 @@
 ---
 
 ::: equinox.nn.MaxPool3d
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -58,7 +58,7 @@
 
 
 ::: equinox.nn.AdaptivePool
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -67,7 +67,7 @@
 ---
 
 ::: equinox.nn.AdaptiveAvgPool1d
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -76,7 +76,7 @@
 ---
 
 ::: equinox.nn.AdaptiveAvgPool2d
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -84,7 +84,7 @@
 ---
 
 ::: equinox.nn.AdaptiveAvgPool3d
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -93,7 +93,7 @@
 ---
 
 ::: equinox.nn.AdaptiveMaxPool1d
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -102,7 +102,7 @@
 ---
 
 ::: equinox.nn.AdaptiveMaxPool2d
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -110,7 +110,7 @@
 ---
 
 ::: equinox.nn.AdaptiveMaxPool3d
-    selection:
+    options:
         members:
             - __init__
             - __call__

@@ -38,7 +38,7 @@ site_url: https://docs.kidger.site/equinox
 
 repo_url: https://github.com/patrick-kidger/equinox
 repo_name: patrick-kidger/equinox
-edit_uri: ""  # No edit button, as some of our pages are in /docs and some in /examples via symlink, so it's impossible for them all to be accurate
+edit_uri: ""
 
 strict: true  # Don't allow warnings during the build process
 
@@ -64,7 +64,6 @@ markdown_extensions:
 
 plugins:
     - search  # default search plugin; needs manually re-enabling when using any other plugins
-#    - autorefs  # Cross-links to headings
     - include_exclude_files:
         include:
             - ".htaccess"
@@ -72,10 +71,21 @@ plugins:
             - "_overrides"
             - "examples/MNIST"
             - "examples/bert_checkpoint.eqx"
-#     - mknotebooks  # Jupyter notebooks
-#     - mkdocstrings:
-#         handlers:
-#             python:
+    - mkdocstrings:
+        handlers:
+            python:
+                options:
+                    docstring_syle: null
+                    heading_level: 4
+                    inherited_members: true
+                    members_order: source
+                    show_if_no_docstring: true
+                    show_overloads: false
+                    show_root_heading: true
+                    show_signature_annotations: true
+                    show_source: false
+                    show_symbol_type_heading: true
+                    show_symbol_type_toc: true
 #                 setup_commands:
 #                     - import pytkdocs_tweaks
 #                     - pytkdocs_tweaks.main()
@@ -85,37 +95,26 @@ plugins:
 #                     - import jax.extend.core
 #                     - jax.ShapeDtypeStruct.__module__ = "jax"
 #                     - jax.extend.core.ClosedJaxpr.__module__ = "jax.extend.core"
-# 
-#                 selection:
-#                     inherited_members: true  # Allow looking up inherited methods
-#                 rendering:
-#                     show_root_heading: true  # actually display anything at all...
-#                     show_root_full_path: true  # display "diffrax.asdf" not just "asdf"
-#                     show_if_no_docstring: true
-#                     show_signature_annotations: true
-#                     show_source: false  # don't include source code
-#                     members_order: source  # order methods according to their order of definition in the source code, not alphabetical order
-#                     heading_level: 4
 
 nav:
     - 'index.md'
     - 'all-of-equinox.md'
     - Examples:
         - Introductory:
-            - CNN on MNIST: 'examples/mnist.ipynb'
-            - Train RNN: 'examples/train_rnn.ipynb'
+            - 'examples/mnist.ipynb'
+            - 'examples/train_rnn.ipynb'
         - Advanced:
-            - Generative score-based diffusion: 'examples/score_based_diffusion.ipynb'
-            - BERT language model: 'examples/bert.ipynb'
-            - U-Net implementation: 'examples/unet.ipynb'
-            - Vision transformer: 'examples/vision_transformer.ipynb'
-            - Image GAN: 'examples/deep_convolutional_gan.ipynb'
+            - 'examples/score_based_diffusion.ipynb'
+            - 'examples/bert.ipynb'
+            - 'examples/unet.ipynb'
+            - 'examples/vision_transformer.ipynb'
+            - 'examples/deep_convolutional_gan.ipynb'
         - Features:
-            - Freezing parameters: 'examples/frozen_layer.ipynb'
-            - Compatibility with init-apply libraries: 'examples/init_apply.ipynb'
-            - Stateful operations (e.g. BatchNorm): 'examples/stateful.ipynb'
-            - Autoparallelism (e.g. multi-GPU): 'examples/parallelism.ipynb'
-            - Serialisation (with hyperparameters): 'examples/serialisation.ipynb'
+            - 'examples/frozen_layer.ipynb'
+            - 'examples/init_apply.ipynb'
+            - 'examples/stateful.ipynb'
+            - 'examples/parallelism.ipynb'
+            - 'examples/serialisation.ipynb'
         - Awesome list: 'awesome-list.md'
     - Basic API:
         - Modules:
