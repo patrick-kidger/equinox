@@ -1,6 +1,5 @@
 import functools as ft
 import types
-import typing
 import warnings
 from collections.abc import Callable, Sequence
 from typing import (
@@ -9,7 +8,6 @@ from typing import (
     Literal,
     Optional,
     overload,
-    TYPE_CHECKING,
     TypeVar,
     Union,
 )
@@ -1116,35 +1114,6 @@ class filter_custom_vjp:
         )
         diff_array_out, nondiff_array_out, nonarray_out = out
         return combine(diff_array_out, nondiff_array_out, nonarray_out.value)
-
-
-if getattr(typing, "GENERATING_DOCUMENTATION", False) and not TYPE_CHECKING:
-    _filter_custom_jvp_doc = filter_custom_jvp.__doc__
-    _filter_custom_vjp_doc = filter_custom_vjp.__doc__
-
-    def def_jvp(fn_jvp):
-        pass
-
-    def defjvp(fn_jvp):
-        pass
-
-    def filter_custom_jvp(fn):
-        return types.SimpleNamespace(def_jvp=def_jvp, defjvp=defjvp)
-
-    def def_fwd(fn_fwd):
-        pass
-
-    def def_bwd(fn_bwd):
-        pass
-
-    def defvjp(fn_fwd, fn_bwd):
-        pass
-
-    def filter_custom_vjp(fn):
-        return types.SimpleNamespace(def_fwd=def_fwd, def_bwd=def_bwd, defvjp=defvjp)
-
-    filter_custom_jvp.__doc__ = _filter_custom_jvp_doc
-    filter_custom_vjp.__doc__ = _filter_custom_vjp_doc
 
 
 def filter_checkpoint(

@@ -165,8 +165,3 @@ h5.doc-heading, h6.heading {
 .output_error > pre {
     overflow: auto;
 }
-
-/* Remove the In and Out in converted Jupyter notebooks, see https://github.com/danielfrg/mkdocs-jupyter/issues/238 */
-.jp-InputPrompt, .jp-OutputPrompt {
-    display: none !important;
-}

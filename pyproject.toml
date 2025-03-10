@@ -32,7 +32,6 @@ docs = [
   "mkdocs-material==9.6.7",
   "mkdocstrings[python]==0.28.3",
   "pymdown-extensions==10.14.3",
-  "ruff==0.9.1",
 ]
 
 [build-system]

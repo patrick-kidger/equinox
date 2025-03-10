@@ -50,6 +50,9 @@ extra_javascript:
 extra_css:
     - _static/custom_css.css
 
+hooks:
+    - mkdocs_hook.py
+
 markdown_extensions:
     - pymdownx.arithmatex:  # Render LaTeX via MathJax
         generic: true
@@ -75,7 +78,7 @@ plugins:
         handlers:
             python:
                 options:
-                    docstring_syle: null
+                    force_inspection: true
                     heading_level: 4
                     inherited_members: true
                     members_order: source
