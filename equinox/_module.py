@@ -1145,7 +1145,6 @@ def _module_update_wrapper(
 
 class Partial(Module):
     """Like `functools.partial`, but treats the wrapped function, and partially-applied
-    value: Any = field(static=True)
     args and kwargs, as a PyTree.
 
     This is very much like `jax.tree_util.Partial`. The difference is that the JAX
