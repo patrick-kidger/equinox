@@ -71,9 +71,12 @@ plugins:
         include:
             - ".htaccess"
         exclude:
+            - "_mkdocstrings_templates"
             - "_overrides"
+            - "examples/.ipynb_checkpoints/"
             - "examples/MNIST"
             - "examples/bert_checkpoint.eqx"
+    - ipynb
     - mkdocstrings:
         handlers:
             python:
@@ -82,6 +85,7 @@ plugins:
                     heading_level: 4
                     inherited_members: true
                     members_order: source
+                    show_bases: false
                     show_if_no_docstring: true
                     show_overloads: false
                     show_root_heading: true
@@ -89,15 +93,6 @@ plugins:
                     show_source: false
                     show_symbol_type_heading: true
                     show_symbol_type_toc: true
-#                 setup_commands:
-#                     - import pytkdocs_tweaks
-#                     - pytkdocs_tweaks.main()
-#                     - import jaxtyping
-#                     - jaxtyping.set_array_name_format("array")
-#                     - import jax
-#                     - import jax.extend.core
-#                     - jax.ShapeDtypeStruct.__module__ = "jax"
-#                     - jax.extend.core.ClosedJaxpr.__module__ = "jax.extend.core"
 
 nav:
     - 'index.md'

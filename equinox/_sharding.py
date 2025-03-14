@@ -30,7 +30,7 @@ def filter_shard(
     A copy of `x` with the specified sharding constraints.
 
     !!! Example
-        See also the [autoparallelism example](../../examples/parallelism).
+        See also the [autoparallelism example](../examples/parallelism.ipynb).
     """
     if isinstance(device_or_shardings, Device):
         shardings = jax.sharding.SingleDeviceSharding(device_or_shardings)
