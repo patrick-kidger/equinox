@@ -249,9 +249,9 @@ def test_converter():
             nonlocal called
             assert not called
             called = True
-            assert tree_allclose(self.field, jnp.array(1.0))
+            assert type(self.field) is float
 
-    MyModuleWithPostInit(1.0)  # pyright: ignore
+    assert tree_allclose(MyModuleWithPostInit(1.0).field, jnp.array(1.0))
     assert called
 
 
@@ -289,7 +289,7 @@ def test_converter_monkeypatched_postinit():
             nonlocal called1
             assert not called1
             called1 = True
-            assert tree_allclose(self.field, jnp.array(1.0))
+            assert type(self.field) is float
 
     assert tree_allclose(Foo(1.0).field, jnp.array(1.0))  # pyright: ignore
     assert called1
@@ -1221,3 +1221,23 @@ def test_init_subclass_and_abstract_class_var():
         abs_cls_var = "foo"
 
     Child()  # pyright: ignore[reportCallIssue]
+
+
+# https://github.com/patrick-kidger/equinox/issues/969
+def test_converter_subclass_post_init():
+    xs = []
+
+    class A(eqx.Module):
+        x: jax.Array = eqx.field(converter=jnp.asarray)
+
+        def __post_init__(self):
+            xs.append(self.x)
+
+    class B(A):
+        pass
+
+    assert tree_allclose(A(1).x, jnp.array(1))
+    assert tree_allclose(B(1).x, jnp.array(1))
+    ax, bx = xs
+    assert type(ax) is int
+    assert type(bx) is int
