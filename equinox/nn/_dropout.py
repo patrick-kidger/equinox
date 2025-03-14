@@ -1,5 +1,4 @@
 import warnings
-from typing import Optional
 
 import jax.lax as lax
 import jax.numpy as jnp
@@ -28,7 +27,7 @@ class Dropout(Module, strict=True):
         p: float = 0.5,
         inference: bool = False,
         *,
-        deterministic: Optional[bool] = None,
+        deterministic: bool | None = None,
     ):
         """**Arguments:**
 
@@ -59,9 +58,9 @@ class Dropout(Module, strict=True):
         self,
         x: Array,
         *,
-        key: Optional[PRNGKeyArray] = None,
-        inference: Optional[bool] = None,
-        deterministic: Optional[bool] = None,
+        key: PRNGKeyArray | None = None,
+        inference: bool | None = None,
+        deterministic: bool | None = None,
     ) -> Array:
         """**Arguments:**
 

@@ -1,5 +1,5 @@
 import itertools as it
-from typing import Any, TYPE_CHECKING, Union
+from typing import Any, TYPE_CHECKING
 
 import jax
 import jax.extend.core
@@ -259,8 +259,7 @@ def _maybe_set(pred, xs, x, i, *, kwargs, makes_false_steps):
 
 
 if TYPE_CHECKING:
-    from typing import Annotated, TypeVar
-    from typing_extensions import TypeAlias
+    from typing import Annotated, TypeAlias, TypeVar
 
     _T = TypeVar("_T")
     MaybeBuffer: TypeAlias = Annotated[_T, "MaybeBuffer"]
@@ -346,7 +345,7 @@ class _BufferItem(Module):
         )
 
 
-def buffer_at_set(buffer: Union[Array, _Buffer], item, x, *, pred=True, **kwargs):
+def buffer_at_set(buffer: Array | _Buffer, item, x, *, pred=True, **kwargs):
     """As `buffer.at[...].set(...)`, and supports the `pred` argument even if it is an
     array.
 

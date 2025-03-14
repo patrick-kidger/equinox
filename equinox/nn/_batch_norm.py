@@ -1,5 +1,4 @@
 from collections.abc import Hashable, Sequence
-from typing import Optional, Union
 
 import jax
 import jax.lax as lax
@@ -43,13 +42,13 @@ class BatchNorm(StatefulLayer, strict=True):
     [`equinox.nn.inference_mode`][].
     """  # noqa: E501
 
-    weight: Optional[Float[Array, "input_size"]]
-    bias: Optional[Float[Array, "input_size"]]
+    weight: Float[Array, "input_size"] | None
+    bias: Float[Array, "input_size"] | None
     first_time_index: StateIndex[Bool[Array, ""]]
     state_index: StateIndex[
         tuple[Float[Array, "input_size"], Float[Array, "input_size"]]
     ]
-    axis_name: Union[Hashable, Sequence[Hashable]]
+    axis_name: Hashable | Sequence[Hashable]
     inference: bool
     input_size: int = field(static=True)
     eps: float = field(static=True)
@@ -59,7 +58,7 @@ class BatchNorm(StatefulLayer, strict=True):
     def __init__(
         self,
         input_size: int,
-        axis_name: Union[Hashable, Sequence[Hashable]],
+        axis_name: Hashable | Sequence[Hashable],
         eps: float = 1e-5,
         channelwise_affine: bool = True,
         momentum: float = 0.99,
@@ -113,8 +112,8 @@ class BatchNorm(StatefulLayer, strict=True):
         x: Array,
         state: State,
         *,
-        key: Optional[PRNGKeyArray] = None,
-        inference: Optional[bool] = None,
+        key: PRNGKeyArray | None = None,
+        inference: bool | None = None,
     ) -> tuple[Array, State]:
         """**Arguments:**
 

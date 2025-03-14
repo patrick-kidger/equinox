@@ -1,6 +1,5 @@
 import math
 from collections.abc import Callable, Sequence
-from typing import Optional, Union
 
 import jax
 import jax.lax as lax
@@ -15,7 +14,7 @@ from ._misc import all_sequences, named_scope
 class Pool(Module, strict=True):
     """General N-dimensional downsampling over a sliding window."""
 
-    init: Union[int, float, Array]
+    init: int | float | Array
     operation: Callable[[Array, Array], Array]
     num_spatial_dims: int = field(static=True)
     kernel_size: tuple[int, ...] = field(static=True)
@@ -25,12 +24,12 @@ class Pool(Module, strict=True):
 
     def __init__(
         self,
-        init: Union[int, float, Array],
+        init: int | float | Array,
         operation: Callable[[Array, Array], Array],
         num_spatial_dims: int,
-        kernel_size: Union[int, Sequence[int]],
-        stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
+        kernel_size: int | Sequence[int],
+        stride: int | Sequence[int] = 1,
+        padding: int | Sequence[int] | Sequence[tuple[int, int]] = 0,
         use_ceil: bool = False,
     ):
         """**Arguments:**
@@ -115,7 +114,7 @@ class Pool(Module, strict=True):
                 )
 
     @named_scope("eqx.nn.Pool")
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
+    def __call__(self, x: Array, *, key: PRNGKeyArray | None = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape
@@ -160,9 +159,9 @@ class AvgPool1d(Pool):
 
     def __init__(
         self,
-        kernel_size: Union[int, Sequence[int]],
-        stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
+        kernel_size: int | Sequence[int],
+        stride: int | Sequence[int] = 1,
+        padding: int | Sequence[int] | Sequence[tuple[int, int]] = 0,
         use_ceil: bool = False,
     ):
         """**Arguments:**
@@ -187,7 +186,7 @@ class AvgPool1d(Pool):
         )
 
     @named_scope("eqx.nn.AvgPool1d")
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
+    def __call__(self, x: Array, *, key: PRNGKeyArray | None = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape `(channels, dim)`.
@@ -207,9 +206,9 @@ class MaxPool1d(Pool):
 
     def __init__(
         self,
-        kernel_size: Union[int, Sequence[int]],
-        stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
+        kernel_size: int | Sequence[int],
+        stride: int | Sequence[int] = 1,
+        padding: int | Sequence[int] | Sequence[tuple[int, int]] = 0,
         use_ceil: bool = False,
     ):
         """**Arguments:**
@@ -235,7 +234,7 @@ class MaxPool1d(Pool):
 
     # Redefined to get them in the right order in docs
     @named_scope("eqx.nn.MaxPool1d")
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
+    def __call__(self, x: Array, *, key: PRNGKeyArray | None = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape `(channels, dim)`.
@@ -255,9 +254,9 @@ class AvgPool2d(Pool):
 
     def __init__(
         self,
-        kernel_size: Union[int, Sequence[int]],
-        stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
+        kernel_size: int | Sequence[int],
+        stride: int | Sequence[int] = 1,
+        padding: int | Sequence[int] | Sequence[tuple[int, int]] = 0,
         use_ceil: bool = False,
     ):
         """**Arguments:**
@@ -282,7 +281,7 @@ class AvgPool2d(Pool):
         )
 
     @named_scope("eqx.nn.AvgPool2d")
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
+    def __call__(self, x: Array, *, key: PRNGKeyArray | None = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape `(channels, dim_1, dim_2)`.
@@ -302,9 +301,9 @@ class MaxPool2d(Pool):
 
     def __init__(
         self,
-        kernel_size: Union[int, Sequence[int]],
-        stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
+        kernel_size: int | Sequence[int],
+        stride: int | Sequence[int] = 1,
+        padding: int | Sequence[int] | Sequence[tuple[int, int]] = 0,
         use_ceil: bool = False,
     ):
         """**Arguments:**
@@ -330,7 +329,7 @@ class MaxPool2d(Pool):
 
     # Redefined to get them in the right order in docs
     @named_scope("eqx.nn.MaxPool2d")
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
+    def __call__(self, x: Array, *, key: PRNGKeyArray | None = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape `(channels, dim_1, dim_2)`.
@@ -350,9 +349,9 @@ class AvgPool3d(Pool):
 
     def __init__(
         self,
-        kernel_size: Union[int, Sequence[int]],
-        stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
+        kernel_size: int | Sequence[int],
+        stride: int | Sequence[int] = 1,
+        padding: int | Sequence[int] | Sequence[tuple[int, int]] = 0,
         use_ceil: bool = False,
     ):
         """**Arguments:**
@@ -377,7 +376,7 @@ class AvgPool3d(Pool):
         )
 
     @named_scope("eqx.nn.AvgPool3d")
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
+    def __call__(self, x: Array, *, key: PRNGKeyArray | None = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape
@@ -398,9 +397,9 @@ class MaxPool3d(Pool):
 
     def __init__(
         self,
-        kernel_size: Union[int, Sequence[int]],
-        stride: Union[int, Sequence[int]] = 1,
-        padding: Union[int, Sequence[int], Sequence[tuple[int, int]]] = 0,
+        kernel_size: int | Sequence[int],
+        stride: int | Sequence[int] = 1,
+        padding: int | Sequence[int] | Sequence[tuple[int, int]] = 0,
         use_ceil: bool = False,
     ):
         """**Arguments:**
@@ -425,7 +424,7 @@ class MaxPool3d(Pool):
         )
 
     @named_scope("eqx.nn.MaxPool3d")
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
+    def __call__(self, x: Array, *, key: PRNGKeyArray | None = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape
@@ -479,7 +478,7 @@ class AdaptivePool(Module, strict=True):
 
     def __init__(
         self,
-        target_shape: Union[int, Sequence[int]],
+        target_shape: int | Sequence[int],
         num_spatial_dims: int,
         operation: Callable,
     ):
@@ -503,7 +502,7 @@ class AdaptivePool(Module, strict=True):
             )
 
     @named_scope("eqx.nn.AdaptivePool")
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
+    def __call__(self, x: Array, *, key: PRNGKeyArray | None = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape
@@ -535,7 +534,7 @@ class AdaptivePool(Module, strict=True):
 class AdaptiveAvgPool1d(AdaptivePool):
     """Adaptive one-dimensional downsampling using average for the target shape."""
 
-    def __init__(self, target_shape: Union[int, Sequence[int]]):
+    def __init__(self, target_shape: int | Sequence[int]):
         """**Arguments:**
 
         - `target_shape`: The target output shape.
@@ -546,7 +545,7 @@ class AdaptiveAvgPool1d(AdaptivePool):
 class AdaptiveAvgPool2d(AdaptivePool):
     """Adaptive two-dimensional downsampling using average for the target shape."""
 
-    def __init__(self, target_shape: Union[int, Sequence[int]]):
+    def __init__(self, target_shape: int | Sequence[int]):
         """**Arguments:**
 
         - `target_shape`: The target output shape.
@@ -557,7 +556,7 @@ class AdaptiveAvgPool2d(AdaptivePool):
 class AdaptiveAvgPool3d(AdaptivePool):
     """Adaptive three-dimensional downsampling using average for the target shape."""
 
-    def __init__(self, target_shape: Union[int, Sequence[int]]):
+    def __init__(self, target_shape: int | Sequence[int]):
         """**Arguments:**
 
         - `target_shape`: The target output shape.
@@ -568,7 +567,7 @@ class AdaptiveAvgPool3d(AdaptivePool):
 class AdaptiveMaxPool1d(AdaptivePool):
     """Adaptive one-dimensional downsampling using maximum for the target shape."""
 
-    def __init__(self, target_shape: Union[int, Sequence[int]]):
+    def __init__(self, target_shape: int | Sequence[int]):
         """**Arguments:**
 
         - `target_shape`: The target output shape.
@@ -579,7 +578,7 @@ class AdaptiveMaxPool1d(AdaptivePool):
 class AdaptiveMaxPool2d(AdaptivePool):
     """Adaptive two-dimensional downsampling using maximum for the target shape."""
 
-    def __init__(self, target_shape: Union[int, Sequence[int]]):
+    def __init__(self, target_shape: int | Sequence[int]):
         """**Arguments:**
 
         - `target_shape`: The target output shape.
@@ -590,7 +589,7 @@ class AdaptiveMaxPool2d(AdaptivePool):
 class AdaptiveMaxPool3d(AdaptivePool):
     """Adaptive three-dimensional downsampling using maximum for the target shape."""
 
-    def __init__(self, target_shape: Union[int, Sequence[int]]):
+    def __init__(self, target_shape: int | Sequence[int]):
         """**Arguments:**
 
         - `target_shape`: The target output shape.

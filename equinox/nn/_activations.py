@@ -1,5 +1,3 @@
-from typing import Optional, Union
-
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array
@@ -19,7 +17,7 @@ class PReLU(Module, strict=True):
 
     def __init__(
         self,
-        init_alpha: Optional[Union[float, Array]] = 0.25,
+        init_alpha: float | Array | None = 0.25,
     ):
         r"""**Arguments:**
 

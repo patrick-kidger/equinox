@@ -1,5 +1,5 @@
 from collections.abc import Callable, Sequence
-from typing import Any, Optional, overload, Union
+from typing import Any, overload
 
 import jax.random as jr
 from jaxtyping import Array, PRNGKeyArray
@@ -64,11 +64,11 @@ class Sequential(StatefulLayer, strict=StrictConfig(allow_method_override=True))
         )
 
     @overload
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array: ...
+    def __call__(self, x: Array, *, key: PRNGKeyArray | None = None) -> Array: ...
 
     @overload
     def __call__(
-        self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
+        self, x: Array, state: State, *, key: PRNGKeyArray | None = None
     ) -> tuple[Array, State]: ...
 
     @named_scope("eqx.nn.Sequential")
@@ -77,8 +77,8 @@ class Sequential(StatefulLayer, strict=StrictConfig(allow_method_override=True))
         x: Array,
         state: State = sentinel,
         *,
-        key: Optional[PRNGKeyArray] = None,
-    ) -> Union[Array, tuple[Array, State]]:
+        key: PRNGKeyArray | None = None,
+    ) -> Array | tuple[Array, State]:
         """**Arguments:**
 
         - `x`: passed to the first member of the sequence.
@@ -108,7 +108,7 @@ class Sequential(StatefulLayer, strict=StrictConfig(allow_method_override=True))
         else:
             return x, state
 
-    def __getitem__(self, i: Union[int, slice]) -> Callable:
+    def __getitem__(self, i: int | slice) -> Callable:
         if isinstance(i, int):
             return self.layers[i]
         elif isinstance(i, slice):
@@ -150,7 +150,7 @@ class Lambda(Module, strict=True):
 
     fn: Callable[[Any], Any]
 
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
+    def __call__(self, x: Array, *, key: PRNGKeyArray | None = None) -> Array:
         """**Arguments:**
 
         - `x`: The input JAX array.

@@ -3,7 +3,7 @@ import math
 import warnings
 from collections.abc import Callable
 from functools import partial
-from typing import cast, Optional, Union
+from typing import cast
 
 import jax
 import jax.numpy as jnp
@@ -20,7 +20,7 @@ from ._misc import named_scope
 def dot_product_attention_weights(
     query: Float[Array, "q_seq qk_size"],
     key: Float[Array, "kv_seq qk_size"],
-    mask: Optional[Bool[Array, "q_seq kv_seq"]] = None,
+    mask: Bool[Array, "q_seq kv_seq"] | None = None,
 ) -> Float[Array, "q_seq kv_seq"]:
     query = query / math.sqrt(query.shape[-1])
     logits = jnp.einsum("sd,Sd->sS", query, key)
@@ -44,11 +44,11 @@ def dot_product_attention(
     query: Float[Array, "q_seq qk_size"],
     key_: Float[Array, "kv_seq qk_size"],
     value: Float[Array, "kv_seq v_size"],
-    mask: Optional[Bool[Array, "q_seq kv_seq"]] = None,
-    dropout: Optional[Dropout] = None,
+    mask: Bool[Array, "q_seq kv_seq"] | None = None,
+    dropout: Dropout | None = None,
     *,
-    key: Optional[PRNGKeyArray] = None,
-    inference: Optional[bool] = None,
+    key: PRNGKeyArray | None = None,
+    inference: bool | None = None,
 ) -> Float[Array, "q_seq v_size"]:
     weights = dot_product_attention_weights(query, key_, mask)
     if dropout is not None:
@@ -141,11 +141,11 @@ class MultiheadAttention(Module, strict=True):
         self,
         num_heads: int,
         query_size: int,
-        key_size: Optional[int] = None,
-        value_size: Optional[int] = None,
-        output_size: Optional[int] = None,
-        qk_size: Optional[int] = None,
-        vo_size: Optional[int] = None,
+        key_size: int | None = None,
+        value_size: int | None = None,
+        output_size: int | None = None,
+        qk_size: int | None = None,
+        vo_size: int | None = None,
         use_query_bias: bool = False,
         use_key_bias: bool = False,
         use_value_bias: bool = False,
@@ -241,14 +241,15 @@ class MultiheadAttention(Module, strict=True):
         query: Float[Array, "q_seq q_size"],
         key_: Float[Array, "kv_seq k_size"],
         value: Float[Array, "kv_seq v_size"],
-        mask: Union[
-            None, Bool[Array, "q_seq kv_seq"], Bool[Array, "num_heads q_seq kv_seq"]
-        ] = None,
+        mask: (
+            None | Bool[Array, "q_seq kv_seq"] | Bool[Array, "num_heads q_seq kv_seq"]
+        ) = None,
         *,
-        key: Optional[PRNGKeyArray] = None,
-        inference: Optional[bool] = None,
-        deterministic: Optional[bool] = None,
-        process_heads: Optional[
+        key: PRNGKeyArray | None = None,
+        inference: bool | None = None,
+        deterministic: bool | None = None,
+        process_heads: None
+        | (
             Callable[
                 [
                     Float[Array, "seq_length num_heads qk_size"],
@@ -261,7 +262,7 @@ class MultiheadAttention(Module, strict=True):
                     Float[Array, "seq_length num_heads vo_size"],
                 ],
             ]
-        ] = None,
+        ) = None,
     ) -> Float[Array, "q_seq o_size"]:
         """**Arguments:**
 

@@ -1,6 +1,6 @@
 import math
 from collections.abc import Callable, Sequence
-from typing import Any, Optional, TypeVar, Union
+from typing import Any, TypeVar, Union
 
 import jax
 import jax.lax as lax
@@ -21,7 +21,7 @@ def bounded_while_loop(
     init_val: _T,
     *,
     max_steps: int,
-    buffers: Optional[Callable[[_T], Union[_Node, Sequence[_Node]]]] = None,
+    buffers: Callable[[_T], _Node | Sequence[_Node]] | None = None,
     base: int = 16,
 ):
     """Reverse-mode autodifferentiable while loop.

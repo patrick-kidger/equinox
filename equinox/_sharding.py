@@ -1,4 +1,4 @@
-from typing import Any, Union
+from typing import Any
 
 import jax
 import jax.lax as lax
@@ -8,9 +8,7 @@ from jaxtyping import PyTree
 from ._filters import combine, is_array, partition
 
 
-def filter_shard(
-    x: PyTree[Any], device_or_shardings: Union[Device, jax.sharding.Sharding]
-):
+def filter_shard(x: PyTree[Any], device_or_shardings: Device | jax.sharding.Sharding):
     """Filtered transform combining `jax.lax.with_sharding_constraint`
     and `jax.device_put`.
 

@@ -4,7 +4,7 @@ import traceback
 import types
 import warnings
 from collections.abc import Sequence
-from typing import Literal, Union
+from typing import Literal
 
 import jax
 import jax._src.traceback_util as traceback_util
@@ -27,7 +27,7 @@ from ._unvmap import unvmap_any, unvmap_max
 traceback_util.register_exclusion(__file__)
 
 
-def _nan_like(x: Union[Array, np.ndarray]) -> Union[Array, np.ndarray]:
+def _nan_like(x: Array | np.ndarray) -> Array | np.ndarray:
     dtype = np.result_type(x)
     if np.issubdtype(dtype, np.inexact):
         return np.broadcast_to(np.array(np.nan, dtype), x.shape)

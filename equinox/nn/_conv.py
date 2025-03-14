@@ -1,7 +1,7 @@
 import itertools as it
 import math
 from collections.abc import Callable, Sequence
-from typing import Optional, TypeVar, Union
+from typing import TypeVar
 
 import jax.lax as lax
 import jax.numpy as jnp
@@ -17,8 +17,8 @@ from ._misc import all_sequences, default_init, named_scope
 _T = TypeVar("_T")
 
 
-def _ntuple(n: int) -> Callable[[Union[_T, Sequence[_T]]], tuple[_T, ...]]:
-    def parse(x: Union[_T, Sequence[_T]]) -> tuple[_T, ...]:
+def _ntuple(n: int) -> Callable[[_T | Sequence[_T]], tuple[_T, ...]]:
+    def parse(x: _T | Sequence[_T]) -> tuple[_T, ...]:
         if isinstance(x, Sequence):
             if len(x) == n:
                 return tuple(x)
@@ -33,9 +33,9 @@ def _ntuple(n: int) -> Callable[[Union[_T, Sequence[_T]]], tuple[_T, ...]]:
 
 
 def _padding_init(
-    padding: Union[str, int, Sequence[int], Sequence[tuple[int, int]]],
+    padding: str | int | Sequence[int] | Sequence[tuple[int, int]],
     num_spatial_dims: int,
-) -> Union[str, tuple[tuple[int, int], ...]]:
+) -> str | tuple[tuple[int, int], ...]:
     if isinstance(padding, str):
         padding = padding.upper()
         if padding not in ("SAME", "SAME_LOWER", "VALID"):
@@ -72,12 +72,12 @@ class Conv(Module, strict=True):
 
     num_spatial_dims: int = field(static=True)
     weight: Array
-    bias: Optional[Array]
+    bias: Array | None
     in_channels: int = field(static=True)
     out_channels: int = field(static=True)
     kernel_size: tuple[int, ...] = field(static=True)
     stride: tuple[int, ...] = field(static=True)
-    padding: Union[str, tuple[tuple[int, int], ...]] = field(static=True)
+    padding: str | tuple[tuple[int, int], ...] = field(static=True)
     dilation: tuple[int, ...] = field(static=True)
     groups: int = field(static=True)
     use_bias: bool = field(static=True)
@@ -88,10 +88,10 @@ class Conv(Module, strict=True):
         num_spatial_dims: int,
         in_channels: int,
         out_channels: int,
-        kernel_size: Union[int, Sequence[int]],
-        stride: Union[int, Sequence[int]] = 1,
-        padding: Union[str, int, Sequence[int], Sequence[tuple[int, int]]] = 0,
-        dilation: Union[int, Sequence[int]] = 1,
+        kernel_size: int | Sequence[int],
+        stride: int | Sequence[int] = 1,
+        padding: str | int | Sequence[int] | Sequence[tuple[int, int]] = 0,
+        dilation: int | Sequence[int] = 1,
         groups: int = 1,
         use_bias: bool = True,
         padding_mode: str = "ZEROS",
@@ -208,7 +208,7 @@ class Conv(Module, strict=True):
         return x
 
     @named_scope("eqx.nn.Conv")
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
+    def __call__(self, x: Array, *, key: PRNGKeyArray | None = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape
@@ -257,10 +257,10 @@ class Conv1d(Conv):
         self,
         in_channels: int,
         out_channels: int,
-        kernel_size: Union[int, Sequence[int]],
-        stride: Union[int, Sequence[int]] = 1,
-        padding: Union[str, int, Sequence[int], Sequence[tuple[int, int]]] = 0,
-        dilation: Union[int, Sequence[int]] = 1,
+        kernel_size: int | Sequence[int],
+        stride: int | Sequence[int] = 1,
+        padding: str | int | Sequence[int] | Sequence[tuple[int, int]] = 0,
+        dilation: int | Sequence[int] = 1,
         groups: int = 1,
         use_bias: bool = True,
         padding_mode: str = "ZEROS",
@@ -291,10 +291,10 @@ class Conv2d(Conv):
         self,
         in_channels: int,
         out_channels: int,
-        kernel_size: Union[int, Sequence[int]],
-        stride: Union[int, Sequence[int]] = (1, 1),
-        padding: Union[str, int, Sequence[int], Sequence[tuple[int, int]]] = (0, 0),
-        dilation: Union[int, Sequence[int]] = (1, 1),
+        kernel_size: int | Sequence[int],
+        stride: int | Sequence[int] = (1, 1),
+        padding: str | int | Sequence[int] | Sequence[tuple[int, int]] = (0, 0),
+        dilation: int | Sequence[int] = (1, 1),
         groups: int = 1,
         use_bias: bool = True,
         padding_mode: str = "ZEROS",
@@ -325,10 +325,10 @@ class Conv3d(Conv):
         self,
         in_channels: int,
         out_channels: int,
-        kernel_size: Union[int, Sequence[int]],
-        stride: Union[int, Sequence[int]] = (1, 1, 1),
-        padding: Union[str, int, Sequence[int], Sequence[tuple[int, int]]] = (0, 0, 0),
-        dilation: Union[int, Sequence[int]] = (1, 1, 1),
+        kernel_size: int | Sequence[int],
+        stride: int | Sequence[int] = (1, 1, 1),
+        padding: str | int | Sequence[int] | Sequence[tuple[int, int]] = (0, 0, 0),
+        dilation: int | Sequence[int] = (1, 1, 1),
         groups: int = 1,
         use_bias: bool = True,
         padding_mode: str = "ZEROS",
@@ -357,12 +357,12 @@ class ConvTranspose(Module, strict=True):
 
     num_spatial_dims: int = field(static=True)
     weight: Array
-    bias: Optional[Array]
+    bias: Array | None
     in_channels: int = field(static=True)
     out_channels: int = field(static=True)
     kernel_size: tuple[int, ...] = field(static=True)
     stride: tuple[int, ...] = field(static=True)
-    padding: Union[str, tuple[tuple[int, int], ...]] = field(static=True)
+    padding: str | tuple[tuple[int, int], ...] = field(static=True)
     output_padding: tuple[int, ...] = field(static=True)
     dilation: tuple[int, ...] = field(static=True)
     groups: int = field(static=True)
@@ -374,11 +374,11 @@ class ConvTranspose(Module, strict=True):
         num_spatial_dims: int,
         in_channels: int,
         out_channels: int,
-        kernel_size: Union[int, Sequence[int]],
-        stride: Union[int, Sequence[int]] = 1,
-        padding: Union[str, int, Sequence[int], Sequence[tuple[int, int]]] = 0,
-        output_padding: Union[int, Sequence[int]] = 0,
-        dilation: Union[int, Sequence[int]] = 1,
+        kernel_size: int | Sequence[int],
+        stride: int | Sequence[int] = 1,
+        padding: str | int | Sequence[int] | Sequence[tuple[int, int]] = 0,
+        output_padding: int | Sequence[int] = 0,
+        dilation: int | Sequence[int] = 1,
         groups: int = 1,
         use_bias: bool = True,
         padding_mode: str = "ZEROS",
@@ -580,7 +580,7 @@ class ConvTranspose(Module, strict=True):
         return x, padding_t
 
     @named_scope("eqx.nn.ConvTranspose")
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
+    def __call__(self, x: Array, *, key: PRNGKeyArray | None = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape
@@ -627,11 +627,11 @@ class ConvTranspose1d(ConvTranspose):
         self,
         in_channels: int,
         out_channels: int,
-        kernel_size: Union[int, Sequence[int]],
-        stride: Union[int, Sequence[int]] = 1,
-        output_padding: Union[int, Sequence[int]] = 0,
-        padding: Union[str, int, Sequence[int], Sequence[tuple[int, int]]] = 0,
-        dilation: Union[int, Sequence[int]] = 1,
+        kernel_size: int | Sequence[int],
+        stride: int | Sequence[int] = 1,
+        output_padding: int | Sequence[int] = 0,
+        padding: str | int | Sequence[int] | Sequence[tuple[int, int]] = 0,
+        dilation: int | Sequence[int] = 1,
         groups: int = 1,
         use_bias: bool = True,
         padding_mode: str = "ZEROS",
@@ -663,11 +663,11 @@ class ConvTranspose2d(ConvTranspose):
         self,
         in_channels: int,
         out_channels: int,
-        kernel_size: Union[int, Sequence[int]],
-        stride: Union[int, Sequence[int]] = (1, 1),
-        output_padding: Union[int, Sequence[int]] = (0, 0),
-        padding: Union[str, int, Sequence[int], Sequence[tuple[int, int]]] = (0, 0),
-        dilation: Union[int, Sequence[int]] = (1, 1),
+        kernel_size: int | Sequence[int],
+        stride: int | Sequence[int] = (1, 1),
+        output_padding: int | Sequence[int] = (0, 0),
+        padding: str | int | Sequence[int] | Sequence[tuple[int, int]] = (0, 0),
+        dilation: int | Sequence[int] = (1, 1),
         groups: int = 1,
         use_bias: bool = True,
         padding_mode: str = "ZEROS",
@@ -699,11 +699,11 @@ class ConvTranspose3d(ConvTranspose):
         self,
         in_channels: int,
         out_channels: int,
-        kernel_size: Union[int, Sequence[int]],
-        stride: Union[int, Sequence[int]] = (1, 1, 1),
-        output_padding: Union[int, Sequence[int]] = (0, 0, 0),
-        padding: Union[str, int, Sequence[int], Sequence[tuple[int, int]]] = (0, 0, 0),
-        dilation: Union[int, Sequence[int]] = (1, 1, 1),
+        kernel_size: int | Sequence[int],
+        stride: int | Sequence[int] = (1, 1, 1),
+        output_padding: int | Sequence[int] = (0, 0, 0),
+        padding: str | int | Sequence[int] | Sequence[tuple[int, int]] = (0, 0, 0),
+        dilation: int | Sequence[int] = (1, 1, 1),
         groups: int = 1,
         use_bias: bool = True,
         padding_mode: str = "ZEROS",

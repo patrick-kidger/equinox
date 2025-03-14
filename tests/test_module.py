@@ -4,7 +4,7 @@ import functools as ft
 import inspect
 from collections.abc import Callable
 from dataclasses import InitVar
-from typing import Any, Optional
+from typing import Any
 
 import equinox as eqx
 import equinox.internal as eqxi
@@ -1007,7 +1007,7 @@ def test_init_as_abstract(field):
 
 # https://github.com/patrick-kidger/equinox/issues/522
 def test_custom_field():
-    def my_field(*, foo: Optional[bool] = None, **kwargs: Any):
+    def my_field(*, foo: bool | None = None, **kwargs: Any):
         metadata = kwargs.pop("metadata", {})
         if foo is not None:
             metadata["foo"] = foo

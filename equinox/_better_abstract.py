@@ -15,9 +15,10 @@ from typing import (
     get_args,
     get_origin,
     TYPE_CHECKING,
+    TypeAlias,
     TypeVar,
 )
-from typing_extensions import dataclass_transform, TypeAlias
+from typing_extensions import dataclass_transform
 
 
 _T = TypeVar("_T")

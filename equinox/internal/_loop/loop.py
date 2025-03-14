@@ -1,5 +1,5 @@
 from collections.abc import Callable, Sequence
-from typing import Any, Literal, Optional, TypeVar, Union
+from typing import Any, Literal, TypeVar, Union
 
 import jax
 import jax.lax as lax
@@ -24,10 +24,10 @@ def while_loop(
     body_fun: Callable[[_Carry], _Carry],
     init_val: _Carry,
     *,
-    max_steps: Optional[int] = None,
-    buffers: Optional[Callable[[_Carry], Union[_Node, Sequence[_Node]]]] = None,
+    max_steps: int | None = None,
+    buffers: Callable[[_Carry], _Node | Sequence[_Node]] | None = None,
     kind: Literal["lax", "checkpointed", "bounded"],
-    checkpoints: Optional[int] = None,
+    checkpoints: int | None = None,
     base: int = 16,
 ) -> _Carry:
     """A better while loop, supporting (1) reverse-mode autodifferentiation; (2) online
@@ -132,11 +132,11 @@ def scan(
     f: Callable[[_Carry, _X], tuple[_Carry, _Y]],
     init: _Carry,
     xs: _X,
-    length: Optional[int] = None,
+    length: int | None = None,
     *,
-    buffers: Optional[Callable[[_Carry], Union[_Node, Sequence[_Node]]]] = None,
+    buffers: Callable[[_Carry], _Node | Sequence[_Node]] | None = None,
     kind: Literal["lax", "checkpointed"],
-    checkpoints: Union[None, int, Literal["all"]] = None,
+    checkpoints: None | int | Literal["all"] = None,
 ) -> tuple[_Carry, _Y]:
     """As `jax.lax.scan`, but with optional checkpointing to reduce memory usage.
 

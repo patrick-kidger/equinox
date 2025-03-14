@@ -1,6 +1,6 @@
 import types
 from collections.abc import Callable
-from typing import Any, Generic, TYPE_CHECKING, TypeVar, Union
+from typing import Any, Generic, TYPE_CHECKING, TypeVar
 from typing_extensions import ParamSpec
 
 import jax
@@ -57,8 +57,8 @@ class StateIndex(Module, Generic[_Value], strict=True):
 
     # Starts off as None when initialised; later replaced with an `int` inside
     # `make_with_state`.
-    marker: Union[object, int] = field(static=True)
-    init: Union[_Value, _Sentinel]
+    marker: object | int = field(static=True)
+    init: _Value | _Sentinel
 
     def __init__(self, init: _Value):
         """**Arguments:**
@@ -130,7 +130,7 @@ class State:
                         "`eqx.nn.make_with_state(ModelClass)(...args...)` instead."
                     )
                 state[leaf.marker] = jtu.tree_map(jnp.asarray, leaf.init)
-        self._state: Union[_Sentinel, dict[object | int, Any]] = state
+        self._state: _Sentinel | dict[object | int, Any] = state
 
     def get(self, item: StateIndex[_Value]) -> _Value:
         """Given an [`equinox.nn.StateIndex`][], returns the value of its state.

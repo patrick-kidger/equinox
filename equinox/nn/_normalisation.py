@@ -1,7 +1,7 @@
 import functools as ft
 import warnings
 from collections.abc import Sequence
-from typing import Optional, overload, Union
+from typing import overload
 
 import jax
 import jax.numpy as jnp
@@ -55,18 +55,18 @@ class LayerNorm(Module, strict=True):
     eps: float = field(static=True)
     use_weight: bool = field(static=True)
     use_bias: bool = field(static=True)
-    weight: Optional[Float[Array, "*shape"]]
-    bias: Optional[Float[Array, "*shape"]]
+    weight: Float[Array, "*shape"] | None
+    bias: Float[Array, "*shape"] | None
 
     def __init__(
         self,
-        shape: Union[int, Sequence[int]],
+        shape: int | Sequence[int],
         eps: float = 1e-5,
         use_weight: bool = True,
         use_bias: bool = True,
         dtype=None,
         *,
-        elementwise_affine: Optional[bool] = None,
+        elementwise_affine: bool | None = None,
     ):
         """**Arguments:**
 
@@ -99,11 +99,11 @@ class LayerNorm(Module, strict=True):
         self.bias = jnp.zeros(shape, dtype=dtype) if use_bias else None
 
     @overload
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array: ...
+    def __call__(self, x: Array, *, key: PRNGKeyArray | None = None) -> Array: ...
 
     @overload
     def __call__(
-        self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
+        self, x: Array, state: State, *, key: PRNGKeyArray | None = None
     ) -> tuple[Array, State]: ...
 
     @named_scope("eqx.nn.LayerNorm")
@@ -112,8 +112,8 @@ class LayerNorm(Module, strict=True):
         x: Float[Array, "*shape"],
         state: State = sentinel,
         *,
-        key: Optional[PRNGKeyArray] = None,
-    ) -> Union[Array, tuple[Array, State]]:
+        key: PRNGKeyArray | None = None,
+    ) -> Array | tuple[Array, State]:
         """**Arguments:**
 
         - `x`: A JAX array, with the same shape as the `shape` passed to `__init__`.
@@ -191,16 +191,16 @@ class GroupNorm(Module, strict=True):
     """  # noqa: E501
 
     groups: int = field(static=True)
-    channels: Optional[int] = field(static=True)
+    channels: int | None = field(static=True)
     eps: float = field(static=True)
     channelwise_affine: bool = field(static=True)
-    weight: Optional[Array]
-    bias: Optional[Array]
+    weight: Array | None
+    bias: Array | None
 
     def __init__(
         self,
         groups: int,
-        channels: Optional[int] = None,
+        channels: int | None = None,
         eps: float = 1e-5,
         channelwise_affine: bool = True,
         dtype=None,
@@ -232,17 +232,17 @@ class GroupNorm(Module, strict=True):
         self.bias = jnp.zeros(channels, dtype=dtype) if channelwise_affine else None
 
     @overload
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array: ...
+    def __call__(self, x: Array, *, key: PRNGKeyArray | None = None) -> Array: ...
 
     @overload
     def __call__(
-        self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
+        self, x: Array, state: State, *, key: PRNGKeyArray | None = None
     ) -> tuple[Array, State]: ...
 
     @named_scope("eqx.nn.GroupNorm")
     def __call__(
-        self, x: Array, state: State = sentinel, *, key: Optional[PRNGKeyArray] = None
-    ) -> Union[Array, tuple[Array, State]]:
+        self, x: Array, state: State = sentinel, *, key: PRNGKeyArray | None = None
+    ) -> Array | tuple[Array, State]:
         """**Arguments:**
 
         - `x`: A JAX array of shape `(channels, ...)`.
@@ -316,12 +316,12 @@ class RMSNorm(Module, strict=True):
     eps: float = field(static=True)
     use_weight: bool = field(static=True)
     use_bias: bool = field(static=True)
-    weight: Optional[Float[Array, "*shape"]]
-    bias: Optional[Float[Array, "*shape"]]
+    weight: Float[Array, "*shape"] | None
+    bias: Float[Array, "*shape"] | None
 
     def __init__(
         self,
-        shape: Union[int, Sequence[int]],
+        shape: int | Sequence[int],
         eps: float = 1e-5,
         use_weight: bool = True,
         use_bias: bool = True,
@@ -351,11 +351,11 @@ class RMSNorm(Module, strict=True):
         self.bias = jnp.zeros(shape, dtype=dtype) if use_bias else None
 
     @overload
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array: ...
+    def __call__(self, x: Array, *, key: PRNGKeyArray | None = None) -> Array: ...
 
     @overload
     def __call__(
-        self, x: Array, state: State, *, key: Optional[PRNGKeyArray] = None
+        self, x: Array, state: State, *, key: PRNGKeyArray | None = None
     ) -> tuple[Array, State]: ...
 
     @named_scope("eqx.nn.RMSNorm")
@@ -364,8 +364,8 @@ class RMSNorm(Module, strict=True):
         x: Float[Array, "*shape"],
         state: State = sentinel,
         *,
-        key: Optional[PRNGKeyArray] = None,
-    ) -> Union[Array, tuple[Array, State]]:
+        key: PRNGKeyArray | None = None,
+    ) -> Array | tuple[Array, State]:
         """**Arguments:**
 
         - `x`: A JAX array, with the same shape as the `shape` passed to `__init__`.

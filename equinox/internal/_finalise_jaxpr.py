@@ -17,7 +17,7 @@ Library authors may wish to register their primitives with `primitive_finalisati
 
 import functools as ft
 from collections.abc import Callable
-from typing import Any, cast, Literal, overload, Union
+from typing import Any, cast, Literal, overload
 
 import jax
 import jax.core
@@ -153,10 +153,10 @@ def finalise_make_jaxpr(
     fn, *, return_shape: bool = False
 ) -> Callable[
     ...,
-    Union[
-        jax.extend.core.ClosedJaxpr,
-        tuple[jax.extend.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct]],
-    ],
+    (
+        jax.extend.core.ClosedJaxpr
+        | tuple[jax.extend.core.ClosedJaxpr, PyTree[jax.ShapeDtypeStruct]]
+    ),
 ]: ...
 
 
