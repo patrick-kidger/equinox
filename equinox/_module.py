@@ -63,7 +63,7 @@ def field(
     - `converter`: a function to call on this field when the model is initialised. For
         example, `field(converter=jax.numpy.asarray)` to convert
         `bool`/`int`/`float`/`complex` values to JAX arrays. This is ran after the
-        `__init__` method (i.e. when using a user-provided `__init__`), and before
+        `__init__` method (i.e. when using a user-provided `__init__`), and after
         `__post_init__` (i.e. when using the default dataclass initialisation).
     - `static`: whether the field should not interact with any JAX transform at all (by
         making it part of the PyTree structure rather than a leaf).
@@ -282,41 +282,6 @@ class _ActualModuleMeta(ABCMeta):
                 stacklevel=2,
             )
 
-        # Add support for `eqx.field(converter=...)` when using `__post_init__`.
-        # (Scenario (c) above. Scenarios (a) and (b) are handled later.)
-        if has_dataclass_init and "__post_init__" in cls.__dict__:
-            post_init = cls.__post_init__
-
-            @ft.wraps(post_init)  # pyright: ignore
-            def __post_init__(self, *args, **kwargs):
-                # This `if` is to handle `super()` correctly.
-                # We want to only convert once, at the top level.
-                #
-                # This check is basically testing whether or not the function we're in
-                # now (`cls`) is at the top level (`self.__class__`). If we are, do
-                # conversion. If we're not, it's presumably because someone is calling
-                # us via `super()` in the middle of their own `__post_init__`. No
-                # conversion then; their own version of this wrapper will do it at the
-                # appropriate time instead.
-                #
-                # This top-level business means that this is very nearly the same as
-                # doing conversion in `_ModuleMeta.__call__`. The differences are that
-                # (a) that wouldn't allow us to convert fields before the user-provided
-                # `__post_init__`, and (b) it allows other libraries (i.e. jaxtyping)
-                # to later monkey-patch `__init__`, and we have our converter run before
-                # their own monkey-patched-in code.
-                if self.__class__ is _make_initable_wrapper(cls):
-                    # Convert all fields currently available.
-                    _convert_fields(self, init=True)
-                post_init(self, *args, **kwargs)  # pyright: ignore
-                if self.__class__ is _make_initable_wrapper(cls):
-                    # Convert all the fields filled in by `__post_init__` as well.
-                    _convert_fields(self, init=False)
-
-            cls.__post_init__ = __post_init__  # pyright: ignore
-        else:
-            post_init = None
-
         # Fairly common to write `Superclass.__init__.__doc__ = "..."` with
         # dataclass-provided inits; here we look through the class hierarchy and will
         # copy this doc forward.
@@ -360,22 +325,6 @@ class _ActualModuleMeta(ABCMeta):
 
         # Registering here records that the `dataclass(...)` call has happened.
         _has_dataclass_init[cls] = has_dataclass_init
-
-        # Now handle conversion for cases (a) and (b) above, in which there is no
-        # `__post_init__`.
-        if post_init is None:
-            init = cls.__init__
-
-            @ft.wraps(init)
-            def __init__(self, *args, **kwargs):
-                __tracebackhide__ = True
-                init(self, *args, **kwargs)
-                # Same `if` trick as with `__post_init__`.
-                if self.__class__ is _make_initable_wrapper(cls):
-                    _convert_fields(self, init=True)
-                    _convert_fields(self, init=False)
-
-            cls.__init__ = __init__
 
         # Assign `__doc__` in case it has been manually overridden:
         # ```
@@ -564,7 +513,21 @@ class _ActualModuleMeta(ABCMeta):
         # [Step 2] Instantiate the class as normal.
         self = super(_ActualModuleMeta, initable_cls).__call__(*args, **kwargs)
         assert not _is_abstract(cls)
-        # [Step 3] Check that all fields are occupied.
+        # [Step 3] Run converters
+        for field in dataclasses.fields(cls):
+            try:
+                converter = field.metadata["converter"]
+            except KeyError:
+                pass
+            else:
+                try:
+                    value = getattr(self, field.name)
+                except AttributeError:
+                    # Let the all-fields-are-filled check handle the error.
+                    pass
+                else:
+                    setattr(self, field.name, converter(value))
+        # [Step 4] Check that all fields are occupied.
         missing_names = {
             field.name
             for field in dataclasses.fields(cls)  # pyright: ignore
@@ -577,7 +540,7 @@ class _ActualModuleMeta(ABCMeta):
                 f"The following fields were not initialised during __init__: "
                 f"{missing_names}"
             )
-        # [Step 3.5] Prevent arrays from being marked as static
+        # [Step 5] Prevent arrays from being marked as static
         for field in dataclasses.fields(self):
             if field.metadata.get("static", False):
                 if any(
@@ -592,7 +555,7 @@ class _ActualModuleMeta(ABCMeta):
                     )
         # Freeze.
         object.__setattr__(self, "__class__", cls)
-        # [Step 4] Run any custom validators. (After freezing; as they run
+        # [Step 6] Run any custom validators. (After freezing; as they run
         # unconditionally across the whole MRO, they aren't allowed to mutate.)
         for kls in cls.__mro__:
             try:
@@ -660,6 +623,7 @@ class _wrap_method:
             self.__isabstractmethod__ = self.method.__isabstractmethod__
 
     def __get__(self, instance, owner):
+        del owner
         if instance is None:
             return self.method
         else:
@@ -868,23 +832,6 @@ went uncaught, possibly leading to silently wrong behaviour.
 
 
 cache_clears.append(_make_initable.cache_clear)
-
-
-def _convert_fields(module, init: bool):
-    for field in dataclasses.fields(module):
-        if field.init is init:
-            try:
-                converter = field.metadata["converter"]
-            except KeyError:
-                pass
-            else:
-                try:
-                    value = getattr(module, field.name)
-                except AttributeError:
-                    # Let the all-fields-are-filled check handle the error.
-                    pass
-                else:
-                    setattr(module, field.name, converter(value))
 
 
 # Used to provide a pretty repr when doing `jtu.tree_structure(SomeModule(...))`.
