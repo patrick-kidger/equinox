@@ -1,9 +1,10 @@
 import functools as ft
 import math
+import typing
 import warnings
 from collections.abc import Callable
 from functools import partial
-from typing import cast
+from typing import cast, TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
@@ -55,6 +56,26 @@ def dot_product_attention(
         weights = dropout(weights, key=key, inference=inference)
     attn = jnp.einsum("sS,Sd->sd", weights, value)
     return attn
+
+
+# Simplified type annotations to avoid our docs becoming too large.
+if getattr(typing, "GENERATING_DOCUMENTATION", "") == "equinox" and not TYPE_CHECKING:
+    _ProcessHeads = Callable
+    _Mask = Bool[Array, "num_heads q_seq kv_seq"]
+else:
+    _ProcessHeads = Callable[
+        [
+            Float[Array, "seq_length num_heads qk_size"],
+            Float[Array, "seq_length num_heads qk_size"],
+            Float[Array, "seq_length num_heads vo_size"],
+        ],
+        tuple[
+            Float[Array, "seq_length num_heads qk_size"],
+            Float[Array, "seq_length num_heads qk_size"],
+            Float[Array, "seq_length num_heads vo_size"],
+        ],
+    ]
+    _Mask = Bool[Array, "q_seq kv_seq"] | Bool[Array, "num_heads q_seq kv_seq"]
 
 
 class MultiheadAttention(Module, strict=True):
@@ -241,28 +262,12 @@ class MultiheadAttention(Module, strict=True):
         query: Float[Array, "q_seq q_size"],
         key_: Float[Array, "kv_seq k_size"],
         value: Float[Array, "kv_seq v_size"],
-        mask: (
-            None | Bool[Array, "q_seq kv_seq"] | Bool[Array, "num_heads q_seq kv_seq"]
-        ) = None,
+        mask: None | _Mask = None,
         *,
         key: PRNGKeyArray | None = None,
         inference: bool | None = None,
         deterministic: bool | None = None,
-        process_heads: None
-        | (
-            Callable[
-                [
-                    Float[Array, "seq_length num_heads qk_size"],
-                    Float[Array, "seq_length num_heads qk_size"],
-                    Float[Array, "seq_length num_heads vo_size"],
-                ],
-                tuple[
-                    Float[Array, "seq_length num_heads qk_size"],
-                    Float[Array, "seq_length num_heads qk_size"],
-                    Float[Array, "seq_length num_heads vo_size"],
-                ],
-            ]
-        ) = None,
+        process_heads: None | _ProcessHeads = None,
     ) -> Float[Array, "q_seq o_size"]:
         """**Arguments:**
 

@@ -30,7 +30,7 @@ def doc_repr(obj: _T, string: str) -> _T:
     if TYPE_CHECKING:
         return obj
     else:
-        if getattr(typing, "GENERATING_DOCUMENTATION", False):
+        if getattr(typing, "GENERATING_DOCUMENTATION", "") == "equinox":
             return WithRepr(obj, string)
         else:
             return obj
@@ -38,7 +38,7 @@ def doc_repr(obj: _T, string: str) -> _T:
 
 def doc_remove_args(*args):
     def doc_remove_args_impl(fn):
-        if getattr(typing, "GENERATING_DOCUMENTATION", False):
+        if getattr(typing, "GENERATING_DOCUMENTATION", "") == "equinox":
             sig = inspect.signature(fn)
             new_params = []
             for param in sig.parameters.values():
