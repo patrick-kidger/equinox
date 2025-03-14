@@ -1,5 +1,4 @@
 import warnings
-from typing import Union
 
 import equinox as eqx
 import jax
@@ -1303,7 +1302,7 @@ def test_poolbackprop():
 
 def test_poolnetworkbackprop(getkey):
     class CNN(eqx.Module):
-        conv_layer: list[Union[eqx.nn.Conv2d, eqx.nn.MaxPool2d]]
+        conv_layer: list[eqx.nn.Conv2d | eqx.nn.MaxPool2d]
         linear_layers: list[eqx.nn.Linear]
 
         def __init__(self, key):

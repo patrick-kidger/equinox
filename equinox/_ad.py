@@ -6,7 +6,6 @@ from typing import (
     Any,
     cast,
     Literal,
-    Optional,
     overload,
     TypeVar,
     Union,
@@ -837,7 +836,7 @@ def _nondifferentiable_jvp(msg: str, primals, tangents):
 
 
 def nondifferentiable(
-    x: PyTree, *, name: Optional[str] = None, msg: Optional[str] = None
+    x: PyTree, *, name: str | None = None, msg: str | None = None
 ) -> PyTree:
     """Identity function, which raises an error if it is differentiated (in forward or
     reverse mode).
@@ -949,8 +948,8 @@ class filter_custom_vjp:
 
     def __init__(self, fn):
         self.fn = fn
-        self.fn_fwd: Optional[Callable] = None
-        self.fn_bwd: Optional[Callable] = None
+        self.fn_fwd: Callable | None = None
+        self.fn_bwd: Callable | None = None
         self.fn_wrapped = None
 
     def def_fwd(self, fn_fwd):
@@ -1120,7 +1119,7 @@ def filter_checkpoint(
     fun: Callable[_P, _T] = sentinel,
     *,
     prevent_cse: bool = True,
-    policy: Optional[Callable[..., bool]] = None,
+    policy: Callable[..., bool] | None = None,
 ) -> Callable[_P, _T]:
     """Filtered version of `jax.checkpoint`.
 
@@ -1154,14 +1153,14 @@ def filter_checkpoint(
 class _CheckpointWrapper(Module):
     _fun: Callable
     _prevent_cse: bool
-    _policy: Optional[Callable[..., bool]]
+    _policy: Callable[..., bool] | None
 
     def __init__(
         self,
         fun: Callable,
         *,
         prevent_cse: bool = True,
-        policy: Optional[Callable[..., bool]] = None,
+        policy: Callable[..., bool] | None = None,
     ):
         self._fun = fun
         self._prevent_cse = prevent_cse

@@ -1,4 +1,4 @@
-from typing import Generic, Optional, TypeVar
+from typing import Generic, TypeVar
 
 import jax.lax as lax
 import jax.numpy as jnp
@@ -116,8 +116,8 @@ class SpectralNorm(StatefulLayer, Generic[_Layer], strict=True):
         x: Array,
         state: State,
         *,
-        key: Optional[PRNGKeyArray] = None,
-        inference: Optional[bool] = None,
+        key: PRNGKeyArray | None = None,
+        inference: bool | None = None,
     ) -> tuple[Array, State]:
         """**Arguments:**
 

@@ -1,6 +1,6 @@
 import functools as ft
 from collections.abc import Callable
-from typing import Generic, Optional, TypeVar
+from typing import Generic, TypeVar
 
 import jax
 import jax.numpy as jnp
@@ -14,7 +14,7 @@ from ._misc import named_scope
 _Layer = TypeVar("_Layer")
 
 
-def _norm_except_axis(v: Array, norm: Callable[[Array], Scalar], axis: Optional[int]):
+def _norm_except_axis(v: Array, norm: Callable[[Array], Scalar], axis: int | None):
     if axis is None:
         return norm(v)
     else:
@@ -66,14 +66,14 @@ class WeightNorm(Module, Generic[_Layer], strict=True):
     layer: _Layer
     g: Array
     weight_name: str = field(static=True)
-    axis: Optional[int] = field(static=True)
+    axis: int | None = field(static=True)
     _norm: Callable[[Array], Scalar]
 
     def __init__(
         self,
         layer: _Layer,
         weight_name: str = "weight",
-        axis: Optional[int] = 0,
+        axis: int | None = 0,
     ):
         """**Arguments:**
 
@@ -96,7 +96,7 @@ class WeightNorm(Module, Generic[_Layer], strict=True):
         self.g = self._norm(getattr(layer, weight_name))
 
     @named_scope("eqx.nn.WeightNorm")
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
+    def __call__(self, x: Array, *, key: PRNGKeyArray | None = None) -> Array:
         """**Arguments:**
 
         - `x`: A JAX Array.

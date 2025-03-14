@@ -1,6 +1,6 @@
 import functools as ft
 from collections.abc import Callable
-from typing import Any, Union
+from typing import Any
 
 import jax
 import jax._src.traceback_util as traceback_util
@@ -21,7 +21,7 @@ def _filter(x):
 
 def filter_eval_shape(
     fun: Callable[..., Any], *args, **kwargs
-) -> PyTree[Union[jax.ShapeDtypeStruct, Any]]:
+) -> PyTree[jax.ShapeDtypeStruct | Any]:
     """As `jax.eval_shape`, but allows any Python object as inputs and outputs.
 
     (`jax.eval_shape` is constrained to only work with JAX arrays, Python

@@ -3,7 +3,6 @@ unbatched, or not differentiated, etc.
 """
 
 import functools as ft
-from typing import Optional
 
 import jax
 import jax.extend.core
@@ -108,8 +107,8 @@ mlir.register_lowering(
 
 def nondifferentiable_backward(
     x: PyTree,
-    name: Optional[str] = None,
-    msg: Optional[str] = None,
+    name: str | None = None,
+    msg: str | None = None,
     symbolic: bool = True,
 ) -> PyTree:
     """Identity function. Raises an error if it is differentiated in reverse mode."""
@@ -152,8 +151,8 @@ mlir.register_lowering(
 def nonbatchable(
     x: PyTree,
     *,
-    name: Optional[str] = None,
-    msg: Optional[str] = None,
+    name: str | None = None,
+    msg: str | None = None,
     allow_constant_across_batch: bool = False,
 ) -> PyTree:
     """Identity function. Raises a trace-time assert if it is batched."""

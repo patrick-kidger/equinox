@@ -50,7 +50,7 @@ import math
 import operator
 import typing
 from collections.abc import Callable, Sequence
-from typing import Any, cast, Optional, TypeVar, Union
+from typing import Any, cast, TypeVar, Union
 
 import jax
 import jax.core
@@ -78,9 +78,9 @@ def checkpointed_while_loop(
     body_fun: Callable[[_T], _T],
     init_val: _T,
     *,
-    max_steps: Optional[int] = None,
-    buffers: Optional[Callable[[_T], Union[_Node, Sequence[_Node]]]] = None,
-    checkpoints: Optional[int] = None,
+    max_steps: int | None = None,
+    buffers: Callable[[_T], _Node | Sequence[_Node]] | None = None,
+    checkpoints: int | None = None,
 ) -> _T:
     """Reverse-mode autodifferentiable while loop, using optimal online checkpointing.
 

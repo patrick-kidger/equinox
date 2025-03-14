@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -26,12 +26,12 @@ class Embedding(Module, strict=True):
 
     def __init__(
         self,
-        num_embeddings: Optional[int] = None,  # pyright: ignore
-        embedding_size: Optional[int] = None,  # pyright: ignore
-        weight: Optional[Float[Array, "num_embeddings embedding_size"]] = None,
+        num_embeddings: int | None = None,  # pyright: ignore
+        embedding_size: int | None = None,  # pyright: ignore
+        weight: Float[Array, "num_embeddings embedding_size"] | None = None,
         dtype=None,
         *,
-        key: Optional[PRNGKeyArray] = None,
+        key: PRNGKeyArray | None = None,
     ):
         """**Arguments:**
 
@@ -84,7 +84,7 @@ class Embedding(Module, strict=True):
 
     @named_scope("eqx.nn.Embedding")
     def __call__(
-        self, x: Int[ArrayLike, ""], *, key: Optional[PRNGKeyArray] = None
+        self, x: Int[ArrayLike, ""], *, key: PRNGKeyArray | None = None
     ) -> Array:
         """**Arguments:**
 
@@ -197,7 +197,7 @@ class RotaryPositionalEmbedding(Module, strict=True):
         self,
         x: Float[Array, "seq_length embedding_size"],
         *,
-        key: Optional[PRNGKeyArray] = None,
+        key: PRNGKeyArray | None = None,
     ) -> Float[Array, "seq_length embedding_size"]:
         """**Arguments:**
 
