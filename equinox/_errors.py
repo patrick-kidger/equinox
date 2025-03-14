@@ -329,7 +329,8 @@ def branched_error_if_impl(
 
     tb = None
     for f, lineno in traceback.walk_stack(None):
-        if f.f_locals.get("__equinox_filter_jit__", False):
+        ejf = f.f_locals.get("_ejf")
+        if ejf and not ejf():
             break
         if traceback_util.include_frame(f):
             tb = types.TracebackType(tb, f, f.f_lasti, lineno)

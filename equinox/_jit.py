@@ -207,9 +207,9 @@ class _JitWrapper(Module):
     def _call(self, is_lower, args, kwargs):
         __tracebackhide__ = True
         # Used by our error messages when figuring out where to stop walking the stack.
-        jitting = currently_jitting()
-        if not jitting:
-            __equinox_filter_jit__ = True  # noqa: F841
+        def _ejf():
+            return isinstance(jnp.array([]), jax.core.Tracer)
+        
         info = (
             self._signature,
             self._dynamic_fun,
@@ -244,7 +244,8 @@ class _JitWrapper(Module):
                     marker, _, _ = out = self._cached(
                         dynamic_donate, dynamic_nodonate, static
                     )
-                if not jitting:
+
+                if not isinstance(marker, jax.core.Tracer):
                     marker.block_until_ready()
             except JaxRuntimeError as e:
                 # Catch Equinox's runtime errors, and re-raise them with actually useful
