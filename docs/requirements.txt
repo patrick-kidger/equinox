@@ -1,9 +1,0 @@
-mkdocstrings==0.17.0     # Autogenerate documentation from docstrings.
-pytkdocs_tweaks==0.0.8   # Tweaks mkdocstrings to improve various aspects
-jinja2==3.0.3            # Older version. After 3.1.0 seems to be incompatible with current versions of mkdocstrings.
-pygments==2.14.0
-mkdocs-autorefs==1.0.1
-
-# Dependencies of Equinox itself.
-# Always use most up-to-date versions.
-jax[cpu]
