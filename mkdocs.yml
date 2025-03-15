@@ -71,13 +71,16 @@ plugins:
         include:
             - ".htaccess"
         exclude:
-            - "_mkdocstrings_templates"
             - "_overrides"
             - "examples/.ipynb_checkpoints/"
             - "examples/MNIST"
             - "examples/bert_checkpoint.eqx"
     - ipynb
-    - hippogriffe
+    - hippogriffe:
+        extra_public_modules:
+            - numpy
+            - jax
+            - jaxlib
     - mkdocstrings:
         handlers:
             python:
