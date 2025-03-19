@@ -327,14 +327,20 @@ def branched_error_if_impl(
             else:
                 return x
 
+    # We don't know where to cut the stack trace here, so compute all possible stack traces
+    # and let filter_jit determine which trace to use
     tb = None
+    tb_format = []
     for f, lineno in traceback.walk_stack(None):
-        ejf = f.f_locals.get("_ejf")
-        if ejf and not ejf():
-            break
+        stack_marker = f.f_locals.get("_stack_marker", None)
         if traceback_util.include_frame(f):
             tb = types.TracebackType(tb, f, f.f_lasti, lineno)
-    stack = "".join(traceback.format_tb(tb)).rstrip()
+            formatted_stack = "".join(traceback.format_tb(tb)).rstrip()
+            tb_format.append(_jit.StackCheckpoint(trace=formatted_stack, stack_marker=stack_marker))
+        else:
+            tb_format.append(_jit.StackCheckpoint(trace=None, stack_marker=stack_marker))
+            
+    stack = tb_format
     dynamic_x, static_x = partition(x, is_array)
     flat = jtu.tree_leaves(dynamic_x)
     if len(flat) == 0:

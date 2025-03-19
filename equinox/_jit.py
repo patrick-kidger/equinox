@@ -4,7 +4,8 @@ import inspect
 import logging
 import warnings
 from collections.abc import Callable
-from typing import Any, Literal, overload, TypeVar
+from dataclasses import dataclass
+from typing import Any, Literal, overload, TypeVar, List, Optional
 from typing_extensions import ParamSpec
 
 import jax
@@ -161,6 +162,11 @@ EquinoxRuntimeError.__module__ = "builtins"
 last_msg = None
 last_stack = None
 
+# StackCheckpoints are used by our error messages to determine where the stack trace should be cut
+@dataclass
+class StackCheckpoint:
+    trace: Optional[str]
+    stack_marker: Any
 
 _on_error_msg = """Above is the stack outside of JIT. Below is the stack inside of JIT:
 {stack}
@@ -207,8 +213,7 @@ class _JitWrapper(Module):
     def _call(self, is_lower, args, kwargs):
         __tracebackhide__ = True
         # Used by our error messages when figuring out where to stop walking the stack.
-        def _ejf():
-            return isinstance(jnp.array([]), jax.core.Tracer)
+        _stack_marker = self
         
         info = (
             self._signature,
@@ -260,8 +265,28 @@ class _JitWrapper(Module):
                     # what happens in distributed/multiprocess environments. Is the
                     # callback necessarily executed in the same interpreter as we are in
                     # here?
+                    
+                    # If the stack is a list, we know that this is a error produced by branched_error_if
+                    # which means we have to determine here where to cut the stack.
+                    last_stack_cleaned = last_stack
+                    if isinstance(last_stack, List):
+                        in_jit = currently_jitting()
+                        
+                        for i, checkpoint in enumerate(last_stack):
+                            assert isinstance(checkpoint, StackCheckpoint)
+                            if not in_jit and self == checkpoint.stack_marker:
+                                last_stack_cleaned = last_stack[:i]
+                                break
+                        # Filter all stacks that should not be included
+                        last_stack_cleaned = [l.trace for l in last_stack_cleaned if l.trace]
+                        # Then take the last valid one
+                        if last_stack_cleaned == []:
+                            last_stack_cleaned = ""
+                        else:
+                            last_stack_cleaned = last_stack_cleaned[-1]
+
                     raise EquinoxRuntimeError(
-                        _on_error_msg.format(msg=last_msg, stack=last_stack)
+                        _on_error_msg.format(msg=last_msg, stack=last_stack_cleaned)
                     ) from None
                     # `from None` to hide the large but uninformative XlaRuntimeError.
                 else:
