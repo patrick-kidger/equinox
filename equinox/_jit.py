@@ -266,7 +266,7 @@ class _JitWrapper(Module):
                     # callback necessarily executed in the same interpreter as we are in
                     # here?
                     
-                    # If the stack is a list, we know that this is a error produced by branched_error_if
+                    # If the stack is a list, we know that this is an error produced by branched_error_if
                     # which means we have to determine here where to cut the stack.
                     last_stack_cleaned = last_stack
                     if isinstance(last_stack, List):
