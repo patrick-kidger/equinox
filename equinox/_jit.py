@@ -223,8 +223,10 @@ class _JitWrapper(Module):
             return self
         return Partial(self, instance)
 
-# _call is not a member method of _JitWrapper (even though it effectively does the same thing)
-# because we want to avoid _call being wrapped in a _wrap_method, which adds about ~90μs per call.
+
+# _call is not a member method of _JitWrapper (even though it effectively does
+# the same thing) because we want to avoid _call being wrapped in a _wrap_method,
+# which adds about ~90μs per call.
 def _call(jit_wrapper: _JitWrapper, is_lower, args, kwargs):
     __tracebackhide__ = True
     # Used by our error messages when figuring out where to stop walking the stack.
