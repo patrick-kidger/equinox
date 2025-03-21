@@ -5,7 +5,7 @@ import logging
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Literal, overload, TypeVar, List, Optional
+from typing import Any, List, Literal, Optional, overload, TypeVar
 from typing_extensions import ParamSpec
 
 import jax
@@ -162,11 +162,14 @@ EquinoxRuntimeError.__module__ = "builtins"
 last_msg = None
 last_stack = None
 
-# StackCheckpoints are used by our error messages to determine where the stack trace should be cut
+
+# StackCheckpoints are used by our error messages to determine
+# where the stack trace should be cut
 @dataclass
 class StackCheckpoint:
     trace: Optional[str]
     stack_marker: Any
+
 
 _on_error_msg = """Above is the stack outside of JIT. Below is the stack inside of JIT:
 {stack}
@@ -229,8 +232,10 @@ class _JitWrapper(Module):
             return self
         return Partial(self, instance)
 
-# _call is not a member method of _JitWrapper (even though it effectively does the same thing)
-# because we want to avoid _call being wrapped in a _wrap_method, which adds about ~90μs per call.
+
+# _call is not a member method of _JitWrapper (even though it effectively does
+# the same thing) because we want to avoid _call being wrapped in a _wrap_method,
+# which adds about ~90μs per call.
 def _call(jit_wrapper: _JitWrapper, is_lower, args, kwargs):
     __tracebackhide__ = True
     # Used by our error messages when figuring out where to stop walking the stack.
@@ -285,20 +290,23 @@ def _call(jit_wrapper: _JitWrapper, is_lower, args, kwargs):
                 # what happens in distributed/multiprocess environments. Is the
                 # callback necessarily executed in the same interpreter as we are in
                 # here?
-            
-                # If the stack is a list, we know that this is an error produced by branched_error_if
-                # which means we have to determine here where to cut the stack.
+
+                # If the stack is a list, we know that this is an error produced by
+                # branched_error_if which means we have to determine here
+                # where to cut the stack.
                 last_stack_cleaned = last_stack
                 if isinstance(last_stack, List):
                     in_jit = currently_jitting()
-                
+
                     for i, checkpoint in enumerate(last_stack):
                         assert isinstance(checkpoint, StackCheckpoint)
                         if not in_jit and jit_wrapper == checkpoint.stack_marker:
                             last_stack_cleaned = last_stack[:i]
                             break
                     # Filter all stacks that should not be included
-                    last_stack_cleaned = [l.trace for l in last_stack_cleaned if l.trace]
+                    last_stack_cleaned = [
+                        l.trace for l in last_stack_cleaned if l.trace
+                    ]
                     # Then take the last valid one
                     if last_stack_cleaned == []:
                         last_stack_cleaned = ""
