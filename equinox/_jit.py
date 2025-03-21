@@ -204,75 +204,10 @@ class _JitWrapper(Module):
     def __wrapped__(self):
         return hashable_combine(self._dynamic_fun, self._static_fun)
 
-    def _call(self, is_lower, args, kwargs):
-        __tracebackhide__ = True
-        # Used by our error messages when figuring out where to stop walking the stack.
-        jitting = currently_jitting()
-        if not jitting:
-            __equinox_filter_jit__ = True  # noqa: F841
-        info = (
-            self._signature,
-            self._dynamic_fun,
-            self._static_fun,
-            self.donate_first,
-            self.donate_rest,
-        )
-        dynamic_donate, dynamic_nodonate, static = _preprocess(  # pyright: ignore
-            info, args, kwargs, return_static=True
-        )
-        if is_lower:
-            return Lowered(
-                self._cached.lower(dynamic_donate, dynamic_nodonate, static),
-                info,
-                _preprocess,  # pyright: ignore
-                _postprocess,  # pyright: ignore
-            )
-        else:
-            filter = _FilterCallback()
-            callback_logger = logging.getLogger("jax._src.callback")
-            callback_logger.addFilter(filter)
-            try:
-                if self.filter_warning:
-                    with warnings.catch_warnings():
-                        warnings.filterwarnings(
-                            "ignore", message="Some donated buffers were not usable*"
-                        )
-                        marker, _, _ = out = self._cached(
-                            dynamic_donate, dynamic_nodonate, static
-                        )
-                else:
-                    marker, _, _ = out = self._cached(
-                        dynamic_donate, dynamic_nodonate, static
-                    )
-                if not jitting:
-                    marker.block_until_ready()
-            except JaxRuntimeError as e:
-                # Catch Equinox's runtime errors, and re-raise them with actually useful
-                # information. (By default XlaRuntimeError produces a lot of terrifying
-                # but useless information.)
-                if (
-                    last_msg is not None
-                    and last_stack is not None
-                    and "_EquinoxRuntimeError: " in str(e)
-                ):
-                    # We check `last_msg` and `last_stack` just in case. I'm not sure
-                    # what happens in distributed/multiprocess environments. Is the
-                    # callback necessarily executed in the same interpreter as we are in
-                    # here?
-                    raise EquinoxRuntimeError(
-                        _on_error_msg.format(msg=last_msg, stack=last_stack)
-                    ) from None
-                    # `from None` to hide the large but uninformative XlaRuntimeError.
-                else:
-                    raise
-            finally:
-                callback_logger.removeFilter(filter)
-            return _postprocess(out)
-
     def __call__(self, /, *args, **kwargs):
         __tracebackhide__ = True
         try:
-            return self._call(False, args, kwargs)
+            return _call(self, False, args, kwargs)
         except EquinoxRuntimeError as e:
             # Use a two-part try/except here and in `_call` to delete the
             # `raise EquinoxRuntimeError` line from the stack trace.
@@ -280,13 +215,80 @@ class _JitWrapper(Module):
             raise
 
     def lower(self, /, *args, **kwargs) -> Lowered:
-        return self._call(True, args, kwargs)
+        return _call(self, True, args, kwargs)
 
     def __get__(self, instance, owner):
         del owner
         if instance is None:
             return self
         return Partial(self, instance)
+
+# _call is not a member method of _JitWrapper (even though it effectively does the same thing)
+# because we want to avoid _call being wrapped in a _wrap_method, which adds about ~90μs per call.
+def _call(jit_wrapper: _JitWrapper, is_lower, args, kwargs):
+    __tracebackhide__ = True
+    # Used by our error messages when figuring out where to stop walking the stack.
+    jitting = currently_jitting()
+    if not jitting:
+        __equinox_filter_jit__ = True  # noqa: F841
+    info = (
+        jit_wrapper._signature,
+        jit_wrapper._dynamic_fun,
+        jit_wrapper._static_fun,
+        jit_wrapper.donate_first,
+        jit_wrapper.donate_rest,
+    )
+    dynamic_donate, dynamic_nodonate, static = _preprocess(  # pyright: ignore
+        info, args, kwargs, return_static=True
+    )
+    if is_lower:
+        return Lowered(
+            jit_wrapper._cached.lower(dynamic_donate, dynamic_nodonate, static),
+            info,
+            _preprocess,  # pyright: ignore
+            _postprocess,  # pyright: ignore
+        )
+    else:
+        filter = _FilterCallback()
+        callback_logger = logging.getLogger("jax._src.callback")
+        callback_logger.addFilter(filter)
+        try:
+            if jit_wrapper.filter_warning:
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore", message="Some donated buffers were not usable*"
+                    )
+                    marker, _, _ = out = jit_wrapper._cached(
+                        dynamic_donate, dynamic_nodonate, static
+                    )
+            else:
+                marker, _, _ = out = jit_wrapper._cached(
+                    dynamic_donate, dynamic_nodonate, static
+                )
+            if not jitting:
+                marker.block_until_ready()
+        except JaxRuntimeError as e:
+            # Catch Equinox's runtime errors, and re-raise them with actually useful
+            # information. (By default XlaRuntimeError produces a lot of terrifying
+            # but useless information.)
+            if (
+                last_msg is not None
+                and last_stack is not None
+                and "_EquinoxRuntimeError: " in str(e)
+            ):
+                # We check `last_msg` and `last_stack` just in case. I'm not sure
+                # what happens in distributed/multiprocess environments. Is the
+                # callback necessarily executed in the same interpreter as we are in
+                # here?
+                raise EquinoxRuntimeError(
+                    _on_error_msg.format(msg=last_msg, stack=last_stack)
+                ) from None
+                # `from None` to hide the large but uninformative XlaRuntimeError.
+            else:
+                raise
+        finally:
+            callback_logger.removeFilter(filter)
+        return _postprocess(out)
 
 
 @overload
