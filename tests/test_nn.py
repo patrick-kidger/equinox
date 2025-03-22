@@ -950,7 +950,8 @@ def test_group_norm(getkey):
         gn = eqx.nn.GroupNorm(groups=4, channels=None, channelwise_affine=True)
 
 
-def test_batch_norm(getkey):
+@pytest.mark.parametrize("mode", ("ema", "batch"))
+def test_batch_norm(getkey, mode):
     x0 = jrandom.uniform(getkey(), (5,))
     x1 = jrandom.uniform(getkey(), (10, 5))
     x2 = jrandom.uniform(getkey(), (10, 5, 6))
@@ -958,14 +959,19 @@ def test_batch_norm(getkey):
 
     # Test that it works with a single vmap'd axis_name
 
-    bn = eqx.nn.BatchNorm(5, "batch")
+    bn = eqx.nn.BatchNorm(5, "batch", mode=mode)
     state = eqx.nn.State(bn)
     vbn = jax.vmap(bn, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
 
     for x in (x1, x2, x3):
         out, state = vbn(x, state)
         assert out.shape == x.shape
-        running_mean, running_var = state.get(bn.state_index)
+        if mode == "ema":
+            assert bn.ema_state_index is not None
+            running_mean, running_var = state.get(bn.ema_state_index)
+        else:
+            assert bn.batch_state_index is not None
+            _, (running_mean, running_var) = state.get(bn.batch_state_index)
         assert running_mean.shape == (5,)
         assert running_var.shape == (5,)
 
@@ -986,13 +992,18 @@ def test_batch_norm(getkey):
         in_axes=(0, None),
     )(x2, state)
     assert out.shape == x2.shape
-    running_mean, running_var = state.get(bn.state_index)
+    if mode == "ema":
+        assert bn.ema_state_index is not None
+        running_mean, running_var = state.get(bn.ema_state_index)
+    else:
+        assert bn.batch_state_index is not None
+        _, (running_mean, running_var) = state.get(bn.batch_state_index)
     assert running_mean.shape == (10, 5)
     assert running_var.shape == (10, 5)
 
     # Test that it handles multiple axis_names
 
-    vvbn = eqx.nn.BatchNorm(6, ("batch1", "batch2"))
+    vvbn = eqx.nn.BatchNorm(6, ("batch1", "batch2"), mode=mode)
     vvstate = eqx.nn.State(vvbn)
     for axis_name in ("batch1", "batch2"):
         vvbn = jax.vmap(
@@ -1000,14 +1011,19 @@ def test_batch_norm(getkey):
         )
     out, out_vvstate = vvbn(x2, vvstate)
     assert out.shape == x2.shape
-    running_mean, running_var = out_vvstate.get(vvbn.state_index)
+    if mode == "ema":
+        assert vvbn.ema_state_index is not None
+        running_mean, running_var = out_vvstate.get(vvbn.ema_state_index)
+    else:
+        assert vvbn.batch_state_index is not None
+        _, (running_mean, running_var) = out_vvstate.get(vvbn.batch_state_index)
     assert running_mean.shape == (6,)
     assert running_var.shape == (6,)
 
     # Test that it normalises
 
     x1alt = jrandom.normal(jrandom.PRNGKey(5678), (10, 5))  # avoid flakey test
-    bn = eqx.nn.BatchNorm(5, "batch", channelwise_affine=False)
+    bn = eqx.nn.BatchNorm(5, "batch", channelwise_affine=False, mode=mode)
     state = eqx.nn.State(bn)
     vbn = jax.vmap(bn, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
     out, state = vbn(x1alt, state)
@@ -1018,9 +1034,19 @@ def test_batch_norm(getkey):
 
     # Test that the statistics update during training
     out, state = vbn(x1, state)
-    running_mean, running_var = state.get(bn.state_index)
+    if mode == "ema":
+        assert bn.ema_state_index is not None
+        running_mean, running_var = state.get(bn.ema_state_index)
+    else:
+        assert bn.batch_state_index is not None
+        _, (running_mean, running_var) = state.get(bn.batch_state_index)
     out, state = vbn(3 * x1 + 10, state)
-    running_mean2, running_var2 = state.get(bn.state_index)
+    if mode == "ema":
+        assert bn.ema_state_index is not None
+        running_mean2, running_var2 = state.get(bn.ema_state_index)
+    else:
+        assert bn.batch_state_index is not None
+        _, (running_mean2, running_var2) = state.get(bn.batch_state_index)
     assert not jnp.allclose(running_mean, running_mean2)
     assert not jnp.allclose(running_var, running_var2)
 
@@ -1029,7 +1055,12 @@ def test_batch_norm(getkey):
     ibn = eqx.nn.inference_mode(bn, value=True)
     vibn = jax.vmap(ibn, axis_name="batch", in_axes=(0, None), out_axes=(0, None))
     out, state = vibn(4 * x1 + 20, state)
-    running_mean3, running_var3 = state.get(bn.state_index)
+    if mode == "ema":
+        assert bn.ema_state_index is not None
+        running_mean3, running_var3 = state.get(bn.ema_state_index)
+    else:
+        assert bn.batch_state_index is not None
+        _, (running_mean3, running_var3) = state.get(bn.batch_state_index)
     assert jnp.array_equal(running_mean2, running_mean3)
     assert jnp.array_equal(running_var2, running_var3)
 
