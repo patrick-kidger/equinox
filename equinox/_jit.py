@@ -2,6 +2,7 @@ import atexit
 import functools as ft
 import inspect
 import logging
+import os
 import warnings
 from collections.abc import Callable
 from typing import Any, Literal, overload, TypeVar
@@ -27,7 +28,6 @@ from ._custom_types import sentinel
 from ._deprecate import deprecated_0_10
 from ._doc_utils import doc_remove_args
 from ._filters import combine, is_array, partition
-from ._misc import currently_jitting
 from ._module import field, Module, module_update_wrapper, Partial, Static
 
 
@@ -158,8 +158,7 @@ EquinoxRuntimeError.__module__ = "builtins"
 # tools, e.g. debuggers. So what we have here is a compromise.
 
 
-last_msg = None
-last_stack = None
+last_error_info: None | tuple[str, list[bytes | str]] = None
 
 
 _on_error_msg = """Above is the stack outside of JIT. Below is the stack inside of JIT:
@@ -229,10 +228,7 @@ class _JitWrapper(Module):
 # which adds about ~90μs per call.
 def _call(jit_wrapper: _JitWrapper, is_lower, args, kwargs):
     __tracebackhide__ = True
-    # Used by our error messages when figuring out where to stop walking the stack.
-    jitting = currently_jitting()
-    if not jitting:
-        __equinox_filter_jit__ = True  # noqa: F841
+    __equinox_jit_id__ = os.urandom(16)
     info = (
         jit_wrapper._signature,
         jit_wrapper._dynamic_fun,
@@ -267,23 +263,24 @@ def _call(jit_wrapper: _JitWrapper, is_lower, args, kwargs):
                 marker, _, _ = out = jit_wrapper._cached(
                     dynamic_donate, dynamic_nodonate, static
                 )
-            if not jitting:
+            if not isinstance(marker, jax.core.Tracer):
                 marker.block_until_ready()
         except JaxRuntimeError as e:
             # Catch Equinox's runtime errors, and re-raise them with actually useful
             # information. (By default XlaRuntimeError produces a lot of terrifying
             # but useless information.)
-            if (
-                last_msg is not None
-                and last_stack is not None
-                and "_EquinoxRuntimeError: " in str(e)
-            ):
-                # We check `last_msg` and `last_stack` just in case. I'm not sure
-                # what happens in distributed/multiprocess environments. Is the
-                # callback necessarily executed in the same interpreter as we are in
-                # here?
+            if last_error_info is not None and "_EquinoxRuntimeError: " in str(e):
+                last_msg, last_stack = last_error_info
+                last_stack_pieces: list[str] = []
+                for id_or_str in last_stack:
+                    if type(id_or_str) is str:
+                        last_stack_pieces.append(id_or_str)
+                    else:
+                        if id_or_str == __equinox_jit_id__:
+                            break
+                last_stack_str = "".join(reversed(last_stack_pieces))
                 raise EquinoxRuntimeError(
-                    _on_error_msg.format(msg=last_msg, stack=last_stack)
+                    _on_error_msg.format(msg=last_msg, stack=last_stack_str)
                 ) from None
                 # `from None` to hide the large but uninformative XlaRuntimeError.
             else:
