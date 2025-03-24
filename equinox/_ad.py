@@ -1,15 +1,12 @@
 import functools as ft
 import types
-import typing
 import warnings
 from collections.abc import Callable, Sequence
 from typing import (
     Any,
     cast,
     Literal,
-    Optional,
     overload,
-    TYPE_CHECKING,
     TypeVar,
     Union,
 )
@@ -839,7 +836,7 @@ def _nondifferentiable_jvp(msg: str, primals, tangents):
 
 
 def nondifferentiable(
-    x: PyTree, *, name: Optional[str] = None, msg: Optional[str] = None
+    x: PyTree, *, name: str | None = None, msg: str | None = None
 ) -> PyTree:
     """Identity function, which raises an error if it is differentiated (in forward or
     reverse mode).
@@ -951,8 +948,8 @@ class filter_custom_vjp:
 
     def __init__(self, fn):
         self.fn = fn
-        self.fn_fwd: Optional[Callable] = None
-        self.fn_bwd: Optional[Callable] = None
+        self.fn_fwd: Callable | None = None
+        self.fn_bwd: Callable | None = None
         self.fn_wrapped = None
 
     def def_fwd(self, fn_fwd):
@@ -1118,40 +1115,11 @@ class filter_custom_vjp:
         return combine(diff_array_out, nondiff_array_out, nonarray_out.value)
 
 
-if getattr(typing, "GENERATING_DOCUMENTATION", False) and not TYPE_CHECKING:
-    _filter_custom_jvp_doc = filter_custom_jvp.__doc__
-    _filter_custom_vjp_doc = filter_custom_vjp.__doc__
-
-    def def_jvp(fn_jvp):
-        pass
-
-    def defjvp(fn_jvp):
-        pass
-
-    def filter_custom_jvp(fn):
-        return types.SimpleNamespace(def_jvp=def_jvp, defjvp=defjvp)
-
-    def def_fwd(fn_fwd):
-        pass
-
-    def def_bwd(fn_bwd):
-        pass
-
-    def defvjp(fn_fwd, fn_bwd):
-        pass
-
-    def filter_custom_vjp(fn):
-        return types.SimpleNamespace(def_fwd=def_fwd, def_bwd=def_bwd, defvjp=defvjp)
-
-    filter_custom_jvp.__doc__ = _filter_custom_jvp_doc
-    filter_custom_vjp.__doc__ = _filter_custom_vjp_doc
-
-
 def filter_checkpoint(
     fun: Callable[_P, _T] = sentinel,
     *,
     prevent_cse: bool = True,
-    policy: Optional[Callable[..., bool]] = None,
+    policy: Callable[..., bool] | None = None,
 ) -> Callable[_P, _T]:
     """Filtered version of `jax.checkpoint`.
 
@@ -1185,14 +1153,14 @@ def filter_checkpoint(
 class _CheckpointWrapper(Module):
     _fun: Callable
     _prevent_cse: bool
-    _policy: Optional[Callable[..., bool]]
+    _policy: Callable[..., bool] | None
 
     def __init__(
         self,
         fun: Callable,
         *,
         prevent_cse: bool = True,
-        policy: Optional[Callable[..., bool]] = None,
+        policy: Callable[..., bool] | None = None,
     ):
         self._fun = fun
         self._prevent_cse = prevent_cse

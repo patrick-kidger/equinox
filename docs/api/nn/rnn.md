@@ -1,7 +1,7 @@
 # Recurrent
 
 ::: equinox.nn.GRUCell
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -9,7 +9,7 @@
 ---
 
 ::: equinox.nn.LSTMCell
-    selection:
+    options:
         members:
         members:
             - __init__

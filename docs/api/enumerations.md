@@ -1,7 +1,7 @@
 # Enumerations
 
 ::: equinox.Enumeration
-    selection:
+    options:
         members:
             - where
             - promote

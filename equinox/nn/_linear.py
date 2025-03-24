@@ -1,5 +1,5 @@
 import math
-from typing import Any, Literal, Optional, TypeVar, Union
+from typing import Any, Literal, TypeVar
 
 import jax.numpy as jnp
 import jax.random as jrandom
@@ -14,15 +14,15 @@ class Linear(Module, strict=True):
     """Performs a linear transformation."""
 
     weight: Array
-    bias: Optional[Array]
-    in_features: Union[int, Literal["scalar"]] = field(static=True)
-    out_features: Union[int, Literal["scalar"]] = field(static=True)
+    bias: Array | None
+    in_features: int | Literal["scalar"] = field(static=True)
+    out_features: int | Literal["scalar"] = field(static=True)
     use_bias: bool = field(static=True)
 
     def __init__(
         self,
-        in_features: Union[int, Literal["scalar"]],
-        out_features: Union[int, Literal["scalar"]],
+        in_features: int | Literal["scalar"],
+        out_features: int | Literal["scalar"],
         use_bias: bool = True,
         dtype=None,
         *,
@@ -65,7 +65,7 @@ class Linear(Module, strict=True):
         self.use_bias = use_bias
 
     @named_scope("eqx.nn.Linear")
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
+    def __call__(self, x: Array, *, key: PRNGKeyArray | None = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape `(in_features,)`. (Or shape
@@ -115,7 +115,7 @@ class Identity(Module, strict=True):
         """Consumes arbitrary `*args` and `**kwargs` but ignores them."""
 
     @named_scope("eqx.nn.Identity")
-    def __call__(self, x: _T, *, key: Optional[PRNGKeyArray] = None) -> _T:
+    def __call__(self, x: _T, *, key: PRNGKeyArray | None = None) -> _T:
         """**Arguments:**
 
         - `x`: The input, of any type.

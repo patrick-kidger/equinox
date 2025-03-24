@@ -12,7 +12,7 @@ import types
 import warnings
 import weakref
 from collections.abc import Callable
-from typing import Any, cast, Optional, Protocol, TYPE_CHECKING, TypeVar, Union
+from typing import Any, cast, Protocol, TYPE_CHECKING, TypeVar
 from typing_extensions import dataclass_transform, ParamSpec
 
 import jax
@@ -184,7 +184,7 @@ class _ActualModuleMeta(ABCMeta):
         bases,
         dict_,
         /,
-        strict: Union[bool, StrictConfig] = False,
+        strict: bool | StrictConfig = False,
         **kwargs,
     ):
         if isinstance(strict, bool):
@@ -438,10 +438,8 @@ class _ActualModuleMeta(ABCMeta):
                             )
                         if len(cls.__abstractclassvars__) > 0:
                             inner.append(
-                                (
-                                    "abstract class variables: "
-                                    f"{list(cls.__abstractclassvars__)}"
-                                )
+                                "abstract class variables: "
+                                f"{list(cls.__abstractclassvars__)}"
                             )
                         inner = ", ".join(inner)
                         inner = " " + inner + "."
@@ -1021,7 +1019,7 @@ class Module(metaclass=_ModuleMeta):
 
     def __eq__(  # pyright: ignore
         self, other
-    ) -> Union[bool, np.bool_, Bool[Array, ""]]:
+    ) -> bool | np.bool_ | Bool[Array, ""]:
         return tree_equal(self, other)
 
     def __repr__(self):
@@ -1062,7 +1060,7 @@ class BoundMethod(Module):
 
 
 def module_update_wrapper(
-    wrapper: Module, wrapped: Optional[Callable[_P, _T]] = None
+    wrapper: Module, wrapped: Callable[_P, _T] | None = None
 ) -> Callable[_P, _T]:
     """Like `functools.update_wrapper` (or its better-known cousin, `functools.wraps`),
     but acts on [`equinox.Module`][]s, and does not modify its input (it returns the
@@ -1107,7 +1105,7 @@ def module_update_wrapper(
 
 
 def _module_update_wrapper(
-    wrapper: Module, wrapped: Optional[Callable[_P, _T]], inplace: bool
+    wrapper: Module, wrapped: Callable[_P, _T] | None, inplace: bool
 ) -> Callable[_P, _T]:
     cls = wrapper.__class__
     if not isinstance(getattr(cls, "__wrapped__", None), property):
@@ -1145,7 +1143,6 @@ def _module_update_wrapper(
 
 class Partial(Module):
     """Like `functools.partial`, but treats the wrapped function, and partially-applied
-    value: Any = field(static=True)
     args and kwargs, as a PyTree.
 
     This is very much like `jax.tree_util.Partial`. The difference is that the JAX

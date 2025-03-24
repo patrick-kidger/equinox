@@ -15,7 +15,7 @@ These are the tools that underlie stateful operations, like [`equinox.nn.BatchNo
 Let's explain how this works under the hood. First of all, all stateful layers (`BatchNorm` etc.) include an "index". This is basically just a unique hashable value (used later as a dictionary key), and an initial value for the state:
 
 ::: equinox.nn.StateIndex
-    selection:
+    options:
         members:
             - __init__
 
@@ -24,7 +24,7 @@ Let's explain how this works under the hood. First of all, all stateful layers (
 This `State` object that's being passed around is essentially just a dictionary, mapping from `StateIndex`s to PyTrees-of-arrays. Correspondingly this has `.get` and `.set` methods to read and write values to it.
 
 ::: equinox.nn.State
-    selection:
+    options:
         members:
             - get
             - set
@@ -70,7 +70,7 @@ print(f"Called {num_calls} times.")  # 2
 
 ## Vmap'd stateful layers
 
-This is an advanced thing to do! Here we'll build on [the ensembling guide](../../../tricks/#ensembling), and see how how we can create vmap'd stateful layers.
+This is an advanced thing to do! Here we'll build on [the ensembling guide](../../tricks.md#ensembling), and see how how we can create vmap'd stateful layers.
 
 This follows on from the previous example, in which we define `Counter`.
 ```python

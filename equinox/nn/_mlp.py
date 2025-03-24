@@ -1,8 +1,6 @@
 from collections.abc import Callable
 from typing import (
     Literal,
-    Optional,
-    Union,
 )
 
 import jax.nn as jnn
@@ -36,15 +34,15 @@ class MLP(Module, strict=True):
     final_activation: Callable
     use_bias: bool = field(static=True)
     use_final_bias: bool = field(static=True)
-    in_size: Union[int, Literal["scalar"]] = field(static=True)
-    out_size: Union[int, Literal["scalar"]] = field(static=True)
+    in_size: int | Literal["scalar"] = field(static=True)
+    out_size: int | Literal["scalar"] = field(static=True)
     width_size: int = field(static=True)
     depth: int = field(static=True)
 
     def __init__(
         self,
-        in_size: Union[int, Literal["scalar"]],
-        out_size: Union[int, Literal["scalar"]],
+        in_size: int | Literal["scalar"],
+        out_size: int | Literal["scalar"],
         width_size: int,
         depth: int,
         activation: Callable = _relu,
@@ -126,7 +124,7 @@ class MLP(Module, strict=True):
         self.use_final_bias = use_final_bias
 
     @named_scope("eqx.nn.MLP")
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
+    def __call__(self, x: Array, *, key: PRNGKeyArray | None = None) -> Array:
         """**Arguments:**
 
         - `x`: A JAX array with shape `(in_size,)`. (Or shape `()` if

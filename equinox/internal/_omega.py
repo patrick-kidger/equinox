@@ -1,6 +1,6 @@
 import operator
 from collections.abc import Callable
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 import jax
 import jax.tree_util as jtu
@@ -74,7 +74,7 @@ else:
     ω = _ω
 
 
-def _equal_code(fn1: Optional[Callable], fn2: Optional[Callable]):
+def _equal_code(fn1: Callable | None, fn2: Callable | None):
     """Checks whether fn1 and fn2 both have the same code.
 
     It's essentially impossible to see if two functions are equivalent, so this won't,

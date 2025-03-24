@@ -1,5 +1,4 @@
 import math
-from typing import Optional
 
 import jax.nn as jnn
 import jax.numpy as jnp
@@ -35,8 +34,8 @@ class GRUCell(Module, strict=True):
 
     weight_ih: Array
     weight_hh: Array
-    bias: Optional[Array]
-    bias_n: Optional[Array]
+    bias: Array | None
+    bias_n: Array | None
     input_size: int = field(static=True)
     hidden_size: int = field(static=True)
     use_bias: bool = field(static=True)
@@ -82,9 +81,7 @@ class GRUCell(Module, strict=True):
         self.use_bias = use_bias
 
     @named_scope("eqx.nn.GRUCell")
-    def __call__(
-        self, input: Array, hidden: Array, *, key: Optional[PRNGKeyArray] = None
-    ):
+    def __call__(self, input: Array, hidden: Array, *, key: PRNGKeyArray | None = None):
         """**Arguments:**
 
         - `input`: The input, which should be a JAX array of shape `(input_size,)`.
@@ -136,7 +133,7 @@ class LSTMCell(Module, strict=True):
 
     weight_ih: Array
     weight_hh: Array
-    bias: Optional[Array]
+    bias: Array | None
     input_size: int = field(static=True)
     hidden_size: int = field(static=True)
     use_bias: bool = field(static=True)

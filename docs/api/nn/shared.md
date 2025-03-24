@@ -1,7 +1,7 @@
 # Sharing layers
 
 ::: equinox.nn.Shared
-    selection:
+    options:
         members:
             - __init__
             - __call__

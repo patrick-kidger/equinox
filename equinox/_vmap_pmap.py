@@ -72,7 +72,7 @@ class if_array:
 
     axis: int
 
-    def __call__(self, x: Any) -> Optional[int]:
+    def __call__(self, x: Any) -> int | None:
         return self.axis if is_array(x) else None
 
 
@@ -117,8 +117,8 @@ class _VmapWrapper(Module):
     _fun: Callable
     _in_axes: PyTree[AxisSpec]
     _out_axes: PyTree[AxisSpec]
-    _axis_name: Optional[Hashable]
-    _axis_size: Optional[int]
+    _axis_name: Hashable | None
+    _axis_size: int | None
     _vmapkwargs: dict[str, Any]
 
     @property
@@ -196,7 +196,7 @@ def filter_vmap(
     in_axes: PyTree[AxisSpec] = if_array(0),
     out_axes: PyTree[AxisSpec] = if_array(0),
     axis_name: Hashable = None,
-    axis_size: Optional[int] = None,
+    axis_size: int | None = None,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
 
 
@@ -207,7 +207,7 @@ def filter_vmap(
     in_axes: PyTree[AxisSpec] = if_array(0),
     out_axes: PyTree[AxisSpec] = if_array(0),
     axis_name: Hashable = None,
-    axis_size: Optional[int] = None,
+    axis_size: int | None = None,
 ) -> Callable[..., Any]: ...
 
 
@@ -218,7 +218,7 @@ def filter_vmap(
     in_axes: PyTree[AxisSpec] = if_array(0),
     out_axes: PyTree[AxisSpec] = if_array(0),
     axis_name: Hashable = None,
-    axis_size: Optional[int] = None,
+    axis_size: int | None = None,
     **vmapkwargs,
 ):
     """Vectorises a function. By default, all JAX/NumPy arrays are vectorised down their
@@ -376,7 +376,7 @@ def _filter_pmap_cache(
     max_out_size = jtu.tree_reduce(lambda x, y: max(x, y.ndim), struct_out, 0)
     del fun_abstract, struct, struct_out
 
-    def _check_map_out_axis(x: Optional[int]):
+    def _check_map_out_axis(x: int | None):
         if isinstance(x, int):
             if x < -max_out_size or x >= max_out_size:
                 raise ValueError(
@@ -449,8 +449,8 @@ class _PmapWrapper(Module):
     _fun: Callable
     _in_axes: PyTree[AxisSpec]
     _out_axes: PyTree[AxisSpec]
-    _axis_name: Optional[Hashable]
-    _axis_size: Optional[int]
+    _axis_name: Hashable | None
+    _axis_size: int | None
     _filter_warning: bool
     _pmapkwargs: dict[str, Any]
 
@@ -521,7 +521,7 @@ def filter_pmap(
     in_axes: PyTree[AxisSpec] = if_array(0),
     out_axes: PyTree[AxisSpec] = if_array(0),
     axis_name: Hashable = None,
-    axis_size: Optional[int] = None,
+    axis_size: int | None = None,
     donate: Literal["all", "warn", "none"] = "none",
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]: ...
 
@@ -533,7 +533,7 @@ def filter_pmap(
     in_axes: PyTree[AxisSpec] = if_array(0),
     out_axes: PyTree[AxisSpec] = if_array(0),
     axis_name: Hashable = None,
-    axis_size: Optional[int] = None,
+    axis_size: int | None = None,
     donate: Literal["all", "warn", "none"] = "none",
 ) -> Callable[..., Any]: ...
 
@@ -545,7 +545,7 @@ def filter_pmap(
     in_axes: PyTree[AxisSpec] = if_array(0),
     out_axes: PyTree[AxisSpec] = if_array(0),
     axis_name: Hashable = None,
-    axis_size: Optional[int] = None,
+    axis_size: int | None = None,
     donate: Literal["all", "warn", "none"] = "none",
     **pmapkwargs,
 ):
@@ -555,7 +555,7 @@ def filter_pmap(
         JAX has now added more powerful parallelism APIs directly to the JIT interface.
         As such, using [`equinox.filter_jit`][] with sharded inputs is now recommended
         over `filter_pmap`. See also the
-        [parallelism example](../../examples/parallelism/).
+        [parallelism example](../examples/parallelism.ipynb).
 
     Parallelises a function. By default, all JAX/NumPy arrays are parallelised down
     their leading axis (i.e. axis index 0), and all other types are broadcast.

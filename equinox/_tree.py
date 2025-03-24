@@ -1,5 +1,5 @@
 from collections.abc import Callable, Sequence
-from typing import Any, Optional, TYPE_CHECKING, Union
+from typing import Any, TYPE_CHECKING
 
 import jax.numpy as jnp
 import jax.tree_util as jtu
@@ -56,11 +56,11 @@ class _DistinctTuple(tuple):
 
 
 def tree_at(
-    where: Callable[[PyTree], Union[_Node, Sequence[_Node]]],
+    where: Callable[[PyTree], _Node | Sequence[_Node]],
     pytree: PyTree,
-    replace: Union[Any, Sequence[Any]] = sentinel,
+    replace: Any | Sequence[Any] = sentinel,
     replace_fn: Callable[[_Node], Any] = sentinel,
-    is_leaf: Optional[Callable[[Any], bool]] = None,
+    is_leaf: Callable[[Any], bool] | None = None,
 ):
     """Modifies a leaf or subtree of a PyTree. (A bit like using `.at[].set()` on a JAX
     array.)
@@ -115,7 +115,7 @@ def tree_at(
         get_last_layer = lambda m: m.layers[-1]
         new_mlp = eqx.tree_at(get_last_layer, mlp, new_linear)
         ```
-        See also the [Tricks](../../tricks) page.
+        See also the [Tricks](../tricks.md) page.
 
     !!! Info
 
@@ -279,7 +279,7 @@ def tree_equal(
     typematch: bool = False,
     rtol: Float[ArrayLike, ""] = 0.0,
     atol: Float[ArrayLike, ""] = 0.0,
-) -> Union[bool, Bool[Array, ""]]:
+) -> bool | Bool[Array, ""]:
     """Returns `True` if all input PyTrees are equal. Every PyTree must have the same
     structure, and all leaves must be equal.
 
