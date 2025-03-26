@@ -66,7 +66,12 @@ markdown_extensions:
         toc_depth: 4
 
 plugins:
-    - search  # default search plugin; needs manually re-enabling when using any other plugins
+    # - search
+    - search:
+        # See https://github.com/squidfunk/mkdocs-material/discussions/8116#discussioncomment-12632752
+        # and https://github.com/patrick-kidger/equinox/issues/984
+        # In particular this allows for searching e.g. 'filter_grad' and to match 'equinox.filter_grad'.
+        separator: '[\s\-,:!=\[\]()"/]+|(?!\b)(?=[A-Z][a-z])|\.(?!\d)|&[lg]t;'
     - include_exclude_files:
         include:
             - ".htaccess"
