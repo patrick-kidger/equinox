@@ -50,9 +50,6 @@ extra_javascript:
 extra_css:
     - _static/custom_css.css
 
-hooks:
-    - mkdocs_hook.py
-
 markdown_extensions:
     - pymdownx.arithmatex:  # Render LaTeX via MathJax
         generic: true
@@ -82,10 +79,11 @@ plugins:
             - "examples/bert_checkpoint.eqx"
     - ipynb
     - hippogriffe:
-        extra_public_modules:
-            - numpy
-            - jax
-            - jaxlib
+        extra_public_objects:
+            - jax.ShapeDtypeStruct
+            - jax.extend.core.ClosedJaxpr
+            - jax.Device
+            - jax.sharding.Sharding
     - mkdocstrings:
         handlers:
             python:

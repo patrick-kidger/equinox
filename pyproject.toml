@@ -27,7 +27,7 @@ dependencies = ["jax>=0.4.38", "jaxtyping>=0.2.20", "typing_extensions>=4.5.0", 
 
 [project.optional-dependencies]
 docs = [
-  "hippogriffe==0.1.0",
+  "hippogriffe==0.2.0",
   "mkdocs==1.6.1",
   "mkdocs-include-exclude-files==0.1.0",
   "mkdocs-ipynb==0.1.0",
