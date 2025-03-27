@@ -263,7 +263,11 @@ def _call(jit_wrapper: _JitWrapper, is_lower, args, kwargs):
                 marker, _, _ = out = jit_wrapper._cached(
                     dynamic_donate, dynamic_nodonate, static
                 )
-            if not isinstance(marker, jax.core.Tracer):
+            # We need to include the explicit `isinstance(marker, jax.Array)` check due
+            # to https://github.com/patrick-kidger/equinox/issues/988
+            if not isinstance(marker, jax.core.Tracer) and isinstance(
+                marker, jax.Array
+            ):
                 marker.block_until_ready()
         except JaxRuntimeError as e:
             # Catch Equinox's runtime errors, and re-raise them with actually useful
