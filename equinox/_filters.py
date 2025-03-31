@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Any, Optional, overload, TypeVar, Union
+from typing import Any, overload, TypeVar, Union
 
 import jax
 import jax.numpy as jnp
@@ -82,7 +82,7 @@ def filter(
     filter_spec: PyTree[AxisSpec],
     inverse: bool = False,
     replace: Any = None,
-    is_leaf: Optional[Callable[[Any], bool]] = None,
+    is_leaf: Callable[[Any], bool] | None = None,
 ) -> PyTree:
     """
     Filters out the leaves of a PyTree not satisfying a condition. Those not satisfying
@@ -136,7 +136,7 @@ def partition(
     pytree: PyTree,
     filter_spec: PyTree[AxisSpec],
     replace: Any = None,
-    is_leaf: Optional[Callable[[Any], bool]] = None,
+    is_leaf: Callable[[Any], bool] | None = None,
 ) -> tuple[PyTree, PyTree]:
     """Splits a PyTree into two pieces. Equivalent to
     `filter(...), filter(..., inverse=True)`, but slightly more efficient.
@@ -167,14 +167,12 @@ _T = TypeVar("_T", bound=PyTree)
 
 
 @overload
-def combine(*pytrees: _T, is_leaf: Optional[Callable[[Any], bool]] = None) -> _T: ...
+def combine(*pytrees: _T, is_leaf: Callable[[Any], bool] | None = None) -> _T: ...
 @overload
 def combine(
-    *pytrees: PyTree, is_leaf: Optional[Callable[[Any], bool]] = None
+    *pytrees: PyTree, is_leaf: Callable[[Any], bool] | None = None
 ) -> PyTree: ...
-def combine(
-    *pytrees: PyTree, is_leaf: Optional[Callable[[Any], bool]] = None
-) -> PyTree:
+def combine(*pytrees: PyTree, is_leaf: Callable[[Any], bool] | None = None) -> PyTree:
     """Combines multiple PyTrees into one PyTree, by replacing `None` leaves.
 
     !!! example

@@ -53,10 +53,17 @@ Most users find that this is a simpler API when working with complicated PyTrees
 ---
 
 ::: equinox.filter_custom_jvp
+    options:
+        members:
+            - def_jvp
 
 ---
 
 ::: equinox.filter_custom_vjp
+    options:
+        members:
+            - def_fwd
+            - def_bwd
 
 ---
 

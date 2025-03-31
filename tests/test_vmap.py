@@ -1,5 +1,3 @@
-from typing import Union
-
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -81,7 +79,7 @@ def test_ensemble(getkey):
 @pytest.mark.parametrize("outer", [False, True])
 def test_methods(call, outer):
     class M(eqx.Module):
-        increment: Union[int, jax.Array]
+        increment: int | jax.Array
 
         if call:
 

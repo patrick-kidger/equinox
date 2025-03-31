@@ -1,13 +1,12 @@
 import warnings
-from typing import Optional
 
-import jax
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array, PRNGKeyArray
 
 from .._module import Module
+from ._misc import named_scope
 
 
 class Dropout(Module, strict=True):
@@ -28,7 +27,7 @@ class Dropout(Module, strict=True):
         p: float = 0.5,
         inference: bool = False,
         *,
-        deterministic: Optional[bool] = None,
+        deterministic: bool | None = None,
     ):
         """**Arguments:**
 
@@ -54,14 +53,14 @@ class Dropout(Module, strict=True):
     def deterministic(self):
         return self.inference
 
-    @jax.named_scope("eqx.nn.Dropout")
+    @named_scope("eqx.nn.Dropout")
     def __call__(
         self,
         x: Array,
         *,
-        key: Optional[PRNGKeyArray] = None,
-        inference: Optional[bool] = None,
-        deterministic: Optional[bool] = None,
+        key: PRNGKeyArray | None = None,
+        inference: bool | None = None,
+        deterministic: bool | None = None,
     ) -> Array:
         """**Arguments:**
 

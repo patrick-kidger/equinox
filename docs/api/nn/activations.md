@@ -5,7 +5,7 @@ In addition to this page, note that JAX also has many activation functions built
 ---
 
 ::: equinox.nn.PReLU
-    selection:
+    options:
         members:
             - __init__
             - __call__

@@ -1,5 +1,4 @@
 import warnings
-from typing import Union
 
 import equinox as eqx
 import jax
@@ -22,6 +21,16 @@ def test_custom_init():
 
 
 def test_linear(getkey):
+    # Zero input shape
+    linear = eqx.nn.Linear(0, 4, key=getkey())
+    x = jrandom.normal(getkey(), (0,))
+    assert linear(x).shape == (4,)
+
+    # Zero output shape
+    linear = eqx.nn.Linear(4, 0, key=getkey())
+    x = jrandom.normal(getkey(), (4,))
+    assert linear(x).shape == (0,)
+
     # Positional arguments
     linear = eqx.nn.Linear(3, 4, key=getkey())
     x = jrandom.normal(getkey(), (3,))
@@ -1324,7 +1333,7 @@ def test_poolbackprop():
 
 def test_poolnetworkbackprop(getkey):
     class CNN(eqx.Module):
-        conv_layer: list[Union[eqx.nn.Conv2d, eqx.nn.MaxPool2d]]
+        conv_layer: list[eqx.nn.Conv2d | eqx.nn.MaxPool2d]
         linear_layers: list[eqx.nn.Linear]
 
         def __init__(self, key):

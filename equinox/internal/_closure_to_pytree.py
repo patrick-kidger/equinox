@@ -10,7 +10,7 @@
 
 import inspect
 import types
-from typing import Any, Optional
+from typing import Any
 
 import jax.tree_util as jtu
 
@@ -67,7 +67,7 @@ class _FunctionWithEquality:
 
 class _Closure(Module):
     fn: _FunctionWithEquality
-    contents: Optional[tuple[Any, ...]]
+    contents: tuple[Any, ...] | None
 
     def __init__(self, fn: types.FunctionType):
         self.fn = _FunctionWithEquality(fn)

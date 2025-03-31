@@ -1,5 +1,5 @@
 # Module
 
 ::: equinox.Module
-    selection:
+    options:
         members: false

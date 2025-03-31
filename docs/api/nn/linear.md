@@ -1,7 +1,7 @@
 # Linear
 
 ::: equinox.nn.Linear
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -9,7 +9,7 @@
 ---
 
 ::: equinox.nn.Identity
-    selection:
+    options:
         members:
             - __init__
             - __call__

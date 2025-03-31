@@ -1,6 +1,6 @@
 import functools as ft
 from collections.abc import Callable
-from typing import Any, Optional, Union
+from typing import Any
 
 import jax
 import jax.core
@@ -182,7 +182,7 @@ class _MetaTransposeTransform(Module):
 
 
 class _MetaBatchTransform(Module):
-    batch_axes: PyTree[Union[batching.NotMapped, int]]  # pyright: ignore
+    batch_axes: PyTree[batching.NotMapped | int]  # pyright: ignore
 
     def __call__(self, static_fn):
         return filter_vmap(static_fn, in_axes=(self.batch_axes,))
@@ -346,7 +346,7 @@ _index_to_fn = []
 
 
 class _NoInlineWrapper(Module):
-    dynamic_index: Int[Union[Array, np.ndarray], ""]
+    dynamic_index: Int[Array | np.ndarray, ""]
     abstract_fn: Callable = field(static=True)
     dynamic_fn: Any
 
@@ -364,7 +364,7 @@ class _NoInlineWrapper(Module):
         )
 
 
-def noinline(fn: Callable, abstract_fn: Optional[Callable] = None) -> Callable:  # pyright: ignore
+def noinline(fn: Callable, abstract_fn: Callable | None = None) -> Callable:  # pyright: ignore
     """Marks a function as not being inlined into a larger computation.
     This can help to reduce compile time at the expense of increased runtime.
 

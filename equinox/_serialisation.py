@@ -2,7 +2,7 @@ import functools as ft
 import pathlib
 from collections.abc import Callable
 from contextlib import contextmanager
-from typing import Any, BinaryIO, Optional, Union
+from typing import Any, BinaryIO
 
 import jax
 import jax.numpy as jnp
@@ -21,7 +21,7 @@ def _ordered_tree_map(
     f: Callable[..., Any],
     tree: Any,
     *rest: Any,
-    is_leaf: Optional[Callable[[Any], bool]] = None,
+    is_leaf: Callable[[Any], bool] | None = None,
 ) -> Any:
     """Like jax.tree_util.tree_map, but guaranteed to iterate over the tree
     in fixed order. (Namely depth-first left-to-right.)
@@ -149,7 +149,7 @@ def _with_suffix(path):
 
 
 @contextmanager
-def _maybe_open(path_or_file: Union[str, pathlib.Path, BinaryIO], mode: str):
+def _maybe_open(path_or_file: str | pathlib.Path | BinaryIO, mode: str):
     """A function that unifies handling of file objects and path-like objects
     by opening the latter."""
     if isinstance(path_or_file, (str, pathlib.Path)):
@@ -189,10 +189,10 @@ def _assert_same(array_impl_type):
 
 
 def tree_serialise_leaves(
-    path_or_file: Union[str, pathlib.Path, BinaryIO],
+    path_or_file: str | pathlib.Path | BinaryIO,
     pytree: PyTree,
     filter_spec=default_serialise_filter_spec,
-    is_leaf: Optional[Callable[[Any], bool]] = None,
+    is_leaf: Callable[[Any], bool] | None = None,
 ) -> None:
     """Save the leaves of a PyTree to file.
 
@@ -246,10 +246,10 @@ def tree_serialise_leaves(
 
 
 def tree_deserialise_leaves(
-    path_or_file: Union[str, pathlib.Path, BinaryIO],
+    path_or_file: str | pathlib.Path | BinaryIO,
     like: PyTree,
     filter_spec=default_deserialise_filter_spec,
-    is_leaf: Optional[Callable[[Any], bool]] = None,
+    is_leaf: Callable[[Any], bool] | None = None,
 ) -> PyTree:
     """Load the leaves of a PyTree from a file.
 

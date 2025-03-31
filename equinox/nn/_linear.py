@@ -1,29 +1,28 @@
 import math
-from typing import Any, Literal, Optional, TypeVar, Union
+from typing import Any, Literal, TypeVar
 
-import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 from jaxtyping import Array, PRNGKeyArray
 
 from .._misc import default_floating_dtype
 from .._module import field, Module
-from ._misc import default_init
+from ._misc import default_init, named_scope
 
 
 class Linear(Module, strict=True):
     """Performs a linear transformation."""
 
     weight: Array
-    bias: Optional[Array]
-    in_features: Union[int, Literal["scalar"]] = field(static=True)
-    out_features: Union[int, Literal["scalar"]] = field(static=True)
+    bias: Array | None
+    in_features: int | Literal["scalar"] = field(static=True)
+    out_features: int | Literal["scalar"] = field(static=True)
     use_bias: bool = field(static=True)
 
     def __init__(
         self,
-        in_features: Union[int, Literal["scalar"]],
-        out_features: Union[int, Literal["scalar"]],
+        in_features: int | Literal["scalar"],
+        out_features: int | Literal["scalar"],
         use_bias: bool = True,
         dtype=None,
         *,
@@ -52,7 +51,10 @@ class Linear(Module, strict=True):
         wkey, bkey = jrandom.split(key, 2)
         in_features_ = 1 if in_features == "scalar" else in_features
         out_features_ = 1 if out_features == "scalar" else out_features
-        lim = 1 / math.sqrt(in_features_)
+        if in_features_ == 0:
+            lim = 1.0
+        else:
+            lim = 1 / math.sqrt(in_features_)
         wshape = (out_features_, in_features_)
         self.weight = default_init(wkey, wshape, dtype, lim)
         bshape = (out_features_,)
@@ -62,8 +64,8 @@ class Linear(Module, strict=True):
         self.out_features = out_features
         self.use_bias = use_bias
 
-    @jax.named_scope("eqx.nn.Linear")
-    def __call__(self, x: Array, *, key: Optional[PRNGKeyArray] = None) -> Array:
+    @named_scope("eqx.nn.Linear")
+    def __call__(self, x: Array, *, key: PRNGKeyArray | None = None) -> Array:
         """**Arguments:**
 
         - `x`: The input. Should be a JAX array of shape `(in_features,)`. (Or shape
@@ -112,8 +114,8 @@ class Identity(Module, strict=True):
     def __init__(self, *args: Any, **kwargs: Any):
         """Consumes arbitrary `*args` and `**kwargs` but ignores them."""
 
-    @jax.named_scope("eqx.nn.Identity")
-    def __call__(self, x: _T, *, key: Optional[PRNGKeyArray] = None) -> _T:
+    @named_scope("eqx.nn.Identity")
+    def __call__(self, x: _T, *, key: PRNGKeyArray | None = None) -> _T:
         """**Arguments:**
 
         - `x`: The input, of any type.

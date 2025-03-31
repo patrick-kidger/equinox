@@ -1,5 +1,6 @@
 from collections.abc import Hashable, Sequence
-from typing import Literal, Optional, Union
+from typing import Literal, Optional
+
 
 import jax
 import jax.lax as lax
@@ -8,6 +9,7 @@ from jaxtyping import Array, Bool, Float, Int, PRNGKeyArray
 
 from .._misc import default_floating_dtype
 from .._module import field
+from ._misc import named_scope
 from ._sequential import StatefulLayer
 from ._stateful import State, StateIndex
 
@@ -75,8 +77,8 @@ class BatchNorm(StatefulLayer, strict=True):
         ```
     """  # noqa: E501
 
-    weight: Optional[Float[Array, "input_size"]]
-    bias: Optional[Float[Array, "input_size"]]
+    weight: Float[Array, "input_size"] | None
+    bias: Float[Array, "input_size"] | None
     ema_first_time_index: Optional[StateIndex[Bool[Array, ""]]]
     ema_state_index: Optional[
         StateIndex[tuple[Float[Array, "input_size"], Float[Array, "input_size"]]]
@@ -90,7 +92,7 @@ class BatchNorm(StatefulLayer, strict=True):
             ],
         ]
     ]
-    axis_name: Union[Hashable, Sequence[Hashable]]
+    axis_name: Hashable | Sequence[Hashable]
     inference: bool
     input_size: int = field(static=True)
     eps: float = field(static=True)
@@ -101,7 +103,7 @@ class BatchNorm(StatefulLayer, strict=True):
     def __init__(
         self,
         input_size: int,
-        axis_name: Union[Hashable, Sequence[Hashable]],
+        axis_name: Hashable | Sequence[Hashable],
         mode: str = "ema",
         eps: float = 1e-5,
         channelwise_affine: bool = True,
@@ -170,14 +172,14 @@ class BatchNorm(StatefulLayer, strict=True):
         self.channelwise_affine = channelwise_affine
         self.momentum = momentum
 
-    @jax.named_scope("eqx.nn.BatchNorm")
+    @named_scope("eqx.nn.BatchNorm")
     def __call__(
         self,
         x: Array,
         state: State,
         *,
-        key: Optional[PRNGKeyArray] = None,
-        inference: Optional[bool] = None,
+        key: PRNGKeyArray | None = None,
+        inference: bool | None = None,
     ) -> tuple[Array, State]:
         """**Arguments:**
 

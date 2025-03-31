@@ -1,5 +1,5 @@
 import functools as ft
-from typing import Any, Union
+from typing import Any
 
 import equinox as eqx
 import jax
@@ -96,7 +96,7 @@ def test_methods(call, outer):
     num_traces = 0
 
     class M(eqx.Module):
-        increment: Union[int, jax.Array]
+        increment: int | jax.Array
 
         if call:
 

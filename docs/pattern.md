@@ -182,7 +182,7 @@ class AbstractPolynomialInterpolation(AbstractInterpolation)
 ```
 This method is something that Equinox will look for, and if present it will be ran after initialisation. This is an Equinox-specific extension designed to support this design pattern.
 
-See [checking invariants](../api/module/advanced_fields/#checking-invariants) for more details.
+See [checking invariants](api/module/advanced_fields.md#checking-invariants) for more details.
 
 ## Extensions and FAQ
 

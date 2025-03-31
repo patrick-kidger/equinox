@@ -7,7 +7,7 @@ These are useful when building fairly straightforward models. But for anything n
 ---
 
 ::: equinox.nn.Sequential
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -15,7 +15,7 @@ These are useful when building fairly straightforward models. But for anything n
 ---
 
 ::: equinox.nn.Lambda
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -23,6 +23,6 @@ These are useful when building fairly straightforward models. But for anything n
 ---
 
 ::: equinox.nn.StatefulLayer
-    selection:
+    options:
         members:
             - is_stateful

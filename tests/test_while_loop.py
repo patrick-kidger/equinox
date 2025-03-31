@@ -1,6 +1,5 @@
 import functools as ft
 import timeit
-from typing import Optional
 
 import equinox as eqx
 import equinox.internal as eqxi
@@ -16,7 +15,7 @@ from jaxtyping import Array
 from .helpers import tree_allclose
 
 
-def _get_problem(key, *, num_steps: Optional[int]):
+def _get_problem(key, *, num_steps: int | None):
     valkey1, valkey2, modelkey = jr.split(key, 3)
 
     def cond_fun(carry):

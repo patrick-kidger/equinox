@@ -1,7 +1,7 @@
 # Normalisation
 
 ::: equinox.nn.LayerNorm
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -9,7 +9,7 @@
 ---
 
 ::: equinox.nn.RMSNorm
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -17,7 +17,7 @@
 ---
 
 ::: equinox.nn.GroupNorm
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -25,7 +25,7 @@
 ---
 
 ::: equinox.nn.BatchNorm
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -33,7 +33,7 @@
 ---
 
 ::: equinox.nn.SpectralNorm
-    selection:
+    options:
         members:
             - __init__
             - __call__
@@ -41,7 +41,7 @@
 ---
 
 ::: equinox.nn.WeightNorm
-    selection:
+    options:
         members:
             - __init__
             - __call__

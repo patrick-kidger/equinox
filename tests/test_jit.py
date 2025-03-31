@@ -1,5 +1,4 @@
 import warnings
-from typing import Union
 
 import equinox as eqx
 import jax
@@ -117,7 +116,7 @@ def test_methods(call, outer):
     num_traces = 0
 
     class M(eqx.Module):
-        increment: Union[int, jax.Array]
+        increment: int | jax.Array
 
         if call:
 

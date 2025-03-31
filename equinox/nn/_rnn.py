@@ -1,7 +1,5 @@
 import math
-from typing import Optional
 
-import jax
 import jax.nn as jnn
 import jax.numpy as jnp
 import jax.random as jrandom
@@ -9,7 +7,7 @@ from jaxtyping import Array, PRNGKeyArray
 
 from .._misc import default_floating_dtype
 from .._module import field, Module
-from ._misc import default_init
+from ._misc import default_init, named_scope
 
 
 class GRUCell(Module, strict=True):
@@ -36,8 +34,8 @@ class GRUCell(Module, strict=True):
 
     weight_ih: Array
     weight_hh: Array
-    bias: Optional[Array]
-    bias_n: Optional[Array]
+    bias: Array | None
+    bias_n: Array | None
     input_size: int = field(static=True)
     hidden_size: int = field(static=True)
     use_bias: bool = field(static=True)
@@ -82,10 +80,8 @@ class GRUCell(Module, strict=True):
         self.hidden_size = hidden_size
         self.use_bias = use_bias
 
-    @jax.named_scope("eqx.nn.GRUCell")
-    def __call__(
-        self, input: Array, hidden: Array, *, key: Optional[PRNGKeyArray] = None
-    ):
+    @named_scope("eqx.nn.GRUCell")
+    def __call__(self, input: Array, hidden: Array, *, key: PRNGKeyArray | None = None):
         """**Arguments:**
 
         - `input`: The input, which should be a JAX array of shape `(input_size,)`.
@@ -137,7 +133,7 @@ class LSTMCell(Module, strict=True):
 
     weight_ih: Array
     weight_hh: Array
-    bias: Optional[Array]
+    bias: Array | None
     input_size: int = field(static=True)
     hidden_size: int = field(static=True)
     use_bias: bool = field(static=True)
@@ -178,7 +174,7 @@ class LSTMCell(Module, strict=True):
         self.hidden_size = hidden_size
         self.use_bias = use_bias
 
-    @jax.named_scope("eqx.nn.LSTMCell")
+    @named_scope("eqx.nn.LSTMCell")
     def __call__(self, input, hidden, *, key=None):
         """**Arguments:**
 

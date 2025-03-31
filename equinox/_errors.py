@@ -4,7 +4,7 @@ import traceback
 import types
 import warnings
 from collections.abc import Sequence
-from typing import Literal, Union
+from typing import Literal
 
 import jax
 import jax._src.traceback_util as traceback_util
@@ -27,7 +27,7 @@ from ._unvmap import unvmap_any, unvmap_max
 traceback_util.register_exclusion(__file__)
 
 
-def _nan_like(x: Union[Array, np.ndarray]) -> Union[Array, np.ndarray]:
+def _nan_like(x: Array | np.ndarray) -> Array | np.ndarray:
     dtype = np.result_type(x)
     if np.issubdtype(dtype, np.inexact):
         return np.broadcast_to(np.array(np.nan, dtype), x.shape)
@@ -84,8 +84,8 @@ def _error(x, pred, index, *, msgs, on_error, stack):
         def raises(_index):
             # Sneakily smuggle out the information about the error. Inspired by
             # `sys.last_value`.
-            _jit.last_msg = msg = msgs[_index.item()]
-            _jit.last_stack = stack
+            msg = msgs[_index.item()]
+            _jit.last_error_info = (msg, stack)
             raise _EquinoxRuntimeError(
                 f"{msg}\n\n\n"
                 "--------------------\n"
@@ -327,13 +327,19 @@ def branched_error_if_impl(
             else:
                 return x
 
-    tb = None
-    for f, lineno in traceback.walk_stack(None):
-        if f.f_locals.get("__equinox_filter_jit__", False):
-            break
-        if traceback_util.include_frame(f):
-            tb = types.TracebackType(tb, f, f.f_lasti, lineno)
-    stack = "".join(traceback.format_tb(tb)).rstrip()
+    stack: list[bytes | str] = []
+    for frame, lineno in traceback.walk_stack(None):
+        frame_id = frame.f_locals.get("__equinox_jit_id__", None)
+        if type(frame_id) is bytes:
+            stack.append(frame_id)
+        if traceback_util.include_frame(frame):
+            # This seems to be the simplest way to format a single frame?
+            frame_str: str = "".join(
+                traceback.format_tb(
+                    types.TracebackType(None, frame, frame.f_lasti, lineno)
+                )
+            )
+            stack.append(frame_str)
     dynamic_x, static_x = partition(x, is_array)
     flat = jtu.tree_leaves(dynamic_x)
     if len(flat) == 0:

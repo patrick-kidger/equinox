@@ -1,5 +1,5 @@
 import warnings
-from typing import Any, cast, TYPE_CHECKING, Union
+from typing import Any, cast, TYPE_CHECKING
 
 import jax._src.traceback_util as traceback_util
 import jax.core
@@ -140,7 +140,7 @@ following entries:
 
 
 class EnumerationItem(Module):
-    _value: Int[Union[Array, np.ndarray[Any, np.dtype[np.signedinteger]]], ""]
+    _value: Int[Array | np.ndarray[Any, np.dtype[np.signedinteger]], ""]
     # Should have annotation `"type[Enumeration]"`, but this fails due to beartype bug
     # #289.
     _enumeration: Any = field(static=True)

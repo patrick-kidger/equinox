@@ -2,7 +2,7 @@ import functools as ft
 import inspect
 import weakref
 from collections.abc import Callable
-from typing import Optional, overload, TypeVar
+from typing import overload, TypeVar
 from typing_extensions import ParamSpec
 
 from .._custom_types import sentinel
@@ -32,7 +32,7 @@ class _Weakrefable:
 
 class _AssertMaxTraces(Module):
     fn: Callable
-    max_traces: Optional[int] = field(static=True)
+    max_traces: int | None = field(static=True)
     tag: _Weakrefable = field(static=True)
 
     def __init__(self, fn, max_traces):
@@ -85,18 +85,18 @@ class _AssertMaxTraces(Module):
 
 @overload
 def assert_max_traces(
-    fn: Callable[_P, _T], *, max_traces: Optional[int]
+    fn: Callable[_P, _T], *, max_traces: int | None
 ) -> Callable[_P, _T]: ...
 
 
 @overload
 def assert_max_traces(
     *,
-    max_traces: Optional[int],
+    max_traces: int | None,
 ) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]: ...
 
 
-def assert_max_traces(fn: Callable = sentinel, *, max_traces: Optional[int]):
+def assert_max_traces(fn: Callable = sentinel, *, max_traces: int | None):
     """Asserts that the wrapped callable is not called more than `max_traces` times.
 
     The typical use-case for this is to check that a JIT-compiled function is not
@@ -167,7 +167,7 @@ def get_num_traces(fn) -> int:
     return num_traces
 
 
-def _get_num_traces(fn) -> Optional[int]:
+def _get_num_traces(fn) -> int | None:
     if isinstance(fn, _AssertMaxTraces):
         return _traces[fn.tag]
     elif hasattr(fn, "__wrapped__"):
