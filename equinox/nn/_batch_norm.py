@@ -1,7 +1,6 @@
 from collections.abc import Hashable, Sequence
 from typing import Literal, Optional
 
-
 import jax
 import jax.lax as lax
 import jax.numpy as jnp
