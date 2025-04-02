@@ -142,7 +142,7 @@ def test_sequential(getkey):
         [
             eqx.nn.Linear(2, 4, key=getkey()),
             eqx.nn.Linear(4, 1, key=getkey()),
-            eqx.nn.BatchNorm(1, axis_name="batch"),
+            eqx.nn.BatchNorm(1, axis_name="batch", mode="ema"),
             eqx.nn.Linear(1, 3, key=getkey()),
         ]
     )
@@ -176,7 +176,7 @@ def test_nested_sequential(inner_stateful, outer_stateful, getkey):
         inner_seq = eqx.nn.Sequential(
             [
                 eqx.nn.Linear(2, 4, key=getkey()),
-                eqx.nn.BatchNorm(4, axis_name="batch")
+                eqx.nn.BatchNorm(4, axis_name="batch", mode="ema")
                 if inner_stateful
                 else eqx.nn.Identity(),
                 eqx.nn.Linear(4, 3, key=getkey()),
@@ -186,7 +186,7 @@ def test_nested_sequential(inner_stateful, outer_stateful, getkey):
             [
                 eqx.nn.Linear(5, 2, key=getkey()),
                 inner_seq,
-                eqx.nn.BatchNorm(3, axis_name="batch")
+                eqx.nn.BatchNorm(3, axis_name="batch", mode="ema")
                 if outer_stateful
                 else eqx.nn.Identity(),
                 eqx.nn.Linear(3, 6, key=getkey()),
