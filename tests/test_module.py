@@ -2,6 +2,7 @@ import abc
 import dataclasses
 import functools as ft
 import inspect
+import pickle
 from collections.abc import Callable
 from dataclasses import InitVar
 from typing import Any
@@ -12,6 +13,7 @@ import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import pytest
+from jaxtyping import Array, Float
 
 from .helpers import tree_allclose
 
@@ -1241,3 +1243,17 @@ def test_converter_subclass_post_init():
     ax, bx = xs
     assert type(ax) is int
     assert type(bx) is int
+
+
+class _RoundTrip(eqx.Module):
+    foo: Float[Array, ""]
+
+
+# https://github.com/patrick-kidger/equinox/issues/992
+def test_tree_roundtrip_serialise_roundtrip():
+    x = _RoundTrip(jnp.array(1.0))
+    leaves, tree = jtu.tree_flatten(x)
+    x = jtu.tree_unflatten(tree, leaves)
+    x = pickle.loads(pickle.dumps(x))
+    tree2 = jtu.tree_structure(x)
+    assert tree == tree2

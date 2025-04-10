@@ -881,7 +881,7 @@ def _flatten_module(module: "Module", with_keys: bool):
                 dynamic_field_values.append(value)
     sentinel = object()
     for name in _wrapper_field_names:
-        value = getattr(module, name, sentinel)
+        value = module.__dict__.get(name, sentinel)
         if value is not sentinel:
             wrapper_field_names.append(name)
             wrapper_field_values.append(value)
