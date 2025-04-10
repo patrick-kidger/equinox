@@ -19,7 +19,7 @@ import jax
 import jax._src.traceback_util as traceback_util
 import jax.tree_util as jtu
 import numpy as np
-from jaxtyping import Array, Bool, PyTreeDef
+from jaxtyping import Array, Bool, PyTree, PyTreeDef
 
 from ._better_abstract import ABCMeta, dataclass
 from ._caches import cache_clears
@@ -133,6 +133,8 @@ def field(
 # This is the core of Equinox.
 #
 
+_flatten_sentinel: Any = doc_repr(object(), "-")
+
 
 @dataclass(frozen=True)
 class StrictConfig:
@@ -172,6 +174,18 @@ Both `allow_*` options should be used with care! They exist only to make it easi
 transition a codebase from non-strict to strict `Module`s in a backward-compatible
 manner. If you are starting a new codebase you should not have need of them.
 """
+
+
+def _check_field(module: "Module", name: str, /) -> bool:
+    """Check field for initialization / property overrides."""
+    try:
+        # Not `getattr` so that we don't pick up `property`s.
+        module.__dict__[name]
+    except KeyError:
+        # Uninitialised values during `__init__`, or when `property`s overwrite a
+        # field.
+        return False
+    return True
 
 
 # Inherits from ABCMeta to support `eqx.{AbstractVar, AbstractClassVar}` and
@@ -478,11 +492,43 @@ class _ActualModuleMeta(ABCMeta):
                                     "attempting to override "
                                     f"`{base.__module__}.{base.__qualname__}.{k}`."
                                 )
+
         # [Step 6] Register as a pytree.
+        data_fs = tuple(
+            f.name
+            for f in dataclasses.fields(cls)
+            if not f.metadata.get("static", False)
+        )
+        static_fs = tuple(
+            f.name for f in dataclasses.fields(cls) if f.metadata.get("static", False)
+        )
+
+        def flatten_module(
+            obj: "Module", /, with_keys: bool
+        ) -> tuple[tuple[PyTree, ...], _FlattenedData]:
+            # Static metadata, placed in aux.
+            static_vs = [getattr(obj, name) for name in static_fs]
+            # Subnodes in the PyTree
+            dynamic_fs = [name for name in data_fs if _check_field(obj, name)]
+            if with_keys:
+                dynamic_vs = [(jtu.GetAttrKey(k), getattr(obj, k)) for k in dynamic_fs]
+            else:
+                dynamic_vs = [getattr(obj, k) for k in dynamic_fs]
+            # Python metadata like `__doc__` and `__module__`.
+            wrapper_fs_and_vs = [
+                (k, obj.__dict__.get(k, _flatten_sentinel))
+                for k in _wrapper_field_names
+            ]
+
+            aux = _FlattenedData(
+                tuple(dynamic_fs), static_fs, tuple(static_vs), tuple(wrapper_fs_and_vs)
+            )
+            return tuple(dynamic_vs), aux
+
         jtu.register_pytree_with_keys(
             cls,
-            flatten_with_keys=ft.partial(_flatten_module, with_keys=True),  # pyright: ignore
-            flatten_func=ft.partial(_flatten_module, with_keys=False),  # pyright: ignore
+            flatten_with_keys=ft.partial(flatten_module, with_keys=True),  # pyright: ignore
+            flatten_func=ft.partial(flatten_module, with_keys=False),  # pyright: ignore
             unflatten_func=ft.partial(_unflatten_module, cls),  # pyright: ignore
         )
         # Done!
@@ -833,13 +879,12 @@ cache_clears.append(_make_initable.cache_clear)
 
 
 # Used to provide a pretty repr when doing `jtu.tree_structure(SomeModule(...))`.
-@dataclass()
+@dataclass(slots=True)
 class _FlattenedData:
     dynamic_field_names: tuple
     static_field_names: tuple
     static_field_values: tuple
-    wrapper_field_names: tuple
-    wrapper_field_values: tuple
+    wrapper_field_names_and_values: tuple
 
     def __repr__(self):
         x = (
@@ -848,51 +893,6 @@ class _FlattenedData:
             self.static_field_values,
         )
         return repr(x)[1:-1]
-
-
-def _flatten_module(module: "Module", with_keys: bool):
-    # Subnodes in the PyTree
-    dynamic_field_names = []
-    dynamic_field_values = []
-    # Static metadata, placed in aux.
-    static_field_names = []
-    static_field_values = []
-    # Python metadata like `__doc__` and `__module__`.
-    wrapper_field_names = []
-    wrapper_field_values = []
-
-    for field_ in dataclasses.fields(module):
-        name = field_.name
-        try:
-            # Not `getattr` so that we don't pick up `property`s.
-            value = module.__dict__[name]
-        except KeyError:
-            # Uninitialised values during `__init__`, or when `property`s overwrite a
-            # field.
-            continue
-        if field_.metadata.get("static", False):
-            static_field_names.append(name)
-            static_field_values.append(value)
-        else:
-            dynamic_field_names.append(name)
-            if with_keys:
-                dynamic_field_values.append((jtu.GetAttrKey(name), value))
-            else:
-                dynamic_field_values.append(value)
-    sentinel = object()
-    for name in _wrapper_field_names:
-        value = module.__dict__.get(name, sentinel)
-        if value is not sentinel:
-            wrapper_field_names.append(name)
-            wrapper_field_values.append(value)
-    aux = _FlattenedData(
-        tuple(dynamic_field_names),
-        tuple(static_field_names),
-        tuple(static_field_values),
-        tuple(wrapper_field_names),
-        tuple(wrapper_field_values),
-    )
-    return tuple(dynamic_field_values), aux
 
 
 def _unflatten_module(cls: type["Module"], aux: _FlattenedData, dynamic_field_values):
@@ -906,7 +906,9 @@ def _unflatten_module(cls: type["Module"], aux: _FlattenedData, dynamic_field_va
         object.__setattr__(module, name, value)
     for name, value in zip(aux.static_field_names, aux.static_field_values):
         object.__setattr__(module, name, value)
-    for name, value in zip(aux.wrapper_field_names, aux.wrapper_field_values):
+    for name, value in aux.wrapper_field_names_and_values:
+        if value is _flatten_sentinel:
+            continue
         object.__setattr__(module, name, value)
     return module
 
