@@ -19,7 +19,7 @@ import jax
 import jax._src.traceback_util as traceback_util
 import jax.tree_util as jtu
 import numpy as np
-from jaxtyping import Array, Bool, PyTreeDef
+from jaxtyping import Array, Bool, PyTree, PyTreeDef
 
 from ._better_abstract import ABCMeta, dataclass
 from ._caches import cache_clears
@@ -47,12 +47,9 @@ def static_field(**kwargs):
     return field(**kwargs, static=True)
 
 
-_converter_sentinel: Any = doc_repr(object(), "lambda x: x")
-
-
 def field(
     *,
-    converter: Callable[[Any], Any] = _converter_sentinel,
+    converter: Callable[[Any], Any] | None = None,
     static: bool = False,
     **kwargs,
 ):
@@ -65,6 +62,7 @@ def field(
         `bool`/`int`/`float`/`complex` values to JAX arrays. This is ran after the
         `__init__` method (i.e. when using a user-provided `__init__`), and after
         `__post_init__` (i.e. when using the default dataclass initialisation).
+        If `converter` is `None`, then no converter is registered.
     - `static`: whether the field should not interact with any JAX transform at all (by
         making it part of the PyTree structure rather than a leaf).
     - `**kwargs`: All other keyword arguments are passed on to `dataclass.field`.
@@ -103,7 +101,7 @@ def field(
     except KeyError:
         metadata = {}
     if "converter" in metadata:
-        raise ValueError("Cannot use metadata with `static` already set.")
+        raise ValueError("Cannot use metadata with `converter` already set.")
     if "static" in metadata:
         raise ValueError("Cannot use metadata with `static` already set.")
     # We don't just use `lambda x: x` as the default, so that this works:
@@ -121,7 +119,7 @@ def field(
     # Oddities like the above are to be discouraged, of course, but in particular
     # `field(init=False)` was sometimes used to denote an abstract field (prior to the
     # introduction of `AbstractVar`), so we do want to support this.
-    if converter is not _converter_sentinel:
+    if converter is not None:
         metadata["converter"] = converter
     if static:
         metadata["static"] = True
@@ -132,6 +130,8 @@ def field(
 # Part 2: Modules!
 # This is the core of Equinox.
 #
+
+_flatten_sentinel: Any = doc_repr(object(), "-")
 
 
 @dataclass(frozen=True)
@@ -302,25 +302,24 @@ class _ActualModuleMeta(ABCMeta):
         for f in dataclasses.fields(cls):
             if f.name not in cls.__init__.__annotations__:
                 continue  # Odd behaviour, so skip.
+
+            if (converter := f.metadata.get("converter")) is None:
+                continue  # No converter, so skip.
+
             try:
-                converter = f.metadata["converter"]
-            except KeyError:
-                pass
+                signature = inspect.signature(converter)
+            except ValueError:
+                # e.g. `inspect.signature(str)` fails
+                converter_annotation = Any
             else:
-                try:
-                    signature = inspect.signature(converter)
-                except ValueError:
-                    # e.g. `inspect.signature(str)` fails
+                parameters = list(signature.parameters.values())
+                if len(parameters) == 0:
+                    # No idea what happened, but play it safe.
                     converter_annotation = Any
                 else:
-                    parameters = list(signature.parameters.values())
-                    if len(parameters) == 0:
-                        # No idea what happened, but play it safe.
+                    converter_annotation = parameters[0].annotation
+                    if converter_annotation is inspect.Signature.empty:
                         converter_annotation = Any
-                    else:
-                        converter_annotation = parameters[0].annotation
-                        if converter_annotation is inspect.Signature.empty:
-                            converter_annotation = Any
                 cls.__init__.__annotations__[f.name] = converter_annotation
 
         # Registering here records that the `dataclass(...)` call has happened.
@@ -478,11 +477,44 @@ class _ActualModuleMeta(ABCMeta):
                                     "attempting to override "
                                     f"`{base.__module__}.{base.__qualname__}.{k}`."
                                 )
+
         # [Step 6] Register as a pytree.
+        data_fs = tuple(
+            f.name
+            for f in dataclasses.fields(cls)
+            if not f.metadata.get("static", False)
+        )
+        static_fs = tuple(
+            f.name for f in dataclasses.fields(cls) if f.metadata.get("static", False)
+        )
+
+        def flatten_module(
+            obj: "Module", /, with_keys: bool
+        ) -> tuple[tuple[PyTree, ...], _FlattenedData]:
+            # Static metadata, placed in aux.
+            static_vs = [getattr(obj, name) for name in static_fs]
+            # Subnodes in the PyTree (filtering on `__dict__` to avoid picking
+            # up `property` and uninitialized values).
+            dynamic_fs = [name for name in data_fs if name in obj.__dict__]
+            if with_keys:
+                dynamic_vs = [(jtu.GetAttrKey(k), getattr(obj, k)) for k in dynamic_fs]
+            else:
+                dynamic_vs = [getattr(obj, k) for k in dynamic_fs]
+            # Python metadata like `__doc__` and `__module__`.
+            wrapper_fs_and_vs = [
+                (k, obj.__dict__.get(k, _flatten_sentinel))
+                for k in _wrapper_field_names
+            ]
+
+            aux = _FlattenedData(
+                tuple(dynamic_fs), static_fs, tuple(static_vs), tuple(wrapper_fs_and_vs)
+            )
+            return tuple(dynamic_vs), aux
+
         jtu.register_pytree_with_keys(
             cls,
-            flatten_with_keys=ft.partial(_flatten_module, with_keys=True),  # pyright: ignore
-            flatten_func=ft.partial(_flatten_module, with_keys=False),  # pyright: ignore
+            flatten_with_keys=ft.partial(flatten_module, with_keys=True),  # pyright: ignore
+            flatten_func=ft.partial(flatten_module, with_keys=False),  # pyright: ignore
             unflatten_func=ft.partial(_unflatten_module, cls),  # pyright: ignore
         )
         # Done!
@@ -513,18 +545,16 @@ class _ActualModuleMeta(ABCMeta):
         assert not _is_abstract(cls)
         # [Step 3] Run converters
         for field in dataclasses.fields(cls):
+            if (converter := field.metadata.get("converter")) is None:
+                continue
+
             try:
-                converter = field.metadata["converter"]
-            except KeyError:
+                value = getattr(self, field.name)
+            except AttributeError:
+                # Let the all-fields-are-filled check handle the error.
                 pass
             else:
-                try:
-                    value = getattr(self, field.name)
-                except AttributeError:
-                    # Let the all-fields-are-filled check handle the error.
-                    pass
-                else:
-                    setattr(self, field.name, converter(value))
+                setattr(self, field.name, converter(value))
         # [Step 4] Check that all fields are occupied.
         missing_names = {
             field.name
@@ -833,13 +863,12 @@ cache_clears.append(_make_initable.cache_clear)
 
 
 # Used to provide a pretty repr when doing `jtu.tree_structure(SomeModule(...))`.
-@dataclass()
+@dataclass(slots=True)
 class _FlattenedData:
     dynamic_field_names: tuple
     static_field_names: tuple
     static_field_values: tuple
-    wrapper_field_names: tuple
-    wrapper_field_values: tuple
+    wrapper_field_names_and_values: tuple
 
     def __repr__(self):
         x = (
@@ -848,51 +877,6 @@ class _FlattenedData:
             self.static_field_values,
         )
         return repr(x)[1:-1]
-
-
-def _flatten_module(module: "Module", with_keys: bool):
-    # Subnodes in the PyTree
-    dynamic_field_names = []
-    dynamic_field_values = []
-    # Static metadata, placed in aux.
-    static_field_names = []
-    static_field_values = []
-    # Python metadata like `__doc__` and `__module__`.
-    wrapper_field_names = []
-    wrapper_field_values = []
-
-    for field_ in dataclasses.fields(module):
-        name = field_.name
-        try:
-            # Not `getattr` so that we don't pick up `property`s.
-            value = module.__dict__[name]
-        except KeyError:
-            # Uninitialised values during `__init__`, or when `property`s overwrite a
-            # field.
-            continue
-        if field_.metadata.get("static", False):
-            static_field_names.append(name)
-            static_field_values.append(value)
-        else:
-            dynamic_field_names.append(name)
-            if with_keys:
-                dynamic_field_values.append((jtu.GetAttrKey(name), value))
-            else:
-                dynamic_field_values.append(value)
-    sentinel = object()
-    for name in _wrapper_field_names:
-        value = module.__dict__.get(name, sentinel)
-        if value is not sentinel:
-            wrapper_field_names.append(name)
-            wrapper_field_values.append(value)
-    aux = _FlattenedData(
-        tuple(dynamic_field_names),
-        tuple(static_field_names),
-        tuple(static_field_values),
-        tuple(wrapper_field_names),
-        tuple(wrapper_field_values),
-    )
-    return tuple(dynamic_field_values), aux
 
 
 def _unflatten_module(cls: type["Module"], aux: _FlattenedData, dynamic_field_values):
@@ -906,7 +890,9 @@ def _unflatten_module(cls: type["Module"], aux: _FlattenedData, dynamic_field_va
         object.__setattr__(module, name, value)
     for name, value in zip(aux.static_field_names, aux.static_field_values):
         object.__setattr__(module, name, value)
-    for name, value in zip(aux.wrapper_field_names, aux.wrapper_field_values):
+    for name, value in aux.wrapper_field_names_and_values:
+        if value is _flatten_sentinel:
+            continue
         object.__setattr__(module, name, value)
     return module
 
