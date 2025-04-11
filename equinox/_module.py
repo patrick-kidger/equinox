@@ -12,14 +12,14 @@ import types
 import warnings
 import weakref
 from collections.abc import Callable
-from typing import Any, cast, Protocol, TYPE_CHECKING, TypeVar
+from typing import Any, cast, Final, Protocol, TYPE_CHECKING, TypeVar
 from typing_extensions import dataclass_transform, ParamSpec
 
 import jax
 import jax._src.traceback_util as traceback_util
 import jax.tree_util as jtu
 import numpy as np
-from jaxtyping import Array, Bool, PyTreeDef
+from jaxtyping import Array, Bool, PyTree, PyTreeDef
 
 from ._better_abstract import ABCMeta, dataclass
 from ._caches import cache_clears
@@ -132,6 +132,8 @@ def field(
 # Part 2: Modules!
 # This is the core of Equinox.
 #
+
+_flatten_sentinel: Final = doc_repr(object(), "-")
 
 
 @dataclass(frozen=True)
@@ -478,13 +480,16 @@ class _ActualModuleMeta(ABCMeta):
                                     "attempting to override "
                                     f"`{base.__module__}.{base.__qualname__}.{k}`."
                                 )
+
         # [Step 6] Register as a pytree.
+        flattener = ModuleFlattener(dataclasses.fields(cls))
         jtu.register_pytree_with_keys(
             cls,
-            flatten_with_keys=ft.partial(_flatten_module, with_keys=True),  # pyright: ignore
-            flatten_func=ft.partial(_flatten_module, with_keys=False),  # pyright: ignore
-            unflatten_func=ft.partial(_unflatten_module, cls),  # pyright: ignore
+            flatten_with_keys=flattener.flatten_with_keys,  # pyright: ignore
+            flatten_func=flattener.flatten,  # pyright: ignore
+            unflatten_func=ft.partial(flattener.unflatten_with_cls, cls),  # pyright: ignore
         )
+
         # Done!
         return cls
 
@@ -833,13 +838,12 @@ cache_clears.append(_make_initable.cache_clear)
 
 
 # Used to provide a pretty repr when doing `jtu.tree_structure(SomeModule(...))`.
-@dataclass()
+@dataclass(slots=True)
 class _FlattenedData:
     dynamic_field_names: tuple
     static_field_names: tuple
     static_field_values: tuple
-    wrapper_field_names: tuple
-    wrapper_field_values: tuple
+    wrapper_field_names_and_values: tuple
 
     def __repr__(self):
         x = (
@@ -850,65 +854,98 @@ class _FlattenedData:
         return repr(x)[1:-1]
 
 
-def _flatten_module(module: "Module", with_keys: bool):
-    # Subnodes in the PyTree
-    dynamic_field_names = []
-    dynamic_field_values = []
-    # Static metadata, placed in aux.
-    static_field_names = []
-    static_field_values = []
-    # Python metadata like `__doc__` and `__module__`.
-    wrapper_field_names = []
-    wrapper_field_values = []
+class ModuleFlattener:
+    """Manager for (un)flattening `Module`."""
 
-    for field_ in dataclasses.fields(module):
-        name = field_.name
-        try:
-            # Not `getattr` so that we don't pick up `property`s.
-            value = module.__dict__[name]
-        except KeyError:
-            # Uninitialised values during `__init__`, or when `property`s overwrite a
-            # field.
-            continue
-        if field_.metadata.get("static", False):
-            static_field_names.append(name)
-            static_field_values.append(value)
-        else:
-            dynamic_field_names.append(name)
-            if with_keys:
-                dynamic_field_values.append((jtu.GetAttrKey(name), value))
-            else:
-                dynamic_field_values.append(value)
-    sentinel = object()
-    for name in _wrapper_field_names:
-        value = module.__dict__.get(name, sentinel)
-        if value is not sentinel:
-            wrapper_field_names.append(name)
-            wrapper_field_values.append(value)
-    aux = _FlattenedData(
-        tuple(dynamic_field_names),
-        tuple(static_field_names),
-        tuple(static_field_values),
-        tuple(wrapper_field_names),
-        tuple(wrapper_field_values),
-    )
-    return tuple(dynamic_field_values), aux
+    __slots__: tuple[str, str] = ("dynamics_fs", "static_fs")
+    dynamics_fs: tuple[str, ...]
+    static_fs: tuple[str, ...]
 
+    def __init__(self, fields: tuple[dataclasses.Field[Any], ...]) -> None:
+        self.dynamics_fs = tuple(
+            f.name for f in fields if not f.metadata.get("static", False)
+        )
+        self.static_fs = tuple(
+            f.name for f in fields if f.metadata.get("static", False)
+        )
 
-def _unflatten_module(cls: type["Module"], aux: _FlattenedData, dynamic_field_values):
-    # This doesn't go via `__init__`. A user may have done something nontrivial there,
-    # and the field values may be dummy values as used in various places throughout JAX.
-    # See also
-    # https://jax.readthedocs.io/en/latest/pytrees.html#custom-pytrees-and-initialization,
-    # which was (I believe) inspired by Equinox's approach here.
-    module = object.__new__(cls)
-    for name, value in zip(aux.dynamic_field_names, dynamic_field_values):
-        object.__setattr__(module, name, value)
-    for name, value in zip(aux.static_field_names, aux.static_field_values):
-        object.__setattr__(module, name, value)
-    for name, value in zip(aux.wrapper_field_names, aux.wrapper_field_values):
-        object.__setattr__(module, name, value)
-    return module
+    def flatten(self, obj: "Module", /) -> tuple[tuple[PyTree, ...], _FlattenedData]:
+        """Flattens a module into a flattened representation."""
+        d = obj.__dict__
+        sntl = _flatten_sentinel
+
+        # Static fields, filtered on property / init state
+        static_vs = [v for k in self.static_fs if (v := d.get(k, sntl)) is not sntl]
+
+        # Build dynamic keys, values in single pass
+        data_fs = []
+        data_vs = []
+        for k in self.dynamics_fs:
+            v = d.get(k, sntl)
+            if v is sntl:
+                continue
+            data_fs.append(k)
+            data_vs.append(v)
+
+        # Wrapper stuff
+        wrapper_fs_and_vs = [(k, d.get(k, sntl)) for k in _wrapper_field_names]
+
+        aux = _FlattenedData(
+            tuple(data_fs), self.static_fs, tuple(static_vs), tuple(wrapper_fs_and_vs)
+        )
+        return tuple(data_vs), aux
+
+    def flatten_with_keys(
+        self, obj: "Module", /
+    ) -> tuple[tuple[tuple[Any, PyTree], ...], _FlattenedData]:
+        """Flattens a module into a flattened representation."""
+        d = obj.__dict__
+        sntl = _flatten_sentinel
+
+        # Static fields, filtered on property / init state
+        static_vs = [v for k in self.static_fs if (v := d.get(k, sntl)) is not sntl]
+
+        # Build dynamic keys, values in single pass
+        data_fs = []
+        data_vs = []
+        for k in self.dynamics_fs:
+            v = d.get(k, sntl)
+            if v is sntl:
+                continue
+            data_fs.append(k)
+            data_vs.append((jtu.GetAttrKey(k), v))
+
+        # Wrapper stuff
+        wrapper_fs_and_vs = [(k, d.get(k, sntl)) for k in _wrapper_field_names]
+
+        aux = _FlattenedData(
+            tuple(data_fs), self.static_fs, tuple(static_vs), tuple(wrapper_fs_and_vs)
+        )
+        return tuple(data_vs), aux
+
+    def unflatten_with_cls(
+        self,
+        module_cls: type["Module"],
+        /,
+        aux: _FlattenedData,
+        dynamic_field_values: tuple[PyTree, ...],
+    ) -> "Module":
+        """Unflattens a module from a flattened representation."""
+        # This doesn't go via `__init__`. A user may have done something nontrivial
+        # there, and the field values may be dummy values as used in various places
+        # throughout JAX. See also
+        # https://jax.readthedocs.io/en/latest/pytrees.html#custom-pytrees-and-initialization,
+        # which was (I believe) inspired by Equinox's approach here.
+        module = object.__new__(module_cls)
+        for name, value in zip(aux.dynamic_field_names, dynamic_field_values):
+            object.__setattr__(module, name, value)
+        for name, value in zip(aux.static_field_names, aux.static_field_values):
+            object.__setattr__(module, name, value)
+        for name, value in aux.wrapper_field_names_and_values:
+            if value is _flatten_sentinel:
+                continue
+            object.__setattr__(module, name, value)
+        return module
 
 
 class Module(metaclass=_ModuleMeta):
