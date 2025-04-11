@@ -12,7 +12,7 @@ import types
 import warnings
 import weakref
 from collections.abc import Callable
-from typing import Any, cast, Protocol, TYPE_CHECKING, TypeVar
+from typing import Any, cast, Final, Protocol, TYPE_CHECKING, TypeVar
 from typing_extensions import dataclass_transform, ParamSpec
 
 import jax
@@ -133,7 +133,7 @@ def field(
 # This is the core of Equinox.
 #
 
-_flatten_sentinel: Any = doc_repr(object(), "-")
+_flatten_sentinel: Final = doc_repr(object(), "-")
 
 
 @dataclass(frozen=True)
@@ -492,22 +492,55 @@ class _ActualModuleMeta(ABCMeta):
         )
 
         def flatten_module(
-            obj: "Module", /, with_keys: bool
+            obj: "Module", /
         ) -> tuple[tuple[PyTree, ...], _FlattenedData]:
-            # Static metadata, placed in aux.
-            static_vs = [getattr(obj, name) for name in static_fs]
-            # Subnodes in the PyTree (filtering on `__dict__` to avoid picking
-            # up `property` and uninitialized values).
-            dynamic_fs = [name for name in data_fs if name in obj.__dict__]
-            if with_keys:
-                dynamic_vs = [(jtu.GetAttrKey(k), getattr(obj, k)) for k in dynamic_fs]
-            else:
-                dynamic_vs = [getattr(obj, k) for k in dynamic_fs]
-            # Python metadata like `__doc__` and `__module__`.
-            wrapper_fs_and_vs = [
-                (k, obj.__dict__.get(k, _flatten_sentinel))
-                for k in _wrapper_field_names
-            ]
+            """Flattens a module into a flattened representation."""
+            d = obj.__dict__
+            sntl = _flatten_sentinel
+
+            # Static fields, filtered on property / init state
+            static_vs = [v for k in static_fs if (v := d.get(k, sntl)) is not sntl]
+
+            # Build dynamic keys, values in single pass
+            dynamic_fs = []
+            dynamic_vs = []
+            for k in data_fs:
+                v = d.get(k, sntl)
+                if v is sntl:
+                    continue
+                dynamic_fs.append(k)
+                dynamic_vs.append(v)
+
+            # Wrapper stuff
+            wrapper_fs_and_vs = [(k, d.get(k, sntl)) for k in _wrapper_field_names]
+
+            aux = _FlattenedData(
+                tuple(dynamic_fs), static_fs, tuple(static_vs), tuple(wrapper_fs_and_vs)
+            )
+            return tuple(dynamic_vs), aux
+
+        def flatten_module_with_keys(
+            obj: "Module", /
+        ) -> tuple[tuple[PyTree, ...], _FlattenedData]:
+            """Flattens a module into a flattened representation."""
+            d = obj.__dict__
+            sntl = _flatten_sentinel
+
+            # Static fields, filtered on property / init state
+            static_vs = [v for k in static_fs if (v := d.get(k, sntl)) is not sntl]
+
+            # Build dynamic keys, values in single pass
+            dynamic_fs = []
+            dynamic_vs = []
+            for k in data_fs:
+                v = d.get(k, sntl)
+                if v is sntl:
+                    continue
+                dynamic_fs.append(k)
+                dynamic_vs.append((jtu.GetAttrKey(k), v))
+
+            # Wrapper stuff
+            wrapper_fs_and_vs = [(k, d.get(k, sntl)) for k in _wrapper_field_names]
 
             aux = _FlattenedData(
                 tuple(dynamic_fs), static_fs, tuple(static_vs), tuple(wrapper_fs_and_vs)
@@ -516,8 +549,8 @@ class _ActualModuleMeta(ABCMeta):
 
         jtu.register_pytree_with_keys(
             cls,
-            flatten_with_keys=ft.partial(flatten_module, with_keys=True),  # pyright: ignore
-            flatten_func=ft.partial(flatten_module, with_keys=False),  # pyright: ignore
+            flatten_with_keys=flatten_module_with_keys,  # pyright: ignore
+            flatten_func=flatten_module,  # pyright: ignore
             unflatten_func=ft.partial(_unflatten_module, cls),  # pyright: ignore
         )
         # Done!
