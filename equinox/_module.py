@@ -176,18 +176,6 @@ manner. If you are starting a new codebase you should not have need of them.
 """
 
 
-def _check_field(module: "Module", name: str, /) -> bool:
-    """Check field for initialization / property overrides."""
-    try:
-        # Not `getattr` so that we don't pick up `property`s.
-        module.__dict__[name]
-    except KeyError:
-        # Uninitialised values during `__init__`, or when `property`s overwrite a
-        # field.
-        return False
-    return True
-
-
 # Inherits from ABCMeta to support `eqx.{AbstractVar, AbstractClassVar}` and
 # `abc.abstractmethod`.
 class _ActualModuleMeta(ABCMeta):
@@ -508,8 +496,9 @@ class _ActualModuleMeta(ABCMeta):
         ) -> tuple[tuple[PyTree, ...], _FlattenedData]:
             # Static metadata, placed in aux.
             static_vs = [getattr(obj, name) for name in static_fs]
-            # Subnodes in the PyTree
-            dynamic_fs = [name for name in data_fs if _check_field(obj, name)]
+            # Subnodes in the PyTree (filtering on `__dict__` to avoid picking
+            # up `property` and uninitialized values).
+            dynamic_fs = [name for name in data_fs if name in obj.__dict__]
             if with_keys:
                 dynamic_vs = [(jtu.GetAttrKey(k), getattr(obj, k)) for k in dynamic_fs]
             else:
