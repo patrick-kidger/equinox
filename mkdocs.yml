@@ -63,7 +63,6 @@ markdown_extensions:
         toc_depth: 4
 
 plugins:
-    # - search
     - search:
         # See https://github.com/squidfunk/mkdocs-material/discussions/8116#discussioncomment-12632752
         # and https://github.com/patrick-kidger/equinox/issues/984
