@@ -863,13 +863,13 @@ class ModuleFlattener:
 
     def flatten(self, obj: "Module", /) -> tuple[tuple[PyTree, ...], _FlattenedData]:
         """Flattens a module into a flattened representation."""
-        d = obj.__dict__
+        get = obj.__dict__.get
 
         # Build dynamic keys, values in a single pass
         dynamic_fs = []
         dynamic_vs = []
         for k in self.dynamic_fs:
-            v = d.get(k, _flatten_sentinel)
+            v = get(k, _flatten_sentinel)
             if v is _flatten_sentinel:
                 continue
             dynamic_fs.append(k)
@@ -877,8 +877,8 @@ class ModuleFlattener:
 
         aux = _FlattenedData(
             tuple(dynamic_fs),
-            tuple([(k, d.get(k, _flatten_sentinel)) for k in self.static_fs]),
-            tuple([(k, d.get(k, _flatten_sentinel)) for k in _wrapper_field_names]),
+            tuple([(k, get(k, _flatten_sentinel)) for k in self.static_fs]),
+            tuple([(k, get(k, _flatten_sentinel)) for k in _wrapper_field_names]),
         )
         return tuple(dynamic_vs), aux
 
@@ -886,13 +886,13 @@ class ModuleFlattener:
         self, obj: "Module", /
     ) -> tuple[tuple[tuple[Any, PyTree], ...], _FlattenedData]:
         """Flattens a module into a flattened representation."""
-        d = obj.__dict__
+        get = obj.__dict__.get
 
         # Build dynamic keys, values in a single pass
         dynamic_fs = []
         dynamic_vs = []
         for k in self.dynamic_fs:
-            v = d.get(k, _flatten_sentinel)
+            v = get(k, _flatten_sentinel)
             if v is _flatten_sentinel:
                 continue
             dynamic_fs.append(k)
@@ -900,8 +900,8 @@ class ModuleFlattener:
 
         aux = _FlattenedData(
             tuple(dynamic_fs),
-            tuple([(k, d.get(k, _flatten_sentinel)) for k in self.static_fs]),
-            tuple([(k, d.get(k, _flatten_sentinel)) for k in _wrapper_field_names]),
+            tuple([(k, get(k, _flatten_sentinel)) for k in self.static_fs]),
+            tuple([(k, get(k, _flatten_sentinel)) for k in _wrapper_field_names]),
         )
         return tuple(dynamic_vs), aux
 
