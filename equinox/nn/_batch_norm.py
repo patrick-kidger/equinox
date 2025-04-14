@@ -244,7 +244,7 @@ class BatchNorm(StatefulLayer, strict=True):
             counter = state.get(self.batch_counter)
             hidden_mean, hidden_var = state.get(self.batch_state_index)
             if inference:
-                # Zero-debias approach: average_ = hidden_ / (1 - decay^counter)
+                # Zero-debias approach: mean = hidden_mean / (1 - momentum^counter)
                 # For simplicity we do the minimal version here (no warmup).
                 scale = 1 - self.momentum**counter
                 mean = hidden_mean / scale
