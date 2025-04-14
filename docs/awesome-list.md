@@ -36,9 +36,6 @@ Distributed multi-dimensional arrays, designed for large-scale machine learning.
 **Diffrax**: [GitHub](https://github.com/patrick-kidger/diffrax)  
 Numerical differential equation solvers.
 
-- **Diffraxtra**: [GitHub](https://github.com/GalacticDynamics/diffraxtra)
-  Extras for `diffrax`: OOP and vectorization
-
 **Optimistix**: [GitHub](https://github.com/patrick-kidger/optimistix)  
 Nonlinear optimisation: root finding, fixed point, minimisation, least squares.
 
@@ -68,6 +65,9 @@ Coordinates (like `astropy.coordinates`).
 
 **galax**: [GitHub](https://github.com/GalacticDynamics/galax)  
 Galactic and gravitational dynamics.
+
+**Diffraxtra**: [GitHub](https://github.com/GalacticDynamics/diffraxtra)  
+Extras for `diffrax`: an alternative API on to `diffeqsolve` and dense evaluation.
 
 **FlowJAX**: [GitHub](https://github.com/danielward27/flowjax)  
 Normalizing flows and probabilistic machine learning.
