@@ -40,11 +40,11 @@ def test_function():
     i = jax.custom_vjp(f)
     j = jax.custom_jvp(f)
 
-    assert eqx.tree_pformat(f) == "<function f>"
-    assert eqx.tree_pformat(g) == "<wrapped function f>"
-    assert eqx.tree_pformat(h) == "partial(<function f>)"
-    assert eqx.tree_pformat(i) == "<function f>"
-    assert eqx.tree_pformat(j) == "<function f>"
+    assert eqx.tree_pformat(f) == "<function test_function.<locals>.f>"
+    assert eqx.tree_pformat(g) == "<wrapped function test_function.<locals>.f>"
+    assert eqx.tree_pformat(h) == "partial(<function test_function.<locals>.f>)"
+    assert eqx.tree_pformat(i) == "<function test_function.<locals>.f>"
+    assert eqx.tree_pformat(j) == "<function test_function.<locals>.f>"
 
 
 def test_struct_as_array():
