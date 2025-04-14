@@ -970,7 +970,7 @@ def test_batch_norm(getkey, mode):
             running_mean, running_var = state.get(bn.ema_state_index)
         else:
             assert bn.batch_state_index is not None
-            _, (running_mean, running_var) = state.get(bn.batch_state_index)
+            running_mean, running_var = state.get(bn.batch_state_index)
         assert running_mean.shape == (5,)
         assert running_var.shape == (5,)
 
@@ -996,7 +996,7 @@ def test_batch_norm(getkey, mode):
         running_mean, running_var = state.get(bn.ema_state_index)
     else:
         assert bn.batch_state_index is not None
-        _, (running_mean, running_var) = state.get(bn.batch_state_index)
+        running_mean, running_var = state.get(bn.batch_state_index)
     assert running_mean.shape == (10, 5)
     assert running_var.shape == (10, 5)
 
@@ -1015,7 +1015,7 @@ def test_batch_norm(getkey, mode):
         running_mean, running_var = out_vvstate.get(vvbn.ema_state_index)
     else:
         assert vvbn.batch_state_index is not None
-        _, (running_mean, running_var) = out_vvstate.get(vvbn.batch_state_index)
+        running_mean, running_var = out_vvstate.get(vvbn.batch_state_index)
     assert running_mean.shape == (6,)
     assert running_var.shape == (6,)
 
@@ -1038,14 +1038,14 @@ def test_batch_norm(getkey, mode):
         running_mean, running_var = state.get(bn.ema_state_index)
     else:
         assert bn.batch_state_index is not None
-        _, (running_mean, running_var) = state.get(bn.batch_state_index)
+        running_mean, running_var = state.get(bn.batch_state_index)
     out, state = vbn(3 * x1 + 10, state)
     if mode == "ema":
         assert bn.ema_state_index is not None
         running_mean2, running_var2 = state.get(bn.ema_state_index)
     else:
         assert bn.batch_state_index is not None
-        _, (running_mean2, running_var2) = state.get(bn.batch_state_index)
+        running_mean2, running_var2 = state.get(bn.batch_state_index)
     assert not jnp.allclose(running_mean, running_mean2)
     assert not jnp.allclose(running_var, running_var2)
 
@@ -1059,7 +1059,7 @@ def test_batch_norm(getkey, mode):
         running_mean3, running_var3 = state.get(bn.ema_state_index)
     else:
         assert bn.batch_state_index is not None
-        _, (running_mean3, running_var3) = state.get(bn.batch_state_index)
+        running_mean3, running_var3 = state.get(bn.batch_state_index)
     assert jnp.array_equal(running_mean2, running_mean3)
     assert jnp.array_equal(running_var2, running_var3)
 
