@@ -83,6 +83,12 @@ If you found this library to be useful in academic work, then please cite: ([arX
 
 ## See also: other libraries in the JAX ecosystem
 
+<div align="center">
+
+[Awesome Equinox](https://docs.kidger.site/equinox/awesome-list/)
+
+</div>
+
 **Always useful**  
 [jaxtyping](https://github.com/patrick-kidger/jaxtyping): type annotations for shape/dtype of arrays.  
 
