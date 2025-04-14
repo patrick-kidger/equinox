@@ -83,12 +83,6 @@ If you found this library to be useful in academic work, then please cite: ([arX
 
 ## See also: other libraries in the JAX ecosystem
 
-<div align="center">
-
-[Awesome Equinox](https://docs.kidger.site/equinox/awesome-list/)
-
-</div>
-
 **Always useful**  
 [jaxtyping](https://github.com/patrick-kidger/jaxtyping): type annotations for shape/dtype of arrays.  
 
@@ -107,4 +101,5 @@ If you found this library to be useful in academic work, then please cite: ([arX
 [PySR](https://github.com/milesCranmer/PySR): symbolic regression. (Non-JAX honourable mention!)  
 
 **Awesome JAX**  
-[Awesome JAX](https://github.com/n2cholas/awesome-jax): a longer list of other JAX projects.  
+[Awesome Equinox](https://docs.kidger.site/equinox/awesome-list/)
+[Awesome JAX](https://github.com/lockwo/awesome-jax): a longer list of other JAX projects.  
