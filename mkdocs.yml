@@ -79,6 +79,7 @@ plugins:
     - ipynb
     - hippogriffe:
         extra_public_objects:
+            - equinox.if_array
             - jax.ShapeDtypeStruct
             - jax.extend.core.ClosedJaxpr
             - jax.Device
