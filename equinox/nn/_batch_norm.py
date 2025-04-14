@@ -60,19 +60,18 @@ class BatchNorm(StatefulLayer, strict=True):
 
         ```bibtex
         @article{DBLP:journals/corr/IoffeS15,
-        author       = {Sergey Ioffe and
-                        Christian Szegedy},
-        title        = {Batch Normalization: Accelerating Deep Network Training
-                        by Reducing Internal Covariate Shift},
-        journal      = {CoRR},
-        volume       = {abs/1502.03167},
-        year         = {2015},
-        url          = {http://arxiv.org/abs/1502.03167},
-        eprinttype    = {arXiv},
-        eprint       = {1502.03167},
-        timestamp    = {Mon, 13 Aug 2018 16:47:06 +0200},
-        biburl       = {https://dblp.org/rec/journals/corr/IoffeS15.bib},
-        bibsource    = {dblp computer science bibliography, https://dblp.org}
+            author = {Sergey Ioffe and Christian Szegedy},
+            title = {Batch Normalization: Accelerating Deep Network Training by Reducing
+                     Internal Covariate Shift},
+            journal = {CoRR},
+            volume = {abs/1502.03167},
+            year = {2015},
+            url = {http://arxiv.org/abs/1502.03167},
+            eprinttype = {arXiv},
+            eprint = {1502.03167},
+            timestamp = {Mon, 13 Aug 2018 16:47:06 +0200},
+            biburl = {https://dblp.org/rec/journals/corr/IoffeS15.bib},
+            bibsource = {dblp computer science bibliography, https://dblp.org}
         }
         ```
     """  # noqa: E501
@@ -85,13 +84,7 @@ class BatchNorm(StatefulLayer, strict=True):
     )
     batch_counter: None | StateIndex[Int[Array, ""]]
     batch_state_index: (
-        None
-        | StateIndex[
-            tuple[
-                tuple[Float[Array, "input_size"], Float[Array, "input_size"]],
-                tuple[Float[Array, "input_size"], Float[Array, "input_size"]],
-            ],
-        ]
+        None | StateIndex[tuple[Float[Array, "input_size"], Float[Array, "input_size"]]]
     )
     axis_name: Hashable | Sequence[Hashable]
     inference: bool
@@ -105,12 +98,12 @@ class BatchNorm(StatefulLayer, strict=True):
         self,
         input_size: int,
         axis_name: Hashable | Sequence[Hashable],
-        mode: Literal["ema", "batch", "legacy"] = "legacy",
         eps: float = 1e-5,
         channelwise_affine: bool = True,
         momentum: float = 0.99,
         inference: bool = False,
         dtype=None,
+        mode: Literal["ema", "batch", "legacy"] = "legacy",
     ):
         """**Arguments:**
 
@@ -118,7 +111,6 @@ class BatchNorm(StatefulLayer, strict=True):
         - `axis_name`: The name of the batch axis to compute statistics over, as passed
             to `axis_name` in `jax.vmap` or `jax.pmap`. Can also be a sequence (e.g. a
             tuple or a list) of names, to compute statistics over multiple named axes.
-        - `mode`: The variant of batch norm to use, either 'ema' or 'batch'.
         - `eps`: Value added to the denominator for numerical stability.
         - `channelwise_affine`: Whether the module has learnable channel-wise affine
             parameters.
@@ -133,15 +125,17 @@ class BatchNorm(StatefulLayer, strict=True):
             if `channelwise_affine` is `True`. Defaults to either
             `jax.numpy.float32` or `jax.numpy.float64` depending on whether JAX is in
             64-bit mode.
+        - `mode`: The variant of batch norm to use, either 'ema' or 'batch'.
         """
         if mode == "legacy":
             mode = "ema"
             warnings.warn(
-                "When mode is unspecified it defaults to 'ema'. This can have "
-                "substantial performance impacts, and the user is encouraged to "
-                "consider and pick which mode they need."
+                "When `eqx.nn.BatchNorm(..., mode=...)` is unspecified it defaults to "
+                "'ema', for backward compatibility. This typically has a performance "
+                "impact, and for new code the user is encouraged to use 'batch' "
+                "instead. See `https://github.com/patrick-kidger/equinox/issues/659`."
             )
-        if mode not in ("ema", "batch"):
+        if mode not in {"ema", "batch"}:
             raise ValueError("Invalid mode, must be 'ema' or 'batch'.")
         self.mode = mode
         dtype = default_floating_dtype() if dtype is None else dtype
@@ -166,11 +160,7 @@ class BatchNorm(StatefulLayer, strict=True):
                 jnp.zeros((input_size,), dtype=dtype),
                 jnp.ones((input_size,), dtype=dtype),
             )
-            init_avg = (
-                jnp.zeros((input_size,), dtype=dtype),
-                jnp.ones((input_size,), dtype=dtype),
-            )
-            self.batch_state_index = StateIndex((init_hidden, init_avg))
+            self.batch_state_index = StateIndex(init_hidden)
             self.ema_first_time_index = None
             self.ema_state_index = None
         self.inference = inference
@@ -212,6 +202,8 @@ class BatchNorm(StatefulLayer, strict=True):
         A `NameError` if no `vmap`s are placed around this operation, or if this vmap
         does not have a matching `axis_name`.
         """
+        del key
+
         if inference is None:
             inference = self.inference
 
@@ -230,61 +222,44 @@ class BatchNorm(StatefulLayer, strict=True):
             return out
 
         if self.mode == "ema":
-            assert (
-                self.ema_first_time_index is not None
-                and self.ema_state_index is not None
-            )
+            assert self.ema_first_time_index is not None
+            assert self.ema_state_index is not None
             if inference:
-                running_mean, running_var = state.get(self.ema_state_index)
+                mean, var = state.get(self.ema_state_index)
             else:
                 first_time = state.get(self.ema_first_time_index)
                 state = state.set(self.ema_first_time_index, jnp.array(False))
-
                 batch_mean, batch_var = jax.vmap(_stats)(x)
                 running_mean, running_var = state.get(self.ema_state_index)
                 momentum = self.momentum
-                running_mean = (1 - momentum) * batch_mean + momentum * running_mean
-                running_var = (1 - momentum) * batch_var + momentum * running_var
+                mean = (1 - momentum) * batch_mean + momentum * running_mean
+                var = (1 - momentum) * batch_var + momentum * running_var
                 # since jnp.array(0) == False
-                running_mean = lax.select(first_time, batch_mean, running_mean)
-                running_var = lax.select(first_time, batch_var, running_var)
-                state = state.set(self.ema_state_index, (running_mean, running_var))
-
-            out = jax.vmap(_norm)(x, running_mean, running_var, self.weight, self.bias)
-            return out, state
+                mean = lax.select(first_time, batch_mean, mean)
+                var = lax.select(first_time, batch_var, var)
+                state = state.set(self.ema_state_index, (mean, var))
         else:
-            assert self.batch_state_index is not None and self.batch_counter is not None
+            assert self.batch_state_index is not None
+            assert self.batch_counter is not None
+            counter = state.get(self.batch_counter)
+            hidden_mean, hidden_var = state.get(self.batch_state_index)
             if inference:
-                _, (mean, var) = state.get(self.batch_state_index)
-            else:
-                batch_mean, batch_var = jax.vmap(_stats)(x)
-                counter = state.get(self.batch_counter)
-                (hidden_mean, hidden_var), (running_mean, running_var) = state.get(
-                    self.batch_state_index
-                )
-
-                decay = self.momentum
-                one = jnp.array(1.0, dtype=x.dtype)
-
-                # Update hidden_{mean,var}
-                new_hidden_mean = hidden_mean * decay + batch_mean * (one - decay)
-                new_hidden_var = hidden_var * decay + batch_var * (one - decay)
-
                 # Zero-debias approach: average_ = hidden_ / (1 - decay^counter)
                 # For simplicity we do the minimal version here (no warmup).
+                scale = 1 - self.momentum**counter
+                mean = hidden_mean / scale
+                var = hidden_var / scale
+            else:
+                mean, var = jax.vmap(_stats)(x)
                 new_counter = counter + 1
-                decay_power = decay**new_counter
-                new_running_mean = new_hidden_mean / (one - decay_power)
-                new_running_var = new_hidden_var / (one - decay_power)
-
-                state = state.set(self.batch_counter, new_counter)
-                new_state_data = (
-                    (new_hidden_mean, new_hidden_var),
-                    (new_running_mean, new_running_var),
+                new_hidden_mean = hidden_mean * self.momentum + mean * (
+                    1 - self.momentum
                 )
-                state = state.set(self.batch_state_index, new_state_data)
+                new_hidden_var = hidden_var * self.momentum + var * (1 - self.momentum)
+                state = state.set(self.batch_counter, new_counter)
+                state = state.set(
+                    self.batch_state_index, (new_hidden_mean, new_hidden_var)
+                )
 
-                mean, var = (batch_mean, batch_var)
-
-            out = jax.vmap(_norm)(x, mean, var, self.weight, self.bias)
-            return out, state
+        out = jax.vmap(_norm)(x, mean, var, self.weight, self.bias)
+        return out, state
