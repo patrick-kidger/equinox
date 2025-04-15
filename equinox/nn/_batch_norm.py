@@ -1,9 +1,11 @@
+import warnings
 from collections.abc import Hashable, Sequence
+from typing import Literal
 
 import jax
 import jax.lax as lax
 import jax.numpy as jnp
-from jaxtyping import Array, Bool, Float, PRNGKeyArray
+from jaxtyping import Array, Bool, Float, Int, PRNGKeyArray
 
 from .._misc import default_floating_dtype
 from .._module import field
@@ -40,20 +42,57 @@ class BatchNorm(StatefulLayer, strict=True):
     statistics updated. During inference then just the running statistics are used.
     Whether the model is in training or inference mode should be toggled using
     [`equinox.nn.inference_mode`][].
+
+    With `mode = "batch"` during training the batch mean and variance are used
+    for normalization.  For inference the exponential running mean and unbiased
+    variance are used for normalization. This is in line with how other machine
+    learning packages (e.g. PyTorch, flax, haiku) implement batch norm.
+
+    With `mode = "ema"` exponential running means and variances are kept.  During
+    training the batch statistics are used to fill in the running statistics until
+    they are populated.  During inference the running statistics are used for
+    normalization.
+
+    ??? cite
+
+        [Batch Normalization: Accelerating Deep Network Training by Reducing
+         Internal Covariate Shift](https://arxiv.org/abs/1502.03167)
+
+        ```bibtex
+        @article{DBLP:journals/corr/IoffeS15,
+            author = {Sergey Ioffe and Christian Szegedy},
+            title = {Batch Normalization: Accelerating Deep Network Training by Reducing
+                     Internal Covariate Shift},
+            journal = {CoRR},
+            volume = {abs/1502.03167},
+            year = {2015},
+            url = {http://arxiv.org/abs/1502.03167},
+            eprinttype = {arXiv},
+            eprint = {1502.03167},
+            timestamp = {Mon, 13 Aug 2018 16:47:06 +0200},
+            biburl = {https://dblp.org/rec/journals/corr/IoffeS15.bib},
+            bibsource = {dblp computer science bibliography, https://dblp.org}
+        }
+        ```
     """  # noqa: E501
 
     weight: Float[Array, "input_size"] | None
     bias: Float[Array, "input_size"] | None
-    first_time_index: StateIndex[Bool[Array, ""]]
-    state_index: StateIndex[
-        tuple[Float[Array, "input_size"], Float[Array, "input_size"]]
-    ]
+    ema_first_time_index: None | StateIndex[Bool[Array, ""]]
+    ema_state_index: (
+        None | StateIndex[tuple[Float[Array, "input_size"], Float[Array, "input_size"]]]
+    )
+    batch_counter: None | StateIndex[Int[Array, ""]]
+    batch_state_index: (
+        None | StateIndex[tuple[Float[Array, "input_size"], Float[Array, "input_size"]]]
+    )
     axis_name: Hashable | Sequence[Hashable]
     inference: bool
     input_size: int = field(static=True)
     eps: float = field(static=True)
     channelwise_affine: bool = field(static=True)
     momentum: float = field(static=True)
+    mode: Literal["ema", "batch"] = field(static=True)
 
     def __init__(
         self,
@@ -64,6 +103,7 @@ class BatchNorm(StatefulLayer, strict=True):
         momentum: float = 0.99,
         inference: bool = False,
         dtype=None,
+        mode: Literal["ema", "batch", "legacy"] = "legacy",
     ):
         """**Arguments:**
 
@@ -85,7 +125,19 @@ class BatchNorm(StatefulLayer, strict=True):
             if `channelwise_affine` is `True`. Defaults to either
             `jax.numpy.float32` or `jax.numpy.float64` depending on whether JAX is in
             64-bit mode.
+        - `mode`: The variant of batch norm to use, either 'ema' or 'batch'.
         """
+        if mode == "legacy":
+            mode = "ema"
+            warnings.warn(
+                "When `eqx.nn.BatchNorm(..., mode=...)` is unspecified it defaults to "
+                "'ema', for backward compatibility. This typically has a performance "
+                "impact, and for new code the user is encouraged to use 'batch' "
+                "instead. See `https://github.com/patrick-kidger/equinox/issues/659`."
+            )
+        if mode not in {"ema", "batch"}:
+            raise ValueError("Invalid mode, must be 'ema' or 'batch'.")
+        self.mode = mode
         dtype = default_floating_dtype() if dtype is None else dtype
         if channelwise_affine:
             self.weight = jnp.ones((input_size,), dtype=dtype)
@@ -93,12 +145,24 @@ class BatchNorm(StatefulLayer, strict=True):
         else:
             self.weight = None
             self.bias = None
-        self.first_time_index = StateIndex(jnp.array(True))
-        init_buffers = (
-            jnp.empty((input_size,), dtype=dtype),
-            jnp.empty((input_size,), dtype=dtype),
-        )
-        self.state_index = StateIndex(init_buffers)
+        if mode == "ema":
+            self.ema_first_time_index = StateIndex(jnp.array(True))
+            init_buffers = (
+                jnp.empty((input_size,), dtype=dtype),
+                jnp.empty((input_size,), dtype=dtype),
+            )
+            self.ema_state_index = StateIndex(init_buffers)
+            self.batch_counter = None
+            self.batch_state_index = None
+        else:
+            self.batch_counter = StateIndex(jnp.array(0))
+            init_hidden = (
+                jnp.zeros((input_size,), dtype=dtype),
+                jnp.ones((input_size,), dtype=dtype),
+            )
+            self.batch_state_index = StateIndex(init_hidden)
+            self.ema_first_time_index = None
+            self.ema_state_index = None
         self.inference = inference
         self.axis_name = axis_name
         self.input_size = input_size
@@ -138,32 +202,18 @@ class BatchNorm(StatefulLayer, strict=True):
         A `NameError` if no `vmap`s are placed around this operation, or if this vmap
         does not have a matching `axis_name`.
         """
+        del key
 
         if inference is None:
             inference = self.inference
-        if inference:
-            running_mean, running_var = state.get(self.state_index)
-        else:
 
-            def _stats(y):
-                mean = jnp.mean(y)
-                mean = lax.pmean(mean, self.axis_name)
-                var = jnp.mean((y - mean) * jnp.conj(y - mean))
-                var = lax.pmean(var, self.axis_name)
-                var = jnp.maximum(0.0, var)
-                return mean, var
-
-            first_time = state.get(self.first_time_index)
-            state = state.set(self.first_time_index, jnp.array(False))
-
-            batch_mean, batch_var = jax.vmap(_stats)(x)
-            running_mean, running_var = state.get(self.state_index)
-            momentum = self.momentum
-            running_mean = (1 - momentum) * batch_mean + momentum * running_mean
-            running_var = (1 - momentum) * batch_var + momentum * running_var
-            running_mean = lax.select(first_time, batch_mean, running_mean)
-            running_var = lax.select(first_time, batch_var, running_var)
-            state = state.set(self.state_index, (running_mean, running_var))
+        def _stats(y):
+            mean = jnp.mean(y)
+            mean = lax.pmean(mean, self.axis_name)
+            var = jnp.mean((y - mean) * jnp.conj(y - mean))
+            var = lax.pmean(var, self.axis_name)
+            var = jnp.maximum(0.0, var)
+            return mean, var
 
         def _norm(y, m, v, w, b):
             out = (y - m) / jnp.sqrt(v + self.eps)
@@ -171,5 +221,45 @@ class BatchNorm(StatefulLayer, strict=True):
                 out = out * w + b
             return out
 
-        out = jax.vmap(_norm)(x, running_mean, running_var, self.weight, self.bias)
+        if self.mode == "ema":
+            assert self.ema_first_time_index is not None
+            assert self.ema_state_index is not None
+            if inference:
+                mean, var = state.get(self.ema_state_index)
+            else:
+                first_time = state.get(self.ema_first_time_index)
+                state = state.set(self.ema_first_time_index, jnp.array(False))
+                batch_mean, batch_var = jax.vmap(_stats)(x)
+                running_mean, running_var = state.get(self.ema_state_index)
+                momentum = self.momentum
+                mean = (1 - momentum) * batch_mean + momentum * running_mean
+                var = (1 - momentum) * batch_var + momentum * running_var
+                # since jnp.array(0) == False
+                mean = lax.select(first_time, batch_mean, mean)
+                var = lax.select(first_time, batch_var, var)
+                state = state.set(self.ema_state_index, (mean, var))
+        else:
+            assert self.batch_state_index is not None
+            assert self.batch_counter is not None
+            counter = state.get(self.batch_counter)
+            hidden_mean, hidden_var = state.get(self.batch_state_index)
+            if inference:
+                # Zero-debias approach: mean = hidden_mean / (1 - momentum^counter)
+                # For simplicity we do the minimal version here (no warmup).
+                scale = 1 - self.momentum**counter
+                mean = hidden_mean / scale
+                var = hidden_var / scale
+            else:
+                mean, var = jax.vmap(_stats)(x)
+                new_counter = counter + 1
+                new_hidden_mean = hidden_mean * self.momentum + mean * (
+                    1 - self.momentum
+                )
+                new_hidden_var = hidden_var * self.momentum + var * (1 - self.momentum)
+                state = state.set(self.batch_counter, new_counter)
+                state = state.set(
+                    self.batch_state_index, (new_hidden_mean, new_hidden_var)
+                )
+
+        out = jax.vmap(_norm)(x, mean, var, self.weight, self.bias)
         return out, state

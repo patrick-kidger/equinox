@@ -7,7 +7,7 @@ import pytest
 
 
 def test_delete_init_state():
-    model = eqx.nn.BatchNorm(3, "batch")
+    model = eqx.nn.BatchNorm(3, "batch", mode="ema")
     eqx.nn.State(model)
     model2 = eqx.nn.delete_init_state(model)
 

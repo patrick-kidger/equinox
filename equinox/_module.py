@@ -48,12 +48,9 @@ def static_field(**kwargs):
     return field(**kwargs, static=True)
 
 
-_converter_sentinel: Any = doc_repr(object(), "lambda x: x")
-
-
 def field(
     *,
-    converter: Callable[[Any], Any] = _converter_sentinel,
+    converter: Callable[[Any], Any] | None = None,
     static: bool = False,
     **kwargs,
 ):
@@ -66,6 +63,7 @@ def field(
         `bool`/`int`/`float`/`complex` values to JAX arrays. This is ran after the
         `__init__` method (i.e. when using a user-provided `__init__`), and after
         `__post_init__` (i.e. when using the default dataclass initialisation).
+        If `converter` is `None`, then no converter is registered.
     - `static`: whether the field should not interact with any JAX transform at all (by
         making it part of the PyTree structure rather than a leaf).
     - `**kwargs`: All other keyword arguments are passed on to `dataclass.field`.
@@ -104,7 +102,7 @@ def field(
     except KeyError:
         metadata = {}
     if "converter" in metadata:
-        raise ValueError("Cannot use metadata with `static` already set.")
+        raise ValueError("Cannot use metadata with `converter` already set.")
     if "static" in metadata:
         raise ValueError("Cannot use metadata with `static` already set.")
     # We don't just use `lambda x: x` as the default, so that this works:
@@ -122,7 +120,7 @@ def field(
     # Oddities like the above are to be discouraged, of course, but in particular
     # `field(init=False)` was sometimes used to denote an abstract field (prior to the
     # introduction of `AbstractVar`), so we do want to support this.
-    if converter is not _converter_sentinel:
+    if converter is not None:
         metadata["converter"] = converter
     if static:
         metadata["static"] = True
@@ -302,14 +300,15 @@ class _ActualModuleMeta(ABCMeta):
         # checkers.
         # Note that mutating the `__init__.__annotations__` is okay, as it was created
         # by the dataclass decorator on the previous line, so nothing else owns it.
-        for f in dataclasses.fields(cls):
-            if f.name not in cls.__init__.__annotations__:
-                continue  # Odd behaviour, so skip.
-            try:
-                converter = f.metadata["converter"]
-            except KeyError:
-                pass
-            else:
+        fields = dataclasses.fields(cls)
+        if has_dataclass_init:
+            for f in fields:
+                if not f.init:
+                    continue
+
+                if (converter := f.metadata.get("converter")) is None:
+                    continue  # No converter, so skip.
+
                 try:
                     signature = inspect.signature(converter)
                 except ValueError:
@@ -396,7 +395,7 @@ class _ActualModuleMeta(ABCMeta):
                 if (base_num_fields > 0) or (not _has_dataclass_init[base]):
                     # If we've added more fields, or added a custom init method, then
                     # error.
-                    if len(dataclasses.fields(cls)) != base_num_fields:
+                    if len(fields) != base_num_fields:
                         raise TypeError(
                             "For readability, any custom `__init__` method, and all "
                             "fields, must all be defined on the same strict Module. "
@@ -483,69 +482,14 @@ class _ActualModuleMeta(ABCMeta):
                                 )
 
         # [Step 6] Register as a pytree.
-        data_fs = tuple(
-            f.name
-            for f in dataclasses.fields(cls)
-            if not f.metadata.get("static", False)
-        )
-        static_fs = tuple(
-            f.name for f in dataclasses.fields(cls) if f.metadata.get("static", False)
-        )
-
-        sntl = _flatten_sentinel
-
-        def flatten_module(
-            obj: "Module", /
-        ) -> tuple[tuple[PyTree, ...], _FlattenedData]:
-            """Flattens a module into a flattened representation."""
-            d = obj.__dict__
-
-            # Build dynamic keys, values in single pass
-            dynamic_fs = []
-            dynamic_vs = []
-            for k in data_fs:
-                v = d.get(k, sntl)
-                if v is sntl:
-                    continue
-                dynamic_fs.append(k)
-                dynamic_vs.append(v)
-
-            aux = _FlattenedData(
-                tuple(dynamic_fs),
-                tuple([(k, d.get(k, sntl)) for k in static_fs]),
-                tuple([(k, d.get(k, sntl)) for k in _wrapper_field_names]),
-            )
-            return tuple(dynamic_vs), aux
-
-        def flatten_module_with_keys(
-            obj: "Module", /
-        ) -> tuple[tuple[PyTree, ...], _FlattenedData]:
-            """Flattens a module into a flattened representation."""
-            d = obj.__dict__
-
-            # Build dynamic keys, values in single pass
-            dynamic_fs = []
-            dynamic_vs = []
-            for k in data_fs:
-                v = d.get(k, sntl)
-                if v is sntl:
-                    continue
-                dynamic_fs.append(k)
-                dynamic_vs.append((jtu.GetAttrKey(k), v))
-
-            aux = _FlattenedData(
-                tuple(dynamic_fs),
-                tuple([(k, d.get(k, sntl)) for k in static_fs]),
-                tuple([(k, d.get(k, sntl)) for k in _wrapper_field_names]),
-            )
-            return tuple(dynamic_vs), aux
-
+        flattener = ModuleFlattener(fields)
         jtu.register_pytree_with_keys(
             cls,
-            flatten_with_keys=flatten_module_with_keys,  # pyright: ignore
-            flatten_func=flatten_module,  # pyright: ignore
-            unflatten_func=ft.partial(_unflatten_module, cls),  # pyright: ignore
+            flatten_with_keys=flattener.flatten_with_keys,  # pyright: ignore
+            flatten_func=flattener.flatten,  # pyright: ignore
+            unflatten_func=ft.partial(flattener.unflatten_with_cls, cls),  # pyright: ignore
         )
+
         # Done!
         return cls
 
@@ -562,7 +506,7 @@ class _ActualModuleMeta(ABCMeta):
         if _is_force_abstract[cls]:
             # Any other is-abstract checks will be handled in super().__call__.
             raise TypeError("Cannot instantiate abstract `equinox.Module`.")
-        if _has_dataclass_init[cls]:
+        if cls.__dataclass_params__.init:  # pyright: ignore
             for x in jtu.tree_leaves((args, kwargs)):
                 _warn_jax_transformed_function(cls, x)
             # else it's handled in __setattr__, but that isn't called here.
@@ -573,55 +517,44 @@ class _ActualModuleMeta(ABCMeta):
         self = super(_ActualModuleMeta, initable_cls).__call__(*args, **kwargs)
         assert not _is_abstract(cls)
         # [Step 3] Run converters
-        for field in dataclasses.fields(cls):
+        fields = dataclasses.fields(cls)
+        for f in fields:
+            if (converter := f.metadata.get("converter")) is None:
+                continue
+
             try:
-                converter = field.metadata["converter"]
-            except KeyError:
+                value = getattr(self, f.name)
+            except AttributeError:
+                # Let the all-fields-are-filled check handle the error.
                 pass
             else:
-                try:
-                    value = getattr(self, field.name)
-                except AttributeError:
-                    # Let the all-fields-are-filled check handle the error.
-                    pass
-                else:
-                    setattr(self, field.name, converter(value))
+                setattr(self, f.name, converter(value))
         # [Step 4] Check that all fields are occupied.
-        missing_names = {
-            field.name
-            for field in dataclasses.fields(cls)  # pyright: ignore
-            # Not `vars` or `__dict__`, to allow for `property`s overwriting a field.
-            # Not recommended, but allowable for backward compatibility.
-            if field.name not in dir(self)
-        }
+        # Not `vars` or `__dict__`, to allow for `property`s overwriting a
+        # field. Not recommended, but allowable for backward compatibility.
+        dir_ks = set(dir(self))
+        missing_names = {f.name for f in fields if f.name not in dir_ks}
         if len(missing_names):
             raise ValueError(
                 f"The following fields were not initialised during __init__: "
                 f"{missing_names}"
             )
         # [Step 5] Prevent arrays from being marked as static
-        for field in dataclasses.fields(self):
-            if field.metadata.get("static", False):
-                if any(
-                    jtu.tree_map(
-                        is_array, jtu.tree_flatten(getattr(self, field.name))[0]
-                    )
-                ):
-                    warnings.warn(
-                        "A JAX array is being set as static! This can result "
-                        "in unexpected behavior and is usually a mistake to do.",
-                        stacklevel=2,
-                    )
+        for f in fields:
+            if f.metadata.get("static", False) and any(
+                jtu.tree_map(is_array, jtu.tree_flatten(getattr(self, f.name))[0])
+            ):
+                warnings.warn(
+                    "A JAX array is being set as static! This can result "
+                    "in unexpected behavior and is usually a mistake to do.",
+                    stacklevel=2,
+                )
         # Freeze.
         object.__setattr__(self, "__class__", cls)
         # [Step 6] Run any custom validators. (After freezing; as they run
         # unconditionally across the whole MRO, they aren't allowed to mutate.)
         for kls in cls.__mro__:
-            try:
-                check = kls.__dict__["__check_init__"]
-            except KeyError:
-                pass
-            else:
+            if (check := kls.__dict__.get("__check_init__")) is not None:
                 check(self)
         return self
 
@@ -638,8 +571,7 @@ class _ActualModuleMeta(ABCMeta):
             and cls not in _has_dataclass_init
         ):
             raise AttributeError
-        else:
-            return value
+        return value
 
     def __setattr__(cls, item, value):
         if _not_magic(item) and inspect.isfunction(value):
@@ -772,13 +704,13 @@ Possibly assigning a JAX-transformed callable as an attribute on
 For example, the following code is buggy:
 ```python
 class MyModule(eqx.Module):
-vmap_linear: Callable
+    vmap_linear: Callable
 
-def __init__(self, ...):
-    self.vmap_linear = jax.vmap(eqx.nn.Linear(...))
+    def __init__(self, ...):
+        self.vmap_linear = jax.vmap(eqx.nn.Linear(...))
 
-def __call__(self, ...):
-    ... = self.vmap_linear(...)
+    def __call__(self, ...):
+        ... = self.vmap_linear(...)
 ```
 This is because the callable returned from `jax.vmap` is *not* a PyTree. This means that
 the parameters inside the `eqx.nn.Linear` layer will not receive gradient updates.
@@ -786,24 +718,24 @@ the parameters inside the `eqx.nn.Linear` layer will not receive gradient update
 You can most easily fix this either by applying the wrapper at `__call__` time:
 ```python
 class MyModule(eqx.Module):
-linear: Callable
+    linear: Callable
 
-def __init__(self, ...):
-    self.linear = eqx.nn.Linear(...)
+    def __init__(self, ...):
+        self.linear = eqx.nn.Linear(...)
 
-def __call__(self, ...):
-    ... = jax.vmap(self.linear)(...)
+    def __call__(self, ...):
+        ... = jax.vmap(self.linear)(...)
 ```
 or by using `eqx.filter_vmap` instead (which *does* return a PyTree):
 ```python
 class MyModule(eqx.Module):
-vmap_linear: Callable
+    vmap_linear: Callable
 
-def __init__(self, ...):
-    self.vmap_linear = eqx.filter_vmap(eqx.nn.Linear(...))
+    def __init__(self, ...):
+        self.vmap_linear = eqx.filter_vmap(eqx.nn.Linear(...))
 
-def __call__(self, ...):
-    ... = self.vmap_linear(...)
+    def __call__(self, ...):
+        ... = self.vmap_linear(...)
 ```
 """,
                     stacklevel=3,
@@ -904,19 +836,86 @@ class _FlattenedData:
         return repr((self.dynamic_field_names, self.static_fields))[1:-1]
 
 
-def _unflatten_module(cls: type["Module"], aux: _FlattenedData, dynamic_field_values):
-    # This doesn't go via `__init__`. A user may have done something nontrivial there,
-    # and the field values may be dummy values as used in various places throughout JAX.
-    # See also
-    # https://jax.readthedocs.io/en/latest/pytrees.html#custom-pytrees-and-initialization,
-    # which was (I believe) inspired by Equinox's approach here.
-    module = object.__new__(cls)
-    for name, value in zip(aux.dynamic_field_names, dynamic_field_values):
-        object.__setattr__(module, name, value)
-    for name, value in itertools.chain(aux.static_fields, aux.wrapper_fields):
-        if value is not _flatten_sentinel:
+class ModuleFlattener:
+    """Manager for (un)flattening `Module`."""
+
+    __slots__: tuple[str, str] = ("dynamic_fs", "static_fs")
+    dynamic_fs: tuple[str, ...]
+    static_fs: tuple[str, ...]
+
+    def __init__(self, fields: tuple[dataclasses.Field[Any], ...]) -> None:
+        self.dynamic_fs = tuple(
+            [f.name for f in fields if not f.metadata.get("static", False)]
+        )
+        self.static_fs = tuple(
+            [f.name for f in fields if f.metadata.get("static", False)]
+        )
+
+    def flatten(self, obj: "Module", /) -> tuple[tuple[PyTree, ...], _FlattenedData]:
+        """Flattens a module into a flattened representation."""
+        get = obj.__dict__.get
+
+        # Build dynamic keys, values in a single pass
+        dynamic_fs = []
+        dynamic_vs = []
+        for k in self.dynamic_fs:
+            v = get(k, _flatten_sentinel)
+            if v is _flatten_sentinel:
+                continue
+            dynamic_fs.append(k)
+            dynamic_vs.append(v)
+
+        aux = _FlattenedData(
+            tuple(dynamic_fs),
+            tuple([(k, get(k, _flatten_sentinel)) for k in self.static_fs]),
+            tuple([(k, get(k, _flatten_sentinel)) for k in _wrapper_field_names]),
+        )
+        return tuple(dynamic_vs), aux
+
+    def flatten_with_keys(
+        self, obj: "Module", /
+    ) -> tuple[tuple[tuple[Any, PyTree], ...], _FlattenedData]:
+        """Flattens a module into a flattened representation."""
+        get = obj.__dict__.get
+
+        # Build dynamic keys, values in a single pass
+        dynamic_fs = []
+        dynamic_vs = []
+        for k in self.dynamic_fs:
+            v = get(k, _flatten_sentinel)
+            if v is _flatten_sentinel:
+                continue
+            dynamic_fs.append(k)
+            dynamic_vs.append((jtu.GetAttrKey(k), v))
+
+        aux = _FlattenedData(
+            tuple(dynamic_fs),
+            tuple([(k, get(k, _flatten_sentinel)) for k in self.static_fs]),
+            tuple([(k, get(k, _flatten_sentinel)) for k in _wrapper_field_names]),
+        )
+        return tuple(dynamic_vs), aux
+
+    def unflatten_with_cls(
+        self,
+        module_cls: type["Module"],
+        /,
+        aux: _FlattenedData,
+        dynamic_field_values: tuple[PyTree, ...],
+    ) -> "Module":
+        """Unflattens a module from a flattened representation."""
+        # This doesn't go via `__init__`. A user may have done something
+        # nontrivial there, and the field values may be dummy values as used in
+        # various places throughout JAX. See also
+        # https://jax.readthedocs.io/en/latest/pytrees.html#custom-pytrees-and-initialization,
+        # which was (I believe) inspired by Equinox's approach here.
+        module = object.__new__(module_cls)
+        for name, value in zip(aux.dynamic_field_names, dynamic_field_values):
             object.__setattr__(module, name, value)
-    return module
+        for name, value in itertools.chain(aux.static_fields, aux.wrapper_fields):
+            if value is not _flatten_sentinel:
+                object.__setattr__(module, name, value)
+
+        return module
 
 
 class Module(metaclass=_ModuleMeta):
