@@ -89,3 +89,6 @@ Converts PyTorch `state_dict`s into Equinox pytrees.
 
 **boltz-binder-design**: [GitHub](https://github.com/escalante-bio/boltz-binder-design)   
 Protein design by multi-objective hallucination (~ColabDesign in Equinox). 
+
+**ksim**: [GitHub](https://github.com/kscalelabs/ksim)  
+MJX robotics simulation library.
