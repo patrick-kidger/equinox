@@ -71,3 +71,6 @@ Normalizing flows and probabilistic machine learning.
 
 **statedict2pytree**: [GitHub](https://github.com/Artur-Galstyan/statedict2pytree)  
 Converts PyTorch `state_dict`s into Equinox pytrees.
+
+**ksim**: [GitHub](https://github.com/kscalelabs/ksim)  
+MJX robotics simulation library.
