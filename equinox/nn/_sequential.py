@@ -130,6 +130,9 @@ class Lambda(Module, strict=True):
     Precisely, this just adds an extra `key` argument (that is ignored). Given some
     function `fn`, then `Lambda` is essentially a convenience for `lambda x, key: f(x)`.
 
+    `fn` is treated as a node in the PyTree and thus supports callable nodes (such as
+     other modules, or custom PyTrees implementing `__call__`).
+
     !!! faq
 
         If you get a TypeError saying the function is not a valid JAX type, see the
