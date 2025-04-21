@@ -54,9 +54,7 @@ Make your changes. You can then build the documentation by doing
 
 ```bash
 pip install -e '.[docs]'
-mkdocs build
 mkdocs serve
 ```
-(The two back-to-back `mkdocs` commands are needed to get the names of functions correct in the documentation.)
 
 You can then see your local copy of the documentation by navigating to `localhost:8000` in a web browser.
