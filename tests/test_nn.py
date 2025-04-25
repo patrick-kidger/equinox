@@ -1073,6 +1073,16 @@ def test_batch_norm(getkey, mode):
     f(jrandom.normal(getkey(), (1, 5)))
 
 
+# https://github.com/patrick-kidger/equinox/issues/1010
+def test_batch_norm_zero_training_steps(getkey):
+    bn, state = eqx.nn.make_with_state(eqx.nn.BatchNorm)(
+        input_size=3, axis_name="foo", mode="batch", inference=True
+    )
+    x = jrandom.normal(getkey(), (5, 3))
+    out, _ = jax.vmap(bn, in_axes=(0, None), axis_name="foo")(x, state)
+    assert jnp.allclose(x, out)
+
+
 def test_spectral_norm(getkey):
     def λ1():
         u, v = state.get(spectral.uv_index)
