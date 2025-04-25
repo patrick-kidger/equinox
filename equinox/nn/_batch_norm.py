@@ -246,7 +246,7 @@ class BatchNorm(StatefulLayer, strict=True):
             if inference:
                 # Zero-debias approach: mean = hidden_mean / (1 - momentum^counter)
                 # For simplicity we do the minimal version here (no warmup).
-                scale = 1 - self.momentum**counter
+                scale = jnp.where(counter == 0, 1, 1 - self.momentum**counter)
                 mean = hidden_mean / scale
                 var = hidden_var / scale
             else:
