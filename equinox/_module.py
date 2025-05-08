@@ -681,6 +681,15 @@ class _wrap_method:
         if getattr(self.method, "__isabstractmethod__", False):
             self.__isabstractmethod__ = self.method.__isabstractmethod__
 
+    # Fixes https://github.com/patrick-kidger/equinox/issues/1016
+    @property
+    def __module__(self):
+        return self.method.__module__
+
+    @property
+    def __doc__(self):
+        return self.method.__doc__
+
     def __get__(self, instance, owner):
         del owner
         if instance is None:

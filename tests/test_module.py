@@ -1,5 +1,6 @@
 import abc
 import dataclasses
+import doctest
 import functools as ft
 import inspect
 import pickle
@@ -1257,3 +1258,61 @@ def test_tree_roundtrip_serialise_roundtrip():
     x = pickle.loads(pickle.dumps(x))
     tree2 = jtu.tree_structure(x)
     assert tree == tree2
+
+
+# https://github.com/patrick-kidger/equinox/issues/1016
+def test_doctest():
+    class Example(eqx.Module):
+        def foo(self) -> int:
+            """
+            >>> example = Example()
+            >>> example.foo()
+            1
+            """
+            return 1
+
+        @property
+        def bar(self) -> int:
+            """
+            >>> example = Example()
+            >>> example.bar
+            1
+            """
+            return 1
+
+        @classmethod
+        def baz(self) -> int:
+            """
+            >>> Example.baz()
+            1
+            """
+            return 1
+
+        @eqx.filter_jit
+        def biz(self) -> int:
+            """
+            >>> example = Example()
+            >>> example.biz()
+            1
+            """
+            return 1
+
+        @staticmethod
+        def buz() -> int:
+            """
+            >>> example = Example()
+            >>> example.buz()
+            1
+            """
+            return 1
+
+    tests = doctest.DocTestFinder().find(Example)
+    tests = [test for test in tests if test.examples]
+
+    assert len(tests) == 5
+
+    assert any("foo" in str(test) for test in tests)
+    assert any("bar" in str(test) for test in tests)
+    assert any("baz" in str(test) for test in tests)
+    assert any("biz" in str(test) for test in tests)
+    assert any("buz" in str(test) for test in tests)
