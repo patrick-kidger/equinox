@@ -1,6 +1,6 @@
 import math
 from collections.abc import Callable, Sequence
-from typing import Any, TypeVar, Union
+from typing import Any, TypeVar
 
 import jax
 import jax.lax as lax
@@ -11,7 +11,7 @@ from .common import common_rewrite, fixed_asarray
 
 
 _T = TypeVar("_T")
-_Bool = Union[bool, Bool[Array, ""]]
+_Bool = bool | Bool[Array, ""]
 _Node = Any
 
 

@@ -3,7 +3,7 @@ import functools as ft
 import inspect
 import warnings
 from collections.abc import Callable, Hashable
-from typing import Any, Literal, Optional, overload, Union
+from typing import Any, Literal, overload
 
 import jax
 import jax._src.traceback_util as traceback_util
@@ -29,8 +29,8 @@ from ._module import Module, module_update_wrapper, Partial, Static
 traceback_util.register_exclusion(__file__)
 
 
-ResolvedAxisSpec = Optional[int]
-AxisSpec = Union[ResolvedAxisSpec, Callable[[Any], ResolvedAxisSpec]]
+ResolvedAxisSpec = None | int
+AxisSpec = ResolvedAxisSpec | Callable[[Any], ResolvedAxisSpec]
 
 
 def _is_none(x: Any) -> bool:

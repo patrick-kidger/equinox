@@ -2,14 +2,7 @@ import functools as ft
 import types
 import warnings
 from collections.abc import Callable, Sequence
-from typing import (
-    Any,
-    cast,
-    Literal,
-    overload,
-    TypeVar,
-    Union,
-)
+from typing import Any, cast, Literal, overload, TypeVar
 from typing_extensions import ParamSpec
 
 import jax
@@ -100,12 +93,13 @@ class _GradWrapper(Module):
             return grad
 
     def __get__(self, instance, owner):
+        del owner
         if instance is None:
             return self
         return Partial(self, instance)
 
 
-_Scalar = Union[float, complex, Float[ArrayLike, ""], Complex[ArrayLike, ""]]
+_Scalar = float | complex | Float[ArrayLike, ""] | Complex[ArrayLike, ""]
 _ScalarTy = TypeVar("_ScalarTy", bound=_Scalar)
 
 
