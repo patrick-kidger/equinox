@@ -22,6 +22,12 @@ Implementation of a VQ-VAE (Vector Quantized Variational Autoencoder) for audio 
 **ESM2quinox**: [GitHub](https://github.com/patrick-kidger/esm2quinox)  
 The ESM2 protein language model.
 
+**esmj**: [GitHub](https://github.com/escalante-bio/esmj)   
+The ESM-C protein language model.
+
+**joltz**: [GitHub](https://github.com/nboyd/joltz)   
+The Boltz-1 protein structure prediction model.
+
 ## Libraries
 
 **Levanter**: [GitHub](https://github.com/stanford-crfm/levanter)  
@@ -71,3 +77,6 @@ Normalizing flows and probabilistic machine learning.
 
 **statedict2pytree**: [GitHub](https://github.com/Artur-Galstyan/statedict2pytree)  
 Converts PyTorch `state_dict`s into Equinox pytrees.
+
+**boltz-binder-design**: [GitHub](https://github.com/escalante-bio/boltz-binder-design)   
+Protein design by multi-objective hallucination (~ColabDesign in Equinox). 
