@@ -100,7 +100,7 @@ def _int_to_zero(batch_axis):
         return 0
 
 
-@ft.lru_cache(maxsize=None)
+@ft.cache
 def _get_callback(treedef, static, is_float0):
     @ft.partial(jax.jit, static_argnums=0)
     def callback(static_fn, dynamic):

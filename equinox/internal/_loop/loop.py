@@ -1,5 +1,5 @@
 from collections.abc import Callable, Sequence
-from typing import Any, Literal, TypeVar, Union
+from typing import Any, Literal, TypeVar
 
 import jax
 import jax.lax as lax
@@ -15,7 +15,7 @@ from .common import common_rewrite
 _Carry = TypeVar("_Carry")
 _X = TypeVar("_X")
 _Y = TypeVar("_Y")
-_Bool = Union[bool, Bool[Array, ""]]
+_Bool = bool | Bool[Array, ""]
 _Node = Any
 
 

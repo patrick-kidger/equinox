@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Any, overload, TypeVar, Union
+from typing import Any, overload, TypeVar
 
 import jax
 import jax.numpy as jnp
@@ -8,7 +8,7 @@ import numpy as np
 from jaxtyping import PyTree
 
 
-AxisSpec = Union[bool, Callable[[Any], bool]]
+AxisSpec = bool | Callable[[Any], bool]
 
 
 #

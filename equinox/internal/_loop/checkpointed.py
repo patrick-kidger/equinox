@@ -50,7 +50,7 @@ import math
 import operator
 import typing
 from collections.abc import Callable, Sequence
-from typing import Any, cast, TypeVar, Union
+from typing import Any, cast, TypeVar
 
 import jax
 import jax.core
@@ -69,7 +69,7 @@ from .common import common_rewrite, fixed_asarray
 
 
 _T = TypeVar("_T")
-_Bool = Union[bool, Bool[Array, ""]]
+_Bool = bool | Bool[Array, ""]
 _Node = Any
 
 

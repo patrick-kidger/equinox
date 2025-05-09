@@ -46,7 +46,7 @@ def _to_struct(x):
         return x
 
 
-@ft.lru_cache(maxsize=None)
+@ft.cache
 def _cached_filter_eval_shape(leaves, treedef):
     fn, args, kwargs = jtu.tree_unflatten(treedef, leaves)
     return filter_eval_shape(fn, *args, **kwargs)
