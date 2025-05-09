@@ -1,29 +1,33 @@
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
 [project]
-name = "equinox"
-version = "0.12.1"
-description = "Elegant easy-to-use neural networks in JAX."
-readme = "README.md"
-requires-python =">=3.10"
-license = {file = "LICENSE"}
 authors = [
-  {name = "Patrick Kidger", email = "contact@kidger.site"},
+  {email = "contact@kidger.site", name = "Patrick Kidger"}
 ]
-keywords = ["jax", "neural-networks", "deep-learning", "equinox"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "Intended Audience :: Financial and Insurance Industry",
-    "Intended Audience :: Information Technology",
-    "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: Apache Software License",
-    "Natural Language :: English",
-    "Programming Language :: Python :: 3",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "Topic :: Scientific/Engineering :: Information Analysis",
-    "Topic :: Scientific/Engineering :: Mathematics",
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Financial and Insurance Industry",
+  "Intended Audience :: Information Technology",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: Apache Software License",
+  "Natural Language :: English",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+  "Topic :: Scientific/Engineering :: Mathematics"
 ]
-urls = {repository = "https://github.com/patrick-kidger/equinox" }
 dependencies = ["jax>=0.4.38", "jaxtyping>=0.2.20", "typing_extensions>=4.5.0", "wadler_lindig>=0.1.0"]
+description = "Elegant easy-to-use neural networks in JAX."
+keywords = ["jax", "neural-networks", "deep-learning", "equinox"]
+license = {file = "LICENSE"}
+name = "equinox"
+readme = "README.md"
+requires-python = ">=3.10"
+urls = {repository = "https://github.com/patrick-kidger/equinox"}
+version = "0.12.1"
 
 [project.optional-dependencies]
 docs = [
@@ -33,15 +37,17 @@ docs = [
   "mkdocs-ipynb==0.1.0",
   "mkdocs-material==9.6.7",
   "mkdocstrings[python]==0.28.3",
-  "pymdown-extensions==10.14.3",
+  "pymdown-extensions==10.14.3"
 ]
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
 
 [tool.hatch.build]
 include = ["equinox/*"]
+
+[tool.pyright]
+include = ["equinox", "tests"]
+reportFunctionMemberAccess = false
+reportIncompatibleMethodOverride = true
+reportIncompatibleVariableOverride = false # Incompatible with eqx.AbstractVar
 
 [tool.pytest.ini_options]
 addopts = "-Werror --jaxtyping-packages=equinox,beartype.beartype(conf=beartype.BeartypeConf(strategy=beartype.BeartypeStrategy.On))"
@@ -60,9 +66,3 @@ combine-as-imports = true
 extra-standard-library = ["typing_extensions"]
 lines-after-imports = 2
 order-by-type = false
-
-[tool.pyright]
-reportIncompatibleMethodOverride = true
-reportIncompatibleVariableOverride = false  # Incompatible with eqx.AbstractVar
-reportFunctionMemberAccess = false
-include = ["equinox", "tests"]
