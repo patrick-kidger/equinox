@@ -2,13 +2,14 @@ from typing import Any
 
 import jax
 import jax.lax as lax
-from jaxlib.xla_extension import Device
 from jaxtyping import PyTree
 
 from ._filters import combine, is_array, partition
 
 
-def filter_shard(x: PyTree[Any], device_or_shardings: Device | jax.sharding.Sharding):
+def filter_shard(
+    x: PyTree[Any], device_or_shardings: jax.Device | jax.sharding.Sharding
+):
     """Filtered transform combining `jax.lax.with_sharding_constraint`
     and `jax.device_put`.
 
@@ -30,7 +31,7 @@ def filter_shard(x: PyTree[Any], device_or_shardings: Device | jax.sharding.Shar
     !!! Example
         See also the [autoparallelism example](../examples/parallelism.ipynb).
     """
-    if isinstance(device_or_shardings, Device):
+    if isinstance(device_or_shardings, jax.Device):
         shardings = jax.sharding.SingleDeviceSharding(device_or_shardings)
     else:
         shardings = device_or_shardings
