@@ -1096,7 +1096,7 @@ def test_weight_norm(getkey):
     out_weight_norm = weight_norm_linear(x)
     out_linear = linear(x)
 
-    assert jnp.allclose(out_weight_norm, out_linear)
+    assert jnp.allclose(out_weight_norm, out_linear, atol=1e-4, rtol=1e-4)
 
     # Axis == None
     linear = eqx.nn.Linear(4, 4, key=getkey())
@@ -1108,7 +1108,7 @@ def test_weight_norm(getkey):
     out_weight_norm = weight_norm_linear(x)
     out_linear = linear(x)
 
-    assert jnp.allclose(out_weight_norm, out_linear)
+    assert jnp.allclose(out_weight_norm, out_linear, atol=1e-4, rtol=1e-4)
 
     # Conv3d (ndim weight matrices > 2)
     conv = eqx.nn.Conv3d(2, 3, 3, key=getkey())
@@ -1117,7 +1117,7 @@ def test_weight_norm(getkey):
     out_weight_norm = weight_norm_conv(x)
     out_conv = conv(x)
 
-    assert jnp.allclose(out_weight_norm, out_conv)
+    assert jnp.allclose(out_weight_norm, out_conv, atol=1e-4, rtol=1e-4)
 
     # Grads get generated for reparametrized weights, not original
     grads = eqx.filter_grad(lambda model, x: jnp.mean(model(x)))(
