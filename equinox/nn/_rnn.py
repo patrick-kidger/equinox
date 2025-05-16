@@ -10,7 +10,7 @@ from .._module import field, Module
 from ._misc import default_init, named_scope
 
 
-class GRUCell(Module, strict=True):
+class GRUCell(Module):
     """A single step of a Gated Recurrent Unit (GRU).
 
     !!! example
@@ -108,7 +108,7 @@ class GRUCell(Module, strict=True):
         return new + inp * (hidden - new)
 
 
-class LSTMCell(Module, strict=True):
+class LSTMCell(Module):
     """A single step of a Long-Short Term Memory unit (LSTM).
 
     !!! example

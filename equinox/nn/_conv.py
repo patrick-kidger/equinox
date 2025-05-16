@@ -67,7 +67,7 @@ def _padding_mode_init(padding_mode: str) -> str:
     return padding_mode
 
 
-class Conv(Module, strict=True):
+class Conv(Module):
     """General N-dimensional convolution."""
 
     num_spatial_dims: int = field(static=True)
@@ -352,7 +352,7 @@ class Conv3d(Conv):
         )
 
 
-class ConvTranspose(Module, strict=True):
+class ConvTranspose(Module):
     """General N-dimensional transposed convolution."""
 
     num_spatial_dims: int = field(static=True)

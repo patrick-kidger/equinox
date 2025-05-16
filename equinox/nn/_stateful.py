@@ -30,7 +30,7 @@ class _Sentinel(Module):
 _sentinel = _Sentinel()
 
 
-class StateIndex(Module, Generic[_Value], strict=True):
+class StateIndex(Module, Generic[_Value]):
     """This wraps together (a) a unique dictionary key used for looking up a stateful
     value, and (b) how that stateful value should be initialised.
 

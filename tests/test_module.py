@@ -1,4 +1,4 @@
-import abc
+import contextlib
 import dataclasses
 import doctest
 import functools as ft
@@ -6,7 +6,7 @@ import inspect
 import pickle
 from collections.abc import Callable
 from dataclasses import InitVar
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 import equinox as eqx
 import equinox.internal as eqxi
@@ -32,7 +32,7 @@ def test_module_not_enough_attributes():
         def __init__(self) -> None:
             pass
 
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         MyModule2()
     with pytest.raises(TypeError):
         MyModule2(1)  # pyright: ignore
@@ -210,22 +210,26 @@ def test_method_access_during_init():
 def test_static_field(new):
     if new:
         static_field = ft.partial(eqx.field, static=True)
+        ctx = contextlib.nullcontext()
     else:
         static_field = eqx.static_field
+        ctx = pytest.warns(match="deprecated")
 
-    class MyModule(eqx.Module):
-        field1: int
-        field2: int = static_field()
-        field3: int = static_field(default=3)
+    with ctx:
 
-    m = MyModule(1, 2)
-    flat, treedef = jtu.tree_flatten(m)
-    assert len(flat) == 1
-    assert flat[0] == 1
-    rm = jtu.tree_unflatten(treedef, flat)
-    assert rm.field1 == 1
-    assert rm.field2 == 2
-    assert rm.field3 == 3
+        class MyModule(eqx.Module):
+            field1: int
+            field2: int = static_field()
+            field3: int = static_field(default=3)
+
+        m = MyModule(1, 2)
+        flat, treedef = jtu.tree_flatten(m)
+        assert len(flat) == 1
+        assert flat[0] == 1
+        rm = jtu.tree_unflatten(treedef, flat)
+        assert rm.field1 == 1
+        assert rm.field2 == 2
+        assert rm.field3 == 3
 
 
 def test_converter():
@@ -636,243 +640,6 @@ def test_check_init_no_assignment():
         A(1)
 
 
-def test_strict_noerrors():
-    class Abstract(eqx.Module, strict=True):
-        @abc.abstractmethod
-        def foo(self, x):
-            pass
-
-    class Concrete1(Abstract, strict=True):
-        def foo(self, x):
-            return x + 1
-
-    class Concrete2(Abstract):
-        def foo(self, x):
-            return x + 2
-
-    class Concrete3(Concrete2):
-        def foo(self, x):
-            return x + 3
-
-    class Abstract1(eqx.Module, strict=True):
-        bar: eqx.AbstractVar[int]
-
-        @abc.abstractmethod
-        def foo(self):
-            pass
-
-    class Abstract2(eqx.Module, strict=True):
-        bar: eqx.AbstractClassVar[int]
-
-        @abc.abstractmethod
-        def foo(self):
-            pass
-
-    class Abstract3(eqx.Module, strict=True):
-        bar: int
-
-        @abc.abstractmethod
-        def foo(self):
-            pass
-
-
-def test_strict_non_module_base():
-    class NotAModule:
-        pass
-
-    with pytest.raises(
-        TypeError, match="Strict `eqx.Module`s must only inherit from other strict"
-    ):
-
-        class MyModule(NotAModule, eqx.Module, strict=True):
-            pass
-
-    class NotAStrictModule(eqx.Module):
-        pass
-
-    with pytest.raises(
-        TypeError, match="Strict `eqx.Module`s must only inherit from other strict"
-    ):
-
-        class MyModule2(NotAStrictModule, eqx.Module, strict=True):
-            pass
-
-
-def test_strict_concrete_is_final():
-    class Concrete(eqx.Module, strict=True):
-        pass
-
-    with pytest.raises(
-        TypeError, match="very strict `eqx.Module` must be either abstract or final"
-    ):
-
-        class Concrete2(Concrete, strict=True):
-            pass
-
-
-@pytest.mark.parametrize("super_init_or_attr", ("init", "attr"))
-@pytest.mark.parametrize("sub_init_or_attr", ("init", "attr"))
-@pytest.mark.parametrize("abstract_flag", (False, True))
-def test_strict_init(super_init_or_attr, sub_init_or_attr, abstract_flag):
-    class Abstract(eqx.Module, strict=eqx.StrictConfig(force_abstract=abstract_flag)):
-        if super_init_or_attr == "init":
-
-            def __init__(self):
-                pass
-
-        else:
-            x: int
-
-        if not abstract_flag:
-
-            @abc.abstractmethod
-            def foo(self):
-                pass
-
-    with pytest.raises(
-        TypeError, match="For readability, any custom `__init__` method, and all fields"
-    ):
-
-        class Concrete1(Abstract, strict=True):
-            if sub_init_or_attr == "init":
-
-                def __init__(self):
-                    pass
-
-            else:
-                y: str
-
-            def foo(self):
-                pass
-
-
-def test_strict_init_in_abstract():
-    class AbstractA(eqx.Module):
-        a: int
-        b: int
-
-        def __init__(self, x):
-            self.a = x
-            self.b = x
-
-        @abc.abstractmethod
-        def foo(self):
-            pass
-
-    class ConcreteB(AbstractA):
-        def foo(self):
-            pass
-
-    # No way to teach pyright about Equinox's different behaviour for `__init__` than
-    # is provided by dataclasses.
-    instance = ConcreteB(x=1)  # pyright: ignore
-    assert instance.a == 1
-    assert instance.b == 1
-
-
-def test_strict_init_transitive():
-    class AbstractA(eqx.Module, strict=eqx.StrictConfig(force_abstract=True)):
-        x: int
-
-    class AbstractB(AbstractA, strict=eqx.StrictConfig(force_abstract=True)):
-        pass
-
-    with pytest.raises(
-        TypeError, match="For readability, any custom `__init__` method, and all fields"
-    ):
-
-        class C(AbstractB, strict=True):
-            y: str
-
-
-def test_strict_abstract_name():
-    class Abstract(eqx.Module, strict=eqx.StrictConfig(force_abstract=True)):
-        pass
-
-    class _Abstract(eqx.Module, strict=eqx.StrictConfig(force_abstract=True)):
-        pass
-
-    with pytest.raises(
-        TypeError, match="Abstract strict `eqx.Module`s must be named starting with"
-    ):
-
-        class NotAbstract(eqx.Module, strict=eqx.StrictConfig(force_abstract=True)):
-            pass
-
-
-def test_strict_method_reoverride():
-    class AbstractA(eqx.Module, strict=True):
-        @abc.abstractmethod
-        def foo(self, x):
-            pass
-
-    class AbstractB(AbstractA, strict=True):
-        def foo(self, x):
-            pass
-
-        @abc.abstractmethod
-        def bar(self, x):
-            pass
-
-    with pytest.raises(
-        TypeError, match="Strict `eqx.Module`s cannot override concrete"
-    ):
-
-        class C(AbstractB, strict=True):
-            def foo(self, x):
-                pass
-
-            def bar(self, x):
-                pass
-
-    class AbstractD(eqx.Module, strict=eqx.StrictConfig(force_abstract=True)):
-        foo = 4
-
-    class AbstractD2(AbstractD, strict=eqx.StrictConfig(force_abstract=True)):
-        pass
-
-    with pytest.raises(
-        TypeError, match="Strict `eqx.Module`s cannot override non-methods"
-    ):
-
-        class E(AbstractD, strict=True):
-            def foo(self):
-                pass
-
-    with pytest.raises(
-        TypeError, match="Strict `eqx.Module`s cannot override non-methods"
-    ):
-
-        class E2(AbstractD2, strict=True):
-            def foo(self):
-                pass
-
-
-def test_strict_default():
-    class AbstractA(eqx.Module, strict=eqx.StrictConfig(force_abstract=True)):
-        def foo(self) -> int:
-            return 4
-
-    class AbstractB(
-        AbstractA,
-        strict=eqx.StrictConfig(force_abstract=True, allow_method_override=True),
-    ):
-        def foo(self) -> int:
-            return 5
-
-    with pytest.raises(
-        TypeError, match="Strict `eqx.Module`s cannot override concrete"
-    ):
-
-        class C1(AbstractB, strict=True):
-            def foo(self):
-                return 6
-
-    class C2(AbstractB, strict=eqx.StrictConfig(allow_method_override=True)):
-        def foo(self):
-            return 7
-
-
 def test_post_init_warning():
     class A(eqx.Module):
         called = False
@@ -962,7 +729,7 @@ def test_init_fields():
     class A(eqx.Module):
         x: int = eqx.field(init=False)
 
-    with pytest.raises(ValueError, match="The following fields were not initialised"):
+    with pytest.raises(TypeError, match="The following fields were not initialised"):
         A()
 
     class B(eqx.Module):
@@ -971,7 +738,7 @@ def test_init_fields():
         def __post_init__(self):
             pass
 
-    with pytest.raises(ValueError, match="The following fields were not initialised"):
+    with pytest.raises(TypeError, match="The following fields were not initialised"):
         B()
 
     class C(eqx.Module):
@@ -983,7 +750,7 @@ def test_init_fields():
                 self.x = 1
 
     C(flag=True)
-    with pytest.raises(ValueError, match="The following fields were not initialised"):
+    with pytest.raises(TypeError, match="The following fields were not initialised"):
         C(flag=False)
 
 
@@ -1086,8 +853,6 @@ def test_module_setattr():
     Foo.g = g  # pyright: ignore
     assert Foo.f is f2
     assert Foo.g is g  # pyright: ignore
-    assert type(Foo.__dict__["f"]).__name__ == "_wrap_method"
-    assert type(Foo.__dict__["g"]).__name__ == "_wrap_method"
 
 
 # See https://github.com/patrick-kidger/equinox/issues/206
@@ -1316,3 +1081,101 @@ def test_doctest():
     assert any("baz" in str(test) for test in tests)
     assert any("biz" in str(test) for test in tests)
     assert any("buz" in str(test) for test in tests)
+
+
+def test_reassign():
+    class A(eqx.Module):
+        x: int
+
+        def __init__(self):
+            self.x = 3
+            self.x = 4
+
+    A()
+
+
+def test_not_weakrefable():
+    class A(eqx.Module):
+        __slots__ = ("x",)
+        x: int
+
+        def __init__(self):
+            self.x = 3
+            self.x = 4
+
+    A()
+
+
+def test_classmethod():
+    class A(eqx.Module):
+        x: int
+
+        @classmethod
+        def make(cls, x):
+            return cls(x)
+
+    a = A(x=1).make(x=2)
+    assert a.x == 2
+
+
+def test_staticmethod():
+    class A(eqx.Module):
+        x: int
+
+        @staticmethod
+        def add_five(x: int):
+            return x + 5
+
+    assert A(x=1).add_five(3) == 8
+
+
+def test_property():
+    class A(eqx.Module):
+        x: int
+
+        @property
+        def add_five(self):
+            return self.x + 5
+
+    assert A(x=1).add_five == 6
+
+
+def test_another_classes_method():
+    class A(eqx.Module):
+        x: int
+
+        def add_five(self):
+            return self.x + 5
+
+    class B(eqx.Module):
+        add_five = A(3).add_five
+
+    assert B.add_five() == 8
+    assert B().add_five() == 8
+
+
+def test_another_classes_classmethod():
+    class A(eqx.Module):
+        x: int
+
+        @classmethod
+        def make(cls):
+            assert cls is A
+            return cls(x=3)
+
+    class B(eqx.Module):
+        make = A.make
+
+    assert B.make() == A(3)
+    assert B().make() == A(3)
+
+
+_T = TypeVar("_T")
+
+
+def test_orig_class():
+    class A(eqx.Module, Generic[_T]):
+        pass
+
+    a = A[int]()
+    assert a.__orig_class__ == A[int]

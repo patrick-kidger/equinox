@@ -9,7 +9,7 @@ from .._module import Module
 from ._misc import named_scope
 
 
-class Dropout(Module, strict=True):
+class Dropout(Module):
     """Applies dropout.
 
     Note that this layer behaves differently during training and inference. During

@@ -4,14 +4,13 @@ from typing import Any, overload
 import jax.random as jr
 from jaxtyping import Array, PRNGKeyArray
 
-from .._better_abstract import AbstractClassVar
 from .._custom_types import sentinel
-from .._module import Module, StrictConfig
+from .._module import AbstractClassVar, Module
 from ._misc import named_scope
 from ._stateful import State
 
 
-class StatefulLayer(Module, strict=StrictConfig(allow_abstract_name=True)):
+class StatefulLayer(Module):
     """An abstract base class, used by [`equinox.nn.Sequential`][], to mark that a
     layer might be stateful. If `Sequential` sees that a layer inherits from
     `StatefulLayer`, then it will call `layer.is_stateful()` to check whether to
@@ -40,7 +39,7 @@ class StatefulLayer(Module, strict=StrictConfig(allow_abstract_name=True)):
     __call__: AbstractClassVar[Callable]
 
 
-class Sequential(StatefulLayer, strict=StrictConfig(allow_method_override=True)):
+class Sequential(StatefulLayer):
     """A sequence of [`equinox.Module`][]s applied in order.
 
     !!! note
@@ -124,7 +123,7 @@ class Sequential(StatefulLayer, strict=StrictConfig(allow_method_override=True))
         return len(self.layers)
 
 
-class Lambda(Module, strict=True):
+class Lambda(Module):
     """Wraps a callable (e.g. an activation function) for use with
     [`equinox.nn.Sequential`][].
 

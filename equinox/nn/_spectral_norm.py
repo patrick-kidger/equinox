@@ -27,7 +27,7 @@ def _power_iteration(weight, u, v, eps):
 _Layer = TypeVar("_Layer")
 
 
-class SpectralNorm(StatefulLayer, Generic[_Layer], strict=True):
+class SpectralNorm(StatefulLayer, Generic[_Layer]):
     """Applies spectral normalisation to a given parameter.
 
     Given a weight matrix $W$, and letting $σ(W)$ denote (an approximation to) its
