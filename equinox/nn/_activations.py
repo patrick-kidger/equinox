@@ -6,7 +6,7 @@ from .._module import Module
 from ._misc import named_scope
 
 
-class PReLU(Module, strict=True):
+class PReLU(Module):
     """PReLU activation function.
 
     This is the elementwise function `x -> max(x, 0) + α * min(x, 0)`.

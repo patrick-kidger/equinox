@@ -171,8 +171,9 @@ def _process_annotation(annotation):
         return is_abstract, is_class
 
 
-class ABCMeta(abc.ABCMeta):
+class BetterABCMeta(abc.ABCMeta):
     def register(cls, subclass):
+        del subclass
         raise ValueError
 
     def __new__(mcs, name, bases, namespace, /, **kwargs):
@@ -236,7 +237,7 @@ class ABCMeta(abc.ABCMeta):
 
 
 @dataclass_transform()
-def dataclass(**kwargs):
+def better_dataclass(**kwargs):
     def make_dataclass(cls):
         try:
             annotations = cls.__dict__["__annotations__"]

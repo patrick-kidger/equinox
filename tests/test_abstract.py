@@ -20,10 +20,10 @@ def test_abstract_method():
         pass
 
     with pytest.raises(TypeError, match="abstract method"):
-        A()
+        A()  # pyright: ignore[reportAbstractUsage]
 
     with pytest.raises(TypeError, match="abstract method"):
-        B()
+        B()  # pyright: ignore[reportAbstractUsage]
 
 
 def test_abstract_attribute_stringified():

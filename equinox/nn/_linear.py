@@ -10,7 +10,7 @@ from .._module import field, Module
 from ._misc import default_init, named_scope
 
 
-class Linear(Module, strict=True):
+class Linear(Module):
     """Performs a linear transformation."""
 
     weight: Array
@@ -106,7 +106,7 @@ class Linear(Module, strict=True):
 _T = TypeVar("_T")
 
 
-class Identity(Module, strict=True):
+class Identity(Module):
     """Identity operation that does nothing. Sometimes useful as a placeholder for
     another Module.
     """
