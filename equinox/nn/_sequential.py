@@ -84,10 +84,11 @@ class Sequential(StatefulLayer, strict=StrictConfig(allow_method_override=True))
         - `x`: passed to the first member of the sequence.
         - `state`: If provided, then it is passed to, and updated from, any layer
             which subclasses [`equinox.nn.StatefulLayer`][].
-        - `key`: Ignored; provided for compatibility with the rest of the Equinox API.
-            (Keyword only argument.)
+        - `key`: If provided, then it is split by the number of layers, and a subkey
+            passed to each layer.
 
         **Returns:**
+
         The output of the last member of the sequence.
 
         If `state` is passed, then a 2-tuple of `(output, state)` is returned.
