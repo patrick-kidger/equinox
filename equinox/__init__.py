@@ -46,7 +46,11 @@ from ._module import (
     static_field as static_field,
     StrictConfig as StrictConfig,
 )
-from ._pretty_print import tree_pformat as tree_pformat, tree_pprint as tree_pprint
+from ._pretty_print import (
+    tree_pformat as tree_pformat,
+    tree_pprint as tree_pprint,
+    TreeWLCustom as TreeWLCustom,  # not public API
+)
 from ._serialisation import (
     default_deserialise_filter_spec as default_deserialise_filter_spec,
     default_serialise_filter_spec as default_serialise_filter_spec,
