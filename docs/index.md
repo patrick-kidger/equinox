@@ -90,5 +90,5 @@ If this quick start has got you interested, then have a read of [All of Equinox]
 [PySR](https://github.com/milesCranmer/PySR): symbolic regression. (Non-JAX honourable mention!)  
 
 **Awesome JAX**  
-[Awesome Equinox](https://docs.kidger.site/equinox/awesome-list/)
+[Awesome Equinox](https://docs.kidger.site/equinox/awesome-list/)  
 [Awesome JAX](https://github.com/lockwo/awesome-jax): a longer list of other JAX projects.  
