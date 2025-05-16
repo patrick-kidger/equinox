@@ -21,7 +21,7 @@ _identity = doc_repr(lambda x: x, "lambda x: x")
 _relu = doc_repr(jnn.relu, "<function relu>")
 
 
-class MLP(Module, strict=True):
+class MLP(Module):
     """Standard Multi-Layer Perceptron; also known as a feed-forward network.
 
     !!! faq
