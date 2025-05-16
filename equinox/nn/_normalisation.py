@@ -14,7 +14,7 @@ from ._misc import named_scope
 from ._stateful import State
 
 
-class LayerNorm(Module, strict=True):
+class LayerNorm(Module):
     r"""
     Computes a mean and standard deviation over the whole input array, and uses these
     to normalise the whole array. Optionally applies an elementwise affine
@@ -161,7 +161,7 @@ class LayerNorm(Module, strict=True):
             return out.astype(orig_dtype), state
 
 
-class GroupNorm(Module, strict=True):
+class GroupNorm(Module):
     r"""
     Splits the first dimension ("channels") into groups of fixed size. Computes a mean
     and standard deviation over the contents of each group, and uses these to normalise
@@ -283,7 +283,7 @@ class GroupNorm(Module, strict=True):
             return out.astype(orig_dtype), state
 
 
-class RMSNorm(Module, strict=True):
+class RMSNorm(Module):
     r"""
     A simplified version of LayerNorm which rescales the inputs, but does not center
     them. Optionally applies a learned reweighting of the transformed array afterward.
