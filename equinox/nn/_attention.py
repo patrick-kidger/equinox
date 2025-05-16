@@ -78,7 +78,7 @@ else:
     _Mask = Bool[Array, "q_seq kv_seq"] | Bool[Array, "num_heads q_seq kv_seq"]
 
 
-class MultiheadAttention(Module, strict=True):
+class MultiheadAttention(Module):
     r"""
     Computes
 

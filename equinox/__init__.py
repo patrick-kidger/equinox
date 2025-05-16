@@ -14,10 +14,6 @@ from ._ad import (
     filter_value_and_grad as filter_value_and_grad,
     filter_vjp as filter_vjp,
 )
-from ._better_abstract import (
-    AbstractClassVar as AbstractClassVar,
-    AbstractVar as AbstractVar,
-)
 from ._caches import clear_caches as clear_caches
 from ._callback import filter_pure_callback as filter_pure_callback
 from ._enum import Enumeration as Enumeration
@@ -39,12 +35,14 @@ from ._filters import (
 from ._jit import EquinoxRuntimeError as EquinoxRuntimeError, filter_jit as filter_jit
 from ._make_jaxpr import filter_make_jaxpr as filter_make_jaxpr
 from ._module import (
+    AbstractClassVar as AbstractClassVar,
+    AbstractVar as AbstractVar,
     field as field,
     Module as Module,
     module_update_wrapper as module_update_wrapper,
     Partial as Partial,
-    static_field as static_field,
-    StrictConfig as StrictConfig,
+    static_field as static_field,  # deprecated
+    StrictConfig as StrictConfig,  # deprecated
 )
 from ._pretty_print import tree_pformat as tree_pformat, tree_pprint as tree_pprint
 from ._serialisation import (

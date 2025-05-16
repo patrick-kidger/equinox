@@ -1,8 +1,4 @@
 # Backward compatibility: expose via `equinox.internal`. Now available under `equinox`.
-from .._better_abstract import (
-    AbstractClassVar as AbstractClassVar,
-    AbstractVar as AbstractVar,
-)
 from .._compile_utils import (
     hashable_combine as hashable_combine,
     hashable_partition as hashable_partition,
@@ -20,7 +16,11 @@ from .._errors import (
 )
 from .._eval_shape import cached_filter_eval_shape as cached_filter_eval_shape
 from .._misc import left_broadcast_to as left_broadcast_to
-from .._module import Static as Static
+from .._module import (
+    AbstractClassVar as AbstractClassVar,
+    AbstractVar as AbstractVar,
+    Static as Static,
+)
 from .._pretty_print import TreeWLCustom as TreeWLCustom
 from .._unvmap import (
     unvmap_all as unvmap_all,

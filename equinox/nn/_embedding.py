@@ -17,7 +17,7 @@ internal_rope_embedding_cache: dict[tuple[int, Any], tuple[Array, Array]] = {}
 cache_clears.append(internal_rope_embedding_cache.clear)
 
 
-class Embedding(Module, strict=True):
+class Embedding(Module):
     """A simple lookup table that stores embeddings of a fixed size."""
 
     num_embeddings: int = field(static=True)
@@ -106,7 +106,7 @@ class Embedding(Module, strict=True):
             )
 
 
-class RotaryPositionalEmbedding(Module, strict=True):
+class RotaryPositionalEmbedding(Module):
     """A rotary positional encoding module, as described in the paper
     "RoFormer: Enhanced Transformer with Rotary Position Embedding". While this module
     can be used in any context, it is particularly useful for providing positional
