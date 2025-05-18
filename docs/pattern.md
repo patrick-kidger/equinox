@@ -15,18 +15,6 @@ The following is a useful design pattern. It's not mandatory, but it does come r
 
 Collectively, these rules serve to avoid all the worst ways in which you might spaghetti your code. Abstract classes are used to define interfaces or partial implementations. Final classes are what get passed around at runtime. No overriding (either of methods or of non-abstract classes) means there are no surprises with exactly what is being called. Keeping all fields together means that initialisation is readable.
 
-Equinox will enforce these rules when subclassing with `strict=True`, e.g.
-```python
-class Foo(eqx.Module, strict=True):
-    x: int
-# ...so far so good...
-
-class Bar(Foo, strict=True):
-    y: int
-# ...error raised here: can't define fields in two different classes.
-```
-(In addition, `strict=True` checks two other things: that all abstract classes have a name that starts with `"Abstract"`, and that modules aren't mixed with non-module classes.)
-
 !!! faq "FAQ"
 
     Some quick FAQs:
@@ -150,7 +138,7 @@ class CubicInterpolation(AbstractPolynomialInterpolation):
         coeffs = ...  # some implementation
         super().__init__(coeffs)
 ```
-but this is now much less readable: we've split up initialisation across two different classes. This is a reliable source of bugs. Thus we arrive at the rule that all fields, and the `__init__` method, should all be defined together. Using `strict=True` when subclassing (e.g. `class CubicInterpolation(AbstractPolynomialInterpolation, strict=True)`) will mean that Equinox checks for this, and raises an error if need be.
+but this is now much less readable: we've split up initialisation across two different classes. This is a reliable source of bugs. Thus we arrive at the rule that all fields, and the `__init__` method, should all be defined together.
 
 ## Level 3: implement methods precisely once, and concrete-means-final
 
@@ -161,7 +149,7 @@ In practice, we argue that's a good idea! This rule means that when you see code
 def foo(interp: AbstractPolynomialInterpolation)
     ... = interp.degree()
 ```
-you know that it is calling precisely `AbstractPolynomialInterpolation.degree`, and not an override in some subclass. This is excellent for code readability. Thus we get the rule that no method should be overridden. (And this rule will also be checked via the `strict=True` flag.)
+you know that it is calling precisely `AbstractPolynomialInterpolation.degree`, and not an override in some subclass. This is excellent for code readability. Thus we get the rule that no method should be overridden.
 
 If we assume this, then we now find ourselves arriving at a conclusion: concrete means final. That is, once we have a concrete class (every abstract method/attribute defined in our ABCs is now overridden with an implementation, so we can instantiate this class), then it is now final (we're not allowed to re-override things, so subclassing is pointless). This is how we arrive at the abstract-or-final rule itself!
 
@@ -261,7 +249,7 @@ class ConcreteArrayTwo(ConcreteArray):
     def another_method(self):
         pass
 ```
-We didn't discuss it above, but we do ban things like this as well. (And `strict=True` will prevent this.) The reason is to simplify things when writing something like:
+We didn't discuss it above, but we do ban things like this as well. The reason is to simplify things when writing something like:
 ```python
 def add(x: ConcreteArray, y: ConcreteArray) -> ConcreteArray:
     ...
