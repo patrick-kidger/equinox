@@ -84,7 +84,6 @@ plugins:
             - jax.extend.core.ClosedJaxpr
             - jax.Device
             - jax.sharding.Sharding
-            - wadler_lindig.AbstractDoc
     - mkdocstrings:
         handlers:
             python:
