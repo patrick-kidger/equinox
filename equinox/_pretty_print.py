@@ -25,17 +25,23 @@ def _false(_):
 
 @dataclasses.dataclass(slots=True)
 class TreeWLCustom:
-    """Wadler-Lindig customisation for PyTree pretty-printing."""
+    """Wadler-Lindig customisation for PyTree pretty-printing.
+
+    **Arguments:**
+    - `truncate_leaf`: A function `Any -> bool`. Applied to all nodes in the
+        PyTree; all truthy nodes will be truncated to just "<class_name>(...)".
+    - `short_arrays`: If `True`, arrays are abbreviated to their shape and
+      dtype (with weak dtype info prepended to the dtype name).
+    - `struct_as_array`: If `True`, JAX ShapeDtypeStructs are abbreviated to
+      their shape and dtype.
+
+    """
 
     truncate_leaf: Callable[[Any], bool]
-    """Function to determine if a leaf should be truncated."""
 
     short_arrays: bool
-    """If `True`, JAX arrays are abbreviated to their shape and dtype."""
 
     struct_as_array: bool
-    """If `True`, JAX ShapeDtypeStructs are abbreviated to their shape and
-    dtype."""
 
     def __call__(self, obj: Any) -> wl.AbstractDoc | None:
         if self.truncate_leaf(obj):
