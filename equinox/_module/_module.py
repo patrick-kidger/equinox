@@ -418,13 +418,10 @@ class _ModuleMeta(BetterABCMeta):
         assert not is_abstract_module(cls)  # pyright: ignore[reportArgumentType]
 
         fields = dataclasses.fields(cls)  # pyright: ignore[reportArgumentType]
-        missing_names = {
-            f.name
-            for f in fields
-            # Not `vars` or `__dict__`, to allow for `property`s overwriting a field.
-            # Not recommended, but allowable for backward compatibility.
-            if f.name not in dir(self)
-        }
+        # Not `vars` or `__dict__`, to allow for `property`s overwriting a field.
+        # Not recommended, but allowable for backward compatibility.
+        dir_self = dir(self)
+        missing_names = {f.name for f in fields if f.name not in dir_self}
         if len(missing_names) > 0:
             raise TypeError(
                 f"The following fields were not initialised during __init__: "
