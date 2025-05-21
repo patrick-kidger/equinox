@@ -61,12 +61,15 @@ class _ModuleFlattener:
     static_fs: tuple[str, ...]
 
     def __init__(self, fields: tuple[dataclasses.Field[Any], ...]):
-        self.dynamic_fs = tuple(
-            [f.name for f in fields if not f.metadata.get("static", False)]
-        )
-        self.static_fs = tuple(
-            [f.name for f in fields if f.metadata.get("static", False)]
-        )
+        dynamic_fs = []
+        static_fs = []
+        for f in fields:
+            if f.metadata.get("static", False):
+                static_fs.append(f.name)
+            else:
+                dynamic_fs.append(f.name)
+        self.dynamic_fs = tuple(dynamic_fs)
+        self.static_fs = tuple(static_fs)
 
     def flatten(self, obj: "Module") -> tuple[tuple[PyTree, ...], _FlattenedData]:
         get = obj.__dict__.get
