@@ -85,6 +85,8 @@ def field(
 
 def static_field(**kwargs):
     warnings.warn(
-        "`equinox.static_field` is deprecated in favour of `equinox.field(static=True)`"
+        "`equinox.static_field` is deprecated in favour of "
+        "`equinox.field(static=True)`",
+        stacklevel=2,
     )
     return field(**kwargs, static=True)
