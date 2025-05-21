@@ -23,6 +23,48 @@ def _false(_):
     return False
 
 
+@dataclasses.dataclass(slots=True)
+class TreeWLCustom:
+    """Wadler-Lindig customisation for PyTree pretty-printing.
+
+    **Arguments:**
+    - `truncate_leaf`: A function `Any -> bool`. Applied to all nodes in the
+        PyTree; all truthy nodes will be truncated to just "<class_name>(...)".
+    - `short_arrays`: If `True`, arrays are abbreviated to their shape and
+      dtype (with weak dtype info prepended to the dtype name).
+    - `struct_as_array`: If `True`, JAX ShapeDtypeStructs are abbreviated to
+      their shape and dtype.
+
+    """
+
+    truncate_leaf: Callable[[Any], bool]
+
+    short_arrays: bool
+
+    struct_as_array: bool
+
+    def __call__(self, obj: Any) -> wl.AbstractDoc | None:
+        if self.truncate_leaf(obj):
+            return wl.TextDoc(f"{type(obj).__name__}(...)")
+
+        if self.short_arrays:
+            if isinstance(obj, jax.Array) or (
+                self.struct_as_array and isinstance(obj, jax.ShapeDtypeStruct)
+            ):
+                dtype = obj.dtype.name
+                # Added in JAX 0.4.32 to `ShapeDtypeStruct`
+                if getattr(obj, "weak_type", False):
+                    dtype = f"weak_{dtype}"
+                return wl.array_summary(obj.shape, dtype, kind=None)
+
+        if isinstance(obj, (jax.custom_jvp, jax.custom_vjp)):
+            return wl.pdoc(obj.__wrapped__)
+
+        if isinstance(obj, jtu.Partial):
+            obj = _Partial(obj.func, obj.args, obj.keywords)
+            return wl.pdoc(obj)
+
+
 def tree_pformat(
     pytree: Any,
     *,
@@ -38,30 +80,16 @@ def tree_pformat(
 
     As [`equinox.tree_pprint`][], but returns the string instead of printing it.
     """
-
-    def custom(obj):
-        if truncate_leaf(obj):
-            return wl.TextDoc(f"{type(obj).__name__}(...)")
-
-        if short_arrays:
-            if isinstance(obj, jax.Array) or (
-                struct_as_array and isinstance(obj, jax.ShapeDtypeStruct)
-            ):
-                dtype = obj.dtype.name
-                # Added in JAX 0.4.32 to `ShapeDtypeStruct`
-                if getattr(obj, "weak_type", False):
-                    dtype = f"weak_{dtype}"
-                return wl.array_summary(obj.shape, dtype, kind=None)
-
-        if isinstance(obj, (jax.custom_jvp, jax.custom_vjp)):
-            return wl.pdoc(obj.__wrapped__)
-
-        if isinstance(obj, jtu.Partial):
-            obj = _Partial(obj.func, obj.args, obj.keywords)
-            return wl.pdoc(obj)
-
     return wl.pformat(
-        pytree, width=width, indent=indent, short_arrays=short_arrays, custom=custom
+        pytree,
+        width=width,
+        indent=indent,
+        short_arrays=short_arrays,
+        custom=TreeWLCustom(
+            truncate_leaf=truncate_leaf,
+            short_arrays=short_arrays,
+            struct_as_array=struct_as_array,
+        ),
     )
 
 
