@@ -6,7 +6,7 @@ import types
 import warnings
 import weakref
 from collections.abc import Callable, Hashable
-from typing import Any, cast, ParamSpec, TypeVar
+from typing import Any, cast, Final, ParamSpec, TypeVar
 from typing_extensions import dataclass_transform
 
 import jax
@@ -30,7 +30,7 @@ def StrictConfig(force_abstact: bool = False, **kwargs):
         return False
 
 
-wrapper_field_names = {
+wrapper_field_names: Final = {
     "__module__",
     "__name__",
     "__qualname__",

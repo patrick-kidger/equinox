@@ -1,6 +1,6 @@
 import types
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 import jax.tree_util as jtu
 from jaxtyping import PyTreeDef
@@ -37,7 +37,10 @@ class BoundMethod(Module):
         return self.__func__.__get__(self.__self__, type(self.__self__))  # pyright: ignore[reportAttributeAccessIssue]
 
 
-class Partial(Module):
+_Return = TypeVar("_Return")
+
+
+class Partial(Module, Generic[_Return]):
     """Like `functools.partial`, but treats the wrapped function, and partially-applied
     args and kwargs, as a PyTree.
 
@@ -47,11 +50,11 @@ class Partial(Module):
     the Equinox version allows for arbitrary callables.
     """
 
-    func: Callable
+    func: Callable[..., _Return]
     args: tuple[Any, ...]
     keywords: dict[str, Any]
 
-    def __init__(self, func, /, *args, **kwargs):
+    def __init__(self, func: Callable[..., _Return], /, *args: Any, **kwargs: Any):
         """**Arguments:**
 
         - `func`: the callable to partially apply.
@@ -62,7 +65,7 @@ class Partial(Module):
         self.args = args
         self.keywords = kwargs
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args: Any, **kwargs: Any) -> _Return:
         """Call the wrapped `self.func`.
 
         **Arguments:**
