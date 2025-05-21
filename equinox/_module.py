@@ -507,7 +507,7 @@ class _ActualModuleMeta(ABCMeta):
         if _is_force_abstract[cls]:
             # Any other is-abstract checks will be handled in super().__call__.
             raise TypeError("Cannot instantiate abstract `equinox.Module`.")
-        if _has_dataclass_init[cls]:
+        if cls.__dataclass_params__.init:  # pyright: ignore
             for x in jtu.tree_leaves((args, kwargs)):
                 _warn_jax_transformed_function(cls, x)
             # else it's handled in __setattr__, but that isn't called here.
@@ -518,53 +518,44 @@ class _ActualModuleMeta(ABCMeta):
         self = super(_ActualModuleMeta, initable_cls).__call__(*args, **kwargs)
         assert not _is_abstract(cls)
         # [Step 3] Run converters
-        for field in dataclasses.fields(cls):
-            if (converter := field.metadata.get("converter")) is None:
+        fields = dataclasses.fields(cls)
+        for f in fields:
+            if (converter := f.metadata.get("converter")) is None:
                 continue
 
             try:
-                value = getattr(self, field.name)
+                value = getattr(self, f.name)
             except AttributeError:
                 # Let the all-fields-are-filled check handle the error.
                 pass
             else:
-                setattr(self, field.name, converter(value))
+                setattr(self, f.name, converter(value))
         # [Step 4] Check that all fields are occupied.
-        missing_names = {
-            field.name
-            for field in dataclasses.fields(cls)  # pyright: ignore
-            # Not `vars` or `__dict__`, to allow for `property`s overwriting a field.
-            # Not recommended, but allowable for backward compatibility.
-            if field.name not in dir(self)
-        }
+        # Not `vars` or `__dict__`, to allow for `property`s overwriting a
+        # field. Not recommended, but allowable for backward compatibility.
+        dir_ks = set(dir(self))
+        missing_names = {f.name for f in fields if f.name not in dir_ks}
         if len(missing_names):
             raise ValueError(
                 f"The following fields were not initialised during __init__: "
                 f"{missing_names}"
             )
         # [Step 5] Prevent arrays from being marked as static
-        for field in dataclasses.fields(self):
-            if field.metadata.get("static", False):
-                if any(
-                    jtu.tree_map(
-                        is_array, jtu.tree_flatten(getattr(self, field.name))[0]
-                    )
-                ):
-                    warnings.warn(
-                        "A JAX array is being set as static! This can result "
-                        "in unexpected behavior and is usually a mistake to do.",
-                        stacklevel=2,
-                    )
+        for f in fields:
+            if f.metadata.get("static", False) and any(
+                jtu.tree_map(is_array, jtu.tree_flatten(getattr(self, f.name))[0])
+            ):
+                warnings.warn(
+                    "A JAX array is being set as static! This can result "
+                    "in unexpected behavior and is usually a mistake to do.",
+                    stacklevel=2,
+                )
         # Freeze.
         object.__setattr__(self, "__class__", cls)
         # [Step 6] Run any custom validators. (After freezing; as they run
         # unconditionally across the whole MRO, they aren't allowed to mutate.)
         for kls in cls.__mro__:
-            try:
-                check = kls.__dict__["__check_init__"]
-            except KeyError:
-                pass
-            else:
+            if (check := kls.__dict__.get("__check_init__")) is not None:
                 check(self)
         return self
 
@@ -581,8 +572,7 @@ class _ActualModuleMeta(ABCMeta):
             and cls not in _has_dataclass_init
         ):
             raise AttributeError
-        else:
-            return value
+        return value
 
     def __setattr__(cls, item, value):
         if _not_magic(item) and inspect.isfunction(value):
@@ -725,13 +715,13 @@ Possibly assigning a JAX-transformed callable as an attribute on
 For example, the following code is buggy:
 ```python
 class MyModule(eqx.Module):
-vmap_linear: Callable
+    vmap_linear: Callable
 
-def __init__(self, ...):
-    self.vmap_linear = jax.vmap(eqx.nn.Linear(...))
+    def __init__(self, ...):
+        self.vmap_linear = jax.vmap(eqx.nn.Linear(...))
 
-def __call__(self, ...):
-    ... = self.vmap_linear(...)
+    def __call__(self, ...):
+        ... = self.vmap_linear(...)
 ```
 This is because the callable returned from `jax.vmap` is *not* a PyTree. This means that
 the parameters inside the `eqx.nn.Linear` layer will not receive gradient updates.
@@ -739,24 +729,24 @@ the parameters inside the `eqx.nn.Linear` layer will not receive gradient update
 You can most easily fix this either by applying the wrapper at `__call__` time:
 ```python
 class MyModule(eqx.Module):
-linear: Callable
+    linear: Callable
 
-def __init__(self, ...):
-    self.linear = eqx.nn.Linear(...)
+    def __init__(self, ...):
+        self.linear = eqx.nn.Linear(...)
 
-def __call__(self, ...):
-    ... = jax.vmap(self.linear)(...)
+    def __call__(self, ...):
+        ... = jax.vmap(self.linear)(...)
 ```
 or by using `eqx.filter_vmap` instead (which *does* return a PyTree):
 ```python
 class MyModule(eqx.Module):
-vmap_linear: Callable
+    vmap_linear: Callable
 
-def __init__(self, ...):
-    self.vmap_linear = eqx.filter_vmap(eqx.nn.Linear(...))
+    def __init__(self, ...):
+        self.vmap_linear = eqx.filter_vmap(eqx.nn.Linear(...))
 
-def __call__(self, ...):
-    ... = self.vmap_linear(...)
+    def __call__(self, ...):
+        ... = self.vmap_linear(...)
 ```
 """,
                     stacklevel=3,
