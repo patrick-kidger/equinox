@@ -28,6 +28,9 @@ The ESM-C protein language model.
 **joltz**: [GitHub](https://github.com/nboyd/joltz)   
 The Boltz-1 protein structure prediction model.
 
+**nequip-eqx**: [GitHub](https://github.com/teddykoker/nequip-eqx)  
+The NequIP neural network interatomic potential model.
+
 ## Libraries
 
 **Levanter**: [GitHub](https://github.com/stanford-crfm/levanter)  
