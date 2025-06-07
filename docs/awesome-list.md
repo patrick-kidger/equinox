@@ -16,7 +16,7 @@ HiFiGAN vocoder using two discriminators to map mel-spectrograms to audio.
 **nanoGPT**: [GitHub](https://github.com/TugdualKerjan/nanoEQXGPT)  
 Port of nanoGPT, a minimalist implementation of a Generative Pre-trained Transformer.
 
-**equinox-openpi** [Github](https://github.com/vyeevani/equinox-openpi)
+**PaliGemma 1/2 + OpenPI** [Github](https://github.com/vyeevani/equinox-openpi)  
 The PaliGemma 1/2 VLM (with support for [transfusion](https://arxiv.org/abs/2408.11039)) + the OpenPi Visual Language Action model.
 
 **VQVAE**: [GitHub](https://github.com/TugdualKerjan/audio-vae-jax)  
