@@ -2,6 +2,7 @@ from collections.abc import Callable
 from typing import Any, overload, TypeVar
 
 import jax
+import jax.core
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
@@ -65,6 +66,8 @@ def is_inexact_array_like(element: Any) -> bool:
 
 def _make_filter_tree(is_leaf):
     def _filter_tree(mask: AxisSpec, arg: Any) -> PyTree[bool]:
+        if isinstance(mask, jax.core.Tracer):
+            raise ValueError("`filter_spec` leaf values cannot be traced arrays.")
         if isinstance(mask, bool):
             return jtu.tree_map(lambda _: mask, arg, is_leaf=is_leaf)
         elif callable(mask):
