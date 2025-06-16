@@ -351,7 +351,7 @@ def tree_equal(
 
 def tree_flatten_one_level(
     pytree: PyTree,
-) -> tuple[list[PyTree], PyTreeDef]:
+) -> tuple[list[PyTree], PyTreeDef]:  # pyright: ignore[reportInvalidTypeForm]
     """Returns the immediate subnodes of a PyTree node. If called on a leaf node then it
     will return just that leaf.
 

@@ -8,7 +8,8 @@ from ._filters import combine, is_array, partition
 
 
 def filter_shard(
-    x: PyTree[Any], device_or_shardings: jax.Device | jax.sharding.Sharding
+    x: PyTree[Any],
+    device_or_shardings: jax.Device | jax.sharding.Sharding,  # pyright: ignore[reportInvalidTypeForm]
 ):
     """Filtered transform combining `jax.lax.with_sharding_constraint`
     and `jax.device_put`.
