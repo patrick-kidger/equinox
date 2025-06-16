@@ -141,8 +141,9 @@ def _maybe_set_impl(
     pred, xs, x, *i_dynamic_leaves, i_static, i_treedef, kwargs, makes_false_steps
 ):
     i = combine(i_static, jtu.tree_unflatten(i_treedef, i_dynamic_leaves))
-    x = _select_if_vmap(pred, x, xs.at[i].get(**kwargs), makes_false_steps)
-    return [xs.at[i].set(x, **kwargs)]
+    kwargs_dict = dict(kwargs)
+    x = _select_if_vmap(pred, x, xs.at[i].get(**kwargs_dict), makes_false_steps)
+    return [xs.at[i].set(x, **kwargs_dict)]
 
 
 def _maybe_set_abstract(
@@ -157,7 +158,9 @@ def _maybe_set_jvp(
     pred, xs, x, *i_dynamic_leaves = primals
     _, t_xs, t_x, *_ = tangents
     i = combine(i_static, jtu.tree_unflatten(i_treedef, i_dynamic_leaves))
-    out = _maybe_set(pred, xs, x, i, kwargs=kwargs, makes_false_steps=makes_false_steps)
+    out = _maybe_set(
+        pred, xs, x, i, kwargs=dict(kwargs), makes_false_steps=makes_false_steps
+    )
     if type(t_x) is ad.Zero and type(t_xs) is ad.Zero:
         t_out = t_xs
     else:
@@ -166,7 +169,7 @@ def _maybe_set_jvp(
         if type(t_xs) is ad.Zero:
             t_xs = jnp.zeros(t_xs.aval.shape, t_xs.aval.dtype)  # pyright: ignore
         t_out = _maybe_set(
-            pred, t_xs, t_x, i, kwargs=kwargs, makes_false_steps=makes_false_steps
+            pred, t_xs, t_x, i, kwargs=dict(kwargs), makes_false_steps=makes_false_steps
         )
     return [out], [t_out]
 
@@ -202,7 +205,7 @@ def _maybe_set_transpose(
         if type(ct_out) is ad.Zero:
             ct_x = None
         else:
-            ct_x = ct_out.at[i].get(**kwargs)
+            ct_x = ct_out.at[i].get(**dict(kwargs))
             ct_x = _select_if_vmap(pred, ct_x, jnp.zeros_like(ct_x), makes_false_steps)
     else:
         ct_x = None
@@ -252,7 +255,7 @@ def _maybe_set(pred, xs, x, i, *, kwargs, makes_false_steps):
         *i_dynamic_leaves,
         i_static=i_static,
         i_treedef=i_treedef,
-        kwargs=kwargs,
+        kwargs=tuple(kwargs.items()),
         makes_false_steps=makes_false_steps,
     )
     return out

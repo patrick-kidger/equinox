@@ -318,7 +318,7 @@ def create_vprim(name: str, impl, abstract_eval, jvp, transpose):
                 __axis_size=axis_size,
                 __axis_name=axis_name,
                 __batch_axes=batch_axes,
-                params=params,
+                params=tuple(params.items()),
             )
             batch_axes_out = jtu.tree_map(lambda _: 0, out)
         return out, batch_axes_out
@@ -337,7 +337,7 @@ def create_vprim(name: str, impl, abstract_eval, jvp, transpose):
 
 
 def _vprim_impl(*inputs, prim, __axis_size, __axis_name, __batch_axes, params):
-    impl = ft.partial(_vprim_impl_registry[prim], **params)
+    impl = ft.partial(_vprim_impl_registry[prim], **dict(params))
     impl = jax.vmap(
         impl, in_axes=__batch_axes, axis_size=__axis_size, axis_name=__axis_name
     )
@@ -360,7 +360,7 @@ def _vprim_abstract_eval(*inputs, prim, __axis_size, __axis_name, __batch_axes, 
         jax.core.mapped_aval(__axis_size, b, x) for x, b in zip(inputs, __batch_axes)
     ]
     abstract_eval = _vprim_abstract_eval_registry[prim]
-    outs = abstract_eval(*inputs, **params)
+    outs = abstract_eval(*inputs, **dict(params))
     outs = [_unmapped_aval(__axis_size, __axis_name, 0, x) for x in outs]
     return outs
 
@@ -393,7 +393,7 @@ def _vprim_jvp(
     assert len(tangents) == len(__batch_axes)
     tangents = [_resolve_zeros_t(t, b) for t, b in zip(tangents, __batch_axes)]
     batch_axes_t = [_resolve_zeros_b(t, b) for t, b in zip(tangents, __batch_axes)]
-    jvp = ft.partial(_vprim_jvp_registry[prim], **params)
+    jvp = ft.partial(_vprim_jvp_registry[prim], **dict(params))
     jvp = jax.vmap(
         jvp,
         in_axes=(__batch_axes, batch_axes_t),
@@ -431,7 +431,7 @@ def _vprim_transpose(
     batch_axes = [_resolve_undefined_b(i, b) for i, b in zip(inputs, __batch_axes)]
 
     def _transpose(*_inputs):
-        _outputs = _vprim_transpose_registry[prim](*_inputs, **params)
+        _outputs = _vprim_transpose_registry[prim](*_inputs, **dict(params))
         # `Zero` is not a JAX type -- it's an internal AD thing -- so we shouldn't pass
         # it across the `vmap` boundary. In particular JAX won't apply the out batch
         # axis to it.
