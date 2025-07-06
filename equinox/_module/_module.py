@@ -14,7 +14,7 @@ import jax.tree_util as jtu
 import numpy as np
 from jaxtyping import Array, Bool, PyTree
 
-from .._filters import is_array, is_array_like
+from .._filters import is_array, is_array_like, is_inexact_array_like
 from .._pretty_print import tree_pformat
 from .._tree import tree_equal
 from ._better_abstract import better_dataclass, BetterABCMeta
@@ -436,6 +436,50 @@ class _ModuleMeta(BetterABCMeta):
                     warnings.warn(
                         "A JAX array is being set as static! This can result "
                         "in unexpected behavior and is usually a mistake to do.",
+                        stacklevel=2,
+                    )
+            if not f.init:
+                if any(
+                    jtu.tree_map(
+                        is_inexact_array_like, jtu.tree_leaves(getattr(self, f.name))
+                    )
+                ):
+                    warnings.warn(
+                        "Using `field(init=False)` on `equinox.Module` can lead to "
+                        "surprising behaviour when used around `jax.grad`. In the "
+                        "following example, observe how JAX computes gradients with "
+                        "respect to the `.len` attribute (which is a PyTree leaf "
+                        "passed across the `jax.grad` boundary) and that there are no "
+                        "gradients with respect to `.a` or `.b`:\n"
+                        "\n"
+                        "```\n"
+                        "import equinox as eqx\n"
+                        "import jax\n"
+                        "import jax.numpy as jnp\n"
+                        "\n"
+                        "class Foo(eqx.Module):\n"
+                        "    a: jax.Array\n"
+                        "    b: jax.Array\n"
+                        "    len: jax.Array = eqx.field(init=False)\n"
+                        "\n"
+                        "    def __post_init__(self):\n"
+                        "        self.len = jnp.sqrt(self.a**2 + self.b**2)\n"
+                        "\n"
+                        "    def __call__(self, x):\n"
+                        "        return self.len * x\n"
+                        "\n"
+                        "@jax.jit\n"
+                        "@jax.grad\n"
+                        "def call(module, x):\n"
+                        "    return module(x)\n"
+                        "\n"
+                        "grads = call(Foo(jnp.array(3.0), jnp.array(4.0)), 5)\n"
+                        "# Foo(\n"
+                        "#   a=Array(0., dtype=float32, weak_type=True),\n"
+                        "#   b=Array(0., dtype=float32, weak_type=True),\n"
+                        "#   len=Array(5., dtype=float32, weak_type=True)\n"
+                        "# )\n"
+                        "```",
                         stacklevel=2,
                     )
 
