@@ -220,6 +220,7 @@ class Conv(Module):
 
         A JAX array of shape `(out_channels, new_dim_1, ..., new_dim_N)`.
         """
+        del key
 
         unbatched_rank = self.num_spatial_dims + 1
         if x.ndim != unbatched_rank:
@@ -501,8 +502,8 @@ class ConvTranspose(Module):
         output_padding = parse(output_padding)
         dilation = parse(dilation)
 
-        for s, o in zip(stride, output_padding):
-            if output_padding >= stride:
+        for s, o in zip(stride, output_padding, strict=True):
+            if o >= s:
                 raise ValueError("Must have `output_padding < stride` (elementwise).")
 
         grouped_in_channels = in_channels // groups
@@ -592,6 +593,7 @@ class ConvTranspose(Module):
 
         A JAX array of shape `(out_channels, new_dim_1, ..., new_dim_N)`.
         """
+        del key
         unbatched_rank = self.num_spatial_dims + 1
         if x.ndim != unbatched_rank:
             raise ValueError(
