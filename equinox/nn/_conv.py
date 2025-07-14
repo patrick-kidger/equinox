@@ -723,5 +723,6 @@ class ConvTranspose3d(ConvTranspose):
             groups=groups,
             use_bias=use_bias,
             padding_mode=padding_mode,
+            dtype=dtype,
             key=key,
         )
