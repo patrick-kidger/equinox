@@ -55,8 +55,8 @@ class StateIndex(Module, Generic[_Value]):
     [`equinox.nn.BatchNorm`][] for further reference.
     """  # noqa: E501
 
-    # Starts off as object when initialised; later replaced with stringified KeyPath
-    # inside `make_with_state`.
+    # Starts off as object when initialised; later replaced with a stringified 
+    # jax.tree_util.KeyPath inside `make_with_state`.
     marker: object | str = field(static=True)
     init: _Value | _Sentinel
 
@@ -365,7 +365,7 @@ def make_with_state(make_model: Callable[_P, _T]) -> Callable[_P, tuple[_T, Stat
         def make_with_state_impl(*args, **kwargs) -> tuple[_T, State]:
             model = make_model(*args, **kwargs)
 
-            # Replace all markers with `int`s. This is needed to ensure that two calls
+            # Replace all markers with stringified key paths. This is needed to ensure that two calls
             # to `make_with_state` produce compatible models and states.
             key_leaves, treedef = jtu.tree_flatten_with_path(model, is_leaf=_is_index)
             new_leaves = []
