@@ -8,8 +8,8 @@ def field(
     *,
     converter: Callable[[Any], Any] | None = None,
     static: bool = False,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> Any:
     """Equinox supports extra functionality on top of the default dataclasses.
 
     **Arguments:**
