@@ -1,5 +1,4 @@
 import functools as ft
-import inspect
 import traceback
 import types
 import warnings
@@ -132,21 +131,12 @@ def _error(x, pred, index, *, msgs, on_error, stack):
         def handle_error():
             index_struct = jax.eval_shape(lambda: index)
             _index = jax.pure_callback(
-                display_msg, index_struct, index, vectorized=True
+                display_msg, index_struct, index, vmap_method="expand_dims"
             )
-            # Support JAX with and without DCE behaviour on breakpoints.
-            breakpoint_params = inspect.signature(
-                jax.debug.breakpoint
-            ).parameters.keys()
-            breakpoint_kwargs = {}
-            if "token" in breakpoint_params:
-                breakpoint_kwargs["token"] = _index
-            if "vectorized" in breakpoint_params:
-                breakpoint_kwargs["vectorized"] = True
-            if EQX_ON_ERROR_BREAKPOINT_FRAMES is not None:
-                breakpoint_kwargs["num_frames"] = EQX_ON_ERROR_BREAKPOINT_FRAMES
-            _index = jax.debug.breakpoint(**breakpoint_kwargs)
-            return jax.pure_callback(to_nan, struct, _index, vectorized=True)
+            _index = jax.debug.breakpoint(
+                token=_index, num_frames=EQX_ON_ERROR_BREAKPOINT_FRAMES
+            )
+            return jax.pure_callback(to_nan, struct, _index, vmap_method="expand_dims")
 
         struct = jax.eval_shape(lambda: x)
         return lax.cond(pred, handle_error, lambda: x)
