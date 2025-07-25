@@ -140,6 +140,7 @@ def _select_if_vmap(pred, x, y, makes_false_steps):
 def _maybe_set_impl(
     pred, xs, x, *i_dynamic_leaves, i_static, i_treedef, kwargs, makes_false_steps
 ):
+    i_static = _to_raw_slice(i_static)
     i = combine(i_static, jtu.tree_unflatten(i_treedef, i_dynamic_leaves))
     kwargs_dict = dict(kwargs)
     x = _select_if_vmap(pred, x, xs.at[i].get(**kwargs_dict), makes_false_steps)
@@ -149,6 +150,7 @@ def _maybe_set_impl(
 def _maybe_set_abstract(
     pred, xs, x, *i_dynamic_leaves, i_static, i_treedef, kwargs, makes_false_steps
 ):
+    del pred, i_dynamic_leaves, i_static, i_treedef, kwargs, makes_false_steps
     return [xs]
 
 
@@ -157,6 +159,7 @@ def _maybe_set_jvp(
 ):
     pred, xs, x, *i_dynamic_leaves = primals
     _, t_xs, t_x, *_ = tangents
+    i_static = _to_raw_slice(i_static)
     i = combine(i_static, jtu.tree_unflatten(i_treedef, i_dynamic_leaves))
     out = _maybe_set(
         pred, xs, x, i, kwargs=dict(kwargs), makes_false_steps=makes_false_steps
@@ -188,6 +191,7 @@ def _maybe_set_transpose(
     assert not ad.is_undefined_primal(pred)
     for z in i_dynamic_leaves:
         assert not ad.is_undefined_primal(z)
+    i_static = _to_raw_slice(i_static)
     i = combine(i_static, jtu.tree_unflatten(i_treedef, i_dynamic_leaves))
     [ct_out] = ct_out
     if ad.is_undefined_primal(xs):
@@ -221,6 +225,38 @@ maybe_set_p = create_vprim(
 )
 
 
+class _HashableSlice(Module):
+    start: Any
+    stop: Any
+    step: Any
+
+
+def _is_hashable_slice(x):
+    return isinstance(x, _HashableSlice)
+
+
+def _to_hashable_slice_impl(x):
+    if isinstance(x, slice):
+        return _HashableSlice(x.start, x.stop, x.step)
+    else:
+        return x
+
+
+def _to_raw_slice_impl(x):
+    if _is_hashable_slice(x):
+        return slice(x.start, x.stop, x.step)
+    else:
+        return x
+
+
+def _to_hashable_slice(tree):
+    return jtu.tree_map(_to_hashable_slice_impl, tree)
+
+
+def _to_raw_slice(tree):
+    return jtu.tree_map(_to_raw_slice_impl, tree, is_leaf=_is_hashable_slice)
+
+
 # This is a carefully optimised routine, that relies on the special behaviour exhibited
 # by `_Buffer`.
 # The main one is fact that `_Buffer`s are write-once to each location, so they
@@ -247,6 +283,7 @@ def _maybe_set(pred, xs, x, i, *, kwargs, makes_false_steps):
     x = fixed_asarray(x).astype(dtype)
     x = jnp.broadcast_to(x, jax.eval_shape(lambda: xs[i]).shape)
     i_dynamic, i_static = partition(i, is_array)
+    i_static = _to_hashable_slice(i_static)
     i_dynamic_leaves, i_treedef = jtu.tree_flatten(i_dynamic)
     [out] = maybe_set_p.bind(
         pred,
