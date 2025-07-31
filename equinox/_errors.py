@@ -3,7 +3,7 @@ import traceback
 import types
 import warnings
 from collections.abc import Sequence
-from typing import Literal
+from typing import Any, cast, Literal
 
 import jax
 import jax._src.traceback_util as traceback_util
@@ -130,13 +130,12 @@ def _error(x, pred, index, *, msgs, on_error, stack):
 
         def handle_error():
             index_struct = jax.eval_shape(lambda: index)
-            _index = jax.pure_callback(
-                display_msg, index_struct, index, vmap_method="expand_dims"
-            )
+            _index = jax.pure_callback(display_msg, index_struct, index)
             _index = jax.debug.breakpoint(
                 token=_index, num_frames=EQX_ON_ERROR_BREAKPOINT_FRAMES
             )
-            return jax.pure_callback(to_nan, struct, _index, vmap_method="expand_dims")
+            _index = unvmap_max(cast(Any, _index))
+            return jax.pure_callback(to_nan, struct, _index)
 
         struct = jax.eval_shape(lambda: x)
         return lax.cond(pred, handle_error, lambda: x)
