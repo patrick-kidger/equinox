@@ -4,6 +4,7 @@ theme:
         - navigation.sections  # Sections are included in the navigation on the left.
         - toc.integrate  # Table of contents is integrated on the left; does not appear separately on the right.
         - header.autohide  # header disappears as you scroll
+        - content.code.copy
     palette:
         # Light mode / dark mode
         # We deliberately don't automatically use `media` to check a user's preferences. We default to light mode as
