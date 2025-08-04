@@ -92,7 +92,17 @@ def tree_at(
 
     **Returns:**
 
-    A copy of the input PyTree, with the appropriate modifications.
+    A new PyTree with the same structure as the input PyTree and the appropriate modifications.
+
+    !!! Important
+
+        The returned PyTree is only a shallow copy of the input PyTree, with the
+        specified nodes replaced. This means that the input PyTree cannot be reused
+        after using the output PyTree as a *donated* argument to a JAX transform.
+
+        To reuse the input PyTree, you must make a copy of its arrays first, e.g.:
+        `copied_pytree = jax.tree.map(lambda x: x.copy() if eqx.is_array(x) else x, pytree)`,
+        and pass the `copied_pytree` to the JAX transform instead.
 
     !!! Example
 

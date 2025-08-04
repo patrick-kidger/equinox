@@ -69,6 +69,7 @@ def inference_mode(pytree: PyTree, value: bool = True) -> PyTree:
 
     **Returns:**
 
-    A copy of `pytree` with all `inference` flags set to `value`.
+    A new PyTree with the same structure as the input PyTree with all `inference` flags
+    set to `value`.
     """
     return tree_at(_inferences, pytree, replace_fn=lambda _: value)
