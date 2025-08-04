@@ -55,9 +55,9 @@ class StateIndex(Module, Generic[_Value]):
     [`equinox.nn.BatchNorm`][] for further reference.
     """  # noqa: E501
 
-    # Starts off as None when initialised; later replaced with an `int` inside
-    # `make_with_state`.
-    marker: object | int = field(static=True)
+    # Starts off as object when initialised; later replaced with a stringified
+    # jax.tree_util.KeyPath inside `make_with_state`.
+    marker: object | str = field(static=True)
     init: _Value | _Sentinel
 
     def __init__(self, init: _Value):
@@ -249,13 +249,7 @@ class State:
         if isinstance(self._state, _Sentinel):
             return wl.TextDoc("State(~old~)")
         else:
-            docs = wl.named_objs(
-                [
-                    (hex(id(key)), value)
-                    for key, value in self._state.items()  # pyright: ignore
-                ],
-                **kwargs,
-            )
+            docs = wl.named_objs(self._state.items(), **kwargs)  # pyright: ignore
             return wl.bracketed(
                 begin=wl.TextDoc("State("),
                 docs=docs,
@@ -371,16 +365,15 @@ def make_with_state(make_model: Callable[_P, _T]) -> Callable[_P, tuple[_T, Stat
         def make_with_state_impl(*args, **kwargs) -> tuple[_T, State]:
             model = make_model(*args, **kwargs)
 
-            # Replace all markers with `int`s. This is needed to ensure that two calls
-            # to `make_with_state` produce compatible models and states.
-            leaves, treedef = jtu.tree_flatten(model, is_leaf=_is_index)
-            counter = 0
+            # Replace all markers with stringified key paths. This is needed to ensure
+            # that two calls to `make_with_state` produce compatible models and states.
+            key_leaves, treedef = jtu.tree_flatten_with_path(model, is_leaf=_is_index)
             new_leaves = []
-            for leaf in leaves:
+            for key, leaf in key_leaves:
                 if _is_index(leaf):
                     leaf = StateIndex(leaf.init)
-                    object.__setattr__(leaf, "marker", counter)
-                    counter += 1
+                    path_str = model.__class__.__name__ + jtu.keystr(key)
+                    object.__setattr__(leaf, "marker", path_str)
                 new_leaves.append(leaf)
             model = jtu.tree_unflatten(treedef, new_leaves)
 
