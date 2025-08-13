@@ -6,7 +6,7 @@ import types
 import warnings
 import weakref
 from collections.abc import Callable, Hashable
-from typing import Any, cast, Final, ParamSpec, TypeVar
+from typing import Any, cast, Final, ParamSpec, TYPE_CHECKING, TypeVar
 from typing_extensions import dataclass_transform
 
 import jax
@@ -618,47 +618,49 @@ class Module(Hashable, metaclass=_ModuleMeta):
     def __eq__(self, other) -> bool | np.bool_ | Bool[Array, ""]:  # pyright: ignore
         return tree_equal(self, other)
 
-    def __setattr__(self, name: str, value: Any):
-        if self in _currently_initialising:
-            allowed_names = frozenset({f.name for f in dataclasses.fields(self)}).union(
-                wrapper_field_names
-            )
-            if name in allowed_names:
-                _error_method_assignment(self, value)
-                _warn_jax_transformed_function(type(self), value)
-                object.__setattr__(self, name, value)
-                return
-        # Allow:
-        # ```
-        # class SomeModule(eqx.Module, Generic[T]): ...
-        # x = SomeModule[int]()
-        # x.__orig_class__ # SomeModule[int]
-        # ```
-        # This attribute is set after instantiation here:
-        # https://github.com/python/cpython/blob/7b3ab5921fa25ed8b97b6296f97c5c78aacf5447/Lib/typing.py#L728
-        # So without special-casing it's incompatible with frozen dataclasses.
-        if name == "__orig_class__":
-            object.__setattr__(self, name, value)
-        raise dataclasses.FrozenInstanceError(f"cannot assign to field '{name}'")
+    if not TYPE_CHECKING:
 
-    def __getattribute__(self, name: str, /) -> Any:
-        out = super().__getattribute__(name)
-        # Arrange for bound methods to be treated as PyTrees as well. This
-        # ensures that
-        # ```
-        # @jax.jit
-        # def run(fn):
-        #     ...
-        # run(SomeModule().some_method)
-        # ```
-        # works.
-        if (
-            not _is_magic(name)
-            and isinstance(out, types.MethodType)
-            and out.__self__ is self
-        ):
-            out = BoundMethod(object.__getattribute__(out, "__func__"), self)
-        return out
+        def __setattr__(self, name: str, value: Any):
+            if self in _currently_initialising:
+                allowed_names = frozenset(
+                    {f.name for f in dataclasses.fields(self)}
+                ).union(wrapper_field_names)
+                if name in allowed_names:
+                    _error_method_assignment(self, value)
+                    _warn_jax_transformed_function(type(self), value)
+                    object.__setattr__(self, name, value)
+                    return
+            # Allow:
+            # ```
+            # class SomeModule(eqx.Module, Generic[T]): ...
+            # x = SomeModule[int]()
+            # x.__orig_class__ # SomeModule[int]
+            # ```
+            # This attribute is set after instantiation here:
+            # https://github.com/python/cpython/blob/7b3ab5921fa25ed8b97b6296f97c5c78aacf5447/Lib/typing.py#L728
+            # So without special-casing it's incompatible with frozen dataclasses.
+            if name == "__orig_class__":
+                object.__setattr__(self, name, value)
+            raise dataclasses.FrozenInstanceError(f"cannot assign to field '{name}'")
+
+        def __getattribute__(self, name: str, /) -> Any:
+            out = super().__getattribute__(name)
+            # Arrange for bound methods to be treated as PyTrees as well. This
+            # ensures that
+            # ```
+            # @jax.jit
+            # def run(fn):
+            #     ...
+            # run(SomeModule().some_method)
+            # ```
+            # works.
+            if (
+                not _is_magic(name)
+                and isinstance(out, types.MethodType)
+                and out.__self__ is self
+            ):
+                out = BoundMethod(object.__getattribute__(out, "__func__"), self)
+            return out
 
 
 def _is_magic(k: str) -> bool:
