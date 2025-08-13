@@ -1046,7 +1046,7 @@ def test_doctest():
             return 1
 
         @classmethod
-        def baz(self) -> int:
+        def baz(cls) -> int:
             """
             >>> Example.baz()
             1
@@ -1178,4 +1178,4 @@ def test_orig_class():
         pass
 
     a = A[int]()
-    assert a.__orig_class__ == A[int]
+    assert a.__orig_class__ == A[int]  # pyright: ignore[reportAttributeAccessIssue]
