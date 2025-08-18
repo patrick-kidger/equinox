@@ -38,4 +38,5 @@ def filter_shard(
         shardings = device_or_shardings
     dynamic, static = partition(x, is_array)
     dynamic = lax.with_sharding_constraint(dynamic, shardings)
+    # dynamic = jax.device_put(dynamic, shardings)
     return combine(dynamic, static)
