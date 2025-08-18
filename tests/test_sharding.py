@@ -28,7 +28,7 @@ def test_sharding_no_inside_jit():
         a, b = eqx.partition(x, eqx.is_array)
         a = jtu.tree_map(lambda x: x + 1, a)
         x = eqx.combine(a, b)
-        return eqx.filter_shard(a, sharding)
+        return x
 
     out = f(sharded_mlp)
 
