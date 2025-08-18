@@ -1,10 +1,12 @@
 from typing import Any
 
 import jax
+import jax.core
 import jax.lax as lax
 from jaxtyping import PyTree
 
-from ._filters import combine, is_array, partition
+from ._compile_utils import hashable_partition, hashable_combine
+from ._filters import is_array
 
 
 def filter_shard(
@@ -15,8 +17,8 @@ def filter_shard(
     and `jax.device_put`.
 
     Enforces sharding within a JIT'd computation (That is, how an array is
-    split between multiple devices, i.e. multiple GPUs/TPUs.), or moves `x` to
-    a device.
+    split between multiple devices, i.e. multiple GPUs/TPUs.), or outside a
+    JIT'd region moves `x` to a device.
 
     **Arguments:**
 
@@ -36,7 +38,11 @@ def filter_shard(
         shardings = jax.sharding.SingleDeviceSharding(device_or_shardings)
     else:
         shardings = device_or_shardings
-    dynamic, static = partition(x, is_array)
-    dynamic = lax.with_sharding_constraint(dynamic, shardings)
-    # dynamic = jax.device_put(dynamic, shardings)
-    return combine(dynamic, static)
+    dynamic, static = hashable_partition(x, is_array)
+    if len(dynamic) > 0:
+        test_array = dynamic[0]
+        if isinstance(test_array, jax.core.Tracer):
+            dynamic = lax.with_sharding_constraint(dynamic, shardings)
+        else:
+            dynamic = jax.device_put(dynamic, shardings)
+    return hashable_combine(dynamic, static)

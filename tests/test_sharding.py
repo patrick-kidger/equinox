@@ -1,19 +1,22 @@
 import equinox as eqx
 import jax
+import jax.numpy as jnp
 import jax.random as jr
 import jax.tree_util as jtu
-from jax.sharding import Mesh, PartitionSpec
+from jax.sharding import PartitionSpec
 
-[cpu] = jax.local_devices(backend="cpu")
-sharding = jax.sharding.NamedSharding(Mesh([cpu], "x"), PartitionSpec("x"))
+jax.config.update("jax_platform_name", "cpu")
+jax.config.update("jax_num_cpu_devices", 2)
 
 
-def test_sharding():
+
+def test_sharding_eager():
     is_committed = lambda pytree: jax.tree.reduce(lambda x, y: x and y, jax.tree.map(lambda x: x.committed, pytree))
     is_sharded = lambda pytree, sharding: jax.tree.reduce(lambda x, y: x and y, jax.tree.map(lambda x: x.sharding == sharding, pytree))
 
     mlp = eqx.nn.MLP(2, 2, 2, 2, key=jr.PRNGKey(0))
 
+    cpu = jax.local_devices(backend="cpu")[0]
     cpu_sharding = jax.sharding.SingleDeviceSharding(cpu)
     sharded_mlp = eqx.filter_shard(mlp, cpu_sharding)
     assert is_committed(eqx.filter(sharded_mlp, eqx.is_array))
@@ -25,8 +28,31 @@ def test_sharding():
         a = jtu.tree_map(lambda x: x + 1, a)
         x = eqx.combine(a, b)
         return x
-        # return eqx.filter_shard(x, sharding)
 
-    _ = f(mlp)
+    out = f(mlp)
 
-    # assert is_sharded(eqx.filter(out, eqx.is_array), sharding)
+    assert is_sharded(eqx.filter(out, eqx.is_array), cpu_sharding)
+
+def test_sharding_jit():
+    is_sharded = lambda pytree, sharding: jax.tree.reduce(lambda x, y: x and y, jax.tree.map(lambda x: x.sharding == sharding, pytree))
+
+    # Make sharding
+    devices = jax.local_devices(backend="cpu")
+    num_devices = len(devices)
+    mesh = jax.make_mesh((num_devices,), ("x",))
+    sharding = jax.sharding.NamedSharding(mesh, PartitionSpec("x"))
+    # Make dummy pytree
+    shape = (10,)
+    pytree = ((jnp.zeros(shape), 4), (jnp.zeros(shape)), ("something_static"))
+
+    @eqx.filter_jit
+    def f(x):
+        a, b = eqx.partition(x, eqx.is_array)
+        a = jtu.tree_map(lambda x: x + 1, a)
+        x = eqx.combine(a, b)
+        return eqx.filter_shard(x, sharding)
+
+    # Evaluate jitted computation
+    out = f(pytree)
+
+    assert is_sharded(eqx.filter(out, eqx.is_array), sharding)
