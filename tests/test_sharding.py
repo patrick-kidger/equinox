@@ -10,30 +10,32 @@ jax.config.update("jax_num_cpu_devices", 2)
 
 
 
-def test_sharding_eager():
+def test_sharding_no_inside_jit():
     is_committed = lambda pytree: jax.tree.reduce(lambda x, y: x and y, jax.tree.map(lambda x: x.committed, pytree))
     is_sharded = lambda pytree, sharding: jax.tree.reduce(lambda x, y: x and y, jax.tree.map(lambda x: x.sharding == sharding, pytree))
 
     mlp = eqx.nn.MLP(2, 2, 2, 2, key=jr.PRNGKey(0))
 
-    cpu = jax.local_devices(backend="cpu")[0]
-    cpu_sharding = jax.sharding.SingleDeviceSharding(cpu)
-    sharded_mlp = eqx.filter_shard(mlp, cpu_sharding)
+    devices = jax.local_devices(backend="cpu")
+    num_devices = len(devices)
+    mesh = jax.make_mesh((num_devices,), ("x",))
+    sharding = jax.sharding.NamedSharding(mesh, PartitionSpec("x"))
+    sharded_mlp = eqx.filter_shard(mlp, sharding)
     assert is_committed(eqx.filter(sharded_mlp, eqx.is_array))
-    assert is_sharded(eqx.filter(sharded_mlp, eqx.is_array), cpu_sharding)
+    assert is_sharded(eqx.filter(sharded_mlp, eqx.is_array), sharding)
 
     @eqx.filter_jit
     def f(x):
         a, b = eqx.partition(x, eqx.is_array)
         a = jtu.tree_map(lambda x: x + 1, a)
         x = eqx.combine(a, b)
-        return x
+        return a
 
-    out = f(mlp)
+    out = f(sharded_mlp)
 
-    assert is_sharded(eqx.filter(out, eqx.is_array), cpu_sharding)
+    assert is_sharded(eqx.filter(out, eqx.is_array), sharding)
 
-def test_sharding_jit():
+def test_sharding_only_inside_jit():
     is_sharded = lambda pytree, sharding: jax.tree.reduce(lambda x, y: x and y, jax.tree.map(lambda x: x.sharding == sharding, pytree))
 
     # Make sharding
@@ -42,8 +44,8 @@ def test_sharding_jit():
     mesh = jax.make_mesh((num_devices,), ("x",))
     sharding = jax.sharding.NamedSharding(mesh, PartitionSpec("x"))
     # Make dummy pytree
-    shape = (10,)
-    pytree = ((jnp.zeros(shape), 4), (jnp.zeros(shape)), ("something_static"))
+    shape = (num_devices,)
+    pytree = ((jnp.zeros(shape), 4), (jnp.zeros(shape),), "something_static")
 
     @eqx.filter_jit
     def f(x):
