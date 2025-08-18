@@ -15,8 +15,8 @@ def filter_shard(
     and `jax.device_put`.
 
     Enforces sharding within a JIT'd computation (That is, how an array is
-    split between multiple devices, i.e. multiple GPUs/TPUs.), or moves `x` to
-    a device.
+    split between multiple devices, i.e. multiple GPUs/TPUs.), or outside a
+    JIT'd region moves `x` to a device.
 
     **Arguments:**
 
@@ -37,5 +37,8 @@ def filter_shard(
     else:
         shardings = device_or_shardings
     dynamic, static = partition(x, is_array)
+    # `with_sharding_constraint` is documented in JAX for jitted
+    # regions, while `device_put` is used for non-jitted regions.
+    # However, it suffices to simply call `with_sharding_constraint` here!
     dynamic = lax.with_sharding_constraint(dynamic, shardings)
     return combine(dynamic, static)
