@@ -98,7 +98,7 @@ def _make_spec(x, y):
 
 
 class Flatten:
-    __slots__ = ("treedef_out", "static_out")
+    __slots__ = ("treedef_out", "static_out", "__weakref__")
 
     def called(self):
         return hasattr(self, "treedef_out")
