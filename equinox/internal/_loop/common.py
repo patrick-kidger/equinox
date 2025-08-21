@@ -81,16 +81,16 @@ def _select_if_vmap_batch(axis_size, axis_name, trace, inputs, batch_axes):
     del axis_name, trace
     pred, x, y = inputs
     bp, bx, by = batch_axes
-    if bp is batching.not_mapped:
-        if bx is batching.not_mapped:
-            if by is batching.not_mapped:
+    if bp is None:
+        if bx is None:
+            if by is None:
                 out_axis = None
             else:
                 x = jnp.broadcast_to(x, (axis_size,) + x.shape)
                 y = jnp.moveaxis(y, by, 0)
                 out_axis = 0
         else:
-            if by is batching.not_mapped:
+            if by is None:
                 x = jnp.moveaxis(x, bx, 0)
                 y = jnp.broadcast_to(y, (axis_size,) + y.shape)
                 out_axis = 0

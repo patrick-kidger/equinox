@@ -126,12 +126,12 @@ def nondifferentiable_backward(
 def _cannot_batch(x, b, *, msg, allow_constant_across_batch):
     (x,) = x
     (b,) = b
-    if b is batching.not_mapped:
+    if b is None:
         return x, b
     else:
         if allow_constant_across_batch:
             x = error_if(x, jnp.min(x, axis=b) != jnp.max(x, axis=b), msg)
-            return jnp.take(x, 0, axis=b), batching.not_mapped
+            return jnp.take(x, 0, axis=b), None
         else:
             raise ValueError(msg)
 
