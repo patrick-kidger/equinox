@@ -5,8 +5,7 @@ import jax.core
 import jax.lax as lax
 from jaxtyping import PyTree
 
-from ._compile_utils import hashable_partition, hashable_combine
-from ._filters import is_array
+from ._filters import combine, is_array, partition
 
 
 def filter_shard(
@@ -38,11 +37,9 @@ def filter_shard(
         shardings = jax.sharding.SingleDeviceSharding(device_or_shardings)
     else:
         shardings = device_or_shardings
-    dynamic, static = hashable_partition(x, is_array)
-    if len(dynamic) > 0:
-        test_array = dynamic[0]
-        if isinstance(test_array, jax.core.Tracer):
-            dynamic = lax.with_sharding_constraint(dynamic, shardings)
-        else:
-            dynamic = jax.device_put(dynamic, shardings)
-    return hashable_combine(dynamic, static)
+    dynamic, static = partition(x, is_array)
+    # `with_sharding_constraint` is documented in JAX for jitted
+    # regions, while `device_put` is used for non-jitted regions.
+    # However, it suffices to simply call `with_sharding_constraint` here!
+    dynamic = lax.with_sharding_constraint(dynamic, shardings)
+    return combine(dynamic, static)
