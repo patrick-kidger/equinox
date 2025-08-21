@@ -82,20 +82,20 @@ def _is_none(x):
     return x is None
 
 
-def _is_not_mapped(x):
-    return x is batching.not_mapped
+def _is_unmapped(x):
+    return x is None
 
 
 def _move_to_front(input, batch_axis):
-    if batch_axis is batching.not_mapped:
+    if batch_axis is None:
         return input
     else:
         return jnp.swapaxes(input, 0, batch_axis)
 
 
 def _int_to_zero(batch_axis):
-    if batch_axis is batching.not_mapped:
-        return batch_axis
+    if batch_axis is None:
+        return None
     else:
         return 0
 
@@ -182,7 +182,7 @@ class _MetaTransposeTransform(Module):
 
 
 class _MetaBatchTransform(Module):
-    batch_axes: PyTree[batching.NotMapped | int]  # pyright: ignore
+    batch_axes: PyTree[int | None]
 
     def __call__(self, static_fn):
         return filter_vmap(static_fn, in_axes=(self.batch_axes,))
@@ -259,7 +259,7 @@ def _noinline_batch(inputs, batch_axes):
     dynamic_index, abstract_fn, transforms, args = inputs
     dynamic_index_bdim, abstract_fn_bdim, transforms_bdim, args_bdim = batch_axes
     assert len(jtu.tree_leaves((abstract_fn_bdim, transforms_bdim))) == 0  # all none
-    if dynamic_index_bdim is not batching.not_mapped:
+    if dynamic_index_bdim is not None:
         # The batch rule for `lax.cond` with vmap'd predicate simply
         # broadcasts all constants in the branches. In particular it may broadcast
         # this. We simply need to ignore this and return to having a single dynamic
@@ -271,8 +271,8 @@ def _noinline_batch(inputs, batch_axes):
         assert jnp.ndim(dynamic_index) == 1
         dynamic_index = dynamic_index[0]
     del dynamic_index_bdim, abstract_fn_bdim, transforms_bdim
-    args = jtu.tree_map(_move_to_front, args, args_bdim, is_leaf=_is_not_mapped)
-    args_bdim = jtu.tree_map(_int_to_zero, args_bdim, is_leaf=_is_not_mapped)
+    args = jtu.tree_map(_move_to_front, args, args_bdim, is_leaf=_is_unmapped)
+    args_bdim = jtu.tree_map(_int_to_zero, args_bdim, is_leaf=_is_unmapped)
     out = filter_primitive_bind(
         noinline_p,
         dynamic_index,

@@ -242,15 +242,13 @@ def filter_primitive_batching(rule):
     def _wrapper(dynamic, batch_axes, *, treedef, static, flatten):
         flat = _combine(dynamic, static)
         inputs = jtu.tree_unflatten(treedef, flat)
-        batch_axes = [None if b is batching.not_mapped else b for b in batch_axes]
+        batch_axes = [None if b is None else b for b in batch_axes]
         batch_axes_static = [x if x is _missing_dynamic else None for x in static]
         batch_axes = _combine(batch_axes, batch_axes_static)
         batch_axes = jtu.tree_unflatten(treedef, batch_axes)
         out, batch_axes = rule(inputs, batch_axes)
         flat_out, flat_batch_axes = flatten(out, batch_axes)
-        flat_batch_axes = [
-            batching.not_mapped if b is None else b for b in flat_batch_axes
-        ]
+        flat_batch_axes = [None if b is None else b for b in flat_batch_axes]
         return flat_out, flat_batch_axes
 
     return _wrapper
@@ -307,9 +305,9 @@ def create_vprim(name: str, impl, abstract_eval, jvp, transpose):
 
     def batch_rule(axis_size, axis_name, trace_type, inputs, batch_axes, **params):
         del trace_type
-        if all(b is batching.not_mapped for b in jtu.tree_leaves(batch_axes)):
+        if all(b is None for b in jtu.tree_leaves(batch_axes)):
             out = prim.bind(*inputs, **params)
-            batch_axes_out = jtu.tree_map(lambda _: batching.not_mapped, out)
+            batch_axes_out = jtu.tree_map(lambda _: None, out)
         else:
             # delegates batching to `_vprim_p`
             out = _vprim_p.bind(
@@ -349,6 +347,7 @@ if jax.__version_info__ >= (0, 5, 1):
     def _unmapped_aval(axis_size, axis_name, axis, aval):
         del axis_name
         return jax.core.unmapped_aval(axis_size, axis, aval)  # pyright: ignore[reportCallIssue]
+
 else:
     # signature (axis_size, axis_name, axis, aval)
     _unmapped_aval = jax.core.unmapped_aval  # pyright: ignore[reportAssignmentType]
