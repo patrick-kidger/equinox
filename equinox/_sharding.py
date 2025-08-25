@@ -1,7 +1,6 @@
 from typing import Any
 
 import jax
-import jax.core
 import jax.lax as lax
 from jaxtyping import PyTree
 
