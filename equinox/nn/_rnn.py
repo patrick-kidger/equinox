@@ -1,4 +1,5 @@
 import math
+from typing import cast
 
 import jax.nn as jnn
 import jax.numpy as jnp
@@ -95,8 +96,8 @@ class GRUCell(Module):
         The updated hidden state, which is a JAX array of shape `(hidden_size,)`.
         """
         if self.use_bias:
-            bias = self.bias
-            bias_n = self.bias_n
+            bias = cast(Array, self.bias)
+            bias_n = cast(Array, self.bias_n)
         else:
             bias = 0
             bias_n = 0
