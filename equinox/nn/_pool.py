@@ -517,7 +517,7 @@ class AdaptivePool(Module):
         if x.ndim - 1 != len(self.target_shape):
             raise ValueError(
                 f"Expected input with {len(self.target_shape)} dimensions, "
-                f"received {x.ndim-1} instead."
+                f"received {x.ndim - 1} instead."
             )
         for i in range(1, x.ndim):
             op = jax.vmap(

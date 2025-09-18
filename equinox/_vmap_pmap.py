@@ -421,8 +421,7 @@ def _filter_pmap_cache(
 def _common_preprocess(axis_size, kwargs):
     if len(kwargs) != 0:
         raise RuntimeError(
-            "keyword arguments cannot be used with functions wrapped with "
-            "`filter_pmap`"
+            "keyword arguments cannot be used with functions wrapped with `filter_pmap`"
         )
     if axis_size is None:
         return 0  # hashable non-array object
