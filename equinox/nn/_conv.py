@@ -1,7 +1,7 @@
 import itertools as it
 import math
 from collections.abc import Callable, Sequence
-from typing import TypeVar
+from typing import TypeVar, cast
 
 import jax.lax as lax
 import jax.numpy as jnp
@@ -247,7 +247,7 @@ class Conv(Module):
         x = jnp.squeeze(x, axis=0)
 
         if self.use_bias:
-            x = x + self.bias
+            x = x + cast(Array, self.bias)
         return x
 
 
@@ -618,7 +618,7 @@ class ConvTranspose(Module):
         x = jnp.squeeze(x, axis=0)
 
         if self.use_bias:
-            x = x + self.bias
+            x = x + cast(Array, self.bias)
         return x
 
 
