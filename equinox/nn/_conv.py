@@ -247,7 +247,7 @@ class Conv(Module):
         x = jnp.squeeze(x, axis=0)
 
         if self.use_bias:
-            x = x + self.bias
+            x = x + self.bias  # pyright: ignore[reportOperatorIssue]
         return x
 
 
@@ -618,7 +618,7 @@ class ConvTranspose(Module):
         x = jnp.squeeze(x, axis=0)
 
         if self.use_bias:
-            x = x + self.bias
+            x = x + self.bias  # pyright: ignore[reportOperatorIssue]
         return x
 
 

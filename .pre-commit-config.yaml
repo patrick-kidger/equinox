@@ -16,7 +16,7 @@ repos:
         types_or: [python, pyi, jupyter, toml]
         args: [--fix]
   - repo: https://github.com/RobertCraigie/pyright-python
-    rev: v1.1.379
+    rev: v1.1.405
     hooks:
       - id: pyright
         additional_dependencies:

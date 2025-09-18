@@ -100,11 +100,11 @@ class GRUCell(Module):
         else:
             bias = 0
             bias_n = 0
-        igates = jnp.split(self.weight_ih @ input + bias, 3)
+        igates = jnp.split(self.weight_ih @ input + bias, 3)  # pyright: ignore[reportOperatorIssue]
         hgates = jnp.split(self.weight_hh @ hidden, 3)
         reset = jnn.sigmoid(igates[0] + hgates[0])
         inp = jnn.sigmoid(igates[1] + hgates[1])
-        new = jnn.tanh(igates[2] + reset * (hgates[2] + bias_n))
+        new = jnn.tanh(igates[2] + reset * (hgates[2] + bias_n))  # pyright: ignore[reportOperatorIssue]
         return new + inp * (hidden - new)
 
 
