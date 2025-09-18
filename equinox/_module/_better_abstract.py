@@ -8,6 +8,7 @@ is the public API. But the two pieces aren't directly related under-the-hood.)
 
 import abc
 import dataclasses
+import inspect
 from typing import (
     Annotated,
     ClassVar,
@@ -243,7 +244,7 @@ class BetterABCMeta(abc.ABCMeta):
 def better_dataclass(**kwargs):
     def make_dataclass(cls):
         try:
-            annotations = cls.__dict__["__annotations__"]
+            annotations = inspect.get_annotations(cls)
         except KeyError:
             cls = dataclasses.dataclass(**kwargs)(cls)
         else:
