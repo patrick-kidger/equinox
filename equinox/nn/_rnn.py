@@ -1,4 +1,5 @@
 import math
+from typing import cast
 
 import jax.nn as jnn
 import jax.numpy as jnp
@@ -95,16 +96,16 @@ class GRUCell(Module):
         The updated hidden state, which is a JAX array of shape `(hidden_size,)`.
         """
         if self.use_bias:
-            bias = self.bias
-            bias_n = self.bias_n
+            bias = cast(Array, self.bias)
+            bias_n = cast(Array, self.bias_n)
         else:
             bias = 0
             bias_n = 0
-        igates = jnp.split(self.weight_ih @ input + bias, 3)  # pyright: ignore[reportOperatorIssue]
+        igates = jnp.split(self.weight_ih @ input + bias, 3)
         hgates = jnp.split(self.weight_hh @ hidden, 3)
         reset = jnn.sigmoid(igates[0] + hgates[0])
         inp = jnn.sigmoid(igates[1] + hgates[1])
-        new = jnn.tanh(igates[2] + reset * (hgates[2] + bias_n))  # pyright: ignore[reportOperatorIssue]
+        new = jnn.tanh(igates[2] + reset * (hgates[2] + bias_n))
         return new + inp * (hidden - new)
 
 
