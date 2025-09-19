@@ -135,7 +135,7 @@ def finalise_fn(fn):
 
 
 @overload
-def finalise_make_jaxpr(
+def finalise_make_jaxpr(  # pyright: ignore[reportOverlappingOverload]
     fn, *, return_shape: Literal[False] = False
 ) -> Callable[..., jax.extend.core.ClosedJaxpr]: ...
 

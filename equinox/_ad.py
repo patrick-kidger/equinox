@@ -104,7 +104,7 @@ _ScalarTy = TypeVar("_ScalarTy", bound=_Scalar)
 
 
 @overload
-def filter_value_and_grad(
+def filter_value_and_grad(  # pyright: ignore[reportOverlappingOverload]
     *,
     has_aux: Literal[False] = False,
 ) -> Callable[[Callable[_P, _ScalarTy]], Callable[_P, tuple[_ScalarTy, PyTree]]]: ...
@@ -182,7 +182,7 @@ def filter_value_and_grad(
 
 
 @overload
-def filter_grad(
+def filter_grad(  # pyright: ignore[reportOverlappingOverload]
     *,
     has_aux: Literal[False] = False,
 ) -> Callable[[Callable[_P, _Scalar]], Callable[_P, PyTree[Float[Array, "..."]]]]: ...
