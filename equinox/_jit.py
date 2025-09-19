@@ -381,7 +381,14 @@ def filter_jit(
     deprecated_0_10(jitkwargs, "kwargs")
     deprecated_0_10(jitkwargs, "out")
     if any(
-        x in jitkwargs for x in ("static_argnums", "static_argnames", "donate_argnums", "in_shardings", "out_shardings")
+        x in jitkwargs
+        for x in (
+            "static_argnums",
+            "static_argnames",
+            "donate_argnums",
+            "in_shardings",
+            "out_shardings",
+        )
     ):
         raise ValueError(
             "`jitkwargs` cannot contain 'static_argnums', 'static_argnames', "
