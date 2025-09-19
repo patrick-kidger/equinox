@@ -2,7 +2,6 @@ import itertools as it
 import math
 from collections.abc import Callable, Sequence
 from typing import cast, TypeVar
-from typing import TypeVar, cast
 
 import jax.lax as lax
 import jax.numpy as jnp
