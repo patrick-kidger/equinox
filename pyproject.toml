@@ -19,7 +19,7 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Information Analysis",
   "Topic :: Scientific/Engineering :: Mathematics"
 ]
-dependencies = ["jax>=0.4.38", "jaxtyping>=0.2.20", "typing_extensions>=4.5.0", "wadler_lindig>=0.1.0"]
+dependencies = ["jax>=0.4.38,!=0.7.0,!=0.7.1", "jaxtyping>=0.2.20", "typing_extensions>=4.5.0", "wadler_lindig>=0.1.0"]
 description = "Elegant easy-to-use neural networks in JAX."
 keywords = ["jax", "neural-networks", "deep-learning", "equinox"]
 license = {file = "LICENSE"}
