@@ -127,7 +127,10 @@ following entries:
         if isinstance(item._value, jax.core.Tracer):
             return "traced"
         elif isinstance(item._value, (np.ndarray, Array)):
-            return cls._index_to_message[item._value.item()]
+            # Needs vectorization for handling vmapped enumerations
+            return str(
+                np.vectorize(lambda val: cls._index_to_message[val])(item._value)
+            )
         else:
             # PyTrees have to be generic wrt leaf type.
             return "unknown"
