@@ -87,6 +87,14 @@ def test_repr():
 
     run(A.x)
 
+    @jax.vmap
+    def return_enum(_) -> A:
+        return A.x
+
+    result = return_enum(jnp.arange(2))
+
+    assert str(result).endswith(".test_repr.<locals>.A<['foo' 'foo']>")
+
 
 def test_inheritance_and_len():
     class A(eqxi.Enumeration):
