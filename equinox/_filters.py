@@ -17,9 +17,30 @@ AxisSpec = bool | Callable[[Any], bool]
 #
 
 
+# Workaround https://github.com/patrick-kidger/equinox/issues/1095 in a backward
+# compatible manner.
+_array_types = (np.ndarray, np.generic, jax.Array)  # JAX < 0.7.2
+
+try:  # JAX 0.7.2
+    from jax._src.literals import LiteralArray
+
+    _array_types += (LiteralArray,)
+except ImportError:
+    pass
+
+try:  # JAX > 0.7.2
+    from jax._src.literals import (
+        TypedNdArray,  # pyright: ignore[reportAttributeAccessIssue]
+    )
+
+    _array_types += (TypedNdArray,)
+except ImportError:
+    pass
+
+
 def is_array(element: Any) -> bool:
     """Returns `True` if `element` is a JAX array or NumPy array."""
-    return isinstance(element, (np.ndarray, np.generic, jax.Array))
+    return isinstance(element, _array_types)
 
 
 # Chosen to match
