@@ -92,3 +92,6 @@ Protein design by multi-objective hallucination (~ColabDesign in Equinox).
 
 **ksim**: [GitHub](https://github.com/kscalelabs/ksim)  
 MJX robotics simulation library.
+
+**Mutax**: [GitHub](https://github.com/gerlero/mutax)  
+Differential evolution–based global optimization (with support for parallel evaluation).
