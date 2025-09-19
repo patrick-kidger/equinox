@@ -11,7 +11,7 @@ import pytest
 from .helpers import tree_allclose as _shaped_allclose
 
 
-(cpu,) = jax.devices("cpu")
+(cpu, _) = jax.devices("cpu")
 filter_pmap: Any = ft.partial(eqx.filter_pmap, devices=[cpu])  # pyright: ignore
 
 
@@ -203,15 +203,12 @@ def test_named_reduction():
         y = x + 1
         return jax.lax.psum(y, axis_name="device")
 
-    n = jax.local_device_count()
-    output = filter_pmap(f, axis_name="device")(jnp.zeros(n))
+    output = filter_pmap(f, axis_name="device")(jnp.zeros(1))
 
-    assert shaped_allclose(output, n * jnp.ones(n))
+    assert shaped_allclose(output, jnp.ones(1))
 
 
 def test_map_non_jax():
-    devices = jax.local_devices()
-
     # this contains a non-jax value for the `activation` field
     # and will therefore break filter_pmap if not filtered out
     # at input and output
@@ -226,7 +223,7 @@ def test_map_non_jax():
 
     def maybe_replicate(value):
         if eqx.is_array(value):
-            return jax.device_put_replicated(value, devices)
+            return jax.device_put_replicated(value, [cpu])
         else:
             return value
 

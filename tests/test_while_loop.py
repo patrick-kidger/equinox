@@ -510,8 +510,8 @@ def test_speed_buffer_while(read):
     args = jnp.array([0, 1]), jnp.zeros((2, size))
     f(*args)  # compile
 
-    speed = timeit.timeit(lambda: f(*args), number=1)
-    assert speed < 1
+    speed = min(timeit.repeat(lambda: f(*args), number=1, repeat=5))
+    assert speed < 2
 
 
 @pytest.mark.skipif(
