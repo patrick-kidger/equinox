@@ -93,7 +93,7 @@ def test_repr():
 
     result = return_enum(jnp.arange(2))
 
-    assert str(result).endswith(".test_repr.<locals>.A<['foo' 'foo']>")
+    assert str(result).endswith("test_enum.test_repr.<locals>.A<['foo' 'foo']>")
 
 
 def test_inheritance_and_len():
