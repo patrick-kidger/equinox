@@ -30,15 +30,25 @@ urls = {repository = "https://github.com/patrick-kidger/equinox"}
 version = "0.13.0"
 
 [project.optional-dependencies]
+dev = [
+  "pre-commit"
+]
 docs = [
-  "hippogriffe==0.2.0",
+  "hippogriffe==0.2.1",
   "griffe==1.7.3",
   "mkdocs==1.6.1",
   "mkdocs-include-exclude-files==0.1.0",
-  "mkdocs-ipynb==0.1.0",
+  "mkdocs-ipynb==0.1.1",
   "mkdocs-material==9.6.7",
-  "mkdocstrings[python]==0.28.3",
+  "mkdocstrings==0.28.3",
+  "mkdocstrings-python==1.16.8",
   "pymdown-extensions==10.14.3"
+]
+tests = [
+  "beartype",
+  "jaxlib",
+  "optax",
+  "pytest"
 ]
 
 [tool.hatch.build]

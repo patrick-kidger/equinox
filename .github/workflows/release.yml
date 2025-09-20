@@ -10,14 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Release
-        uses: patrick-kidger/action_update_python_project@v6
+        uses: patrick-kidger/action_update_python_project@v8
         with:
             python-version: "3.11"
             test-script: |
                 cp -r ${{ github.workspace }}/tests ./tests
                 cp ${{ github.workspace }}/pyproject.toml ./pyproject.toml
-                python -m pip install -r ./tests/requirements.txt
-                pytest
+                uv sync --extra tests --no-install-project --inexact
+                uv run --no-sync pytest
             pypi-token: ${{ secrets.pypi_token }}
             github-user: patrick-kidger
             github-token: ${{ github.token }}

@@ -1,4 +1,0 @@
-jaxlib
-optax
-pytest
-beartype
