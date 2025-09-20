@@ -17,15 +17,15 @@ import equinox as eqx
 import jax
 
 class NeuralNetwork(eqx.Module):
-    layers: list
+    layers: tuple
     extra_bias: jax.Array
 
     def __init__(self, key):
         key1, key2, key3 = jax.random.split(key, 3)
         # These contain trainable parameters.
-        self.layers = [eqx.nn.Linear(2, 8, key=key1),
+        self.layers = (eqx.nn.Linear(2, 8, key=key1),
                        eqx.nn.Linear(8, 8, key=key2),
-                       eqx.nn.Linear(8, 2, key=key3)]
+                       eqx.nn.Linear(8, 2, key=key3))
         # This is also a trainable parameter.
         self.extra_bias = jax.numpy.ones(2)
 
@@ -72,13 +72,13 @@ import functools as ft
 import jax
 
 class NeuralNetwork2(eqx.Module):
-    layers: list
+    layers: tuple
 
     def __init__(self, key):
         key1, key2 = jax.random.split(key)
-        self.layers = [eqx.nn.Linear(2, 8, key=key1),
+        self.layers = (eqx.nn.Linear(2, 8, key=key1),
                        jax.nn.relu,
-                       eqx.nn.Linear(8, 2, key=key2)]
+                       eqx.nn.Linear(8, 2, key=key2))
 
     def __call__(self, x):
         for layer in self.layers:
