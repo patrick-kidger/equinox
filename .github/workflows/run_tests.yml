@@ -24,17 +24,16 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r ./tests/requirements.txt
+          python -m pip install '.[dev,docs,tests]'
 
       - name: Checks with pre-commit
-        uses: pre-commit/action@v3.0.1
+        run: |
+          pre-commit run --all-files
 
       - name: Test with pytest
         run: |
-          python -m pip install .
-          python -m pytest
+          pytest
 
       - name: Check that documentation can be built.
         run: |
-          python -m pip install '.[docs]'
           mkdocs build
