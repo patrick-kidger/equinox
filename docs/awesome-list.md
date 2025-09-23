@@ -88,10 +88,13 @@ Normalizing flows and probabilistic machine learning.
 Converts PyTorch `state_dict`s into Equinox pytrees.
 
 **boltz-binder-design**: [GitHub](https://github.com/escalante-bio/boltz-binder-design)   
-Protein design by multi-objective hallucination (~ColabDesign in Equinox). 
+Protein design by multi-objective hallucination (~ColabDesign in Equinox).
 
 **ksim**: [GitHub](https://github.com/kscalelabs/ksim)  
 MJX robotics simulation library.
 
 **Mutax**: [GitHub](https://github.com/gerlero/mutax)  
 Differential evolution–based global optimization (with support for parallel evaluation).
+
+**Typinox**: [GitHub](https://github.com/EtaoinWu/typinox) [Docs](https://typinox.readthedocs.io/latest/)  
+Enhanced `beartype` run-time typechecking for `jaxtyping` annotated `equinox` Modules.
