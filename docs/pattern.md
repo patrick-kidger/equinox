@@ -1,6 +1,8 @@
 # The abstract/final pattern
 
-The following is a useful design pattern. It's not mandatory, but it does come recommended, as it's designed to produce very readable code. This is also the pattern used throughout the Equinox ecosystem -- [Lineax](https://github.com/google/lineax), [Diffrax](https://github.com/patrick-kidger/diffrax) etc. (And most of `equinox.nn` -- although not all of it, for backward compatibility reasons!)
+The following is a useful design pattern. It's not mandatory, but it does come recommended, as it's designed to produce very readable code. This is the pattern used throughout the Equinox ecosystem – [Lineax](https://github.com/google/lineax), [Diffrax](https://github.com/patrick-kidger/diffrax), `equinox.nn`, etc.
+
+_This page is primarily a description of how this pattern can be used with Equinox Modules. However it can also be used as inspiration for non-Equinox use-cases as well!_
 
 !!! Tip "The abstract/final design pattern"
 
