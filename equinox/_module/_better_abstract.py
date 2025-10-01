@@ -191,7 +191,7 @@ class BetterABCMeta(abc.ABCMeta):
         abstract_vars = set()
         abstract_class_vars = set()
         for kls in reversed(cls.__mro__):
-            ann = kls.__dict__.get("__annotations__", {})
+            ann = inspect.get_annotations(kls)
             for name, annotation in ann.items():
                 is_abstract, is_class = _process_annotation(annotation)
                 if is_abstract:
