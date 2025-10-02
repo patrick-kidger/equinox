@@ -248,8 +248,8 @@ def test_mlp_learnt_activation():
         key=jrandom.PRNGKey(5678),
     )
     x = jnp.array([0.5, 0.7])
-    assert mlp.activation.negative_slope.shape == (2, 8)
-    assert mlp.final_activation.negative_slope.shape == (5,)
+    assert mlp.activation.negative_slope.shape == (2, 8)  # pyright: ignore
+    assert mlp.final_activation.negative_slope.shape == (5,)  # pyright: ignore
 
     @eqx.filter_jit
     @eqx.filter_grad
@@ -1411,12 +1411,13 @@ def test_prelu(getkey):
 
 def test_rope_embeddings_shapes(getkey):
     embedding_size = 32
-    rope_embeddings = eqx.nn.RotaryPositionalEmbedding(embedding_size)
 
     n_heads = 4
     seq_length = 8
     query_size = 32
     key_size = 32
+
+    rope_embeddings = eqx.nn.RotaryPositionalEmbedding(embedding_size)
 
     query_heads = jax.random.normal(
         key=getkey(), shape=(seq_length, n_heads, query_size)
@@ -1535,3 +1536,20 @@ def test_rope_embeddings_values():
         jnp.allclose(res.astype(jnp.float32), expected_values, rtol=1e-2)
         and res.dtype == jnp.float16
     )
+
+
+def test_rope_with_offset():
+    embedding_size = 2
+
+    rotary_emb = eqx.nn.RotaryPositionalEmbedding(embedding_size=embedding_size)
+    rotary_emb = eqx.filter_jit(rotary_emb)
+
+    out1 = rotary_emb(jnp.ones(shape=(2, embedding_size)), offset=1)
+    out2 = rotary_emb(jnp.ones(shape=(3, embedding_size)), offset=2)
+
+    assert jnp.allclose(out1[1], out2[0])
+
+    out3 = rotary_emb(jnp.ones(shape=(2, embedding_size)), offset=1)
+    out4 = rotary_emb(jnp.ones(shape=(3, embedding_size)), offset=1)
+
+    assert jnp.allclose(out3, out4[:2])
