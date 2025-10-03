@@ -34,7 +34,7 @@ dev = [
   "pre-commit"
 ]
 docs = [
-  "hippogriffe==0.2.1",
+  "hippogriffe==0.2.2",
   "griffe==1.7.3",
   "mkdocs==1.6.1",
   "mkdocs-include-exclude-files==0.1.0",
