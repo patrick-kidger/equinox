@@ -45,13 +45,14 @@ def is_array(element: Any) -> bool:
 
 # Chosen to match
 # https://github.com/google/jax/blob/4a17c78605e7fc69a69a999e2f6298db79d3837a/jax/_src/numpy/lax_numpy.py#L542  # noqa: E501
+_array_like_types = (*_array_types, float, complex, bool, int)
+
+
 def is_array_like(element: Any) -> bool:
     """Returns `True` if `element` is a JAX array, a NumPy array, or a Python
     `float`/`complex`/`bool`/`int`.
     """
-    return isinstance(
-        element, (jax.Array, np.ndarray, np.generic, float, complex, bool, int)
-    ) or hasattr(element, "__jax_array__")
+    return isinstance(element, _array_like_types) or hasattr(element, "__jax_array__")
 
 
 def is_inexact_array(element: Any) -> bool:
