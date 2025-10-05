@@ -190,6 +190,49 @@ def _is_array_like(x: object, /) -> None:
         raise _JaxTransformException
 
 
+_JAX_XFM_FUNC_WARNING: Final = """
+Possibly assigning a JAX-transformed callable as an attribute on
+{0}.{1}. This will not have any of its parameters updated.
+
+For example, the following code is buggy:
+```python
+class MyModule(eqx.Module):
+    vmap_linear: Callable
+
+    def __init__(self, ...):
+        self.vmap_linear = jax.vmap(eqx.nn.Linear(...))
+
+    def __call__(self, ...):
+        ... = self.vmap_linear(...)
+```
+This is because the callable returned from `jax.vmap` is *not* a PyTree. This means that
+the parameters inside the `eqx.nn.Linear` layer will not receive gradient updates.
+
+You can most easily fix this either by applying the wrapper at `__call__` time:
+```python
+class MyModule(eqx.Module):
+    linear: Callable
+
+    def __init__(self, ...):
+        self.linear = eqx.nn.Linear(...)
+
+    def __call__(self, ...):
+        ... = jax.vmap(self.linear)(...)
+```
+or by using `eqx.filter_vmap` instead (which *does* return a PyTree):
+```python
+class MyModule(eqx.Module):
+    vmap_linear: Callable
+
+    def __init__(self, ...):
+        self.vmap_linear = eqx.filter_vmap(eqx.nn.Linear(...))
+
+    def __call__(self, ...):
+        ... = self.vmap_linear(...)
+```
+"""
+
+
 def _warn_jax_transformed_function(cls: "_ModuleMeta", x: object) -> None:
     # not `isinstance`, just in case JAX every tries to override `__instancecheck__`.
     if type(x) in _transform_types:
@@ -202,47 +245,7 @@ def _warn_jax_transformed_function(cls: "_ModuleMeta", x: object) -> None:
                 jtu.tree_map(_is_array_like, x)
             except _JaxTransformException:
                 warnings.warn(
-                    f"""
-Possibly assigning a JAX-transformed callable as an attribute on
-{cls.__module__}.{cls.__qualname__}. This will not have any of its parameters updated.
-
-For example, the following code is buggy:
-```python
-class MyModule(eqx.Module):
-vmap_linear: Callable
-
-def __init__(self, ...):
-    self.vmap_linear = jax.vmap(eqx.nn.Linear(...))
-
-def __call__(self, ...):
-    ... = self.vmap_linear(...)
-```
-This is because the callable returned from `jax.vmap` is *not* a PyTree. This means that
-the parameters inside the `eqx.nn.Linear` layer will not receive gradient updates.
-
-You can most easily fix this either by applying the wrapper at `__call__` time:
-```python
-class MyModule(eqx.Module):
-linear: Callable
-
-def __init__(self, ...):
-    self.linear = eqx.nn.Linear(...)
-
-def __call__(self, ...):
-    ... = jax.vmap(self.linear)(...)
-```
-or by using `eqx.filter_vmap` instead (which *does* return a PyTree):
-```python
-class MyModule(eqx.Module):
-vmap_linear: Callable
-
-def __init__(self, ...):
-    self.vmap_linear = eqx.filter_vmap(eqx.nn.Linear(...))
-
-def __call__(self, ...):
-    ... = self.vmap_linear(...)
-```
-""",
+                    _JAX_XFM_FUNC_WARNING.format(cls.__module__, cls.__qualname__),
                     stacklevel=3,
                 )
                 break
