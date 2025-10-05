@@ -366,7 +366,8 @@ class _ModuleMeta(BetterABCMeta):
             init_doc = cls.__init__.__doc__
 
         cls = better_dataclass(eq=False, repr=False, init=has_dataclass_init)(cls)
-        for f in dataclasses.fields(cls):  # pyright: ignore[reportArgumentType]
+        fields = dataclasses.fields(cls)  # pyright: ignore[reportArgumentType]
+        for f in fields:  # pyright: ignore[reportArgumentType]
             if f.name not in cls.__init__.__annotations__:
                 continue  # Odd behaviour, so skip.
             try:
@@ -375,12 +376,12 @@ class _ModuleMeta(BetterABCMeta):
                 pass
             else:
                 try:
-                    signature = inspect.signature(converter)
+                    sig = inspect.signature(converter)
                 except ValueError:
                     # e.g. `inspect.signature(str)` fails
                     converter_annotation = Any
                 else:
-                    parameters = list(signature.parameters.values())
+                    parameters = list(sig.parameters.values())
                     if len(parameters) == 0:
                         # No idea what happened, but play it safe.
                         converter_annotation = Any
@@ -392,7 +393,7 @@ class _ModuleMeta(BetterABCMeta):
         if has_dataclass_init:
             cls.__init__.__doc__ = init_doc  # pyright: ignore[reportPossiblyUnboundVariable]
 
-        flattener = _ModuleFlattener(dataclasses.fields(cls))  # pyright: ignore[reportArgumentType]
+        flattener = _ModuleFlattener(fields)  # pyright: ignore[reportArgumentType]
         jtu.register_pytree_with_keys(
             cls,
             flatten_with_keys=flattener.flatten_with_keys,  # pyright: ignore
