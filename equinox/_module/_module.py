@@ -6,7 +6,7 @@ import types
 import warnings
 import weakref
 from collections.abc import Callable, Hashable
-from typing import Any, cast, Final, ParamSpec, TYPE_CHECKING, TypeVar
+from typing import Any, cast, Final, Literal, ParamSpec, TYPE_CHECKING, TypeVar
 from typing_extensions import dataclass_transform
 
 import jax
@@ -22,12 +22,11 @@ from ._field import field
 
 
 # Legacy compatibibility API, passed to `strict` below.
-def StrictConfig(force_abstact: bool = False, **kwargs):
+def StrictConfig(
+    force_abstact: bool = False, **kwargs: object
+) -> Literal[False] | None:
     del kwargs
-    if force_abstact:
-        return None
-    else:
-        return False
+    return None if force_abstact else False
 
 
 wrapper_field_names: Final = {
@@ -47,11 +46,11 @@ _flatten_sentinel = object()
 # Used to provide a pretty repr when doing `jtu.tree_structure(SomeModule(...))`.
 @dataclasses.dataclass(slots=True)
 class _FlattenedData:
-    dynamic_field_names: tuple
+    dynamic_field_names: tuple[str, ...]
     static_fields: tuple[tuple[str, Any], ...]
     wrapper_fields: tuple[tuple[str, Any], ...]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return repr((self.dynamic_field_names, self.static_fields))[1:-1]
 
 
@@ -127,7 +126,7 @@ class _ModuleFlattener:
         return module
 
 
-def _error_method_assignment(self, value):
+def _error_method_assignment(self, value: object) -> None:
     if isinstance(value, BoundMethod) and value.__self__ is self:
         raise ValueError(
             """Cannot assign methods in __init__.
@@ -186,17 +185,17 @@ class _JaxTransformException(Exception):
     pass
 
 
-def _is_array_like(x):
+def _is_array_like(x: object, /) -> None:
     if is_array_like(x):
         raise _JaxTransformException
 
 
-def _warn_jax_transformed_function(cls, x):
+def _warn_jax_transformed_function(cls: "_ModuleMeta", x: object) -> None:
     # not `isinstance`, just in case JAX every tries to override `__instancecheck__`.
     if type(x) in _transform_types:
         while True:
             try:
-                x = x.__wrapped__
+                x = getattr(x, "__wrapped__")
             except AttributeError:
                 break
             try:
@@ -253,18 +252,18 @@ class _IdSet:
     __slots__ = ("_dict",)
 
     def __init__(self):
-        self._dict = {}
+        self._dict: dict[int, Module] = {}
 
-    def __contains__(self, key):
+    def __contains__(self, key: "Module") -> bool:
         return id(key) in self._dict.keys()
 
-    def add(self, key):
+    def add(self, key: "Module") -> None:
         if key not in self:
             id_key = id(key)
             # Hold on to `key` to be sure that `id(key)` does not get reallocated.
             self._dict[id_key] = key
 
-    def remove(self, key):
+    def remove(self, key: "Module") -> None:
         del self._dict[id(key)]
 
 
@@ -277,14 +276,14 @@ _currently_initialising = _IdSet()
 class _ModuleMeta(BetterABCMeta):
     def __new__(
         mcs,
-        name,
-        bases,
-        namespace,
+        name: str,
+        bases: tuple[type, ...],
+        namespace: dict[str, object],
         *,
         is_abstract: bool = False,
         strict: None | bool = False,
         **kwargs,
-    ):
+    ) -> type["_ModuleMeta"]:
         if strict is None:
             # Legacy compatibility API. Checking that this has the desired behaviour:
             #
@@ -400,7 +399,7 @@ class _ModuleMeta(BetterABCMeta):
 
         return cls
 
-    def __call__(cls, *args, **kwargs):  # noqa: N805
+    def __call__(cls, *args: object, **kwargs: object):  # noqa: N805
         __tracebackhide__ = True
         if cls in _abstract_module_registry:
             # Any other is-abstract checks will be handled in super().__call__.
@@ -409,12 +408,13 @@ class _ModuleMeta(BetterABCMeta):
             for x in jtu.tree_leaves((args, kwargs)):
                 _warn_jax_transformed_function(cls, x)
 
-        self = None
+        tryself = None
         try:
-            self = super().__call__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
+            self = tryself = super().__call__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
         finally:
-            if self is not None:
-                _currently_initialising.remove(self)
+            if tryself is not None:
+                _currently_initialising.remove(tryself)
+            del tryself
         assert not is_abstract_module(cls)  # pyright: ignore[reportArgumentType]
 
         fields = dataclasses.fields(cls)  # pyright: ignore[reportArgumentType]
@@ -598,14 +598,14 @@ class Module(Hashable, metaclass=_ModuleMeta):
         [`equinox.AbstractClassVar`][].
     """  # noqa: E501
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args: object, **kwargs: object) -> "Module":
         del args, kwargs
         self = super().__new__(cls)
         # We record currently-initialising modules
         _currently_initialising.add(self)
         return self
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return tree_pformat(self)
 
     def __hash__(self) -> int:
@@ -615,12 +615,12 @@ class Module(Hashable, metaclass=_ModuleMeta):
             )
         )
 
-    def __eq__(self, other) -> bool | np.bool_ | Bool[Array, ""]:  # pyright: ignore
+    def __eq__(self, other: object, /) -> bool | np.bool_ | Bool[Array, ""]:  # pyright: ignore
         return tree_equal(self, other)
 
     if not TYPE_CHECKING:
 
-        def __setattr__(self, name: str, value: Any):
+        def __setattr__(self, name: str, value: Any) -> None:
             if self in _currently_initialising:
                 allowed_names = frozenset(
                     {f.name for f in dataclasses.fields(self)}
@@ -663,11 +663,11 @@ class Module(Hashable, metaclass=_ModuleMeta):
             return out
 
 
-def _is_magic(k: str) -> bool:
+def _is_magic(k: str, /) -> bool:
     return (k.startswith("__") and k.endswith("__")) or (k == "_abc_impl")
 
 
-def is_abstract_module(cls: type[Module]) -> bool:
+def is_abstract_module(cls: type[Module], /) -> bool:
     if not issubclass(cls, Module):
         raise TypeError(f"{cls} is not a subclass of `Module`.")
     return (
