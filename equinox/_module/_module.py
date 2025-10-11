@@ -191,7 +191,7 @@ def _is_array_like(x: object, /) -> None:
         raise _JaxTransformException
 
 
-_JAX_XFM_FUNC_WARNING: Final = """
+MSG_JAX_XFM_FUNC: Final = """
 Possibly assigning a JAX-transformed callable as an attribute on
 {0}.{1}. This will not have any of its parameters updated.
 
@@ -246,7 +246,7 @@ def _warn_jax_transformed_function(cls: "_ModuleMeta", x: object) -> None:
                 jtu.tree_map(_is_array_like, x)
             except _JaxTransformException:
                 warnings.warn(
-                    _JAX_XFM_FUNC_WARNING.format(cls.__module__, cls.__qualname__),
+                    MSG_JAX_XFM_FUNC.format(cls.__module__, cls.__qualname__),
                     stacklevel=3,
                 )
                 break
