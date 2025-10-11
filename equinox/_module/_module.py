@@ -310,17 +310,43 @@ class _ModuleMeta(BetterABCMeta):
         # Cache the field names for later use.
         _module_info[cls] = frozenset(f.name for f in fields)
 
-        # Generate optimized flatten/unflatten functions
-        flatten_func, flatten_with_keys_func, unflatten_func = (
-            _generate_flatten_functions(cls, fields)  # pyright: ignore[reportArgumentType]
-        )
+        # Allow for classes to define their own (un)flattening procedures.
+        unflatten = getattr(cls, "_eqx_tree_unflatten", False)
+        flatten_with_k = getattr(cls, "_eqx_tree_flatten_with_keys", False)
+        flatten = getattr(cls, "_eqx_tree_flatten", None)
+        # Using `None` since it's the default value for
+        # register_pytree_with_keys and has a truthy value of False.
 
-        jtu.register_pytree_with_keys(
-            cls,
-            flatten_with_keys=flatten_with_keys_func,  # pyright: ignore
-            flatten_func=flatten_func,  # pyright: ignore
-            unflatten_func=ft.partial(unflatten_func, cls),  # pyright: ignore
-        )
+        if unflatten and flatten_with_k:
+            print("Using custom flatten_with_keys and unflatten methods.")
+            jtu.register_pytree_with_keys(
+                cls,
+                flatten_with_keys=flatten_with_k,
+                flatten_func=flatten,
+                unflatten_func=unflatten,
+            )
+        elif unflatten and flatten:
+            jtu.register_pytree_node(cls, flatten, unflatten)
+        else:
+            # Partial or missing definition: fall back to automatic registration.
+            if unflatten or flatten_with_k or flatten:
+                warnings.warn(
+                    "Class contains partial PyTree definition. "
+                    "Falling back to automatic registration.",
+                    stacklevel=2,
+                )
+
+            # Generate optimized flatten/unflatten functions
+            flatten_func, flatten_with_keys_func, unflatten_func = (
+                _generate_flatten_functions(cls, fields)
+            )
+
+            jtu.register_pytree_with_keys(
+                cls,
+                flatten_with_keys=flatten_with_keys_func,
+                flatten_func=flatten_func,
+                unflatten_func=ft.partial(unflatten_func, cls),
+            )
 
         return cls
 
@@ -578,7 +604,7 @@ class Module(Hashable, metaclass=_ModuleMeta):
             # ```
             # works.
             if (
-                not _is_magic(name)
+                not _is_magic_or_eqx_flatten_method(name)
                 and isinstance(out, types.MethodType)
                 and out.__self__ is self
             ):
@@ -586,8 +612,26 @@ class Module(Hashable, metaclass=_ModuleMeta):
             return out
 
 
-def _is_magic(k: str, /) -> bool:
-    return (k.startswith("__") and k.endswith("__")) or (k == "_abc_impl")
+# ===============================================
+
+_MAGIC_NAMES: Final = ("_abc_impl",)
+
+_EQX_FLATTEN_METHOD_NAMES: Final = (
+    "_eqx_tree_flatten",
+    "_eqx_tree_flatten_with_keys",
+    "_eqx_tree_unflatten",
+)
+
+_MAGIC_EQX_FLATTEN_METHOD_NAMES: Final = _MAGIC_NAMES + _EQX_FLATTEN_METHOD_NAMES
+
+
+def _is_magic_or_eqx_flatten_method(k: str, /) -> bool:
+    return (
+        k.startswith("__") and k.endswith("__")
+    ) or k in _MAGIC_EQX_FLATTEN_METHOD_NAMES
+
+
+# ===============================================
 
 
 def is_abstract_module(cls: type[Module], /) -> bool:
