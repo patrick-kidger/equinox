@@ -286,7 +286,7 @@ class _ModuleMeta(BetterABCMeta):
         *,
         is_abstract: bool = False,
         strict: None | bool = False,
-        **kwargs,
+        **kwargs: object,
     ) -> type["_ModuleMeta"]:
         if strict is None:
             # Legacy compatibility API. Checking that this has the desired behaviour:
