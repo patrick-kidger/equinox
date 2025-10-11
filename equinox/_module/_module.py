@@ -126,10 +126,7 @@ class _ModuleFlattener:
         return module
 
 
-def _error_method_assignment(self, value: object) -> None:
-    if isinstance(value, BoundMethod) and value.__self__ is self:
-        raise ValueError(
-            """Cannot assign methods in __init__.
+MSG_METHOD_IN_INIT: Final = """Cannot assign methods in __init__.
 
 That is, something like the following is not allowed:
 ```
@@ -160,7 +157,11 @@ so that you can still use `self.foo`, but it is not stored in the PyTree structu
 This is a check that was introduced in Equinox v0.11.0. Before this, the above error
 went uncaught, possibly leading to silently wrong behaviour.
 """
-        )
+
+
+def _error_method_assignment(self, value: object, /) -> None:
+    if isinstance(value, BoundMethod) and value.__self__ is self:
+        raise ValueError(MSG_METHOD_IN_INIT)
 
 
 _transform_types = {
