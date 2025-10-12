@@ -29,7 +29,7 @@ def StrictConfig(
     return None if force_abstact else False
 
 
-wrapper_field_names: Final = {
+WRAPPER_FIELD_NAMES: Final = {
     "__module__",
     "__name__",
     "__qualname__",
@@ -84,7 +84,7 @@ class _ModuleFlattener:
         aux = _FlattenedData(
             tuple(dynamic_fs),
             tuple([(k, get(k, _flatten_sentinel)) for k in self.static_fs]),
-            tuple([(k, get(k, _flatten_sentinel)) for k in wrapper_field_names]),
+            tuple([(k, get(k, _flatten_sentinel)) for k in WRAPPER_FIELD_NAMES]),
         )
         return tuple(dynamic_vs), aux
 
@@ -103,7 +103,7 @@ class _ModuleFlattener:
         aux = _FlattenedData(
             tuple(dynamic_fs),
             tuple([(k, get(k, _flatten_sentinel)) for k in self.static_fs]),
-            tuple([(k, get(k, _flatten_sentinel)) for k in wrapper_field_names]),
+            tuple([(k, get(k, _flatten_sentinel)) for k in WRAPPER_FIELD_NAMES]),
         )
         return tuple(dynamic_vs), aux
 
@@ -636,7 +636,7 @@ class Module(Hashable, metaclass=_ModuleMeta):
 
         def __setattr__(self, name: str, value: Any) -> None:
             if self in _currently_initialising and (
-                name in _module_info[type(self)] or name in wrapper_field_names
+                name in _module_info[type(self)] or name in WRAPPER_FIELD_NAMES
             ):
                 _error_method_assignment(self, value)
                 _warn_jax_transformed_function(type(self), value)
@@ -756,7 +756,7 @@ def module_update_wrapper(
     # PyTree.
     _currently_initialising.add(wrapper)
     try:
-        for field_name in wrapper_field_names:
+        for field_name in WRAPPER_FIELD_NAMES:
             try:
                 value = getattr(wrapped, field_name)
             except AttributeError:
