@@ -41,7 +41,7 @@ WRAPPER_FIELD_NAMES: Final = {
 _abstract_module_registry = weakref.WeakSet()
 _has_dataclass_init = weakref.WeakKeyDictionary()
 _module_info = weakref.WeakKeyDictionary()
-_flatten_sentinel = object()
+_MISSING = object()
 
 
 # Used to provide a pretty repr when doing `jtu.tree_structure(SomeModule(...))`.
@@ -76,15 +76,15 @@ class _ModuleFlattener:
         dynamic_fs = []
         dynamic_vs = []
         for k in self.dynamic_fs:
-            v = get(k, _flatten_sentinel)
-            if v is _flatten_sentinel:
+            v = get(k, _MISSING)
+            if v is _MISSING:
                 continue
             dynamic_fs.append(k)
             dynamic_vs.append(v)
         aux = _FlattenedData(
             tuple(dynamic_fs),
-            tuple([(k, get(k, _flatten_sentinel)) for k in self.static_fs]),
-            tuple([(k, get(k, _flatten_sentinel)) for k in WRAPPER_FIELD_NAMES]),
+            tuple([(k, get(k, _MISSING)) for k in self.static_fs]),
+            tuple([(k, get(k, _MISSING)) for k in WRAPPER_FIELD_NAMES]),
         )
         return tuple(dynamic_vs), aux
 
@@ -95,15 +95,15 @@ class _ModuleFlattener:
         dynamic_fs = []
         dynamic_vs = []
         for k in self.dynamic_fs:
-            v = get(k, _flatten_sentinel)
-            if v is _flatten_sentinel:
+            v = get(k, _MISSING)
+            if v is _MISSING:
                 continue
             dynamic_fs.append(k)
             dynamic_vs.append((jtu.GetAttrKey(k), v))
         aux = _FlattenedData(
             tuple(dynamic_fs),
-            tuple([(k, get(k, _flatten_sentinel)) for k in self.static_fs]),
-            tuple([(k, get(k, _flatten_sentinel)) for k in WRAPPER_FIELD_NAMES]),
+            tuple([(k, get(k, _MISSING)) for k in self.static_fs]),
+            tuple([(k, get(k, _MISSING)) for k in WRAPPER_FIELD_NAMES]),
         )
         return tuple(dynamic_vs), aux
 
@@ -122,7 +122,7 @@ class _ModuleFlattener:
         for name, value in zip(aux.dynamic_field_names, dynamic_field_values):
             object.__setattr__(module, name, value)
         for name, value in itertools.chain(aux.static_fields, aux.wrapper_fields):
-            if value is not _flatten_sentinel:
+            if value is not _MISSING:
                 object.__setattr__(module, name, value)
         return module
 
