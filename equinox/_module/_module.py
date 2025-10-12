@@ -6,7 +6,7 @@ import types
 import warnings
 import weakref
 from collections.abc import Callable, Hashable
-from typing import Any, cast, Final, ParamSpec, TYPE_CHECKING, TypeVar
+from typing import Any, cast, Final, Literal, ParamSpec, TYPE_CHECKING, TypeVar
 from typing_extensions import dataclass_transform
 
 import jax
@@ -22,12 +22,11 @@ from ._field import field
 
 
 # Legacy compatibibility API, passed to `strict` below.
-def StrictConfig(force_abstact: bool = False, **kwargs):
+def StrictConfig(
+    force_abstact: bool = False, **kwargs: object
+) -> Literal[False] | None:
     del kwargs
-    if force_abstact:
-        return None
-    else:
-        return False
+    return None if force_abstact else False
 
 
 wrapper_field_names: Final = {
@@ -47,11 +46,11 @@ _flatten_sentinel = object()
 # Used to provide a pretty repr when doing `jtu.tree_structure(SomeModule(...))`.
 @dataclasses.dataclass(slots=True)
 class _FlattenedData:
-    dynamic_field_names: tuple
+    dynamic_field_names: tuple[str, ...]
     static_fields: tuple[tuple[str, Any], ...]
     wrapper_fields: tuple[tuple[str, Any], ...]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return repr((self.dynamic_field_names, self.static_fields))[1:-1]
 
 
@@ -127,10 +126,7 @@ class _ModuleFlattener:
         return module
 
 
-def _error_method_assignment(self, value):
-    if isinstance(value, BoundMethod) and value.__self__ is self:
-        raise ValueError(
-            """Cannot assign methods in __init__.
+MSG_METHOD_IN_INIT: Final = """Cannot assign methods in __init__.
 
 That is, something like the following is not allowed:
 ```
@@ -161,7 +157,11 @@ so that you can still use `self.foo`, but it is not stored in the PyTree structu
 This is a check that was introduced in Equinox v0.11.0. Before this, the above error
 went uncaught, possibly leading to silently wrong behaviour.
 """
-        )
+
+
+def _error_method_assignment(self, value: object, /) -> None:
+    if isinstance(value, BoundMethod) and value.__self__ is self:
+        raise ValueError(MSG_METHOD_IN_INIT)
 
 
 _transform_types = {
@@ -186,37 +186,25 @@ class _JaxTransformException(Exception):
     pass
 
 
-def _is_array_like(x):
+def _is_array_like(x: object, /) -> None:
     if is_array_like(x):
         raise _JaxTransformException
 
 
-def _warn_jax_transformed_function(cls, x):
-    # not `isinstance`, just in case JAX every tries to override `__instancecheck__`.
-    if type(x) in _transform_types:
-        while True:
-            try:
-                x = x.__wrapped__
-            except AttributeError:
-                break
-            try:
-                jtu.tree_map(_is_array_like, x)
-            except _JaxTransformException:
-                warnings.warn(
-                    f"""
+MSG_JAX_XFM_FUNC: Final = """
 Possibly assigning a JAX-transformed callable as an attribute on
-{cls.__module__}.{cls.__qualname__}. This will not have any of its parameters updated.
+{0}.{1}. This will not have any of its parameters updated.
 
 For example, the following code is buggy:
 ```python
 class MyModule(eqx.Module):
-vmap_linear: Callable
+    vmap_linear: Callable
 
-def __init__(self, ...):
-    self.vmap_linear = jax.vmap(eqx.nn.Linear(...))
+    def __init__(self, ...):
+        self.vmap_linear = jax.vmap(eqx.nn.Linear(...))
 
-def __call__(self, ...):
-    ... = self.vmap_linear(...)
+    def __call__(self, ...):
+        ... = self.vmap_linear(...)
 ```
 This is because the callable returned from `jax.vmap` is *not* a PyTree. This means that
 the parameters inside the `eqx.nn.Linear` layer will not receive gradient updates.
@@ -224,26 +212,41 @@ the parameters inside the `eqx.nn.Linear` layer will not receive gradient update
 You can most easily fix this either by applying the wrapper at `__call__` time:
 ```python
 class MyModule(eqx.Module):
-linear: Callable
+    linear: Callable
 
-def __init__(self, ...):
-    self.linear = eqx.nn.Linear(...)
+    def __init__(self, ...):
+        self.linear = eqx.nn.Linear(...)
 
-def __call__(self, ...):
-    ... = jax.vmap(self.linear)(...)
+    def __call__(self, ...):
+        ... = jax.vmap(self.linear)(...)
 ```
 or by using `eqx.filter_vmap` instead (which *does* return a PyTree):
 ```python
 class MyModule(eqx.Module):
-vmap_linear: Callable
+    vmap_linear: Callable
 
-def __init__(self, ...):
-    self.vmap_linear = eqx.filter_vmap(eqx.nn.Linear(...))
+    def __init__(self, ...):
+        self.vmap_linear = eqx.filter_vmap(eqx.nn.Linear(...))
 
-def __call__(self, ...):
-    ... = self.vmap_linear(...)
+    def __call__(self, ...):
+        ... = self.vmap_linear(...)
 ```
-""",
+"""
+
+
+def _warn_jax_transformed_function(cls: "_ModuleMeta", x: object) -> None:
+    # not `isinstance`, just in case JAX every tries to override `__instancecheck__`.
+    if type(x) in _transform_types:
+        while True:
+            try:
+                x = getattr(x, "__wrapped__")
+            except AttributeError:
+                break
+            try:
+                jtu.tree_map(_is_array_like, x)
+            except _JaxTransformException:
+                warnings.warn(
+                    MSG_JAX_XFM_FUNC.format(cls.__module__, cls.__qualname__),
                     stacklevel=3,
                 )
                 break
@@ -253,18 +256,18 @@ class _IdSet:
     __slots__ = ("_dict",)
 
     def __init__(self):
-        self._dict = {}
+        self._dict: dict[int, Module] = {}
 
-    def __contains__(self, key):
+    def __contains__(self, key: "Module") -> bool:
         return id(key) in self._dict.keys()
 
-    def add(self, key):
+    def add(self, key: "Module") -> None:
         if key not in self:
             id_key = id(key)
             # Hold on to `key` to be sure that `id(key)` does not get reallocated.
             self._dict[id_key] = key
 
-    def remove(self, key):
+    def remove(self, key: "Module") -> None:
         del self._dict[id(key)]
 
 
@@ -277,14 +280,14 @@ _currently_initialising = _IdSet()
 class _ModuleMeta(BetterABCMeta):
     def __new__(
         mcs,
-        name,
-        bases,
-        namespace,
+        name: str,
+        bases: tuple[type, ...],
+        namespace: dict[str, object],
         *,
         is_abstract: bool = False,
         strict: None | bool = False,
-        **kwargs,
-    ):
+        **kwargs: object,
+    ) -> type["_ModuleMeta"]:
         if strict is None:
             # Legacy compatibility API. Checking that this has the desired behaviour:
             #
@@ -364,7 +367,8 @@ class _ModuleMeta(BetterABCMeta):
             init_doc = cls.__init__.__doc__
 
         cls = better_dataclass(eq=False, repr=False, init=has_dataclass_init)(cls)
-        for f in dataclasses.fields(cls):  # pyright: ignore[reportArgumentType]
+        fields = dataclasses.fields(cls)  # pyright: ignore[reportArgumentType]
+        for f in fields:  # pyright: ignore[reportArgumentType]
             if f.name not in cls.__init__.__annotations__:
                 continue  # Odd behaviour, so skip.
             try:
@@ -373,12 +377,12 @@ class _ModuleMeta(BetterABCMeta):
                 pass
             else:
                 try:
-                    signature = inspect.signature(converter)
+                    sig = inspect.signature(converter)
                 except ValueError:
                     # e.g. `inspect.signature(str)` fails
                     converter_annotation = Any
                 else:
-                    parameters = list(signature.parameters.values())
+                    parameters = list(sig.parameters.values())
                     if len(parameters) == 0:
                         # No idea what happened, but play it safe.
                         converter_annotation = Any
@@ -390,7 +394,7 @@ class _ModuleMeta(BetterABCMeta):
         if has_dataclass_init:
             cls.__init__.__doc__ = init_doc  # pyright: ignore[reportPossiblyUnboundVariable]
 
-        flattener = _ModuleFlattener(dataclasses.fields(cls))  # pyright: ignore[reportArgumentType]
+        flattener = _ModuleFlattener(fields)  # pyright: ignore[reportArgumentType]
         jtu.register_pytree_with_keys(
             cls,
             flatten_with_keys=flattener.flatten_with_keys,  # pyright: ignore
@@ -400,7 +404,7 @@ class _ModuleMeta(BetterABCMeta):
 
         return cls
 
-    def __call__(cls, *args, **kwargs):  # noqa: N805
+    def __call__(cls, *args: object, **kwargs: object):  # noqa: N805
         __tracebackhide__ = True
         if cls in _abstract_module_registry:
             # Any other is-abstract checks will be handled in super().__call__.
@@ -409,12 +413,13 @@ class _ModuleMeta(BetterABCMeta):
             for x in jtu.tree_leaves((args, kwargs)):
                 _warn_jax_transformed_function(cls, x)
 
-        self = None
+        tryself = None
         try:
-            self = super().__call__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
+            self = tryself = super().__call__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
         finally:
-            if self is not None:
-                _currently_initialising.remove(self)
+            if tryself is not None:
+                _currently_initialising.remove(tryself)
+            del tryself
         assert not is_abstract_module(cls)  # pyright: ignore[reportArgumentType]
 
         fields = dataclasses.fields(cls)  # pyright: ignore[reportArgumentType]
@@ -598,14 +603,14 @@ class Module(Hashable, metaclass=_ModuleMeta):
         [`equinox.AbstractClassVar`][].
     """  # noqa: E501
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args: object, **kwargs: object) -> "Module":
         del args, kwargs
         self = super().__new__(cls)
         # We record currently-initialising modules
         _currently_initialising.add(self)
         return self
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return tree_pformat(self)
 
     def __hash__(self) -> int:
@@ -615,12 +620,12 @@ class Module(Hashable, metaclass=_ModuleMeta):
             )
         )
 
-    def __eq__(self, other) -> bool | np.bool_ | Bool[Array, ""]:  # pyright: ignore
+    def __eq__(self, other: object, /) -> bool | np.bool_ | Bool[Array, ""]:  # pyright: ignore
         return tree_equal(self, other)
 
     if not TYPE_CHECKING:
 
-        def __setattr__(self, name: str, value: Any):
+        def __setattr__(self, name: str, value: Any) -> None:
             if self in _currently_initialising:
                 allowed_names = frozenset(
                     {f.name for f in dataclasses.fields(self)}
@@ -663,11 +668,11 @@ class Module(Hashable, metaclass=_ModuleMeta):
             return out
 
 
-def _is_magic(k: str) -> bool:
+def _is_magic(k: str, /) -> bool:
     return (k.startswith("__") and k.endswith("__")) or (k == "_abc_impl")
 
 
-def is_abstract_module(cls: type[Module]) -> bool:
+def is_abstract_module(cls: type[Module], /) -> bool:
     if not issubclass(cls, Module):
         raise TypeError(f"{cls} is not a subclass of `Module`.")
     return (
