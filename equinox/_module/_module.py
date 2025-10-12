@@ -29,7 +29,7 @@ def StrictConfig(
     return None if force_abstact else False
 
 
-wrapper_field_names: Final = {
+WRAPPER_FIELD_NAMES: Final = {
     "__module__",
     "__name__",
     "__qualname__",
@@ -83,7 +83,7 @@ class _ModuleFlattener:
         aux = _FlattenedData(
             tuple(dynamic_fs),
             tuple([(k, get(k, _flatten_sentinel)) for k in self.static_fs]),
-            tuple([(k, get(k, _flatten_sentinel)) for k in wrapper_field_names]),
+            tuple([(k, get(k, _flatten_sentinel)) for k in WRAPPER_FIELD_NAMES]),
         )
         return tuple(dynamic_vs), aux
 
@@ -102,7 +102,7 @@ class _ModuleFlattener:
         aux = _FlattenedData(
             tuple(dynamic_fs),
             tuple([(k, get(k, _flatten_sentinel)) for k in self.static_fs]),
-            tuple([(k, get(k, _flatten_sentinel)) for k in wrapper_field_names]),
+            tuple([(k, get(k, _flatten_sentinel)) for k in WRAPPER_FIELD_NAMES]),
         )
         return tuple(dynamic_vs), aux
 
@@ -629,7 +629,7 @@ class Module(Hashable, metaclass=_ModuleMeta):
             if self in _currently_initialising:
                 allowed_names = frozenset(
                     {f.name for f in dataclasses.fields(self)}
-                ).union(wrapper_field_names)
+                ).union(WRAPPER_FIELD_NAMES)
                 if name in allowed_names:
                     _error_method_assignment(self, value)
                     _warn_jax_transformed_function(type(self), value)
@@ -749,7 +749,7 @@ def module_update_wrapper(
     # PyTree.
     _currently_initialising.add(wrapper)
     try:
-        for field_name in wrapper_field_names:
+        for field_name in WRAPPER_FIELD_NAMES:
             try:
                 value = getattr(wrapped, field_name)
             except AttributeError:
