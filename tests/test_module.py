@@ -771,7 +771,8 @@ def test_init_as_abstract(field):
 
     x = Concrete()
     leaves, treedef = jtu.tree_flatten(x)
-    assert len(leaves) == 0
+    # The init=False field will be present as a sentinel value in the leaves
+    assert len(leaves) == 1
     y = jtu.tree_unflatten(treedef, leaves)
     assert y.foo == 1
 
