@@ -1,7 +1,6 @@
 import dataclasses
 import functools as ft
 import inspect
-import itertools
 import types
 import warnings
 import weakref
@@ -12,7 +11,7 @@ from typing_extensions import dataclass_transform
 import jax
 import jax.tree_util as jtu
 import numpy as np
-from jaxtyping import Array, Bool, PyTree
+from jaxtyping import Array, Bool
 
 from .._filters import is_array, is_array_like, is_inexact_array_like
 from .._pretty_print import tree_pformat
@@ -44,87 +43,161 @@ _module_info = weakref.WeakKeyDictionary()
 _MISSING = object()
 
 
-# Used to provide a pretty repr when doing `jtu.tree_structure(SomeModule(...))`.
-@dataclasses.dataclass(slots=True)
-class _FlattenedData:
-    dynamic_field_names: tuple[str, ...]
-    static_fields: tuple[tuple[str, Any], ...]
-    wrapper_fields: tuple[tuple[str, Any], ...]
+def _make_tuple_type(count: int, element_type: str = "Any") -> str:
+    """Generate a tuple type annotation string for a given count of elements."""
+    if count == 0:
+        return "tuple[()]"
+    elif count == 1:
+        return f"tuple[{element_type}]"
+    else:
+        return f"tuple[{', '.join([element_type] * count)}]"
 
-    def __repr__(self) -> str:
-        return repr((self.dynamic_field_names, self.static_fields))[1:-1]
 
+def _generate_flatten_functions(cls: type, fields: tuple[dataclasses.Field[Any], ...]):
+    """Generate optimized flatten/unflatten functions for a specific field config."""
+    # Separate dynamic and static fields
+    dynamic_fs = []
+    static_fs = []
+    for f in fields:
+        if f.metadata.get("static", False):
+            static_fs.append(f.name)
+        else:
+            dynamic_fs.append(f.name)
 
-class _ModuleFlattener:
-    __slots__: tuple[str, str] = ("dynamic_fs", "static_fs")
-    dynamic_fs: tuple[str, ...]
-    static_fs: tuple[str, ...]
+    # -------------------------------------------
+    # Generate flatten function
 
-    def __init__(self, fields: tuple[dataclasses.Field[Any], ...]):
-        dynamic_fs = []
-        static_fs = []
-        for f in fields:
-            if f.metadata.get("static", False):
-                static_fs.append(f.name)
-            else:
-                dynamic_fs.append(f.name)
-        self.dynamic_fs = tuple(dynamic_fs)
-        self.static_fs = tuple(static_fs)
+    # Directly access dynamic fields by name
+    dynamic_exprs = [f"obj.{name}" for name in dynamic_fs]
+    dynamic_tuple = f"({', '.join(dynamic_exprs)},)" if dynamic_fs else "()"
 
-    def flatten(self, obj: "Module") -> tuple[tuple[PyTree, ...], _FlattenedData]:
-        get = obj.__dict__.get
-        dynamic_fs = []
-        dynamic_vs = []
-        for k in self.dynamic_fs:
-            v = get(k, _MISSING)
-            if v is _MISSING:
-                continue
-            dynamic_fs.append(k)
-            dynamic_vs.append(v)
-        aux = _FlattenedData(
-            tuple(dynamic_fs),
-            tuple([(k, get(k, _MISSING)) for k in self.static_fs]),
-            tuple([(k, get(k, _MISSING)) for k in WRAPPER_FIELD_NAMES]),
+    # For static fields, we need to store their values in aux data
+    static_exprs = [f"obj.{name}" for name in static_fs]
+    static_aux = f"({', '.join(static_exprs)},)" if static_fs else "()"
+
+    # Build return type annotation
+    dynamic_type = _make_tuple_type(len(dynamic_fs))
+    static_type = _make_tuple_type(len(static_fs))
+    return_type = f"tuple[{dynamic_type}, {static_type}]"
+
+    flatten_code = f'''
+def flatten(obj: module_cls) -> {return_type}:
+    """Generated flatten function for {cls.__qualname__}.
+    
+    Dynamic fields: {dynamic_fs}
+    Static fields: {static_fs}
+    """
+    return {dynamic_tuple}, {static_aux}
+'''
+
+    # -------------------------------------------
+    # Generate flatten_with_keys function
+
+    key_exprs = [f"(jtu.GetAttrKey({name!r}), obj.{name})" for name in dynamic_fs]
+    key_tuple = f"({', '.join(key_exprs)},)" if dynamic_fs else "()"
+
+    # For static fields, we need to store their values in aux data
+    static_exprs = [f"(jtu.GetAttrKey({name!r}), obj.{name})" for name in static_fs]
+    static_aux = f"({', '.join(static_exprs)},)" if static_fs else "()"
+
+    # For flatten_with_keys, the dynamic part contains (GetAttrKey, value) tuples
+    keys_dynamic_type = _make_tuple_type(len(dynamic_fs), "tuple[Any, Any]")
+    keys_return_type = f"tuple[{keys_dynamic_type}, {static_type}]"
+
+    flatten_with_keys_code = f'''
+def flatten_with_keys(obj: module_cls) -> {keys_return_type}:
+    """Generated flatten_with_keys function for {cls.__qualname__}.
+    
+    Dynamic fields: {dynamic_fs}
+    Static fields: {static_fs}
+    """
+    return {key_tuple}, {static_aux}
+'''
+
+    # -------------------------------------------
+    # Generate unflatten function - directly set fields by index
+    # Extract types from flatten return type: tuple[dynamic_type, static_type]
+
+    unflatten_signature = (
+        f"def unflatten("
+        f"module_cls: type[T], "
+        f"aux_data: {static_type}, "
+        f"children: {dynamic_type}"
+        f") -> T:"
+    )
+    unflatten_lines = [unflatten_signature]
+    unflatten_lines.append(
+        f'    """Generated unflatten function for {cls.__qualname__}.'
+    )
+    unflatten_lines.append("    ")
+    unflatten_lines.append(f"    Dynamic fields: {dynamic_fs}")
+    unflatten_lines.append(f"    Static fields: {static_fs}")
+    unflatten_lines.append('    """')
+    unflatten_lines.append("    self = object.__new__(module_cls)")
+
+    # Set dynamic fields directly by index
+    for i, field_name in enumerate(dynamic_fs):
+        unflatten_lines.append(
+            f"    object.__setattr__(self, {field_name!r}, children[{i}])"
         )
-        return tuple(dynamic_vs), aux
 
-    def flatten_with_keys(
-        self, obj: "Module"
-    ) -> tuple[tuple[tuple[Any, PyTree], ...], _FlattenedData]:
-        get = obj.__dict__.get
-        dynamic_fs = []
-        dynamic_vs = []
-        for k in self.dynamic_fs:
-            v = get(k, _MISSING)
-            if v is _MISSING:
-                continue
-            dynamic_fs.append(k)
-            dynamic_vs.append((jtu.GetAttrKey(k), v))
-        aux = _FlattenedData(
-            tuple(dynamic_fs),
-            tuple([(k, get(k, _MISSING)) for k in self.static_fs]),
-            tuple([(k, get(k, _MISSING)) for k in WRAPPER_FIELD_NAMES]),
+    # Set static fields from aux_data
+    for i, field_name in enumerate(static_fs):
+        unflatten_lines.append(
+            f"    object.__setattr__(self, {field_name!r}, aux_data[{i}])"
         )
-        return tuple(dynamic_vs), aux
 
-    @staticmethod
-    def unflatten_with_cls(
-        module_cls: type["Module"],
-        aux: _FlattenedData,
-        dynamic_field_values: tuple[PyTree, ...],
-    ) -> "Module":
-        # This doesn't go via `__init__`. A user may have done something
-        # nontrivial there, and the field values may be dummy values as used in
-        # various places throughout JAX. See also
-        # https://jax.readthedocs.io/en/latest/pytrees.html#custom-pytrees-and-initialization,
-        # which was (I believe) inspired by Equinox's approach here.
-        module = object.__new__(module_cls)
-        for name, value in zip(aux.dynamic_field_names, dynamic_field_values):
-            object.__setattr__(module, name, value)
-        for name, value in itertools.chain(aux.static_fields, aux.wrapper_fields):
-            if value is not _MISSING:
-                object.__setattr__(module, name, value)
-        return module
+    unflatten_lines.append("    return self")
+
+    unflatten_code = "\n".join(unflatten_lines)
+
+    # -------------------------------------------
+    # Compile all functions
+
+    # Namespace for flatten functions (they need module_cls)
+    flatten_ns = {
+        "jtu": jtu,
+        "object": object,
+        "module_cls": cls,
+        "Any": Any,
+        "tuple": tuple,
+    }
+
+    # Namespace for unflatten function (takes module_cls as parameter)
+    unflatten_ns = {
+        "object": object,
+        "Any": Any,
+        "tuple": tuple,
+        "type": type,
+        "T": TypeVar("T"),
+    }
+
+    # Use class-specific filenames for better __code__ introspection
+    cls_name = cls.__qualname__
+    exec(compile(flatten_code, f"<generated_flatten_{cls_name}>", "exec"), flatten_ns)
+    exec(
+        compile(
+            flatten_with_keys_code, f"<generated_flatten_with_keys_{cls_name}>", "exec"
+        ),
+        flatten_ns,
+    )
+    exec(
+        compile(unflatten_code, f"<generated_unflatten_{cls_name}>", "exec"),
+        unflatten_ns,
+    )
+
+    # Extract the generated functions from respective namespaces
+    flatten_func = flatten_ns["flatten"]
+    flatten_with_keys_func = flatten_ns["flatten_with_keys"]
+    unflatten_func = unflatten_ns["unflatten"]
+
+    # Set proper module reference (this is a standard Python attribute)
+    module_name = getattr(cls, "__module__", "equinox._module._module")
+    flatten_func.__module__ = module_name
+    flatten_with_keys_func.__module__ = module_name
+    unflatten_func.__module__ = module_name
+
+    return flatten_func, flatten_with_keys_func, unflatten_func
 
 
 MSG_METHOD_IN_INIT: Final = """Cannot assign methods in __init__.
@@ -403,12 +476,16 @@ class _ModuleMeta(BetterABCMeta):
         # Cache the field names for later use.
         _module_info[cls] = frozenset(f.name for f in fields)
 
-        flattener = _ModuleFlattener(fields)  # pyright: ignore[reportArgumentType]
+        # Generate optimized flatten/unflatten functions
+        flatten_func, flatten_with_keys_func, unflatten_func = (
+            _generate_flatten_functions(cls, fields)  # pyright: ignore[reportArgumentType]
+        )
+
         jtu.register_pytree_with_keys(
             cls,
-            flatten_with_keys=flattener.flatten_with_keys,  # pyright: ignore
-            flatten_func=flattener.flatten,  # pyright: ignore
-            unflatten_func=ft.partial(flattener.unflatten_with_cls, cls),  # pyright: ignore
+            flatten_with_keys=flatten_with_keys_func,  # pyright: ignore
+            flatten_func=flatten_func,  # pyright: ignore
+            unflatten_func=ft.partial(unflatten_func, cls),  # pyright: ignore
         )
 
         return cls
