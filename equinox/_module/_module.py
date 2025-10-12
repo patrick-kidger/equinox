@@ -21,7 +21,7 @@ from ._better_abstract import better_dataclass, BetterABCMeta
 from ._field import field
 
 
-# Legacy compatibibility API, passed to `strict` below.
+# Legacy compatibility API, passed to `strict` below.
 def StrictConfig(
     force_abstact: bool = False, **kwargs: object
 ) -> Literal[False] | None:
