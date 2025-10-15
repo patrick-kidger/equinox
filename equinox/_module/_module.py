@@ -102,7 +102,8 @@ object.__setattr__(self, {name!r}, children[{i}])
 """[1:-1]  # (trim leading and trailing newlines)
 
 SET_AUX_BASE = """
-object.__setattr__(self, {name!r}, aux_data[{i}])
+if aux_data[{i}] is not _MISSING:
+    object.__setattr__(self, {name!r}, aux_data[{i}])
 """[1:-1]  # (trim leading and trailing newlines)
 
 SET_WRAPPER_BASE = """
@@ -113,6 +114,8 @@ if aux_data[{i}] is not _MISSING:
 SET_WRAPPER_LINES = "\n".join(
     SET_WRAPPER_BASE.format(i=i, name=k) for i, k in enumerate(WRAPPER_FIELD_NAMES)
 )
+
+NS_BASE = {"object": object, "Any": Any, "tuple": tuple, "_MISSING": _MISSING}
 
 
 def _generate_flatten_functions(cls: type, fields: tuple[dataclasses.Field[Any], ...]):
@@ -142,7 +145,7 @@ def _generate_flatten_functions(cls: type, fields: tuple[dataclasses.Field[Any],
 
     # For static fields, we need to store their values in aux data
     if static_fs:
-        static_exprs = [f"obj.{name}" for name in static_fs]
+        static_exprs = [f"getattr(obj, {name!r}, _MISSING)" for name in static_fs]
         static_aux = f"({', '.join(static_exprs)},)"
     else:
         static_aux = "()"
@@ -208,45 +211,26 @@ def _generate_flatten_functions(cls: type, fields: tuple[dataclasses.Field[Any],
     # Compile all functions
 
     # Namespace for flatten functions (they need module_cls)
-    flatten_ns = {
-        "jtu": jtu,
-        "object": object,
-        "module_cls": cls,
-        "Any": Any,
-        "tuple": tuple,
-        "_MISSING": _MISSING,
-    }
+    flatten_ns = NS_BASE | {"jtu": jtu, "module_cls": cls}
 
     # Namespace for unflatten function (takes module_cls as parameter)
-    unflatten_ns = {
-        "object": object,
-        "Any": Any,
-        "tuple": tuple,
-        "type": type,
-        "T": TypeVar("T"),
-        "_MISSING": _MISSING,
-    }
-
-    # Use class-specific filenames for better __code__ introspection
-    exec(compile(flatten_code, f"<generated_flatten_{qualname}>", "exec"), flatten_ns)
-    exec(
-        compile(
-            flatten_with_keys_code, f"<generated_flatten_with_keys_{qualname}>", "exec"
-        ),
-        flatten_ns,
-    )
-    exec(
-        compile(unflatten_code, f"<generated_unflatten_{qualname}>", "exec"),
-        unflatten_ns,
-    )
+    unflatten_ns = NS_BASE | {"type": type, "T": TypeVar("T")}
 
     # Extract the generated functions from respective namespaces to
     # set the proper module reference.
     module_name = getattr(cls, "__module__", "equinox._module._module")
+    # flatten func
+    exec(compile(flatten_code, f"<generated_flatten_{qualname}>", "exec"), flatten_ns)
     flatten_func = flatten_ns["flatten"]
     flatten_func.__module__ = module_name
+    # flatten with keys func
+    func_name = f"<generated_flatten_with_keys_{qualname}>"
+    exec(compile(flatten_with_keys_code, func_name, "exec"), flatten_ns)
     flatten_with_keys_func = flatten_ns["flatten_with_keys"]
     flatten_with_keys_func.__module__ = module_name
+    # unflatten
+    func_name = f"<generated_unflatten_{qualname}>"
+    exec(compile(unflatten_code, func_name, "exec"), unflatten_ns)
     unflatten_func = unflatten_ns["unflatten"]
     unflatten_func.__module__ = module_name
 
