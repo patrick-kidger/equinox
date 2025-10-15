@@ -1,6 +1,7 @@
 import dataclasses
 import functools as ft
 import inspect
+import textwrap
 import types
 import warnings
 import weakref
@@ -53,6 +54,56 @@ def _make_tuple_type(count: int, element_type: str = "Any") -> str:
         return f"tuple[{', '.join([element_type] * count)}]"
 
 
+FLATTEN_CODE_BASE = '''
+def flatten(obj: module_cls) -> {return_type}:
+    """Generated flatten function for {cls.__qualname__}.
+    
+    Dynamic fields: {dynamic_fs}
+    Static fields: {static_fs}
+    """
+    return {dynamic_tuple}, {aux}
+'''
+
+
+FLATTEN_WITH_KEYS_CODE_BASE = '''
+def flatten_with_keys(obj: module_cls) -> {keys_return_type}:
+    """Generated flatten_with_keys function for {cls.__qualname__}.
+    
+    Dynamic fields: {dynamic_fs}
+    Static fields: {static_fs}
+    """
+    return {key_tuple}, {aux}
+'''
+
+UNFLATTEN_FUNC_BASE = '''
+def unflatten(
+    module_cls: type[T],
+    aux_data: {aux_type},
+    children: {dynamic_type},
+) -> T:
+    """Generated unflatten function for {cls.__qualname__}.
+
+    Dynamic fields: {dynamic_keys}
+    Static fields: {static_keys}
+
+    """
+    self = object.__new__(module_cls)
+
+    # Set fields directly by index
+{setters}
+
+    return self
+'''
+
+SET_DYNAMIC_BASE = """
+object.__setattr__(self, {name!r}, children[{i}])
+"""[1:-1]  # (trim leading and trailing newlines)
+
+SET_AUX_BASE = """
+object.__setattr__(self, {name!r}, aux_data[{i}])
+"""[1:-1]  # (trim leading and trailing newlines)
+
+
 def _generate_flatten_functions(cls: type, fields: tuple[dataclasses.Field[Any], ...]):
     """Generate optimized flatten/unflatten functions for a specific field config."""
     # Separate dynamic and static fields
@@ -80,15 +131,14 @@ def _generate_flatten_functions(cls: type, fields: tuple[dataclasses.Field[Any],
     static_type = _make_tuple_type(len(static_fs))
     return_type = f"tuple[{dynamic_type}, {static_type}]"
 
-    flatten_code = f'''
-def flatten(obj: module_cls) -> {return_type}:
-    """Generated flatten function for {cls.__qualname__}.
-    
-    Dynamic fields: {dynamic_fs}
-    Static fields: {static_fs}
-    """
-    return {dynamic_tuple}, {static_aux}
-'''
+    flatten_code = FLATTEN_CODE_BASE.format(
+        return_type=return_type,
+        cls=cls,
+        dynamic_fs=dynamic_fs,
+        static_fs=static_fs,
+        dynamic_tuple=dynamic_tuple,
+        aux=static_aux,
+    )
 
     # -------------------------------------------
     # Generate flatten_with_keys function
@@ -104,52 +154,36 @@ def flatten(obj: module_cls) -> {return_type}:
     keys_dynamic_type = _make_tuple_type(len(dynamic_fs), "tuple[Any, Any]")
     keys_return_type = f"tuple[{keys_dynamic_type}, {static_type}]"
 
-    flatten_with_keys_code = f'''
-def flatten_with_keys(obj: module_cls) -> {keys_return_type}:
-    """Generated flatten_with_keys function for {cls.__qualname__}.
-    
-    Dynamic fields: {dynamic_fs}
-    Static fields: {static_fs}
-    """
-    return {key_tuple}, {static_aux}
-'''
+    flatten_with_keys_code = FLATTEN_WITH_KEYS_CODE_BASE.format(
+        keys_return_type=keys_return_type,
+        cls=cls,
+        dynamic_fs=dynamic_fs,
+        static_fs=static_fs,
+        key_tuple=key_tuple,
+        aux=static_aux,
+    )
 
     # -------------------------------------------
     # Generate unflatten function - directly set fields by index
     # Extract types from flatten return type: tuple[dynamic_type, static_type]
 
-    unflatten_signature = (
-        f"def unflatten("
-        f"module_cls: type[T], "
-        f"aux_data: {static_type}, "
-        f"children: {dynamic_type}"
-        f") -> T:"
-    )
-    unflatten_lines = [unflatten_signature]
-    unflatten_lines.append(
-        f'    """Generated unflatten function for {cls.__qualname__}.'
-    )
-    unflatten_lines.append("    ")
-    unflatten_lines.append(f"    Dynamic fields: {dynamic_fs}")
-    unflatten_lines.append(f"    Static fields: {static_fs}")
-    unflatten_lines.append('    """')
-    unflatten_lines.append("    self = object.__new__(module_cls)")
-
+    unflatten_lines = []
     # Set dynamic fields directly by index
-    for i, field_name in enumerate(dynamic_fs):
-        unflatten_lines.append(
-            f"    object.__setattr__(self, {field_name!r}, children[{i}])"
-        )
-
+    for i, name in enumerate(dynamic_fs):
+        unflatten_lines.append(SET_DYNAMIC_BASE.format(i=i, name=name))
     # Set static fields from aux_data
-    for i, field_name in enumerate(static_fs):
-        unflatten_lines.append(
-            f"    object.__setattr__(self, {field_name!r}, aux_data[{i}])"
-        )
+    for i, name in enumerate(static_fs):
+        unflatten_lines.append(SET_AUX_BASE.format(i=i, name=name))
 
-    unflatten_lines.append("    return self")
-
-    unflatten_code = "\n".join(unflatten_lines)
+    unflatten_code = UNFLATTEN_FUNC_BASE.format(
+        aux_type=static_type,
+        dynamic_type=dynamic_type,
+        cls=cls,
+        dynamic_keys=dynamic_fs,
+        static_keys=static_fs,
+        wrapper_keys=WRAPPER_FIELD_NAMES,
+        setters=textwrap.indent("\n".join(unflatten_lines), "    "),
+    )
 
     # -------------------------------------------
     # Compile all functions
