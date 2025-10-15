@@ -28,13 +28,13 @@ def StrictConfig(
     return None if force_abstact else False
 
 
-WRAPPER_FIELD_NAMES: Final = {
+WRAPPER_FIELD_NAMES: Final = (
     "__module__",
     "__name__",
     "__qualname__",
     "__doc__",
     "__annotations__",
-}
+)
 
 
 _abstract_module_registry = weakref.WeakSet()
