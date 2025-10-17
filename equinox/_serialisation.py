@@ -135,7 +135,7 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
         out = np.load(f)
         if isinstance(x, jax.dtypes.bfloat16):
             out = out.view(jax.dtypes.bfloat16)
-        return type(x)(out.item())
+        return type(x)(out.item())  # pyright: ignore[reportCallIssue]
     else:
         return x
 
