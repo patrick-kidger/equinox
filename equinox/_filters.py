@@ -22,7 +22,9 @@ AxisSpec = bool | Callable[[Any], bool]
 _array_types = (np.ndarray, np.generic, jax.Array)  # JAX < 0.7.2
 
 try:  # JAX 0.7.2
-    from jax._src.literals import LiteralArray
+    from jax._src.literals import (
+        LiteralArray,  # pyright: ignore[reportAttributeAccessIssue]
+    )
 
     _array_types += (LiteralArray,)
 except ImportError:

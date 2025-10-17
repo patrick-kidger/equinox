@@ -238,9 +238,9 @@ def test_tree_equal_scalars():
     # dtype does matter
     assert _typeequal(eqx.tree_equal(x, z), False)
 
-    z = jax.dtypes.bfloat16(1)
-    z2 = jax.dtypes.bfloat16(1)
-    w = jax.dtypes.bfloat16(2)
+    z = jax.dtypes.bfloat16(1)  # pyright: ignore[reportCallIssue]
+    z2 = jax.dtypes.bfloat16(1)  # pyright: ignore[reportCallIssue]
+    w = jax.dtypes.bfloat16(2)  # pyright: ignore[reportCallIssue]
     assert _typeequal(eqx.tree_equal(z, z2), True)
     assert _typeequal(eqx.tree_equal(z, w), False)
 

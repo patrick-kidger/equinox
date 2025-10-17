@@ -122,22 +122,22 @@ def test_helpful_errors(getkey, tmp_path):
 
 def test_generic_dtype_serialisation(getkey, tmp_path):
     # Ensure we can round trip when we start with an array
-    jax_array = jnp.array(bfloat16(1))
+    jax_array = jnp.array(bfloat16(1))  # pyright: ignore[reportCallIssue]
     eqx.tree_serialise_leaves(tmp_path, jax_array)
-    like_jax_array = jnp.array(bfloat16(2))
+    like_jax_array = jnp.array(bfloat16(2))  # pyright: ignore[reportCallIssue]
     loaded_jax_array = eqx.tree_deserialise_leaves(tmp_path, like_jax_array)
     assert jax_array.item() == loaded_jax_array.item()
 
     tree = (
         jnp.array(1e-8),
-        bfloat16(1e-8),
+        bfloat16(1e-8),  # pyright: ignore[reportCallIssue]
         np.float32(1e-8),
         jnp.array(1e-8),
         np.float64(1e-8),
     )
     like_tree = (
         jnp.array(2.0),
-        bfloat16(2),
+        bfloat16(2),  # pyright: ignore[reportCallIssue]
         np.float32(2),
         jnp.array(2.0),
         np.float64(2.0),
