@@ -59,9 +59,15 @@ class _EnumerationMeta(type):
             _base_offsets=base_offsets,
         )
         if cls_name == "Enumeration" and "Enumeration" not in globals().keys():
+            new_namespace["string"] = namespace.pop("string")
             new_namespace["promote"] = namespace.pop("promote")
             new_namespace["where"] = namespace.pop("where")
         else:
+            if "string" in namespace:
+                raise ValueError(
+                    "Cannot have enumeration item with name `string`, as this "
+                    "conflicts with the classmethod of this name"
+                )
             if "promote" in namespace:
                 raise ValueError(
                     "Cannot have enumeration item with name `promote`, as this "
@@ -207,15 +213,16 @@ if TYPE_CHECKING:
     from typing import ClassVar
     from typing_extensions import Self
 
-    class _Sequence(type):
-        def __getitem__(cls, item) -> str: ...
-
+    class _HasLen(type):
         def __len__(cls) -> int: ...
 
-    class Enumeration(enum.Enum, EnumerationItem, metaclass=_Sequence):  # pyright: ignore
+    class Enumeration(enum.Enum, EnumerationItem, metaclass=_HasLen):  # pyright: ignore
         _name_to_item: ClassVar[dict[str, EnumerationItem]]  # pyright: ignore
         _index_to_message: ClassVar[list[str]]  # pyright: ignore
         _base_offsets: ClassVar[dict["Enumeration", int]]
+
+        @classmethod
+        def string(cls, item: "Enumeration") -> str: ...
 
         @classmethod
         def promote(cls, item: "Enumeration") -> Self: ...
@@ -262,10 +269,10 @@ else:
         print(RESULTS.success)  # RESULTS<Hurrah!>
         ```
 
-        Given a Enumeration element, just the string can be looked up by indexing it:
+        Given an Enumeration element, just the string message can be looked up:
         ```python
         result = RESULTS.success
-        print(RESULTS[result])  # Hurrah!
+        print(RESULTS.string(result))  # Hurrah!
         ```
 
         Enumerations support inheritance, to include all of the superclasses' fields as
@@ -291,6 +298,37 @@ else:
         this is equivalent to `x = eqx.error_if(x, pred, msg)`, where `msg` is the
         string corresponding to the enumeration item.
         """
+
+        @classmethod
+        def string(cls, item: _Enumeration) -> str:
+            """Look up the string associated with an enum element.
+
+            !!! Example
+
+                ```python
+                class RESULTS(eqx.Enumeration):
+                    success = "success"
+                    linear_solve_failed = "Linear solve failed to converge"
+
+                result = RESULTS.linear_solve_failed
+                assert RESULTS.string(result) == "Linear solve failed to converge"
+                ```
+
+            **Arguments:**
+
+            - `item`: a member of the enumeration.
+
+            **Returns:**
+
+            If `item` is outside of JIT, then the string associated with the enum (from
+            the right hand side of the equals sign during its definition).
+
+            If `item` is a traced JAX value (inside of JIT), then the string "traced" is
+            returned.
+            """
+            # Wrap old API with new API, see
+            # https://github.com/patrick-kidger/equinox/issues/1121.
+            return cls[item]
 
         @classmethod
         def promote(cls, item: _Enumeration) -> _Enumeration:
