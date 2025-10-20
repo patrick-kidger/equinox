@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from typing import Any, overload, TypeVar
+from typing import Any, Final, overload, TypeVar
 
 import jax
 import jax.core
@@ -19,12 +19,15 @@ AxisSpec = bool | Callable[[Any], bool]
 
 # Workaround https://github.com/patrick-kidger/equinox/issues/1095 in a backward
 # compatible manner.
-_array_types = (np.ndarray, np.generic, jax.Array)  # JAX < 0.7.2
+_NDARRAY_TYPES: Final = (np.ndarray, np.generic)
+_ARRAY_TYPES = (*_NDARRAY_TYPES, jax.Array)  # JAX < 0.7.2
 
 try:  # JAX 0.7.2
-    from jax._src.literals import LiteralArray
+    from jax._src.literals import (
+        LiteralArray,  # pyright: ignore[reportAttributeAccessIssue]
+    )
 
-    _array_types += (LiteralArray,)
+    _ARRAY_TYPES += (LiteralArray,)
 except ImportError:
     pass
 
@@ -33,33 +36,33 @@ try:  # JAX > 0.7.2
         TypedNdArray,  # pyright: ignore[reportAttributeAccessIssue]
     )
 
-    _array_types += (TypedNdArray,)
+    _ARRAY_TYPES += (TypedNdArray,)
 except ImportError:
     pass
 
 
 def is_array(element: Any) -> bool:
     """Returns `True` if `element` is a JAX array or NumPy array."""
-    return isinstance(element, _array_types)
+    return isinstance(element, _ARRAY_TYPES)
 
 
 # Chosen to match
 # https://github.com/google/jax/blob/4a17c78605e7fc69a69a999e2f6298db79d3837a/jax/_src/numpy/lax_numpy.py#L542  # noqa: E501
-_array_like_types = (*_array_types, float, complex, bool, int)
+_ARRAY_LIKE_TYPES: Final = (*_ARRAY_TYPES, float, complex, bool, int)
 
 
 def is_array_like(element: Any) -> bool:
     """Returns `True` if `element` is a JAX array, a NumPy array, or a Python
     `float`/`complex`/`bool`/`int`.
     """
-    return isinstance(element, _array_like_types) or hasattr(element, "__jax_array__")
+    return isinstance(element, _ARRAY_LIKE_TYPES) or hasattr(element, "__jax_array__")
 
 
 def is_inexact_array(element: Any) -> bool:
     """Returns `True` if `element` is an inexact (i.e. floating or complex) JAX/NumPy
     array.
     """
-    if isinstance(element, (np.ndarray, np.generic)):
+    if isinstance(element, _NDARRAY_TYPES):
         return bool(np.issubdtype(element.dtype, np.inexact))
     elif isinstance(element, jax.Array):
         return jnp.issubdtype(element.dtype, jnp.inexact)
@@ -73,7 +76,7 @@ def is_inexact_array_like(element: Any) -> bool:
     """
     if hasattr(element, "__jax_array__"):
         element = element.__jax_array__()
-    if isinstance(element, (np.ndarray, np.generic)):
+    if isinstance(element, _NDARRAY_TYPES):
         return bool(np.issubdtype(element.dtype, np.inexact))
     elif isinstance(element, jax.Array):
         return jnp.issubdtype(element.dtype, jnp.inexact)
