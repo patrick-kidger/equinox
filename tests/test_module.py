@@ -381,7 +381,8 @@ def test_init_and_postinit():
         def __post_init__(self):
             assert False
 
-    with pytest.warns(UserWarning, match="__init__` method and a `__post_init__"):
+    match = r"`__init__`\s+method and a\s+`__post_init__`"
+    with pytest.warns(UserWarning, match=match):
 
         class Bar(Foo):
             def __init__(self):
@@ -395,7 +396,7 @@ def test_init_and_postinit():
         def __init__(self):
             self.field = 1  # pyright: ignore
 
-    with pytest.warns(UserWarning, match="__init__` method and a `__post_init__"):
+    with pytest.warns(UserWarning, match=match):
 
         class Quux(Qux):
             def __post_init__(self):

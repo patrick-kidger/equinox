@@ -274,6 +274,34 @@ class _IdSet:
 _currently_initialising = _IdSet()
 
 
+_MSG_CUSTOM_INIT_AND_POST_INIT = """
+Class `{cls.__module__}.{cls.__qualname__}` has both an `__init__` method and a
+`__post_init__` method. This means that the `__post_init__` method will not be
+run!
+
+The reason for this is that `__post_init__` is intended to be used with the
+automatically-generated `__init__` method provided by Python dataclasses, which
+are generated of the form:
+
+```
+def __init__(self, field1, field2)
+    self.field1 = field1
+    self.field2 = field2
+    self.__post_init__()
+```
+
+and as such a user-provided `__init__` overrides both the setting of fields, and
+the calling of `__post_init__`.
+
+The above is how Python dataclasses work, and has nothing to do with Equinox!
+
+If you are using `__post_init__` to check that certain invariants hold, then
+consider using `__check_init__` instead. This is an Equinox-specific extension
+that is always ran. See here for more details:
+https://docs.kidger.site/equinox/api/module/advanced_fields/#checking-invariants
+"""[1:]
+
+
 # This deliberately does not pass `frozen_default=True`, as that clashes with custom
 # `__init__` methods.
 @dataclass_transform(field_specifiers=(dataclasses.field, field))
@@ -339,30 +367,7 @@ class _ModuleMeta(BetterABCMeta):
         _has_dataclass_init[cls] = has_dataclass_init
         # Check before `dataclass` adds an `__init__` method.
         if not has_dataclass_init and hasattr(cls, "__post_init__"):
-            warnings.warn(
-                f"Class `{cls.__module__}.{cls.__qualname__}` has both an "
-                "`__init__` method and a `__post_init__` method. This means that "
-                "the `__post_init__` method will not be run!\n"
-                "The reason for this is that `__post_init__` is intended to be "
-                "used with the automatically-generated `__init__` method provided "
-                "by Python dataclasses, which are generated of the form:\n"
-                "```\n"
-                "def __init__(self, field1, field2)\n"
-                "    self.field1 = field1\n"
-                "    self.field2 = field2\n"
-                "    self.__post_init__()\n"
-                "```\n"
-                "and as such a user-provided `__init__` overrides both the setting "
-                "of fields, and the calling of `__post_init__`.\n"
-                "The above is how Python dataclasses work, and has nothing "
-                "to do with Equinox!\n"
-                "If you are using `__post_init__` to check that certain invariants "
-                "hold, then consider using `__check_init__` instead. This is an "
-                "Equinox-specific extension that is always ran. See here for more "
-                "details: "
-                "https://docs.kidger.site/equinox/api/module/advanced_fields/#checking-invariants",  # noqa: E501
-                stacklevel=2,
-            )
+            warnings.warn(_MSG_CUSTOM_INIT_AND_POST_INIT.format(cls=cls), stacklevel=2)
         if has_dataclass_init:
             init_doc = cls.__init__.__doc__
 
