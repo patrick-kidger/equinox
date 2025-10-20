@@ -12,7 +12,7 @@ repos:
     hooks:
       - id: ruff-format # formatter
         types_or: [python, pyi, jupyter, toml]
-      - id: ruff # linter
+      - id: ruff-check # linter
         types_or: [python, pyi, jupyter, toml]
         args: [--fix]
   - repo: https://github.com/RobertCraigie/pyright-python
