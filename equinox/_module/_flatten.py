@@ -1,10 +1,5 @@
 """Utilities for generating optimized flatten/unflatten functions for Module."""
 
-__all__ = (
-    "WRAPPER_FIELD_NAMES",
-    "generate_flatten_functions",
-)
-
 import dataclasses
 import textwrap
 from typing import Any, Final, TypeVar
@@ -14,7 +9,7 @@ import jax.tree_util as jtu
 
 MISSING = object()
 
-WRAPPER_FIELD_NAMES: Final = (
+_WRAPPER_FIELD_NAMES: Final = (
     "__module__",
     "__name__",
     "__qualname__",
@@ -27,7 +22,7 @@ INDENT: Final = 4
 FIELDS_INFO = f"""
     Dynamic fields: {{dynamic}}
     Static fields: {{static}}
-    Wrapper fields: {WRAPPER_FIELD_NAMES}
+    Wrapper fields: {_WRAPPER_FIELD_NAMES}
 """[1:-1]  # (trim leading and trailing newlines)
 
 
@@ -86,7 +81,7 @@ if (aux[{i}] is not MISSING) and (getattr(self,{name!r},MISSING) != aux[{i}]):
 """[1:-1]  # (trim leading and trailing newlines)
 
 SET_WRAPPER_LINES = "\n".join(
-    SET_WRAPPER_BASE.format(i=i, name=k) for i, k in enumerate(WRAPPER_FIELD_NAMES)
+    SET_WRAPPER_BASE.format(i=i, name=k) for i, k in enumerate(_WRAPPER_FIELD_NAMES)
 )
 
 NS_BASE = {"object": object, "Any": Any, "tuple": tuple, "MISSING": MISSING}
@@ -102,7 +97,7 @@ def make_tuple_type(count: int, element_type: str = "Any") -> str:
         return f"tuple[{', '.join([element_type] * count)}]"
 
 
-def generate_flatten_functions(cls: type, fields: tuple[dataclasses.Field[Any], ...]):
+def _generate_flatten_functions(cls: type, fields: tuple[dataclasses.Field[Any], ...]):
     """Generate optimized flatten/unflatten functions for a specific field config."""
     # Separate dynamic and static fields
     _dynamic_fs, _static_fs = [], []
@@ -112,7 +107,7 @@ def generate_flatten_functions(cls: type, fields: tuple[dataclasses.Field[Any], 
         else:
             _dynamic_fs.append(f.name)
     dynamic_fs, static_fs = tuple(_dynamic_fs), tuple(_static_fs)
-    # aux_fs = WRAPPER_FIELD_NAMES + static_fs
+    # aux_fs = _WRAPPER_FIELD_NAMES + static_fs
 
     # Build field info for docs
     fields_info = FIELDS_INFO.format(dynamic=dynamic_fs, static=static_fs)[INDENT:]
@@ -201,7 +196,7 @@ def generate_flatten_functions(cls: type, fields: tuple[dataclasses.Field[Any], 
     # Set static fields from aux_data
     unflatten_lines.extend(
         SET_AUX_BASE.format(i=i, name=k)
-        # for i, k in enumerate(static_fs, start=len(WRAPPER_FIELD_NAMES))
+        # for i, k in enumerate(static_fs, start=len(_WRAPPER_FIELD_NAMES))
         for i, k in enumerate(static_fs, start=0)
     )
 
