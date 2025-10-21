@@ -6,7 +6,7 @@ import jax.tree_util as jtu
 from jaxtyping import PyTreeDef
 
 from ._field import field
-from ._module import Module, WRAPPER_FIELD_NAMES
+from ._module import _WRAPPER_FIELD_NAMES, Module
 
 
 # Not using `jax.tree_util.Partial` as it doesn't implement __eq__ very well. See #480.
@@ -20,7 +20,7 @@ class BoundMethod(Module):
     __self__: Module
 
     def __post_init__(self):
-        for field_name in WRAPPER_FIELD_NAMES:
+        for field_name in _WRAPPER_FIELD_NAMES:
             try:
                 value = getattr(self.__func__, field_name)
             except AttributeError:

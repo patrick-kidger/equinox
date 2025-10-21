@@ -18,7 +18,7 @@ from .._pretty_print import tree_pformat
 from .._tree import tree_equal
 from ._better_abstract import better_dataclass, BetterABCMeta
 from ._field import field
-from ._flatten import generate_flatten_functions, WRAPPER_FIELD_NAMES
+from ._flatten import _generate_flatten_functions, _WRAPPER_FIELD_NAMES
 
 
 # Legacy compatibility API, passed to `strict` below.
@@ -303,7 +303,7 @@ class _ModuleMeta(BetterABCMeta):
 
         # Generate optimized flatten/unflatten functions
         flatten_func, flatten_with_keys_func, unflatten_func = (
-            generate_flatten_functions(cls, fields)  # pyright: ignore[reportArgumentType]
+            _generate_flatten_functions(cls, fields)  # pyright: ignore[reportArgumentType]
         )
 
         jtu.register_pytree_with_keys(
@@ -540,7 +540,7 @@ class Module(Hashable, metaclass=_ModuleMeta):
             if self in _currently_initialising:
                 allowed_names = frozenset(
                     {f.name for f in dataclasses.fields(self)}
-                ).union(WRAPPER_FIELD_NAMES)
+                ).union(_WRAPPER_FIELD_NAMES)
                 if name in allowed_names:
                     _error_method_assignment(self, value)
                     _warn_jax_transformed_function(type(self), value)
@@ -660,7 +660,7 @@ def module_update_wrapper(
     # PyTree.
     _currently_initialising.add(wrapper)
     try:
-        for field_name in WRAPPER_FIELD_NAMES:
+        for field_name in _WRAPPER_FIELD_NAMES:
             try:
                 value = getattr(wrapped, field_name)
             except AttributeError:
