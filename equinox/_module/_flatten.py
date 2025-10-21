@@ -34,7 +34,10 @@ def flatten(obj: module_cls) -> {return_annotation}:
     
     {fields_info}
     """
-    return {dynamic_vals}, {aux}
+    return (
+        {dynamic_vals},
+        {aux}
+    )
 '''
 
 FLAT_KEYS_NAME = "<generated_flatten_with_keys_{0}>"
@@ -45,7 +48,10 @@ def flatten_with_keys(obj: module_cls) -> {return_annotation}:
     
     {fields_info}
     """
-    return {key_tuple}, {aux}
+    return (
+        {key_tuple},
+        {aux}
+    )
 '''
 
 UNFLAT_NAME = "<generated_unflatten_{0}>"
@@ -155,6 +161,7 @@ def _generate_flatten_functions(cls: type, fields: tuple[dataclasses.Field[Any],
     exec(compile(flat_code, FLAT_FUNC_NAME.format(clsname), "exec"), flat_ns)
     flat_fn = flat_ns["flatten"]
     flat_fn.__module__ = module_name
+    flat_fn.__source__ = flat_code
 
     # -------------------------------------------
     # Generate flatten_with_keys function
@@ -179,6 +186,7 @@ def _generate_flatten_functions(cls: type, fields: tuple[dataclasses.Field[Any],
     exec(compile(flat_w_keys_code, FLAT_KEYS_NAME.format(clsname), "exec"), flat_ns)
     flat_w_keys_fn = flat_ns["flatten_with_keys"]
     flat_w_keys_fn.__module__ = module_name
+    flat_w_keys_fn.__source__ = flat_w_keys_code
 
     # -------------------------------------------
     # Generate unflatten function - directly set fields by index
@@ -214,6 +222,7 @@ def _generate_flatten_functions(cls: type, fields: tuple[dataclasses.Field[Any],
     exec(compile(unflat_code, UNFLAT_NAME.format(clsname), "exec"), unflat_ns)
     unflat_fn = unflat_ns["unflatten"]
     unflat_fn.__module__ = module_name
+    unflat_fn.__source__ = unflat_code
 
     # -------------------------------------------
 
