@@ -40,6 +40,7 @@ wrapper_field_names: Final = {
 
 _abstract_module_registry = weakref.WeakSet()
 _has_dataclass_init = weakref.WeakKeyDictionary()
+_module_info = weakref.WeakKeyDictionary()
 _flatten_sentinel = object()
 
 
@@ -399,6 +400,9 @@ class _ModuleMeta(BetterABCMeta):
         if has_dataclass_init:
             cls.__init__.__doc__ = init_doc  # pyright: ignore[reportPossiblyUnboundVariable]
 
+        # Cache the field names for later use.
+        _module_info[cls] = frozenset(f.name for f in fields)
+
         flattener = _ModuleFlattener(fields)  # pyright: ignore[reportArgumentType]
         jtu.register_pytree_with_keys(
             cls,
@@ -631,15 +635,13 @@ class Module(Hashable, metaclass=_ModuleMeta):
     if not TYPE_CHECKING:
 
         def __setattr__(self, name: str, value: Any) -> None:
-            if self in _currently_initialising:
-                allowed_names = frozenset(
-                    {f.name for f in dataclasses.fields(self)}
-                ).union(wrapper_field_names)
-                if name in allowed_names:
-                    _error_method_assignment(self, value)
-                    _warn_jax_transformed_function(type(self), value)
-                    object.__setattr__(self, name, value)
-                    return
+            if self in _currently_initialising and (
+                name in _module_info[type(self)] or name in wrapper_field_names
+            ):
+                _error_method_assignment(self, value)
+                _warn_jax_transformed_function(type(self), value)
+                object.__setattr__(self, name, value)
+                return
             # Allow:
             # ```
             # class SomeModule(eqx.Module, Generic[T]): ...
