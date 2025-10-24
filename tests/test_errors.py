@@ -107,6 +107,22 @@ def test_nan():
     assert jnp.isnan(y)
 
 
+def test_off_tracetime():
+    @jax.jit
+    def f(x):
+        return eqx.error_if(x, True, "hi", on_error="off")
+
+    _ = f(1.0)
+
+
+def test_off():
+    @jax.jit
+    def f(x, pred):
+        return eqx.error_if(x, pred, "hi", on_error="off")
+
+    _ = f(1.0, True)
+
+
 def test_assert_dce():
     @jax.jit
     def f(x):

@@ -190,7 +190,7 @@ def error_if(
     pred: Bool[ArrayLike, "..."],
     msg: str,
     *,
-    on_error: Literal["default", "raise", "breakpoint", "nan"] = "default",
+    on_error: Literal["default", "raise", "breakpoint", "nan", "off"] = "default",
 ) -> PyTree:
     """Throws an error based on runtime values. Works even under JIT.
 
@@ -222,6 +222,8 @@ def error_if(
             `EQX_ON_ERROR_BREAKPOINT_FRAMES` environment variable to a small integer,
             which specifies how many frames upwards the debugger should capture. The
             JAX bug is triggered when taking too many frames.
+    - `EQX_ON_ERROR=off` turns off all error checking. This is useful for removing
+        performance penalties incurred from use of `error_if`.
 
     After changing an environment variable, the Python process must be restarted.
 
@@ -253,7 +255,7 @@ def branched_error_if(
     index: Int[ArrayLike, "..."],
     msgs: Sequence[str],
     *,
-    on_error: Literal["default", "raise", "breakpoint", "nan"] = "default",
+    on_error: Literal["default", "raise", "breakpoint", "nan", "off"] = "default",
 ) -> PyTree:
     """As [`equinox.error_if`][], but will raise one of
     several `msgs` depending on the value of `index`. If `index` is vmap'd, then the
@@ -275,11 +277,11 @@ def branched_error_if_impl(
     index: Int[ArrayLike, "..."],
     msgs: Sequence[str],
     *,
-    on_error: Literal["default", "raise", "breakpoint", "nan"],
+    on_error: Literal["default", "raise", "breakpoint", "off", "nan"],
 ) -> PyTree:
     if on_error == "default":
         on_error = EQX_ON_ERROR
-    elif on_error not in ("raise", "breakpoint", "nan"):
+    elif on_error not in ("raise", "breakpoint", "off", "nan"):
         raise RuntimeError("Unrecognised value for `on_error`.")
     with jax.ensure_compile_time_eval():
         # This carefully does not perform any JAX operations if `pred` and `index` are
@@ -348,7 +350,7 @@ def assert_dce(
     x: PyTree,
     msg: str,
     *,
-    on_error: Literal["default", "raise", "breakpoint", "nan"] = "default",
+    on_error: Literal["default", "raise", "breakpoint", "off", "nan"] = "default",
 ) -> PyTree:
     """Asserts that a particular array (or PyTree of arrays) is DCE'd."""
 
