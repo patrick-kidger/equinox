@@ -142,6 +142,8 @@ def _error(x, pred, index, *, msgs, on_error, stack):
 
     elif on_error == "nan":
         return lax.cond(pred, ft.partial(jtu.tree_map, _nan_like), lambda y: y, x)
+    elif on_error == "off":
+        return x
     else:
         assert False
 
@@ -312,6 +314,8 @@ def branched_error_if_impl(
                             "`on_error='nan'`)."
                         )
                         return jtu.tree_map(_nan_like, x)
+                    elif on_error == "off":
+                        return x
                     else:
                         assert False
                 # else defer error to runtime, when the index is known.
