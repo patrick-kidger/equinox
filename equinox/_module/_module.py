@@ -399,13 +399,30 @@ class _ModuleMeta(BetterABCMeta):
         if has_dataclass_init:
             cls.__init__.__doc__ = init_doc  # pyright: ignore[reportPossiblyUnboundVariable]
 
-        flattener = _ModuleFlattener(fields)  # pyright: ignore[reportArgumentType]
-        jtu.register_pytree_with_keys(
-            cls,
-            flatten_with_keys=flattener.flatten_with_keys,  # pyright: ignore
-            flatten_func=flattener.flatten,  # pyright: ignore
-            unflatten_func=ft.partial(flattener.unflatten_with_cls, cls),  # pyright: ignore
-        )
+        # Allow for classes to define their own (un)flattening procedures.
+        has_unflatten = hasattr(cls, "tree_unflatten")
+        has_with_keys = hasattr(cls, "tree_flatten_with_keys")
+        has_flatten = hasattr(cls, "tree_flatten")
+
+        if has_unflatten and has_with_keys:
+            cls = jtu.register_pytree_with_keys_class(cls)
+        elif has_unflatten and has_flatten:
+            cls = jtu.register_pytree_node_class(cls)
+        else:
+            # Partial or missing definition: fall back to automatic registration.
+            if has_unflatten or has_with_keys or has_flatten:
+                warnings.warn(
+                    "Class contains partial PyTree definition. "
+                    "Falling back to automatic registration.",
+                    stacklevel=2,
+                )
+            flattener = _ModuleFlattener(fields)  # pyright: ignore[reportArgumentType]
+            jtu.register_pytree_with_keys(
+                cls,
+                flatten_with_keys=flattener.flatten_with_keys,  # pyright: ignore
+                flatten_func=flattener.flatten,  # pyright: ignore
+                unflatten_func=ft.partial(flattener.unflatten_with_cls, cls),  # pyright: ignore
+            )
 
         return cls
 
@@ -665,7 +682,7 @@ class Module(Hashable, metaclass=_ModuleMeta):
             # ```
             # works.
             if (
-                not _is_magic(name)
+                not _is_magic_or_jax_flatten_method(name)
                 and isinstance(out, types.MethodType)
                 and out.__self__ is self
             ):
@@ -673,8 +690,26 @@ class Module(Hashable, metaclass=_ModuleMeta):
             return out
 
 
-def _is_magic(k: str, /) -> bool:
-    return (k.startswith("__") and k.endswith("__")) or (k == "_abc_impl")
+# ===============================================
+
+_MAGIC_NAMES: Final = ("_abc_impl",)
+
+_JAX_FLATTEN_METHOD_NAMES: Final = (
+    "tree_flatten",
+    "tree_flatten_with_keys",
+    "tree_unflatten",
+)
+
+_MAGIC_JAX_FLATTEN_METHOD_NAMES: Final = _MAGIC_NAMES + _JAX_FLATTEN_METHOD_NAMES
+
+
+def _is_magic_or_jax_flatten_method(k: str, /) -> bool:
+    return (
+        k.startswith("__") and k.endswith("__")
+    ) or k in _MAGIC_JAX_FLATTEN_METHOD_NAMES
+
+
+# ===============================================
 
 
 def is_abstract_module(cls: type[Module], /) -> bool:
