@@ -1,7 +1,6 @@
 import dataclasses
 import functools as ft
 import inspect
-import itertools
 import types
 import warnings
 import weakref
@@ -12,16 +11,17 @@ from typing_extensions import dataclass_transform
 import jax
 import jax.tree_util as jtu
 import numpy as np
-from jaxtyping import Array, Bool, PyTree
+from jaxtyping import Array, Bool
 
 from .._filters import is_array, is_array_like, is_inexact_array_like
 from .._pretty_print import tree_pformat
 from .._tree import tree_equal
 from ._better_abstract import better_dataclass, BetterABCMeta
 from ._field import field
+from ._flatten import _generate_flatten_functions, _WRAPPER_FIELD_NAMES
 
 
-# Legacy compatibibility API, passed to `strict` below.
+# Legacy compatibility API, passed to `strict` below.
 def StrictConfig(
     force_abstact: bool = False, **kwargs: object
 ) -> Literal[False] | None:
@@ -29,101 +29,8 @@ def StrictConfig(
     return None if force_abstact else False
 
 
-wrapper_field_names: Final = {
-    "__module__",
-    "__name__",
-    "__qualname__",
-    "__doc__",
-    "__annotations__",
-}
-
-
 _abstract_module_registry = weakref.WeakSet()
 _has_dataclass_init = weakref.WeakKeyDictionary()
-_flatten_sentinel = object()
-
-
-# Used to provide a pretty repr when doing `jtu.tree_structure(SomeModule(...))`.
-@dataclasses.dataclass(slots=True)
-class _FlattenedData:
-    dynamic_field_names: tuple[str, ...]
-    static_fields: tuple[tuple[str, Any], ...]
-    wrapper_fields: tuple[tuple[str, Any], ...]
-
-    def __repr__(self) -> str:
-        return repr((self.dynamic_field_names, self.static_fields))[1:-1]
-
-
-class _ModuleFlattener:
-    __slots__: tuple[str, str] = ("dynamic_fs", "static_fs")
-    dynamic_fs: tuple[str, ...]
-    static_fs: tuple[str, ...]
-
-    def __init__(self, fields: tuple[dataclasses.Field[Any], ...]):
-        dynamic_fs = []
-        static_fs = []
-        for f in fields:
-            if f.metadata.get("static", False):
-                static_fs.append(f.name)
-            else:
-                dynamic_fs.append(f.name)
-        self.dynamic_fs = tuple(dynamic_fs)
-        self.static_fs = tuple(static_fs)
-
-    def flatten(self, obj: "Module") -> tuple[tuple[PyTree, ...], _FlattenedData]:
-        get = obj.__dict__.get
-        dynamic_fs = []
-        dynamic_vs = []
-        for k in self.dynamic_fs:
-            v = get(k, _flatten_sentinel)
-            if v is _flatten_sentinel:
-                continue
-            dynamic_fs.append(k)
-            dynamic_vs.append(v)
-        aux = _FlattenedData(
-            tuple(dynamic_fs),
-            tuple([(k, get(k, _flatten_sentinel)) for k in self.static_fs]),
-            tuple([(k, get(k, _flatten_sentinel)) for k in wrapper_field_names]),
-        )
-        return tuple(dynamic_vs), aux
-
-    def flatten_with_keys(
-        self, obj: "Module"
-    ) -> tuple[tuple[tuple[Any, PyTree], ...], _FlattenedData]:
-        get = obj.__dict__.get
-        dynamic_fs = []
-        dynamic_vs = []
-        for k in self.dynamic_fs:
-            v = get(k, _flatten_sentinel)
-            if v is _flatten_sentinel:
-                continue
-            dynamic_fs.append(k)
-            dynamic_vs.append((jtu.GetAttrKey(k), v))
-        aux = _FlattenedData(
-            tuple(dynamic_fs),
-            tuple([(k, get(k, _flatten_sentinel)) for k in self.static_fs]),
-            tuple([(k, get(k, _flatten_sentinel)) for k in wrapper_field_names]),
-        )
-        return tuple(dynamic_vs), aux
-
-    @staticmethod
-    def unflatten_with_cls(
-        module_cls: type["Module"],
-        aux: _FlattenedData,
-        dynamic_field_values: tuple[PyTree, ...],
-    ) -> "Module":
-        # This doesn't go via `__init__`. A user may have done something
-        # nontrivial there, and the field values may be dummy values as used in
-        # various places throughout JAX. See also
-        # https://jax.readthedocs.io/en/latest/pytrees.html#custom-pytrees-and-initialization,
-        # which was (I believe) inspired by Equinox's approach here.
-        module = object.__new__(module_cls)
-        for name, value in zip(aux.dynamic_field_names, dynamic_field_values):
-            object.__setattr__(module, name, value)
-        for name, value in itertools.chain(aux.static_fields, aux.wrapper_fields):
-            if value is not _flatten_sentinel:
-                object.__setattr__(module, name, value)
-        return module
 
 
 MSG_METHOD_IN_INIT: Final = """Cannot assign methods in __init__.
@@ -315,7 +222,7 @@ class _ModuleMeta(BetterABCMeta):
         is_abstract: bool = False,
         strict: None | bool = False,
         **kwargs: object,
-    ) -> type["_ModuleMeta"]:
+    ):
         if strict is None:
             # Legacy compatibility API. Checking that this has the desired behaviour:
             #
@@ -399,12 +306,16 @@ class _ModuleMeta(BetterABCMeta):
         if has_dataclass_init:
             cls.__init__.__doc__ = init_doc  # pyright: ignore[reportPossiblyUnboundVariable]
 
-        flattener = _ModuleFlattener(fields)  # pyright: ignore[reportArgumentType]
+        # Generate optimized flatten/unflatten functions
+        flatten_func, flatten_with_keys_func, unflatten_func = (
+            _generate_flatten_functions(cls, fields)  # pyright: ignore[reportArgumentType]
+        )
+
         jtu.register_pytree_with_keys(
             cls,
-            flatten_with_keys=flattener.flatten_with_keys,  # pyright: ignore
-            flatten_func=flattener.flatten,  # pyright: ignore
-            unflatten_func=ft.partial(flattener.unflatten_with_cls, cls),  # pyright: ignore
+            flatten_with_keys=flatten_with_keys_func,  # pyright: ignore
+            flatten_func=flatten_func,  # pyright: ignore
+            unflatten_func=ft.partial(unflatten_func, cls),  # pyright: ignore
         )
 
         return cls
@@ -634,7 +545,7 @@ class Module(Hashable, metaclass=_ModuleMeta):
             if self in _currently_initialising:
                 allowed_names = frozenset(
                     {f.name for f in dataclasses.fields(self)}
-                ).union(wrapper_field_names)
+                ).union(_WRAPPER_FIELD_NAMES)
                 if name in allowed_names:
                     _error_method_assignment(self, value)
                     _warn_jax_transformed_function(type(self), value)
@@ -754,7 +665,7 @@ def module_update_wrapper(
     # PyTree.
     _currently_initialising.add(wrapper)
     try:
-        for field_name in wrapper_field_names:
+        for field_name in _WRAPPER_FIELD_NAMES:
             try:
                 value = getattr(wrapped, field_name)
             except AttributeError:
