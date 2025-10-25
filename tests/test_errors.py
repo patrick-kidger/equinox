@@ -110,9 +110,9 @@ def test_nan():
 def test_off_tracetime():
     @jax.jit
     def f(x):
-        return eqx.error_if(x, True, "hi", on_error="off")
+        return eqx.error_if(x, True, "hi", on_error="off") + 1
 
-    _ = f(1.0)
+    assert jnp.isclose(f(1.0), 2.0)
 
 
 def test_off():
@@ -120,7 +120,7 @@ def test_off():
     def f(x, pred):
         return eqx.error_if(x, pred, "hi", on_error="off")
 
-    _ = f(1.0, True)
+    assert jnp.isclose(f(1.0, True), 1.0)
 
 
 def test_assert_dce():
