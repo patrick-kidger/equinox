@@ -98,3 +98,6 @@ Differential evolution–based global optimization (with support for parallel ev
 
 **Typinox**: [GitHub](https://github.com/EtaoinWu/typinox) [Docs](https://typinox.readthedocs.io/latest/)  
 Enhanced `beartype` run-time typechecking for `jaxtyping` annotated `equinox` Modules.
+
+**Oncequinox**: [Github](https://github.com/GalacticDynamics/oncequinox)  
+Micro-library for making Equinox singletons.
