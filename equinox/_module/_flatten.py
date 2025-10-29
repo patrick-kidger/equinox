@@ -2,12 +2,19 @@
 
 import dataclasses
 import textwrap
-from typing import Any, Final, TypeVar
+from enum import Enum
+from typing import Any, Final, Literal, TypeVar
 
 import jax.tree_util as jtu
 
 
-MISSING = object()
+class Sentinel(Enum):
+    """Sentinel values for flattening/unflattening."""
+
+    MISSING = "MISSING"
+
+
+MISSING = Sentinel.MISSING
 
 _WRAPPER_FIELD_NAMES: Final = (
     "__module__",
@@ -17,7 +24,7 @@ _WRAPPER_FIELD_NAMES: Final = (
     "__annotations__",
 )
 
-INDENT: Final = 4
+INDENT: Final = " " * 4
 
 FIELDS_INFO = f"""
     Dynamic fields: {{dynamic}}
@@ -27,47 +34,49 @@ FIELDS_INFO = f"""
 
 
 FLAT_FUNC_NAME = "<generated_flatten_{0}>"
-
-FLAT_CODE_BASE = '''
-def flatten(obj: module_cls) -> {return_annotation}:
-    """Generated flatten function for {qualname}.
-    
-    {fields_info}
-    """
-    return (
-        {dynamic_vals},
-        {aux}
-    )
-'''
-
 FLAT_KEYS_NAME = "<generated_flatten_with_keys_{0}>"
-
-FLAT_WITH_KEYS_CODE_BASE = '''
-def flatten_with_keys(obj: module_cls) -> {return_annotation}:
-    """Generated flatten_with_keys function for {qualname}.
+FLAT_WRAPPER = ", ".join(
+    [f"getattr(self, {name!r}, MISSING)" for name in _WRAPPER_FIELD_NAMES]
+)
+FLAT_CODE_BASE = f'''
+def {{func_name}}(obj: module_cls) -> {{return_annotation}}:
+    """Generated {{func_name}} function for {{qualname}}.
     
-    {fields_info}
+{{fields_info}}
     """
     return (
-        {key_tuple},
-        {aux}
+        {{dynamic_vals}},
+        (
+            MISSING if '__module__' not in obj.__dict__ else ({FLAT_WRAPPER}),
+            {{static_vals}}
+        )
     )
 '''
+
 
 UNFLAT_NAME = "<generated_unflatten_{0}>"
 
-UNFLAT_FUNC_BASE = '''
+UNFLAT_WRAPPERS: Final = "\n".join(
+    f"self.__dict__[{name}] = waux[{i}]" for i, name in enumerate(_WRAPPER_FIELD_NAMES)
+)
+
+UNFLAT_FUNC_BASE = f'''
 def unflatten(
     module_cls: type[T],
-    aux: {aux_type},
-    data: {dynamic_type},
+    aux: {{aux_type}},
+    data: {{dynamic_type}},
 ) -> T:
-    """Generated unflatten function for {qualname}.
+    """Generated unflatten function for {{qualname}}.
 
-    {fields_info}
+{{fields_info}}
     """
     self = object.__new__(module_cls)
-    {setters}
+    # Set fields directly by index
+{{setters_dynamic}}
+    if aux[0] is not MISSING:
+        waux = aux[0]
+{textwrap.indent(UNFLAT_WRAPPERS, INDENT * 2)}
+{{setters_static}}
     return self
 '''
 
@@ -81,14 +90,13 @@ if aux[{i}] is not MISSING:
     object.__setattr__(self, {name!r}, aux[{i}])
 """[1:-1]  # (trim leading and trailing newlines)
 
-SET_WRAPPER_LINES = f"""
-if aux[0] is not MISSING:
-    waux = aux[0]
-    for i, name in enumerate({_WRAPPER_FIELD_NAMES!r}):
-        self.__dict__[name] = waux[i]
-"""[1:-1]  # (trim leading and trailing newlines)
-
-NS_BASE = {"object": object, "Any": Any, "tuple": tuple, "MISSING": MISSING}
+NS_BASE = {
+    "object": object,
+    "Any": Any,
+    "tuple": tuple,
+    "Literal": Literal,
+    "MISSING": MISSING,
+}
 
 
 def make_tuple_type(count: int, element_type: str = "Any") -> str:
@@ -114,7 +122,7 @@ def _generate_flatten_functions(cls: type, fields: tuple[dataclasses.Field[Any],
     # aux_fs = _WRAPPER_FIELD_NAMES + static_fs
 
     # Build field info for docs
-    fields_info = FIELDS_INFO.format(dynamic=dynamic_fs, static=static_fs)[INDENT:]
+    fields_info = FIELDS_INFO.format(dynamic=dynamic_fs, static=static_fs)
 
     # Extract the generated functions from respective namespaces to
     # set the proper module reference.
@@ -130,31 +138,23 @@ def _generate_flatten_functions(cls: type, fields: tuple[dataclasses.Field[Any],
     else:
         dynamic_vals = "()"
 
-    # # For wrapper fields we only need to
-    wrapper_exprs = ", ".join(
-        [f"getattr(self, {name!r}, MISSING)" for name in _WRAPPER_FIELD_NAMES]
-    )
-
     # For static fields, we need to store their values in aux data
     static_exprs = [f"getattr(obj, {k!r}, MISSING)" for k in static_fs]
-    aux_vals = (
-        "("
-        f"MISSING if '__module__' not in obj.__dict__ else ({wrapper_exprs}), "
-        + f"{', '.join(static_exprs)}"
-        + ")"
-    )
+    static_vals = f"{', '.join(static_exprs)}"
 
     # Build return type annotation
     dynamic_type = make_tuple_type(len(dynamic_fs))
-    static_type = make_tuple_type(len(static_fs) + 1)  # +1 for wrapper aux
+    wrapper_type = "Literal[MISSING]|tuple[Any, ...]"
+    static_type = f"tuple[{wrapper_type}, {', '.join(['Any'] * len(static_fs))}]"
     clsname = cls.__qualname__
 
     flat_code = FLAT_CODE_BASE.format(
+        func_name="flatten",
         return_annotation=f"tuple[{dynamic_type}, {static_type}]",
         qualname=clsname,
         fields_info=fields_info,
         dynamic_vals=dynamic_vals,
-        aux=aux_vals,
+        static_vals=static_vals,
     )
 
     # Namespace for flatten functions (they need module_cls)
@@ -177,12 +177,13 @@ def _generate_flatten_functions(cls: type, fields: tuple[dataclasses.Field[Any],
 
     keys_dynamic_type = make_tuple_type(len(dynamic_fs), "tuple[jtu.GetAttrKey, str]")
 
-    flat_w_keys_code = FLAT_WITH_KEYS_CODE_BASE.format(
+    flat_w_keys_code = FLAT_CODE_BASE.format(
+        func_name="flatten_with_keys",
         return_annotation=f"tuple[{keys_dynamic_type}, {static_type}]",
         qualname=clsname,
         fields_info=fields_info,
-        key_tuple=dynamic_key_vals,
-        aux=aux_vals,
+        dynamic_vals=dynamic_key_vals,
+        static_vals=static_vals,
     )
 
     # flatten with keys func
@@ -195,26 +196,23 @@ def _generate_flatten_functions(cls: type, fields: tuple[dataclasses.Field[Any],
     # Generate unflatten function - directly set fields by index
     # Extract types from flatten return type: tuple[dynamic_type, static_type]
 
-    unflatten_lines: list[str] = []
-    if dynamic_fs or static_fs:
-        unflatten_lines.append("# Set dynamic fields directly by index")
     # Set dynamic fields directly by index
-    unflatten_lines.extend(
+    unflat_dynamic = [
         SET_DYNAMIC_BASE.format(i=i, name=k) for i, k in enumerate(dynamic_fs)
-    )
-    # # Set wrapper fields from aux_data
-    unflatten_lines.append(SET_WRAPPER_LINES)
-    # Set static fields from aux_data
-    unflatten_lines.extend(
+    ]
+    # Set static fields from aux_data by index. Offset by 1 for wrapper
+    # auxiliary field.
+    unflat_aux = [
         SET_AUX_BASE.format(i=i, name=k) for i, k in enumerate(static_fs, start=1)
-    )
+    ]
 
     unflat_code = UNFLAT_FUNC_BASE.format(
         aux_type=static_type,
         dynamic_type=dynamic_type,
         qualname=clsname,
         fields_info=fields_info,
-        setters=textwrap.indent("\n".join(unflatten_lines), " " * INDENT)[INDENT:],
+        setters_dynamic=textwrap.indent("\n".join(unflat_dynamic), INDENT),
+        setters_static=textwrap.indent("\n".join(unflat_aux), INDENT),
     )
 
     # Namespace for unflatten function (takes module_cls as parameter)
