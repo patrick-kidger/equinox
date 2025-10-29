@@ -207,11 +207,25 @@ def test_getitem():
     class B(eqxi.Enumeration):
         b = "bye"
 
-    A[A.a]
+    assert A[A.a] == "hi"
     with pytest.raises(ValueError):
         A[0]
     with pytest.raises(ValueError):
         A[B.b]
+
+
+def test_string():
+    class A(eqxi.Enumeration):
+        a = "hi"
+
+    class B(eqxi.Enumeration):
+        b = "bye"
+
+    assert A.string(A.a) == "hi"
+    with pytest.raises(ValueError):
+        A.string(0)  # pyright: ignore[reportArgumentType]
+    with pytest.raises(ValueError):
+        A.string(B.b)
 
 
 def test_isinstance():
