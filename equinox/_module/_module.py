@@ -181,7 +181,7 @@ def _error_method_assignment(self, value: object, /) -> None:
         raise ValueError(MSG_METHOD_IN_INIT)
 
 
-_transform_types = {
+_transform_types: set[type] = {
     type(transform(lambda x: x))
     for transform in (
         jax.jit,
@@ -208,7 +208,7 @@ def _is_array_like(x: object, /) -> None:
         raise _JaxTransformException
 
 
-MSG_JAX_XFM_FUNC: Final = """
+_MSG_JAX_XFM_FUNC: Final = """
 Possibly assigning a JAX-transformed callable as an attribute on
 {0}.{1}. This will not have any of its parameters updated.
 
@@ -263,7 +263,7 @@ def _warn_jax_transformed_function(cls: "_ModuleMeta", x: object) -> None:
                 jtu.tree_map(_is_array_like, x)
             except _JaxTransformException:
                 warnings.warn(
-                    MSG_JAX_XFM_FUNC.format(cls.__module__, cls.__qualname__),
+                    _MSG_JAX_XFM_FUNC.format(cls.__module__, cls.__qualname__),
                     stacklevel=3,
                 )
                 break
@@ -316,6 +316,44 @@ If you are using `__post_init__` to check that certain invariants hold, then
 consider using `__check_init__` instead. This is an Equinox-specific extension
 that is always ran. See here for more details:
 https://docs.kidger.site/equinox/api/module/advanced_fields/#checking-invariants
+"""[1:]
+
+
+_MSG_FIELD_INIT_FALSE: Final = """
+Using `field(init=False)` on `equinox.Module` can lead to surprising behaviour
+when used around `jax.grad`. In the following example, observe how JAX computes
+gradients with respect to the `.len` attribute (which is a PyTree leaf passed
+across the `jax.grad` boundary) and that there are no gradients with respect to
+`.a` or `.b`:
+
+```
+import equinox as eqx
+import jax
+import jax.numpy as jnp
+
+class Foo(eqx.Module):
+    a: jax.Array
+    b: jax.Array
+    len: jax.Array = eqx.field(init=False)
+
+    def __post_init__(self):
+        self.len = jnp.sqrt(self.a**2 + self.b**2)
+
+    def __call__(self, x):
+        return self.len * x
+
+@jax.jit
+@jax.grad
+def call(module, x):
+    return module(x)
+
+grads = call(Foo(jnp.array(3.0), jnp.array(4.0)), 5)
+# Foo(
+#   a=Array(0., dtype=float32, weak_type=True),
+#   b=Array(0., dtype=float32, weak_type=True),
+#   len=Array(5., dtype=float32, weak_type=True)
+# )
+```
 """[1:]
 
 
@@ -471,44 +509,7 @@ class _ModuleMeta(BetterABCMeta):
                     )
             if not f.init:
                 if any(jtu.tree_map(is_inexact_array_like, jtu.tree_leaves(val))):
-                    warnings.warn(
-                        "Using `field(init=False)` on `equinox.Module` can lead to "
-                        "surprising behaviour when used around `jax.grad`. In the "
-                        "following example, observe how JAX computes gradients with "
-                        "respect to the `.len` attribute (which is a PyTree leaf "
-                        "passed across the `jax.grad` boundary) and that there are no "
-                        "gradients with respect to `.a` or `.b`:\n"
-                        "\n"
-                        "```\n"
-                        "import equinox as eqx\n"
-                        "import jax\n"
-                        "import jax.numpy as jnp\n"
-                        "\n"
-                        "class Foo(eqx.Module):\n"
-                        "    a: jax.Array\n"
-                        "    b: jax.Array\n"
-                        "    len: jax.Array = eqx.field(init=False)\n"
-                        "\n"
-                        "    def __post_init__(self):\n"
-                        "        self.len = jnp.sqrt(self.a**2 + self.b**2)\n"
-                        "\n"
-                        "    def __call__(self, x):\n"
-                        "        return self.len * x\n"
-                        "\n"
-                        "@jax.jit\n"
-                        "@jax.grad\n"
-                        "def call(module, x):\n"
-                        "    return module(x)\n"
-                        "\n"
-                        "grads = call(Foo(jnp.array(3.0), jnp.array(4.0)), 5)\n"
-                        "# Foo(\n"
-                        "#   a=Array(0., dtype=float32, weak_type=True),\n"
-                        "#   b=Array(0., dtype=float32, weak_type=True),\n"
-                        "#   len=Array(5., dtype=float32, weak_type=True)\n"
-                        "# )\n"
-                        "```",
-                        stacklevel=2,
-                    )
+                    warnings.warn(_MSG_FIELD_INIT_FALSE, stacklevel=2)
 
         for parent_cls in cls.__mro__:
             try:
