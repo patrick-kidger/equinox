@@ -730,7 +730,7 @@ def test_init_fields():
     class A(eqx.Module):
         x: int = eqx.field(init=False)
 
-    with pytest.raises(TypeError, match="The following fields were not initialised"):
+    with pytest.raises(TypeError, match="Field 'x' was not initialized."):
         A()
 
     class B(eqx.Module):
@@ -739,7 +739,7 @@ def test_init_fields():
         def __post_init__(self):
             pass
 
-    with pytest.raises(TypeError, match="The following fields were not initialised"):
+    with pytest.raises(TypeError, match="Field 'x' was not initialized."):
         B()
 
     class C(eqx.Module):
@@ -751,7 +751,7 @@ def test_init_fields():
                 self.x = 1
 
     C(flag=True)
-    with pytest.raises(TypeError, match="The following fields were not initialised"):
+    with pytest.raises(TypeError, match="Field 'x' was not initialized."):
         C(flag=False)
 
 

@@ -432,17 +432,14 @@ class _ModuleMeta(BetterABCMeta):
         assert not is_abstract_module(cls)  # pyright: ignore[reportArgumentType]
 
         fields = dataclasses.fields(cls)  # pyright: ignore[reportArgumentType]
-        # Not `vars` or `__dict__`, to allow for `property`s overwriting a field.
-        # Not recommended, but allowable for backward compatibility.
-        dir_self = dir(self)
-        missing_names = {f.name for f in fields if f.name not in dir_self}
-        if len(missing_names) > 0:
-            raise TypeError(
-                f"The following fields were not initialised during __init__: "
-                f"{missing_names}"
-            )
 
         for f in fields:
+            # Check the field was initialized.
+            try:
+                val = getattr(self, f.name)
+            except AttributeError as err:
+                raise TypeError(f"Field {f.name!r} was not initialized.") from err
+
             if (converter := f.metadata.get("converter")) is not None:
                 object.__setattr__(self, f.name, converter(getattr(self, f.name)))
             if f.metadata.get("static", False):
@@ -453,11 +450,7 @@ class _ModuleMeta(BetterABCMeta):
                         stacklevel=2,
                     )
             if not f.init:
-                if any(
-                    jtu.tree_map(
-                        is_inexact_array_like, jtu.tree_leaves(getattr(self, f.name))
-                    )
-                ):
+                if any(jtu.tree_map(is_inexact_array_like, jtu.tree_leaves(val))):
                     warnings.warn(
                         "Using `field(init=False)` on `equinox.Module` can lead to "
                         "surprising behaviour when used around `jax.grad`. In the "
