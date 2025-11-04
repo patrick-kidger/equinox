@@ -6,7 +6,16 @@ import types
 import warnings
 import weakref
 from collections.abc import Callable, Hashable
-from typing import Any, cast, Final, Literal, ParamSpec, TYPE_CHECKING, TypeVar
+from typing import (
+    Any,
+    cast,
+    Final,
+    Literal,
+    NamedTuple,
+    ParamSpec,
+    TYPE_CHECKING,
+    TypeVar,
+)
 from typing_extensions import dataclass_transform
 
 import jax
@@ -42,6 +51,13 @@ _abstract_module_registry = weakref.WeakSet()
 _has_dataclass_init = weakref.WeakKeyDictionary()
 _module_info = weakref.WeakKeyDictionary()
 _flatten_sentinel = object()
+
+
+class _ModuleInfo(NamedTuple):
+    """Holds cached information about a Module subclass."""
+
+    names_tuple: tuple[str, ...]
+    names_set: frozenset[str]
 
 
 # Used to provide a pretty repr when doing `jtu.tree_structure(SomeModule(...))`.
@@ -401,7 +417,11 @@ class _ModuleMeta(BetterABCMeta):
             cls.__init__.__doc__ = init_doc  # pyright: ignore[reportPossiblyUnboundVariable]
 
         # Cache the field names for later use.
-        _module_info[cls] = frozenset(f.name for f in fields)
+        names = tuple(f.name for f in fields)
+        _module_info[cls] = _ModuleInfo(
+            names_tuple=names,
+            names_set=frozenset(names),
+        )
 
         flattener = _ModuleFlattener(fields)  # pyright: ignore[reportArgumentType]
         jtu.register_pytree_with_keys(
@@ -617,9 +637,7 @@ class Module(Hashable, metaclass=_ModuleMeta):
 
     def __hash__(self) -> int:
         return hash(
-            tuple(
-                (f.name, getattr(self, f.name)) for f in dataclasses.fields(type(self))
-            )
+            tuple((k, getattr(self, k)) for k in _module_info[type(self)].names_tuple)
         )
 
     def __eq__(self, other: object, /) -> bool | np.bool_ | Bool[Array, ""]:  # pyright: ignore
@@ -629,7 +647,8 @@ class Module(Hashable, metaclass=_ModuleMeta):
 
         def __setattr__(self, name: str, value: Any) -> None:
             if self in _currently_initialising and (
-                name in _module_info[type(self)] or name in wrapper_field_names
+                name in _module_info[type(self)].names_set
+                or name in wrapper_field_names
             ):
                 _error_method_assignment(self, value)
                 _warn_jax_transformed_function(type(self), value)
