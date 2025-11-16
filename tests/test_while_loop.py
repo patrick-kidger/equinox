@@ -503,15 +503,23 @@ def test_speed_buffer_while(read):
         # Linearize so that we save residuals
         return jax.linearize(loop, init_xs)
 
-    size = 100_000
-    # nontrivial batch size is important to ensure that the `.at[].set()` is really a
-    # scatter, and that XLA doesn't optimise it into a dynamic_update_slice. (Which
-    # can be switched with `select` in the compiler.)
-    args = jnp.array([0, 1]), jnp.zeros((2, size))
-    f(*args)  # compile
+    sizes = [25_000, 50_000, 100_000, 200_000]
+    times = []
 
-    speed = min(timeit.repeat(lambda: f(*args), number=1, repeat=5))
-    assert speed < 2
+    for size in sizes:
+        args = jnp.array([0, 1]), jnp.zeros((2, size))
+        f(*args)
+        speed = min(timeit.repeat(lambda: f(*args), number=1, repeat=3))
+        times.append(speed)
+
+    scaling_ratios = []
+    for i in range(1, len(sizes)):
+        size_ratio = sizes[i] / sizes[i - 1]
+        time_ratio = times[i] / times[i - 1]
+        scaling_ratios.append(time_ratio / size_ratio)
+
+    for ratio in scaling_ratios:
+        assert 0.9 < ratio < 1.1, f"Non-linear scaling detected: ratio={ratio:.2f}"
 
 
 @pytest.mark.skipif(
