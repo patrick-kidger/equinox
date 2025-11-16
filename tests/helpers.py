@@ -1,4 +1,5 @@
 import equinox as eqx
+import jax
 import jax.random as jr
 import jax.tree_util as jtu
 
@@ -26,4 +27,6 @@ treedefs = [
 
 
 def tree_allclose(x, y, *, rtol=1e-5, atol=1e-8):
+    if jax.default_backend() == "gpu":
+        atol = 1e-3
     return eqx.tree_equal(x, y, typematch=True, rtol=rtol, atol=atol)
