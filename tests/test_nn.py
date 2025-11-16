@@ -299,14 +299,33 @@ def test_conv1d(getkey):
 
     # Test value matches
     conv = eqx.nn.Conv1d(1, 3, kernel_size=3, padding=1, key=getkey())
-    new_weight = jnp.arange(9).reshape(3, 1, 3)
-    new_bias = jnp.array([1, 2, 3]).reshape(3, 1)
-    data = jnp.arange(-3, 3).reshape(1, -1)
+    new_weight = jnp.arange(9, dtype=jnp.float32).reshape(3, 1, 3)
+    new_bias = jnp.array([1.0, 2.0, 3.0]).reshape(3, 1)
+    data = jnp.arange(-3, 3, dtype=jnp.float32).reshape(1, -1)
     assert new_weight.shape == conv.weight.shape
     assert new_bias.shape == conv.bias.shape  # pyright: ignore
     conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
     answer = jnp.array(
-        [-6, -3, 0, 3, 6, 3, -20, -20, -8, 4, 16, 13, -34, -37, -16, 5, 26, 23]
+        [
+            -6.0,
+            -3.0,
+            0.0,
+            3.0,
+            6.0,
+            3.0,
+            -20.0,
+            -20.0,
+            -8.0,
+            4.0,
+            16.0,
+            13.0,
+            -34.0,
+            -37.0,
+            -16.0,
+            5.0,
+            26.0,
+            23.0,
+        ]
     ).reshape(3, 6)
     assert jnp.allclose(conv(data), answer)
 
@@ -349,13 +368,15 @@ def test_conv2d(getkey):
 
     # Test value matches
     conv = eqx.nn.Conv2d(1, 1, kernel_size=3, padding=1, key=getkey())
-    new_weight = jnp.arange(9).reshape(1, 1, 3, 3)
-    new_bias = jnp.array([1]).reshape(1, 1, 1)
-    data = jnp.arange(-4, 5).reshape(1, 3, 3)
+    new_weight = jnp.arange(9, dtype=jnp.float32).reshape(1, 1, 3, 3)
+    new_bias = jnp.array([1], dtype=jnp.float32).reshape(1, 1, 1)
+    data = jnp.arange(-4, 5, dtype=jnp.float32).reshape(1, 3, 3)
     assert new_weight.shape == conv.weight.shape
     assert new_bias.shape == conv.bias.shape  # pyright: ignore
     conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
-    answer = jnp.array([-37, -31, -9, 25, 61, 49, 23, 41, 27]).reshape(1, 3, 3)
+    answer = jnp.array(
+        [-37.0, -31.0, -9.0, 25.0, 61.0, 49.0, 23.0, 41.0, 27.0]
+    ).reshape(1, 3, 3)
     assert jnp.allclose(conv(data), answer)
 
     # Test complex value matches
@@ -366,7 +387,9 @@ def test_conv2d(getkey):
     assert new_weight.shape == conv.weight.shape
     assert new_bias.shape == conv.bias.shape  # pyright: ignore
     conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
-    answer = jnp.array([-37, -31, -9, 25, 61, 49, 23, 41, 27]).reshape(1, 3, 3)
+    answer = jnp.array(
+        [-37.0, -31.0, -9.0, 25.0, 61.0, 49.0, 23.0, 41.0, 27.0]
+    ).reshape(1, 3, 3)
     answer = (1 + 1j) * answer.astype(jnp.complex64)
     assert jnp.allclose(conv(data), answer)
 
@@ -376,22 +399,24 @@ def test_conv2d(getkey):
     # and multiply one copy by 2. Also, we modify the bias
     new_weight = jnp.concatenate(
         [
-            1 * jnp.arange(9).reshape(1, 1, 3, 3),
-            2 * jnp.arange(9).reshape(1, 1, 3, 3),
+            1 * jnp.arange(9, dtype=jnp.float32).reshape(1, 1, 3, 3),
+            2 * jnp.arange(9, dtype=jnp.float32).reshape(1, 1, 3, 3),
         ],
         axis=0,
     )
-    new_bias = jnp.array([1, 2]).reshape(2, 1, 1)
+    new_bias = jnp.array([1.0, 2.0]).reshape(2, 1, 1)
 
     data = jnp.broadcast_to(
-        jnp.arange(-4, 5).reshape(1, 3, 3),
+        jnp.arange(-4, 5, dtype=jnp.float32).reshape(1, 3, 3),
         (2, 3, 3),
     )
     assert new_weight.shape == conv.weight.shape
     assert new_bias.shape == conv.bias.shape  # pyright: ignore
     conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
     # this is the multiplication part, without the bias
-    answer_part = jnp.array([-38, -32, -10, 24, 60, 48, 22, 40, 26]).reshape(1, 3, 3)
+    answer_part = jnp.array(
+        [-38.0, -32.0, -10.0, 24.0, 60.0, 48.0, 22.0, 40.0, 26.0]
+    ).reshape(1, 3, 3)
     answer = (
         jnp.concatenate(
             [
@@ -443,13 +468,15 @@ def test_conv3d(getkey):
 
     # Test value matches
     conv = eqx.nn.Conv3d(1, 1, kernel_size=(2, 1, 1), padding=(1, 0, 0), key=getkey())
-    new_weight = jnp.arange(2).reshape(1, 1, 2, 1, 1)
-    new_bias = jnp.array([1]).reshape(1, 1, 1, 1)
-    data = jnp.arange(-4, 4).reshape(1, 2, 2, 2)
+    new_weight = jnp.arange(2, dtype=jnp.float32).reshape(1, 1, 2, 1, 1)
+    new_bias = jnp.array([1.0]).reshape(1, 1, 1, 1)
+    data = jnp.arange(-4, 4, dtype=jnp.float32).reshape(1, 2, 2, 2)
     assert new_weight.shape == conv.weight.shape
     assert new_bias.shape == conv.bias.shape  # pyright: ignore
     conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
-    answer = jnp.array([-3, -2, -1, 0, 1, 2, 3, 4, 1, 1, 1, 1]).reshape(1, 3, 2, 2)
+    answer = jnp.array(
+        [-3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 1.0, 1.0, 1.0, 1.0]
+    ).reshape(1, 3, 2, 2)
     assert jnp.allclose(conv(data), answer)
 
 
@@ -500,38 +527,38 @@ def test_convtranspose1d(getkey):
 
     # Test value matches
     conv = eqx.nn.ConvTranspose1d(1, 3, kernel_size=3, padding=0, key=getkey())
-    new_weight = jnp.arange(9).reshape(3, 1, 3)
-    new_bias = jnp.array([1, 2, 3]).reshape(3, 1)
-    data = jnp.arange(-3, 3).reshape(1, -1)
+    new_weight = jnp.arange(9, dtype=jnp.float32).reshape(3, 1, 3)
+    new_bias = jnp.array([1.0, 2.0, 3.0]).reshape(3, 1)
+    data = jnp.arange(-3, 3, dtype=jnp.float32).reshape(1, -1)
     assert new_weight.shape == conv.weight.shape
     assert new_bias.shape == conv.bias.shape  # pyright: ignore
     conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
     answer = jnp.array(
         [
-            -5,
-            -6,
-            -3,
-            0,
-            3,
-            6,
-            3,
-            1,
-            -13,
-            -20,
-            -20,
-            -8,
-            4,
-            16,
-            13,
-            8,
-            -21,
-            -34,
-            -37,
-            -16,
-            5,
-            26,
-            23,
-            15,
+            -5.0,
+            -6.0,
+            -3.0,
+            0.0,
+            3.0,
+            6.0,
+            3.0,
+            1.0,
+            -13.0,
+            -20.0,
+            -20.0,
+            -8.0,
+            4.0,
+            16.0,
+            13.0,
+            8.0,
+            -21.0,
+            -34.0,
+            -37.0,
+            -16.0,
+            5.0,
+            26.0,
+            23.0,
+            15.0,
         ]
     ).reshape(3, 8)
     assert jnp.all(conv(data) == answer)
@@ -560,13 +587,15 @@ def test_convtranspose2d(getkey):
 
     # Test value matches
     conv = eqx.nn.ConvTranspose2d(1, 1, kernel_size=3, padding=1, key=getkey())
-    new_weight = jnp.arange(9).reshape(1, 1, 3, 3)
-    new_bias = jnp.array([1]).reshape(1, 1, 1)
-    data = jnp.arange(-4, 5).reshape(1, 3, 3)
+    new_weight = jnp.arange(9, dtype=jnp.float32).reshape(1, 1, 3, 3)
+    new_bias = jnp.array([1.0]).reshape(1, 1, 1)
+    data = jnp.arange(-4, 5, dtype=jnp.float32).reshape(1, 3, 3)
     assert new_weight.shape == conv.weight.shape
     assert new_bias.shape == conv.bias.shape  # pyright: ignore
     conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
-    answer = jnp.array([-37, -31, -9, 25, 61, 49, 23, 41, 27]).reshape(1, 3, 3)
+    answer = jnp.array(
+        [-37.0, -31.0, -9.0, 25.0, 61.0, 49.0, 23.0, 41.0, 27.0]
+    ).reshape(1, 3, 3)
     assert jnp.all(conv(data) == answer)
 
     # Test groups
@@ -577,22 +606,24 @@ def test_convtranspose2d(getkey):
     # and multiply one copy by 2. Also, we modify the bias
     new_weight = jnp.concatenate(
         [
-            1 * jnp.arange(9).reshape(1, 1, 3, 3),
-            2 * jnp.arange(9).reshape(1, 1, 3, 3),
+            1 * jnp.arange(9, dtype=jnp.float32).reshape(1, 1, 3, 3),
+            2 * jnp.arange(9, dtype=jnp.float32).reshape(1, 1, 3, 3),
         ],
         axis=0,
     )
-    new_bias = jnp.array([1, 2]).reshape(2, 1, 1)
+    new_bias = jnp.array([1.0, 2.0]).reshape(2, 1, 1)
 
     data = jnp.broadcast_to(
-        jnp.arange(-4, 5).reshape(1, 3, 3),
+        jnp.arange(-4, 5, dtype=jnp.float32).reshape(1, 3, 3),
         (2, 3, 3),
     )
     assert new_weight.shape == conv.weight.shape
     assert new_bias.shape == conv.bias.shape  # pyright: ignore
     conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
     # this is the multiplication part, without the bias
-    answer_part = jnp.array([-38, -32, -10, 24, 60, 48, 22, 40, 26]).reshape(1, 3, 3)
+    answer_part = jnp.array(
+        [-38.0, -32.0, -10.0, 24.0, 60.0, 48.0, 22.0, 40.0, 26.0]
+    ).reshape(1, 3, 3)
     answer = (
         jnp.concatenate(
             [
@@ -631,41 +662,41 @@ def test_convtranspose3d(getkey):
     conv = eqx.nn.ConvTranspose3d(
         1, 1, kernel_size=(2, 2, 2), padding=(0, 0, 0), key=getkey()
     )
-    new_weight = jnp.arange(8).reshape(1, 1, 2, 2, 2)
-    new_bias = jnp.array([1]).reshape(1, 1, 1, 1)
-    data = jnp.arange(-4, 4).reshape(1, 2, 2, 2)
+    new_weight = jnp.arange(8, dtype=jnp.float32).reshape(1, 1, 2, 2, 2)
+    new_bias = jnp.array([1.0]).reshape(1, 1, 1, 1)
+    data = jnp.arange(-4, 4, dtype=jnp.float32).reshape(1, 2, 2, 2)
     assert new_weight.shape == conv.weight.shape
     assert new_bias.shape == conv.bias.shape  # pyright: ignore
     conv = eqx.tree_at(lambda x: (x.weight, x.bias), conv, (new_weight, new_bias))
     answer = jnp.array(
         [
-            -27,
-            -44,
-            -17,
-            -33,
-            -49,
-            -17,
-            -9,
-            -12,
-            -3,
-            -11,
-            -9,
-            1,
-            5,
-            29,
-            21,
-            9,
-            23,
-            13,
-            1,
-            4,
-            3,
-            7,
-            15,
-            7,
-            3,
-            4,
-            1,
+            -27.0,
+            -44.0,
+            -17.0,
+            -33.0,
+            -49.0,
+            -17.0,
+            -9.0,
+            -12.0,
+            -3.0,
+            -11.0,
+            -9.0,
+            1.0,
+            5.0,
+            29.0,
+            21.0,
+            9.0,
+            23.0,
+            13.0,
+            1.0,
+            4.0,
+            3.0,
+            7.0,
+            15.0,
+            7.0,
+            3.0,
+            4.0,
+            1.0,
         ]
     ).reshape(1, 3, 3, 3)
     assert jnp.all(conv(data) == answer)
