@@ -21,7 +21,9 @@ def test_sharding_no_inside_jit():
     mlp = eqx.nn.MLP(2, 2, 2, 2, key=jr.PRNGKey(0))
 
     num_devices = 2
-    mesh = jax.make_mesh((num_devices,), ("x",))
+    mesh = jax.make_mesh(
+        (num_devices,), ("x",), axis_types=(jax.sharding.AxisType.Auto,)
+    )
     sharding = jshard.NamedSharding(mesh, jshard.PartitionSpec("x"))
     sharded_mlp = eqx.filter_shard(mlp, sharding)
     assert _is_committed(eqx.filter(sharded_mlp, eqx.is_array))
@@ -46,7 +48,9 @@ def test_sharding_no_inside_jit():
 def test_sharding_only_inside_jit():
     # Make sharding
     num_devices = 2
-    mesh = jax.make_mesh((num_devices,), ("x",))
+    mesh = jax.make_mesh(
+        (num_devices,), ("x",), axis_types=(jax.sharding.AxisType.Auto,)
+    )
     sharding = jshard.NamedSharding(mesh, jshard.PartitionSpec("x"))
     # Make dummy pytree
     shape = (10 * num_devices,)
