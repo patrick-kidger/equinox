@@ -224,7 +224,7 @@ def test_map_non_jax():
 
     def maybe_replicate(value):
         if eqx.is_array(value):
-            return jax.device_put_replicated(value, [cpu])
+            return jax.device_put(value[None], device=cpu)
         else:
             return value
 
