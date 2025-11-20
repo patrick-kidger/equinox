@@ -465,7 +465,13 @@ def test_speed_while(inplace_op, while_loop):
     # Takes O(10) without optimisation.
     # So we have two orders of magnitude safety margin each way, so the test shouldn't
     # be flaky.
-    assert speed < 0.1
+    if jax.default_backend() != "cpu":
+        # for non-cpu cases and because of the checkpointing, there will be a
+        # large spike as soon as the 50_000 threshold is crossed. Also, the overhead
+        # of moving data to the GPU is much higher, so we give it a much wider margins
+        assert speed < 5.0
+    else:
+        assert speed < 0.1
 
 
 # This tests the possible failure mode of "the buffer doesn't do anything".
