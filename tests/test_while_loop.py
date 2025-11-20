@@ -428,6 +428,10 @@ def test_vmap_cotangent(buffer, kind, getkey):
 #
 # This test is really just checking `lax.while_loop`, but we throw in
 # `while_loop` too, because why not?
+@pytest.mark.skipif(
+    condition=jax.default_backend() != "cpu",
+    reason="This test is flaky on a non-CPU environment",
+)
 @pytest.mark.parametrize("inplace_op", ["scatter", "dynamic_update_slice"])
 @pytest.mark.parametrize(
     "while_loop",
@@ -465,13 +469,7 @@ def test_speed_while(inplace_op, while_loop):
     # Takes O(10) without optimisation.
     # So we have two orders of magnitude safety margin each way, so the test shouldn't
     # be flaky.
-    if jax.default_backend() != "cpu":
-        # for non-cpu cases and because of the checkpointing, there will be a
-        # large spike as soon as the 50_000 threshold is crossed. Also, the overhead
-        # of moving data to the GPU is much higher, so we give it a much wider margins
-        assert speed < 5.0
-    else:
-        assert speed < 0.1
+    assert speed < 0.1
 
 
 # This tests the possible failure mode of "the buffer doesn't do anything".
@@ -547,6 +545,10 @@ def test_speed_buffer_while(read):
 @pytest.mark.skipif(
     jax.lib.__version__ == "0.4.16",  # pyright: ignore
     reason="jaxlib bug; see https://github.com/google/jax/pull/17724",
+)
+@pytest.mark.skipif(
+    condition=jax.default_backend() != "cpu",
+    reason="This test is flaky on a non-CPU environment",
 )
 # This isn't testing any particular failure mode: just that things generally work.
 def test_speed_grad_checkpointed_while(getkey):

@@ -13,10 +13,11 @@ import pytest
 # sharding
 
 
+@pytest.mark.skipif(
+    condition=len(jax.devices()) < 2,
+    reason="Test requires > 1 device to verify implicit sharding propagation",
+)
 def test_sharding_no_inside_jit():
-    if len(jax.devices()) < 2:
-        pytest.skip("Test requires > 1 device to verify implicit sharding propagation")
-
     mlp = eqx.nn.MLP(2, 2, 2, 2, key=jr.PRNGKey(0))
 
     num_devices = 2
@@ -38,9 +39,11 @@ def test_sharding_no_inside_jit():
     assert _is_sharded(eqx.filter(out, eqx.is_array), sharding)
 
 
+@pytest.mark.skipif(
+    condition=len(jax.devices()) < 2,
+    reason="Test requires > 1 device to verify explicit sharding propagation",
+)
 def test_sharding_only_inside_jit():
-    if len(jax.devices()) < 2:
-        pytest.skip("Test requires > 1 device to verify explicit sharding propagation")
     # Make sharding
     num_devices = 2
     mesh = jax.make_mesh((num_devices,), ("x",))

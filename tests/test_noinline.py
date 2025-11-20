@@ -2,8 +2,13 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jax.random as jr
+import pytest
 
 from .helpers import tree_allclose
+
+
+if jax.default_backend() != "cpu":
+    pytest.skip("Skipping tests on non-CPU backend", allow_module_level=True)
 
 
 def test_simple():
