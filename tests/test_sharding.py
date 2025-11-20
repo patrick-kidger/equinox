@@ -4,9 +4,19 @@ import jax.numpy as jnp
 import jax.random as jr
 import jax.sharding as jshard
 import jax.tree_util as jtu
+import pytest
+
+
+# Info on the skips: on CPU-only, JAX can simulate mulitple devices
+# but as soon as you have a GPU(s), JAX will use those, so if you have
+# only a single GPU (i.e. a single device) it makes no sense to "test"
+# sharding
 
 
 def test_sharding_no_inside_jit():
+    if len(jax.devices()) < 2:
+        pytest.skip("Test requires > 1 device to verify implicit sharding propagation")
+
     mlp = eqx.nn.MLP(2, 2, 2, 2, key=jr.PRNGKey(0))
 
     num_devices = 2
@@ -29,6 +39,8 @@ def test_sharding_no_inside_jit():
 
 
 def test_sharding_only_inside_jit():
+    if len(jax.devices()) < 2:
+        pytest.skip("Test requires > 1 device to verify explicit sharding propagation")
     # Make sharding
     num_devices = 2
     mesh = jax.make_mesh((num_devices,), ("x",))
