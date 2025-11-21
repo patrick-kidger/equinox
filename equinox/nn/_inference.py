@@ -49,18 +49,6 @@ def inference_mode(pytree: PyTree, value: bool = True) -> PyTree:
         training_model_again = eqx.nn.inference_mode(inference_model, value=False)
         ```
 
-    This function is essentially equivalent to:
-    ```python
-    has_inference = lambda leaf: hasattr(leaf, "inference")
-
-    def where(pytree):
-        return tuple(x.inference
-                     for x in jtu.tree_leaves(pytree, is_leaf=has_inference)
-                     if has_inference(x))
-
-    inference_pytree = equinox.tree_at(where, pytree, replace_fn=lambda _: value)
-    ```
-
     **Arguments:**
 
     - `pytree`: the PyTree to modify.
