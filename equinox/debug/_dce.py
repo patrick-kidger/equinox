@@ -81,13 +81,13 @@ def store_dce(x: PyTree, name: Hashable = None):
 
 
 def inspect_dce(name: Hashable = None):
-    """Used in conjunction with `equinox.debug.check_dce`; see documentation there.
+    """Used in conjunction with `equinox.debug.store_dce`; see documentation there.
 
     Must be called outside of any JIT'd function.
 
     **Arguments:**
 
-    - `name`: Optional argument. Whatever name was used with `check_dce`.
+    - `name`: Optional argument. Whatever name was used with `store_dce`.
 
     **Returns:**
 
