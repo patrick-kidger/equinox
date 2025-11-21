@@ -7,17 +7,20 @@ import jax.tree_util as jtu
 import pytest
 
 
-# Info on the skips: on CPU-only, JAX can simulate mulitple devices
-# but as soon as you have a GPU(s), JAX will use those, so if you have
-# only a single GPU (i.e. a single device) it makes no sense to "test"
-# sharding
-
-
-@pytest.mark.skipif(
-    condition=len(jax.devices()) < 2,
-    reason="Test requires > 1 device to verify implicit sharding propagation",
+pytestmark = pytest.mark.skipif(
+    jax.default_backend() != "cpu",
+    reason=(
+        "Sharding tests require multiple devices. JAX can simulate multiple "
+        "devices on a single CPU but cannot easily do so on a single GPU/TPU. "
+        "Therefore, we skip these tests on non-CPU backends."
+    ),
 )
+
+
 def test_sharding_no_inside_jit():
+    assert len(jax.devices()) > 1, (
+        "Test requires > 1 device to verify implicit sharding propagation"
+    )
     mlp = eqx.nn.MLP(2, 2, 2, 2, key=jr.PRNGKey(0))
 
     num_devices = 2
@@ -41,11 +44,10 @@ def test_sharding_no_inside_jit():
     assert _is_sharded(eqx.filter(out, eqx.is_array), sharding)
 
 
-@pytest.mark.skipif(
-    condition=len(jax.devices()) < 2,
-    reason="Test requires > 1 device to verify explicit sharding propagation",
-)
 def test_sharding_only_inside_jit():
+    assert len(jax.devices()) > 1, (
+        "Test requires > 1 device to verify explicit sharding propagation"
+    )
     # Make sharding
     num_devices = 2
     mesh = jax.make_mesh(
