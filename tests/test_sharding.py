@@ -4,13 +4,29 @@ import jax.numpy as jnp
 import jax.random as jr
 import jax.sharding as jshard
 import jax.tree_util as jtu
+import pytest
+
+
+pytestmark = pytest.mark.skipif(
+    jax.default_backend() != "cpu",
+    reason=(
+        "Sharding tests require multiple devices. JAX can simulate multiple "
+        "devices on a single CPU but cannot easily do so on a single GPU/TPU. "
+        "Therefore, we skip these tests on non-CPU backends."
+    ),
+)
 
 
 def test_sharding_no_inside_jit():
+    assert len(jax.devices()) > 1, (
+        "Test requires > 1 device to verify implicit sharding propagation"
+    )
     mlp = eqx.nn.MLP(2, 2, 2, 2, key=jr.PRNGKey(0))
 
     num_devices = 2
-    mesh = jax.make_mesh((num_devices,), ("x",))
+    mesh = jax.make_mesh(
+        (num_devices,), ("x",), axis_types=(jax.sharding.AxisType.Auto,)
+    )
     sharding = jshard.NamedSharding(mesh, jshard.PartitionSpec("x"))
     sharded_mlp = eqx.filter_shard(mlp, sharding)
     assert _is_committed(eqx.filter(sharded_mlp, eqx.is_array))
@@ -29,9 +45,14 @@ def test_sharding_no_inside_jit():
 
 
 def test_sharding_only_inside_jit():
+    assert len(jax.devices()) > 1, (
+        "Test requires > 1 device to verify explicit sharding propagation"
+    )
     # Make sharding
     num_devices = 2
-    mesh = jax.make_mesh((num_devices,), ("x",))
+    mesh = jax.make_mesh(
+        (num_devices,), ("x",), axis_types=(jax.sharding.AxisType.Auto,)
+    )
     sharding = jshard.NamedSharding(mesh, jshard.PartitionSpec("x"))
     # Make dummy pytree
     shape = (10 * num_devices,)

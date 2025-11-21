@@ -6,6 +6,7 @@ import jax
 import jax.numpy as jnp
 import jax.random as jr
 import jax.tree_util as jtu
+import numpy as np
 import pytest
 
 from .helpers import tree_allclose as _shaped_allclose
@@ -223,7 +224,7 @@ def test_map_non_jax():
 
     def maybe_replicate(value):
         if eqx.is_array(value):
-            return jax.device_put_replicated(value, [cpu])
+            return jax.device_put(value[None], device=cpu)
         else:
             return value
 
@@ -281,4 +282,4 @@ def test_out_axes_with_at_least_three_dimensions(out_axes):
     y = jax.pmap(foo, out_axes=out_axes)(x)
     z = filter_pmap(foo, out_axes=out_axes)(x)
     assert y.shape == z.shape
-    assert (y == z).all()
+    assert (np.array(y) == np.array(z)).all()
