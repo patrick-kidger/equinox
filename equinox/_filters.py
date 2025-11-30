@@ -1,5 +1,15 @@
 from collections.abc import Callable
-from typing import Any, Final, overload, TypeVar
+from typing import (
+    Any,
+    Final,
+    get_args,
+    overload,
+    TYPE_CHECKING,
+    TypeAlias,
+    TypeGuard,
+    TypeVar,
+)
+from typing_extensions import Never, Protocol
 
 import jax
 import jax.core
@@ -17,31 +27,40 @@ AxisSpec = bool | Callable[[Any], bool]
 #
 
 
-# Workaround https://github.com/patrick-kidger/equinox/issues/1095 in a backward
-# compatible manner.
-_NDARRAY_TYPES: Final = (np.ndarray, np.generic)
-_ARRAY_TYPES = (*_NDARRAY_TYPES, jax.Array)  # JAX < 0.7.2
+# Define array types
+# Note that we don't accept `np.generic` as a suitable duck-type for arrays,
+# because `generic` includes `np.object_` and `np.flexible` which are not
+# array-like.
+NDArrayType: TypeAlias = np.ndarray | np.number | np.bool_
+_NDARRAY_TYPES: Final = get_args(NDArrayType)
+_ARRAY_TYPES = _NDARRAY_TYPES + (jax.Array,)
 
 try:  # JAX 0.7.2
     from jax._src.literals import (
         LiteralArray,  # pyright: ignore[reportAttributeAccessIssue]
     )
-
-    _ARRAY_TYPES += (LiteralArray,)
 except ImportError:
-    pass
+    LiteralArray = Never  # type: ignore[assignment, misc]
+else:
+    _ARRAY_TYPES += (LiteralArray,)
 
 try:  # JAX > 0.7.2
     from jax._src.literals import (
         TypedNdArray,  # pyright: ignore[reportAttributeAccessIssue]
     )
-
-    _ARRAY_TYPES += (TypedNdArray,)
 except ImportError:
-    pass
+    TypedNdArray = Never  # type: ignore[assignment, misc]
+else:
+    _ARRAY_TYPES += (TypedNdArray,)
+
+# Type alias for type checkers. Never disappears from unions: T | Never == T
+if TYPE_CHECKING:
+    ArrayTypes: TypeAlias = NDArrayType | jax.Array | LiteralArray | TypedNdArray  # type: ignore[valid-type]
+else:
+    ArrayTypes = object
 
 
-def is_array(element: Any) -> bool:
+def is_array(element: Any) -> TypeGuard[ArrayTypes]:
     """Returns `True` if `element` is a JAX array or NumPy array."""
     return isinstance(element, _ARRAY_TYPES)
 
@@ -51,7 +70,22 @@ def is_array(element: Any) -> bool:
 _ARRAY_LIKE_TYPES: Final = (*_ARRAY_TYPES, float, complex, bool, int)
 
 
-def is_array_like(element: Any) -> bool:
+class HasJaxArray(Protocol):
+    def __jax_array__(self) -> jax.Array: ...
+
+
+# For static analysis most jax functions don't know they accept `HasJaxArray`
+# objects. So for static analysis we don't include it in the definition of
+# `ArrayLikeTypes`.  However at runtime we do want to accept them because
+# runtime type-checkers like `beartype` will inspect the annotations and will
+# error if `HasJaxArray` *isn't* included.
+if TYPE_CHECKING:
+    ArrayLikeTypes: TypeAlias = jax.typing.ArrayLike
+else:
+    ArrayLikeTypes: TypeAlias = jax.typing.ArrayLike | HasJaxArray
+
+
+def is_array_like(element: Any) -> TypeGuard[ArrayLikeTypes]:
     """Returns `True` if `element` is a JAX array, a NumPy array, or a Python
     `float`/`complex`/`bool`/`int`.
     """

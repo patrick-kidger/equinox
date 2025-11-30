@@ -86,8 +86,7 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
         np.save(f, x)
     elif is_array_like(x):
         # Important to use `jnp` here to handle `bfloat16`.
-        # jnp.asarray handles all array-like types including HasJaxArray
-        jnp.save(f, jnp.asarray(x))
+        jnp.save(f, x)
     else:
         pass
 
