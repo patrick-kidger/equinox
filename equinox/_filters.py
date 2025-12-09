@@ -2,14 +2,14 @@ from collections.abc import Callable
 from typing import (
     Any,
     Final,
-    get_args,
+    Literal as L,
     overload,
     TYPE_CHECKING,
     TypeAlias,
     TypeGuard,
     TypeVar,
 )
-from typing_extensions import Never, Protocol
+from typing_extensions import Never, Protocol, runtime_checkable
 
 import jax
 import jax.core
@@ -28,11 +28,31 @@ AxisSpec = bool | Callable[[Any], bool]
 
 
 # Define array types
-# Note that we don't accept `np.generic` as a suitable duck-type for arrays,
-# because `generic` includes `np.object_` and `np.flexible` which are not
-# array-like.
-NDArrayType: TypeAlias = np.ndarray | np.number | np.bool_
-_NDARRAY_TYPES: Final = get_args(NDArrayType)
+# Note that `np.generic` covers more than just the array-like dtypes,
+# e.g. `np.object_` and `np.flexible`. But `ml_dtypes` also defines dtypes
+# that inherit from `np.generic` and can't easily be listed here individually.
+@runtime_checkable
+class ArrayLikeGeneric(Protocol):
+    @property
+    def base(self) -> None: ...
+    @property
+    def ndim(self) -> L[0]: ...
+    @property
+    def size(self) -> L[1]: ...
+    @property
+    def shape(self) -> tuple[()]: ...
+    @property
+    def strides(self) -> tuple[()]: ...
+    @property
+    def dtype(self) -> np.generic: ...
+
+    def __add__(self, other: Any, /) -> Any: ...
+    def __mul__(self, other: Any, /) -> Any: ...
+    def __rmul__(self, other: Any, /) -> Any: ...
+
+
+NDArrayType: TypeAlias = np.ndarray | ArrayLikeGeneric
+_NDARRAY_TYPES: Final = (np.ndarray, np.generic)
 _ARRAY_TYPES = _NDARRAY_TYPES + (jax.Array,)
 
 try:  # JAX 0.7.2

@@ -1,4 +1,5 @@
 import warnings
+from typing import cast
 
 import equinox as eqx
 import jax
@@ -6,6 +7,7 @@ import jax.numpy as jnp
 import jax.random as jrandom
 import jax.tree_util as jtu
 import pytest
+from jaxtyping import ArrayLike
 
 from .helpers import tree_allclose
 
@@ -32,7 +34,8 @@ def test_filter_jit(donate, getkey):
 
     array_tree_ = jtu.tree_map(jnp.copy, array_tree)
     general_tree_ = jtu.tree_map(
-        lambda x: jnp.copy(x) if eqx.is_array(x) else x, general_tree
+        lambda x: jnp.copy(cast(ArrayLike, x)) if eqx.is_array(x) else x,
+        general_tree,
     )
 
     @eqx.filter_jit(donate=donate)
