@@ -183,3 +183,16 @@ def test_traceback_runtime_custom():
         # assert e.__cause__ is None  # varies by Python version and JAX version.
         assert "egads" in str(e)
         assert "EQX_ON_ERROR" not in str(e)
+
+
+# https://github.com/patrick-kidger/equinox/issues/1156
+def test_error_after_success():
+    @eqx.filter_jit
+    def foo(x):
+        return eqx.error_if(x, x > 0.0, "foo")
+
+    foo(jnp.array(-1.0))
+    try:
+        foo(jnp.array(1.0))
+    except Exception as e:
+        assert type(e) is eqx.EquinoxRuntimeError
