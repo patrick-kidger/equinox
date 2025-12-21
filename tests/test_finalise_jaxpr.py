@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 from typing import cast
 
 import equinox.internal as eqxi
@@ -131,10 +132,22 @@ def test_fn2fn_custom_idempotent():
     _assert_jaxpr_equal(finalised_vmap_jaxpr, finalised_finalised_vmap_jaxpr)
 
 
+# Stolen from `jax.core.subjaxprs` as it is being deprecated.
+def _subjaxprs(jaxpr: jax.extend.core.Jaxpr) -> Iterator[jax.extend.core.Jaxpr]:
+    for eqn in jaxpr.eqns:
+        for val in eqn.params.values():
+            vals = val if isinstance(val, tuple) else (val,)
+            for v in vals:
+                if isinstance(v, jax.extend.core.Jaxpr):
+                    yield v
+                elif isinstance(v, jax.extend.core.ClosedJaxpr):
+                    yield v.jaxpr
+
+
 def _assert_no_unvmap(jaxpr: jax.extend.core.Jaxpr):
     for eqn in jaxpr.eqns:
         assert eqn.primitive not in (eqxi.unvmap_any_p, eqxi.unvmap_all_p)
-    for subjaxpr in jax.core.subjaxprs(jaxpr):
+    for subjaxpr in _subjaxprs(jaxpr):
         _assert_no_unvmap(subjaxpr)
 
 
