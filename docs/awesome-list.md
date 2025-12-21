@@ -1,6 +1,6 @@
 # Awesome List
 
-A list of community projects that use Equinox and its ecosystem! Feel free to write a PR to add your own projects so that the community may benefit from as many examples as possible.
+A list of community projects that use Equinox and its ecosystem! Feel free to [write a PR](https://github.com/patrick-kidger/equinox/blob/main/docs/awesome-list.md) to add your own projects so that the community may benefit from as many examples as possible.
 
 ## Models
 
