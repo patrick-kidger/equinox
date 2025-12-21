@@ -134,7 +134,7 @@ else:
     def wait_for_tokens2():
         try:
             wait_for_tokens()
-        except JaxRuntimeError:
+        except (JaxRuntimeError, ValueError):
             pass
 
     atexit.unregister(wait_for_tokens)
@@ -269,7 +269,7 @@ def _call(jit_wrapper: _JitWrapper, is_lower, args, kwargs):
                 marker, jax.Array
             ):
                 marker.block_until_ready()
-        except JaxRuntimeError as e:
+        except (JaxRuntimeError, ValueError) as e:
             # Catch Equinox's runtime errors, and re-raise them with actually useful
             # information. (By default XlaRuntimeError produces a lot of terrifying
             # but useless information.)
