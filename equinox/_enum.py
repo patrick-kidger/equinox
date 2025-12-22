@@ -5,6 +5,7 @@ import jax._src.traceback_util as traceback_util
 import jax.core
 import jax.numpy as jnp
 import numpy as np
+import wadler_lindig as wl
 from jaxtyping import Array, ArrayLike, Bool, Int
 
 from ._doc_utils import doc_repr
@@ -170,6 +171,10 @@ class EnumerationItem(Module):
         raise ValueError(
             "Can only compare equality between enumerations of the same type."
         )
+
+    def __pdoc__(self, **kwargs):
+        del kwargs
+        return wl.TextDoc(repr(self))
 
     def __repr__(self):
         prefix = f"{self._enumeration.__module__}.{self._enumeration.__qualname__}"
