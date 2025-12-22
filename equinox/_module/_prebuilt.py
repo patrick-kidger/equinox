@@ -82,7 +82,10 @@ class Partial(Module, Generic[_Return]):
         return self.func(*self.args, *args, **kwargs, **self.keywords)
 
 
-class Static(Module):
+_Value = TypeVar("_Value")
+
+
+class Static(Module, Generic[_Value]):
     """Wraps a value into a `eqx.field(static=True)`.
 
     This is useful to treat something as just static metadata with respect to a JAX
@@ -93,12 +96,12 @@ class Static(Module):
     _leaves: list[Any] = field(static=True)
     _treedef: PyTreeDef = field(static=True)  # pyright: ignore
 
-    def __init__(self, value: Any):
+    def __init__(self, value: _Value):
         # By flattening, we handle pytrees without `__eq__` methods.
         # When comparing static metadata for equality, this means we never actually
         # call `value.__eq__`.
         self._leaves, self._treedef = jtu.tree_flatten(value)
 
     @property
-    def value(self):
+    def value(self) -> _Value:
         return jtu.tree_unflatten(self._treedef, self._leaves)
