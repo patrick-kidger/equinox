@@ -872,7 +872,7 @@ def _none_to_zero(ct, x):
         if x is None:
             return None
         else:
-            aval = jax.core.get_aval(x)
+            aval = jax.typeof(x)
             if hasattr(aval, "to_tangent_aval"):
                 # Earlier versions of JAX were internally inconsistent, and expected
                 # e.g. integer primals to have integer tangents from `custom_{jvp,vjp}`

@@ -60,7 +60,7 @@ def _is_array_like_internal(x):
 
 def _zero_from_primal(p):
     assert type(p) is not ad.UndefinedPrimal
-    aval = jax.core.get_aval(p)
+    aval = jax.typeof(p)
     if hasattr(aval, "to_tangent_aval"):
         # JAX >=0.4.34
         aval = aval.to_tangent_aval()  # pyright: ignore
