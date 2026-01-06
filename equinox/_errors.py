@@ -16,7 +16,7 @@ from jaxtyping import Array, ArrayLike, Bool, Int, PyTree
 
 from . import _jit
 from ._ad import filter_custom_jvp
-from ._config import EQX_ON_ERROR, EQX_ON_ERROR_BREAKPOINT_FRAMES
+from ._config import get_eqx_on_error, get_eqx_on_error_breakpoint_frames
 from ._doc_utils import doc_remove_args
 from ._filters import combine, is_array, partition
 from ._misc import currently_jitting
@@ -51,14 +51,16 @@ You will need to manually kill this job and/or restart the runtime.
 """
 
 
-_frames_msg = f"""
+_get_frames_msg = (
+    lambda _num_frames: f"""
 -------------------
 
-Opening a breakpoint with {EQX_ON_ERROR_BREAKPOINT_FRAMES} frames. You can control this
+Opening a breakpoint with {_num_frames} frames. You can control this
 value by setting the environment variable `EQX_ON_ERROR_BREAKPOINT_FRAMES=<some value>`.
 (Note that setting large values of this number may lead to crashes at trace time; see
 `https://docs.kidger.site/equinox/api/errors/#equinox.error_if` for more information.)
 """
+)
 
 
 # The name of this is looked for in `_jit.py` in order to determine if we have a
@@ -120,7 +122,7 @@ def _error(x, pred, index, *, msgs, on_error, stack):
     elif on_error == "breakpoint":
 
         def display_msg(_index):
-            print(_frames_msg)
+            print(_get_frames_msg(get_eqx_on_error_breakpoint_frames()))
             print("equinox.EquinoxRuntimeError: " + msgs[_index.item()])
             return _index
 
@@ -132,7 +134,7 @@ def _error(x, pred, index, *, msgs, on_error, stack):
             index_struct = jax.eval_shape(lambda: index)
             _index = jax.pure_callback(display_msg, index_struct, index)
             _index = jax.debug.breakpoint(
-                token=_index, num_frames=EQX_ON_ERROR_BREAKPOINT_FRAMES
+                token=_index, num_frames=get_eqx_on_error_breakpoint_frames()
             )
             _index = unvmap_max(cast(Any, _index))
             return jax.pure_callback(to_nan, struct, _index)
@@ -159,7 +161,7 @@ def _error_jvp(primals, tangents, *, msgs, on_error, stack):
     return _error(x, pred, index, msgs=msgs, on_error=on_error, stack=stack), tx
 
 
-if EQX_ON_ERROR == "breakpoint":
+if get_eqx_on_error() == "breakpoint":
     # TODO: remove this branch once JAX issue #16732 is fixed.
     _old_jit = jax.jit
 
@@ -180,6 +182,11 @@ if EQX_ON_ERROR == "breakpoint":
         return fixed_jit_impl
 
     jax.jit = fixed_jit
+    get_eqx_on_error.cache_clear()
+    _BREAKPOINT_PATCH = True
+else:
+    get_eqx_on_error.cache_clear()
+    _BREAKPOINT_PATCH = False
 
 
 # Remove the `on_error` argument from the public API for now. If you pass
@@ -224,10 +231,15 @@ def error_if(
             `EQX_ON_ERROR_BREAKPOINT_FRAMES` environment variable to a small integer,
             which specifies how many frames upwards the debugger should capture. The
             JAX bug is triggered when taking too many frames.
+        - Until this bug is fixed, it is not possible to modify 'EQX_ON_ERROR' from/to
+            "breakpoint" after `equinox` import using
+            `os.environ["EQX_ON_ERROR"] = ...`.
     - `EQX_ON_ERROR=off` turns off all error checking. This is useful for removing
         performance penalties incurred from use of `error_if`.
 
-    After changing an environment variable, the Python process must be restarted.
+    `EQX_ON_ERROR` can be changed up until the first call to `error_if`, i.e.
+    using `os.environ["EQX_ON_ERROR"] = "nan"`. After this, the Python process must
+    be restarted.
 
     **Returns:**
 
@@ -237,14 +249,34 @@ def error_if(
 
     !!! Example
 
+        By default, the behavior of `error_if` is to raise
+        a runtime error.
+
         ```python
+        @jax.jit
+        def f(x):
+            x = eqx.error_if(x, x < 0, "x must be >= 0")
+            # ...use x in your computation...
+            return x
+
+        f(jax.numpy.array(-1)) # raises a runtime error!
+        ```
+
+        The behavior of `error_if` can be modified
+        by setting the `EQX_ON_ERROR` environmental variable.
+
+        ```python
+        import os
+
+        os.environ["EQX_ON_ERROR"] = "off"
+
         @jax.jit
         def f(x):
             x = error_if(x, x < 0, "x must be >= 0")
             # ...use x in your computation...
             return x
 
-        f(jax.numpy.array(-1))
+        f(jax.numpy.array(-1)) # -1 is returned unchanged and no error is raised
         ```
     """
     return branched_error_if(x, pred, 0, [msg], on_error=on_error)
@@ -282,7 +314,25 @@ def branched_error_if_impl(
     on_error: Literal["default", "raise", "breakpoint", "off", "nan"],
 ) -> PyTree:
     if on_error == "default":
-        on_error = EQX_ON_ERROR
+        on_error = get_eqx_on_error()
+        if _BREAKPOINT_PATCH and on_error != "breakpoint":
+            raise RuntimeError(
+                "Found that `EQX_ON_ERROR` was equal to 'breakpoint' "
+                "during `equinox` import, but at runtime it was equal to "
+                f"'{on_error}'. Due to a JAX bug "
+                "(https://github.com/google/jax/issues/16732), "
+                "`EQX_ON_ERROR` must be set equal to 'breakpoint' at "
+                "during import and remain unchanged."
+            )
+        if not _BREAKPOINT_PATCH and on_error == "breakpoint":
+            raise RuntimeError(
+                "Found that `EQX_ON_ERROR` was equal to 'breakpoint' "
+                "at runtime, but during `equinox` import this was not the "
+                "case. Due to a JAX bug "
+                "(https://github.com/google/jax/issues/16732), "
+                "`EQX_ON_ERROR` must be set equal to 'breakpoint' at "
+                "during import and remain unchanged."
+            )
     elif on_error not in ("raise", "breakpoint", "off", "nan"):
         raise RuntimeError("Unrecognised value for `on_error`.")
     with jax.ensure_compile_time_eval():
