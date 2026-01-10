@@ -190,7 +190,11 @@ class State:
         value = jtu.tree_map(jnp.asarray, value)
         if isinstance(old_value, Intermediate):
             if old_value.inner is not None:
-                raise ValueError("`eqx.nn.State`")
+                raise ValueError(
+                    "`eqx.nn.Intermediate` value already set."
+                    "Either `state.set` has been called multiple time on this `eqx.nn.State`,"
+                    "or has not been extracted via `state.extract_intermediate` after the forward."
+                )
             new_value = Intermediate(value)
         else:
             new_value = value
