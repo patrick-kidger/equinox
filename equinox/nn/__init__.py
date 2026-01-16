@@ -1,5 +1,9 @@
 from ._activations import PReLU as PReLU
-from ._attention import MultiheadAttention as MultiheadAttention
+from ._attention import (
+    dot_product_attention as dot_product_attention,
+    dot_product_attention_weights as dot_product_attention_weights,
+    MultiheadAttention as MultiheadAttention,
+)
 from ._batch_norm import BatchNorm as BatchNorm
 from ._conv import (
     Conv as Conv,
