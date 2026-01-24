@@ -204,8 +204,7 @@ class EnumerationItem(Module):
 
 if TYPE_CHECKING:
     import enum
-    from typing import ClassVar
-    from typing_extensions import Self
+    from typing import ClassVar, Self
 
     class _Sequence(type):
         def __getitem__(cls, item) -> str: ...
