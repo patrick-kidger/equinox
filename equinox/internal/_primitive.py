@@ -345,22 +345,25 @@ def _vprim_impl(*inputs, prim, __axis_size, __axis_name, __batch_axes, params):
     return impl(*inputs)
 
 
+if hasattr(jax.extend.core, "mapped_aval"):
+    _mapped_aval = jax.extend.core.mapped_aval  # pyright: ignore[reportAttributeAccessIssue]
+else:
+    _mapped_aval = jax.core.mapped_aval
+if hasattr(jax.extend.core, "unmapped_aval"):
+    _unmapped_aval = jax.extend.core.unmapped_aval  # pyright: ignore[reportAttributeAccessIssue,reportAssignmentType]
+else:
+    _unmapped_aval = jax.core.unmapped_aval  # pyright: ignore[reportAssignmentType]
 if jax.__version_info__ >= (0, 5, 1):
+    _old_unmapped_aval = _unmapped_aval
 
     def _unmapped_aval(axis_size, axis_name, axis, aval):
         del axis_name
-        return jax.core.unmapped_aval(axis_size, axis, aval)  # pyright: ignore[reportCallIssue]
-
-else:
-    # signature (axis_size, axis_name, axis, aval)
-    _unmapped_aval = jax.core.unmapped_aval  # pyright: ignore[reportAssignmentType]
+        return _old_unmapped_aval(axis_size, axis, aval)  # pyright: ignore[reportCallIssue]
 
 
 def _vprim_abstract_eval(*inputs, prim, __axis_size, __axis_name, __batch_axes, params):
     assert len(inputs) == len(__batch_axes)
-    inputs = [
-        jax.core.mapped_aval(__axis_size, b, x) for x, b in zip(inputs, __batch_axes)
-    ]
+    inputs = [_mapped_aval(__axis_size, b, x) for x, b in zip(inputs, __batch_axes)]
     abstract_eval = _vprim_abstract_eval_registry[prim]
     outs = abstract_eval(*inputs, **dict(params))
     outs = [_unmapped_aval(__axis_size, __axis_name, 0, x) for x in outs]
