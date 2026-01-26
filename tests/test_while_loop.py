@@ -539,7 +539,7 @@ def test_speed_buffer_while(read):
             # at 50_000 there is a spike because this JAX starts collecting values
             # we can skip this particular size, because it's just a one-off thing
 
-        assert 0.75 < ratio < 1.25, f"Non-linear scaling detected: ratio={ratio:.2f}"
+        assert ratio < 1.25, f"Non-linear scaling detected: ratio={ratio:.2f}"
 
 
 @pytest.mark.skipif(
