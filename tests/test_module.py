@@ -1181,3 +1181,24 @@ def test_orig_class():
 
     a = A[int]()
     assert a.__orig_class__ == A[int]  # pyright: ignore[reportAttributeAccessIssue]
+
+
+# https://github.com/patrick-kidger/equinox/issues/1172
+def test_vmap_scan_default():
+    class SomeNetwork(eqx.Module):
+        some_eqx_field_value: int = eqx.field(default=42, static=True)
+
+        def __init__(self):
+            pass
+
+        def __call__(self, x):
+            return x
+
+    model = SomeNetwork()
+    batch = jnp.zeros((2, 2))
+
+    def scan_fn(carry, x):
+        out = jax.vmap(carry)(x)
+        return carry, out
+
+    jax.lax.scan(scan_fn, model, batch)

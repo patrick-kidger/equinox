@@ -2,7 +2,6 @@
 
 import dataclasses
 import textwrap
-from enum import Enum
 from typing import Any, Final, Literal, TypeVar
 
 import jax.tree_util as jtu
@@ -26,14 +25,12 @@ WRAPPER_FIELD_NAMES: Final = (
 _INDENT: Final = " " * 4
 
 
-# Sentinel values for flattening/unflattening
-class _Sentinel(Enum):
-    """Sentinel values for flattening/unflattening."""
-
-    MISSING = "MISSING"
+class _Missing:
+    def __bool__(self):
+        return False
 
 
-MISSING = _Sentinel.MISSING
+MISSING = _Missing()
 
 # Code template for flattening the wrapper fields
 _GETTER = "get({k!r},MISSING)"  # get = obj.__dict__.get
