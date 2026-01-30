@@ -1,9 +1,8 @@
 from collections.abc import Callable
-from typing import (
-    Literal,
-)
+from typing import Literal
 
 import jax.nn as jnn
+import jax.numpy as jnp
 import jax.random as jrandom
 import jax.tree_util as jtu
 from jaxtyping import Array, PRNGKeyArray
@@ -139,7 +138,9 @@ class MLP(Module):
         for i, layer in enumerate(self.layers[:-1]):
             x = layer(x)
             layer_activation = jtu.tree_map(
-                lambda x: x[i] if is_array(x) else x, self.activation
+                # `asarray` needed for `is_array` -> np.number / np.bool_
+                lambda x: jnp.asarray(x)[i] if is_array(x) else x,
+                self.activation,
             )
             x = filter_vmap(lambda a, b: a(b))(layer_activation, x)
         x = self.layers[-1](x)

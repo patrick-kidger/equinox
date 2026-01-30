@@ -224,7 +224,9 @@ def test_map_non_jax():
 
     def maybe_replicate(value):
         if eqx.is_array(value):
-            return jax.device_put(value[None], device=cpu)
+            # TODO: remove the explicit jnp.asarray call once numpy/numpy#30335
+            # is part of the minimum supported numpy version
+            return jax.device_put(jnp.asarray(value)[None], device=cpu)
         else:
             return value
 

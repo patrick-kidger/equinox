@@ -26,14 +26,11 @@ class WithRepr(type):
 _T = TypeVar("_T")
 
 
-def doc_repr(obj: _T, string: str) -> _T:
-    if TYPE_CHECKING:
-        return obj
-    else:
-        if hasattr(typing, "GENERATING_DOCUMENTATION"):
-            return WithRepr(obj, string)
-        else:
-            return obj
+def doc_repr(obj: _T, string: str, /) -> _T:
+    if not TYPE_CHECKING and hasattr(typing, "GENERATING_DOCUMENTATION"):
+        return WithRepr(obj, string)
+
+    return obj
 
 
 def doc_remove_args(*args):
