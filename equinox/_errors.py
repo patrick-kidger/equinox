@@ -364,3 +364,110 @@ def assert_dce(
     else:
         # Don't run if not JIT'ing, as without the compiler nothing will be DCE'd.
         return x
+
+
+# ------------------------------------
+
+
+def warn_if(
+    x: PyTree,
+    pred: Bool[ArrayLike, "..."],
+    msg: str,
+    *,
+    category: Warning | None = None,
+    stacklevel: int = 1
+) -> PyTree:
+    """Surfaces a warning based on runtime values. Works even under JIT.
+
+    **Arguments:**
+
+    - `x`: will be returned unchanged. This is used to determine where the warning check
+        happens in the overall computation: it will happen after `x` is computed and
+        before the return value is used. `x` can be any PyTree, and it must contain at
+        least one array.
+    - `pred`: a boolean for whether to raise an warning. Can be an array of bools; an
+        warning will be raised if any of them are `True`. If vmap'd then an warning will be
+        raised if any batch element has `True`.
+    - `msg`: the string to display as an warning message.
+
+    **Returns:**
+
+    The original argument `x` unchanged. **If this return value is unused then the warning
+    check will not be performed.** (It will be removed as part of dead code
+    elimination.)
+
+    !!! Example
+
+        ```python
+        @jax.jit
+        def f(x):
+            x = warn_if(x, x < 0, "x must be >= 0")
+            # ...use x in your computation...
+            return x
+
+        f(jax.numpy.array(-1))
+        ```
+    """
+    return branched_warn_if(x, pred, 0, [msg], category=category, stacklevel=stacklevel)
+
+
+def branched_warn_if(
+    x: PyTree,
+    pred: Bool[ArrayLike, "..."],
+    index: Int[ArrayLike, "..."],
+    msgs: Sequence[str],
+    *,
+    category: Warning | None = None,
+    stacklevel: int = 1
+) -> PyTree:
+    """As [`equinox.warn_if`][], but will raise one of
+    several `msgs` depending on the value of `index`. If `index` is vmap'd, then the
+    warn message from the largest value (across the whole batch) will be used.
+    """
+    leaves = jtu.tree_leaves((x, pred, index))
+    # This carefully does not perform any JAX operations if `pred` and `index` are
+    # a bool and an int.
+    # This ensures we can use `warn_if` before init_google.
+    if any(is_array(leaf) for leaf in leaves):
+        return branched_warn_if_impl_jit(x, pred, index, msgs, category=category, stacklevel=stacklevel)
+    else:
+        return branched_warn_if_impl(x, pred, index, msgs, category=category, stacklevel=stacklevel)
+
+
+def warning_callback(message, *, category: Warning | None, stacklevel: int):
+    warnings.warn(message, category=category, stacklevel=stacklevel)
+
+
+def branched_warn_if_impl(
+    x: PyTree,
+    pred: Bool[ArrayLike, "..."],
+    index: Int[ArrayLike, "..."],
+    msgs: Sequence[str],
+    *,
+    category: Warning | None = None,
+    stacklevel: int = 1
+) -> PyTree:
+    with jax.ensure_compile_time_eval():
+        # This carefully does not perform any JAX operations if `pred` and `index` are
+        # a bool and an int.
+        # This ensures we can use `error_if` before init_google.
+        if not isinstance(pred, bool):
+            pred = unvmap_any(pred)
+        if not isinstance(index, int):
+            index = unvmap_max(index)
+        if not isinstance(pred, jax.core.Tracer):
+            if isinstance(pred, Array):
+                pred = pred.item()
+            assert type(pred) is bool
+            if pred:
+                if not isinstance(index, jax.core.Tracer):
+                    if isinstance(index, Array):
+                        index = index.item()
+                    assert type(index) is int
+                    jax.debug.callback(warning_callback, msgs[index], category=category, stacklevel=stacklevel)
+    return x
+
+
+# filter_jit does some work to produce nicer runtime warning messages.
+# We also place it here to ensure a consistent experience when using JAX in eager mode.
+branched_warn_if_impl_jit = filter_jit(branched_warn_if_impl)
