@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import jax.random as jrandom
 import jax.tree_util as jtu
 import pytest
+from jax.errors import JaxRuntimeError
 
 from .helpers import tree_allclose
 
@@ -414,3 +415,18 @@ def test_aot_compilation_kwargs(donate):
     lowered.as_text()
     compiled = lowered.compile()
     compiled(x, y, test=123)
+
+
+def test_compiler_options():
+    def f(x, y):
+        return 2 * x + y
+
+    x, y = jnp.array(3), 4
+    lowered = eqx.filter_jit(f).lower(x, y)
+    compiled = lowered.compile(compiler_options={"xla_gpu_autotune_level": "0"})
+    assert compiled(x, y) == 2 * x + y
+
+    with pytest.raises(JaxRuntimeError):
+        lowered.compile(
+            compiler_options={"an option that does not make sense": "bad value"}
+        )

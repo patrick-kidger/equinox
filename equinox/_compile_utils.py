@@ -112,9 +112,9 @@ class Lowered(Module):
     def as_text(self):
         return self.lowered.as_text()
 
-    def compile(self):
+    def compile(self, /, compiler_options: dict[str, str | bool] | None = None):
         return Compiled(
-            self.lowered.compile(),
+            self.lowered.compile(compiler_options=compiler_options),
             self.info,
             self.preprocess,  # pyright: ignore
             self.postprocess,  # pyright: ignore
