@@ -237,8 +237,126 @@ def test_mlp(getkey):
     assert [mlp.layers[i].use_bias for i in range(0, 3)] == [True, True, False]
 
 
+def test_scan_over_mlp(getkey):
+    mlp = eqx.nn.ScanOverMLP(2, 3, 8, 2, key=getkey())
+    x = jrandom.normal(getkey(), (2,))
+    assert mlp(x).shape == (3,)
+
+    mlp = eqx.nn.ScanOverMLP(in_size=2, width_size=8, out_size=3, depth=2, key=getkey())
+    x = jrandom.normal(getkey(), (2,))
+    assert mlp(x).shape == (3,)
+
+    mlp = eqx.nn.ScanOverMLP("scalar", 2, 2, 2, key=getkey())
+    x = jrandom.normal(getkey(), ())
+    assert mlp(x).shape == (2,)
+
+    mlp = eqx.nn.ScanOverMLP(2, "scalar", 2, 2, key=getkey())
+    x = jrandom.normal(getkey(), (2,))
+    assert mlp(x).shape == ()
+
+    mlp = eqx.nn.ScanOverMLP(
+        2, 3, 8, 2, use_bias=False, use_final_bias=True, key=getkey()
+    )
+    x = jrandom.normal(getkey(), (2,))
+    assert mlp(x).shape == (3,)
+    input_layer, hidden_layers, output_layer = mlp.layers
+    assert input_layer.use_bias is False
+    assert getattr(hidden_layers, "use_bias") is False
+    assert output_layer.use_bias is True
+
+    mlp = eqx.nn.ScanOverMLP(
+        2, 3, 8, 2, use_bias=True, use_final_bias=False, key=getkey()
+    )
+    x = jrandom.normal(getkey(), (2,))
+    assert mlp(x).shape == (3,)
+    input_layer, hidden_layers, output_layer = mlp.layers
+    assert input_layer.use_bias is True
+    assert getattr(hidden_layers, "use_bias") is True
+    assert output_layer.use_bias is False
+
+
+def test_scan_over_mlp_depth_one(getkey):
+    """Test the edge case of depth=1, which has zero hidden layers to scan over.
+
+    When depth=1, hidden_keys = keys[1:depth] evaluates to keys[1:1], resulting in
+    an empty array and zero hidden layers. The network should consist of only an
+    input layer and output layer, matching the behavior of MLP(depth=1).
+    """
+    # Test basic functionality with depth=1
+    scan_mlp = eqx.nn.ScanOverMLP(2, 3, 8, depth=1, key=getkey())
+    x = jrandom.normal(getkey(), (2,))
+    out = scan_mlp(x)
+    assert out.shape == (3,)
+
+    # Compare with regular MLP of depth=1
+    mlp_key = getkey()
+    mlp = eqx.nn.MLP(2, 3, 8, depth=1, key=mlp_key)
+    scan_mlp_same_key = eqx.nn.ScanOverMLP(2, 3, 8, depth=1, key=mlp_key)
+    x = jrandom.normal(getkey(), (2,))
+    # With the same random key, outputs should be identical
+    assert jnp.allclose(mlp(x), scan_mlp_same_key(x))
+
+    # Test with scalar input
+    scan_mlp = eqx.nn.ScanOverMLP("scalar", 3, 8, depth=1, key=getkey())
+    x = jrandom.normal(getkey(), ())
+    assert scan_mlp(x).shape == (3,)
+
+    # Test with scalar output
+    scan_mlp = eqx.nn.ScanOverMLP(2, "scalar", 8, depth=1, key=getkey())
+    x = jrandom.normal(getkey(), (2,))
+    assert scan_mlp(x).shape == ()
+
+    # Verify layer structure
+    input_layer, hidden_layers, output_layer = scan_mlp.layers
+    assert isinstance(input_layer, eqx.nn.Linear)
+    assert isinstance(output_layer, eqx.nn.Linear)
+    # hidden_layers should be an empty vmapped structure
+    dynamic, _ = eqx.partition(hidden_layers, eqx.is_array)
+    # Check that dynamic parts have zero layers (axis size 0)
+    if hasattr(dynamic, "weight"):
+        assert dynamic.weight.shape[0] == 0  # First dimension should be 0 (no layers)
+
+    # Test gradients work correctly
+    @eqx.filter_jit
+    @eqx.filter_grad
+    def loss_fn(model, x):
+        return jnp.sum(model(x) ** 2)
+
+    scan_mlp = eqx.nn.ScanOverMLP(2, 3, 8, depth=1, key=getkey())
+    x = jrandom.normal(getkey(), (2,))
+    grads = loss_fn(scan_mlp, x)
+    # Verify gradients exist for input and output layers
+    input_layer_grad, _, output_layer_grad = grads.layers
+    assert input_layer_grad.weight is not None
+    assert output_layer_grad.weight is not None
+
+
 def test_mlp_learnt_activation():
     mlp = eqx.nn.MLP(
+        2,
+        5,
+        8,
+        2,
+        activation=eqx.nn.PReLU(),
+        final_activation=eqx.nn.PReLU(),
+        key=jrandom.PRNGKey(5678),
+    )
+    x = jnp.array([0.5, 0.7])
+    assert mlp.activation.negative_slope.shape == (2, 8)
+    assert mlp.final_activation.negative_slope.shape == (5,)
+
+    @eqx.filter_jit
+    @eqx.filter_grad
+    def grad(mlp, x):
+        return jnp.sum(mlp(x))
+
+    grads = grad(mlp, x)
+    assert grads.activation.negative_slope.shape == (2, 8)
+    assert grads.final_activation.negative_slope.shape == (5,)
+
+
+def test_scan_over_mlp_learnt_activation():
+    mlp = eqx.nn.ScanOverMLP(
         2,
         5,
         8,
