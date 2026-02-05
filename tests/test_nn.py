@@ -208,71 +208,40 @@ def test_nested_sequential(inner_stateful, outer_stateful, getkey):
     assert out.shape == (1, 6)
 
 
-def test_mlp(getkey):
-    mlp = eqx.nn.MLP(2, 3, 8, 2, key=getkey())
+@pytest.mark.parametrize("scan", (False, True), ids=["no_scan", "scan"])
+def test_mlp(getkey, scan):
+    mlp = eqx.nn.MLP(2, 3, 8, 2, scan=scan, key=getkey())
     x = jrandom.normal(getkey(), (2,))
     assert mlp(x).shape == (3,)
 
-    mlp = eqx.nn.MLP(in_size=2, out_size=3, width_size=8, depth=2, key=getkey())
+    mlp = eqx.nn.MLP(
+        in_size=2, out_size=3, width_size=8, depth=2, scan=scan, key=getkey()
+    )
     x = jrandom.normal(getkey(), (2,))
     assert mlp(x).shape == (3,)
 
-    mlp = eqx.nn.MLP("scalar", 2, 2, 2, key=getkey())
+    mlp = eqx.nn.MLP("scalar", 2, 2, 2, scan=scan, key=getkey())
     x = jrandom.normal(getkey(), ())
     assert mlp(x).shape == (2,)
 
-    mlp = eqx.nn.MLP(2, "scalar", 2, 2, key=getkey())
+    mlp = eqx.nn.MLP(2, "scalar", 2, 2, scan=scan, key=getkey())
     x = jrandom.normal(getkey(), (2,))
     assert mlp(x).shape == ()
     assert [mlp.layers[i].use_bias for i in range(0, 3)] == [True, True, True]
 
-    mlp = eqx.nn.MLP(2, 3, 8, 2, use_bias=False, use_final_bias=True, key=getkey())
+    mlp = eqx.nn.MLP(
+        2, 3, 8, 2, use_bias=False, use_final_bias=True, scan=scan, key=getkey()
+    )
     x = jrandom.normal(getkey(), (2,))
     assert mlp(x).shape == (3,)
     assert [mlp.layers[i].use_bias for i in range(0, 3)] == [False, False, True]
 
-    mlp = eqx.nn.MLP(2, 3, 8, 2, use_bias=True, use_final_bias=False, key=getkey())
+    mlp = eqx.nn.MLP(
+        2, 3, 8, 2, use_bias=True, use_final_bias=False, scan=scan, key=getkey()
+    )
     x = jrandom.normal(getkey(), (2,))
     assert mlp(x).shape == (3,)
     assert [mlp.layers[i].use_bias for i in range(0, 3)] == [True, True, False]
-
-
-def test_scan_over_mlp(getkey):
-    mlp = eqx.nn.ScanOverMLP(2, 3, 8, 2, key=getkey())
-    x = jrandom.normal(getkey(), (2,))
-    assert mlp(x).shape == (3,)
-
-    mlp = eqx.nn.ScanOverMLP(in_size=2, width_size=8, out_size=3, depth=2, key=getkey())
-    x = jrandom.normal(getkey(), (2,))
-    assert mlp(x).shape == (3,)
-
-    mlp = eqx.nn.ScanOverMLP("scalar", 2, 2, 2, key=getkey())
-    x = jrandom.normal(getkey(), ())
-    assert mlp(x).shape == (2,)
-
-    mlp = eqx.nn.ScanOverMLP(2, "scalar", 2, 2, key=getkey())
-    x = jrandom.normal(getkey(), (2,))
-    assert mlp(x).shape == ()
-
-    mlp = eqx.nn.ScanOverMLP(
-        2, 3, 8, 2, use_bias=False, use_final_bias=True, key=getkey()
-    )
-    x = jrandom.normal(getkey(), (2,))
-    assert mlp(x).shape == (3,)
-    input_layer, hidden_layers, output_layer = mlp.layers
-    assert input_layer.use_bias is False
-    assert getattr(hidden_layers, "use_bias") is False
-    assert output_layer.use_bias is True
-
-    mlp = eqx.nn.ScanOverMLP(
-        2, 3, 8, 2, use_bias=True, use_final_bias=False, key=getkey()
-    )
-    x = jrandom.normal(getkey(), (2,))
-    assert mlp(x).shape == (3,)
-    input_layer, hidden_layers, output_layer = mlp.layers
-    assert input_layer.use_bias is True
-    assert getattr(hidden_layers, "use_bias") is True
-    assert output_layer.use_bias is False
 
 
 def test_scan_over_mlp_depth_one(getkey):
@@ -283,7 +252,7 @@ def test_scan_over_mlp_depth_one(getkey):
     input layer and output layer, matching the behavior of MLP(depth=1).
     """
     # Test basic functionality with depth=1
-    scan_mlp = eqx.nn.ScanOverMLP(2, 3, 8, depth=1, key=getkey())
+    scan_mlp = eqx.nn.MLP(2, 3, 8, depth=1, scan=True, key=getkey())
     x = jrandom.normal(getkey(), (2,))
     out = scan_mlp(x)
     assert out.shape == (3,)
@@ -291,18 +260,18 @@ def test_scan_over_mlp_depth_one(getkey):
     # Compare with regular MLP of depth=1
     mlp_key = getkey()
     mlp = eqx.nn.MLP(2, 3, 8, depth=1, key=mlp_key)
-    scan_mlp_same_key = eqx.nn.ScanOverMLP(2, 3, 8, depth=1, key=mlp_key)
+    scan_mlp_same_key = eqx.nn.MLP(2, 3, 8, depth=1, scan=True, key=mlp_key)
     x = jrandom.normal(getkey(), (2,))
     # With the same random key, outputs should be identical
     assert jnp.allclose(mlp(x), scan_mlp_same_key(x))
 
     # Test with scalar input
-    scan_mlp = eqx.nn.ScanOverMLP("scalar", 3, 8, depth=1, key=getkey())
+    scan_mlp = eqx.nn.MLP("scalar", 3, 8, depth=1, scan=True, key=getkey())
     x = jrandom.normal(getkey(), ())
     assert scan_mlp(x).shape == (3,)
 
     # Test with scalar output
-    scan_mlp = eqx.nn.ScanOverMLP(2, "scalar", 8, depth=1, key=getkey())
+    scan_mlp = eqx.nn.MLP(2, "scalar", 8, depth=1, scan=True, key=getkey())
     x = jrandom.normal(getkey(), (2,))
     assert scan_mlp(x).shape == ()
 
@@ -322,7 +291,7 @@ def test_scan_over_mlp_depth_one(getkey):
     def loss_fn(model, x):
         return jnp.sum(model(x) ** 2)
 
-    scan_mlp = eqx.nn.ScanOverMLP(2, 3, 8, depth=1, key=getkey())
+    scan_mlp = eqx.nn.MLP(2, 3, 8, depth=1, scan=True, key=getkey())
     x = jrandom.normal(getkey(), (2,))
     grads = loss_fn(scan_mlp, x)
     # Verify gradients exist for input and output layers
@@ -356,13 +325,14 @@ def test_mlp_learnt_activation():
 
 
 def test_scan_over_mlp_learnt_activation():
-    mlp = eqx.nn.ScanOverMLP(
+    mlp = eqx.nn.MLP(
         2,
         5,
         8,
         2,
         activation=eqx.nn.PReLU(),
         final_activation=eqx.nn.PReLU(),
+        scan=True,
         key=jrandom.PRNGKey(5678),
     )
     x = jnp.array([0.5, 0.7])
