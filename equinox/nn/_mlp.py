@@ -3,13 +3,15 @@ from typing import (
     Literal,
 )
 
+import jax
 import jax.nn as jnn
+import jax.numpy as jnp
 import jax.random as jrandom
 import jax.tree_util as jtu
 from jaxtyping import Array, PRNGKeyArray
 
 from .._doc_utils import doc_repr
-from .._filters import is_array
+from .._filters import combine, is_array, partition
 from .._misc import default_floating_dtype
 from .._module import field, Module
 from .._vmap_pmap import filter_vmap
@@ -38,6 +40,7 @@ class MLP(Module):
     out_size: int | Literal["scalar"] = field(static=True)
     width_size: int = field(static=True)
     depth: int = field(static=True)
+    scan: bool = field(static=True, default=False)
 
     def __init__(
         self,
@@ -51,6 +54,7 @@ class MLP(Module):
         use_final_bias: bool = True,
         dtype=None,
         *,
+        scan: bool = False,
         key: PRNGKeyArray,
     ):
         """**Arguments**:
@@ -75,6 +79,8 @@ class MLP(Module):
         - `dtype`: The dtype to use for all the weights and biases in this MLP.
             Defaults to either `jax.numpy.float32` or `jax.numpy.float64` depending
             on whether JAX is in 64-bit mode.
+        - `scan`: Whether to use a scan-over-layers pattern for fast compilation.
+            Defaults to `False`.
         - `key`: A `jax.random.PRNGKey` used to provide randomness for parameter
             initialisation. (Keyword only argument.)
 
@@ -86,25 +92,56 @@ class MLP(Module):
         """
         dtype = default_floating_dtype() if dtype is None else dtype
         keys = jrandom.split(key, depth + 1)
+
+        # Input layer
         layers = []
-        if depth == 0:
-            layers.append(
-                Linear(in_size, out_size, use_final_bias, dtype=dtype, key=keys[0])
+        layers.append(
+            Linear(
+                in_size,
+                out_size if depth == 0 else width_size,
+                use_bias=use_bias,
+                dtype=dtype,
+                key=keys[0],
             )
+        )
+
+        # Hidden layers: create depth-1 identical layers
+        if depth == 0:
+            pass
+        elif scan:
+
+            def make_hidden_layer(k: PRNGKeyArray, /) -> Linear:
+                return Linear(
+                    width_size, width_size, use_bias=use_bias, dtype=dtype, key=k
+                )
+
+            if depth > 1:
+                hidden_keys = keys[1:depth]
+                hidden_layers = filter_vmap(make_hidden_layer)(hidden_keys)
+            else:
+                # For depth == 1, construct an empty collection of hidden layers
+                # with the correct tree structure and array dtypes/shapes.
+                single_hidden = filter_vmap(make_hidden_layer)(keys[1:2])
+                hidden_layers = jtu.tree_map(lambda x: x[:0], single_hidden)
+
+            layers.append(hidden_layers)
+
+        else:
+            layers.extend(
+                Linear(width_size, width_size, use_bias, dtype=dtype, key=keys[i + 1])
+                for i in range(depth - 1)
+            )
+
+        # Output layer
+        if depth == 0:
+            pass
         else:
             layers.append(
-                Linear(in_size, width_size, use_bias, dtype=dtype, key=keys[0])
+                Linear(width_size, out_size, use_final_bias, dtype=dtype, key=keys[-1]),
             )
-            for i in range(depth - 1):
-                layers.append(
-                    Linear(
-                        width_size, width_size, use_bias, dtype=dtype, key=keys[i + 1]
-                    )
-                )
-            layers.append(
-                Linear(width_size, out_size, use_final_bias, dtype=dtype, key=keys[-1])
-            )
+
         self.layers = tuple(layers)
+
         self.in_size = in_size
         self.out_size = out_size
         self.width_size = width_size
@@ -136,15 +173,35 @@ class MLP(Module):
 
         A JAX array with shape `(out_size,)`. (Or shape `()` if `out_size="scalar"`.)
         """
-        for i, layer in enumerate(self.layers[:-1]):
-            x = layer(x)
-            layer_activation = jtu.tree_map(
-                lambda x: x[i] if is_array(x) else x, self.activation
-            )
-            x = filter_vmap(lambda a, b: a(b))(layer_activation, x)
+
+        def get_layer_activation(i: int | Array) -> Callable:
+            return jtu.tree_map(lambda x: x[i] if is_array(x) else x, self.activation)
+
+        if self.scan:
+            # Input layer + activation
+            x = self.layers[0](x)
+            x = filter_vmap(lambda a, b: a(b))(get_layer_activation(0), x)
+
+            def scan_fn(
+                carry: tuple[Array, Array], layer_params: Linear
+            ) -> tuple[tuple[Array, Array], None]:
+                x, i = carry
+                layer = combine(layer_params, static)
+                x = layer(x)
+                x = filter_vmap(lambda a, b: a(b))(get_layer_activation(i + 1), x)
+                return (x, i + 1), None
+
+            dynamic, static = partition(self.layers[1], is_array)
+            (x, _), _ = jax.lax.scan(scan_fn, (x, jnp.array(0)), dynamic)
+        else:
+            for i, layer in enumerate(self.layers[:-1]):
+                x = layer(x)
+                x = filter_vmap(lambda a, b: a(b))(get_layer_activation(i), x)
+
         x = self.layers[-1](x)
         if self.out_size == "scalar":
             x = self.final_activation(x)
         else:
             x = filter_vmap(lambda a, b: a(b))(self.final_activation, x)
+
         return x
