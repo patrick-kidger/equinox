@@ -18,7 +18,7 @@ from ._embedding import (
 )
 from ._inference import inference_mode as inference_mode
 from ._linear import Identity as Identity, Linear as Linear
-from ._mlp import MLP as MLP, ScanOverMLP as ScanOverMLP
+from ._mlp import MLP as MLP
 from ._normalisation import (
     GroupNorm as GroupNorm,
     LayerNorm as LayerNorm,
