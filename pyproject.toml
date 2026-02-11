@@ -61,7 +61,13 @@ reportIncompatibleMethodOverride = true
 reportIncompatibleVariableOverride = false # Incompatible with eqx.AbstractVar
 
 [tool.pytest.ini_options]
-addopts = "-Werror --jaxtyping-packages=equinox,beartype.beartype(conf=beartype.BeartypeConf(strategy=beartype.BeartypeStrategy.On))"
+addopts = "--jaxtyping-packages=equinox,beartype.beartype(conf=beartype.BeartypeConf(strategy=beartype.BeartypeStrategy.On))"
+filterwarnings = [
+  "error",
+  # JAX v0.9.0 deprecated jax_pmap_shmap_merge config, will be removed in
+  # v0.10.0. Source: optax sets this config internally during import.
+  "ignore:Setting `jax_pmap_shmap_merge` is deprecated:DeprecationWarning"
+]
 
 [tool.ruff]
 extend-include = ["*.ipynb"]
