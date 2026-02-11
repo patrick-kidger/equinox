@@ -880,7 +880,8 @@ def test_jax_transform_warn(getkey):
             jax.custom_jvp,
             jax.custom_vjp,
             jax.checkpoint,  # pyright: ignore
-            jax.pmap,
+            # No longer testing pmap, as it's been changing somewhat unstably in JAX.
+            # jax.pmap,
         ):
             with pytest.warns(
                 match="Possibly assigning a JAX-transformed callable as an attribute"
