@@ -208,40 +208,57 @@ def test_nested_sequential(inner_stateful, outer_stateful, getkey):
     assert out.shape == (1, 6)
 
 
+def _assert_bias(depth: int, scan: bool, mlp: eqx.nn.MLP, use_bias: bool, use_final_bias: bool):
+    if depth == 0:
+        [layer] = mlp.layers
+        assert layer.use_bias == use_final_bias
+    elif scan:
+        [input, hidden, output] = mlp.layers
+        assert input.use_bias == use_bias
+        assert hidden.use_bias == use_bias
+        assert output.use_bias == use_final_bias
+    else:
+        [*early, output] = mlp.layers
+        assert len(early) == depth
+        assert all(e.use_bias == use_bias for e in early)
+        assert output.use_bias == use_final_bias
+
+
 @pytest.mark.parametrize("scan", (False, True), ids=["no_scan", "scan"])
-def test_mlp(getkey, scan):
-    mlp = eqx.nn.MLP(2, 3, 8, 2, scan=scan, key=getkey())
+@pytest.mark.parametrize("depth", (0, 1, 2))
+def test_mlp(getkey, scan, depth):
+    mlp = eqx.nn.MLP(2, 3, 8, depth=depth, scan=scan, key=getkey())
     x = jrandom.normal(getkey(), (2,))
     assert mlp(x).shape == (3,)
 
     mlp = eqx.nn.MLP(
-        in_size=2, out_size=3, width_size=8, depth=2, scan=scan, key=getkey()
+        in_size=2, out_size=3, width_size=8, depth=depth, scan=scan, key=getkey()
     )
     x = jrandom.normal(getkey(), (2,))
     assert mlp(x).shape == (3,)
 
-    mlp = eqx.nn.MLP("scalar", 2, 2, 2, scan=scan, key=getkey())
+    mlp = eqx.nn.MLP("scalar", 2, 2, depth=depth, scan=scan, key=getkey())
     x = jrandom.normal(getkey(), ())
     assert mlp(x).shape == (2,)
 
-    mlp = eqx.nn.MLP(2, "scalar", 2, 2, scan=scan, key=getkey())
+    mlp = eqx.nn.MLP(2, "scalar", 2, depth=depth, scan=scan, key=getkey())
     x = jrandom.normal(getkey(), (2,))
     assert mlp(x).shape == ()
-    assert [mlp.layers[i].use_bias for i in range(0, 3)] == [True, True, True]
+    _assert_bias(depth, scan, mlp, use_bias=True, use_final_bias=True)
 
     mlp = eqx.nn.MLP(
-        2, 3, 8, 2, use_bias=False, use_final_bias=True, scan=scan, key=getkey()
+        2, 3, 8, depth=depth, use_bias=False, use_final_bias=True, scan=scan, key=getkey()
     )
     x = jrandom.normal(getkey(), (2,))
     assert mlp(x).shape == (3,)
-    assert [mlp.layers[i].use_bias for i in range(0, 3)] == [False, False, True]
+    _assert_bias(depth, scan, mlp, use_bias=False, use_final_bias=True)
 
     mlp = eqx.nn.MLP(
-        2, 3, 8, 2, use_bias=True, use_final_bias=False, scan=scan, key=getkey()
+        2, 3, 8, depth=depth, use_bias=True, use_final_bias=False, scan=scan, key=getkey()
     )
     x = jrandom.normal(getkey(), (2,))
     assert mlp(x).shape == (3,)
-    assert [mlp.layers[i].use_bias for i in range(0, 3)] == [True, True, False]
+    _assert_bias(depth, scan, mlp, use_bias=True, use_final_bias=False)
 
 
 def test_scan_over_mlp_depth_one(getkey):
