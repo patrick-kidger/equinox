@@ -472,11 +472,20 @@ def common_rewrite(cond_fun, body_fun, init_val, max_steps, buffers, makes_false
         # For some reason this is actually a minor performance optimisation.
         # See https://github.com/patrick-kidger/diffrax/issues/274
         buffer_val = _wrap_buffers(val, prev_pred, None)
-        out = unvmap_any(cond_fun(buffer_val))
         if max_steps is not None:
             if type(max_steps) is not int:
                 raise ValueError("`max_steps` must be a Python integer")
-            out = out & (step < max_steps)
+            # Use lax.cond to skip cond_fun entirely when step >= max_steps.
+            # `step` is always a scalar (never batched), so lax.cond with
+            # `step < max_steps` as predicate executes only one branch at runtime
+            # even under vmap — avoiding an expensive cond_fun evaluation.
+            out = lax.cond(
+                step < max_steps,
+                lambda: unvmap_any(cond_fun(buffer_val)),
+                lambda: jnp.array(False),
+            )
+        else:
+            out = unvmap_any(cond_fun(buffer_val))
         # Need to allow being constant across the batch. This seems to arise in some
         # edge case when using `bounded_while_loop`, in which:
         # - `lax.scan` saves a copy of its state (in particular `step`) for use in the
