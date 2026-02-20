@@ -2,7 +2,7 @@ import functools as ft
 import pathlib
 from collections.abc import Callable
 from contextlib import contextmanager
-from typing import Any, BinaryIO
+from typing import Any, Protocol, runtime_checkable, TypeVar
 
 import jax
 import jax.numpy as jnp
@@ -13,8 +13,23 @@ from jaxtyping import PyTree
 from ._filters import is_array_like
 
 
+_T_co = TypeVar("_T_co", covariant=True)
+_T_contra = TypeVar("_T_contra", contravariant=True)
+
+
 class TreePathError(RuntimeError):
     path: tuple
+
+
+@runtime_checkable
+class _SupportsWrite(Protocol[_T_contra]):
+    def write(self, s: _T_contra, /) -> object: ...
+
+
+@runtime_checkable
+class _SupportsReadSeek(Protocol[_T_co]):
+    def seek(self, offset: int, whence: int, /) -> object: ...
+    def read(self, length: int = ..., /) -> _T_co: ...
 
 
 def _ordered_tree_map(
@@ -47,7 +62,7 @@ def _ordered_tree_map(
     return treedef.unflatten(_f(*xs) for xs in zip(*all_leaves))
 
 
-def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
+def default_serialise_filter_spec(f: _SupportsWrite[bytes], x: Any) -> None:
     """Default filter specification for serialising a leaf.
 
     **Arguments**
@@ -91,7 +106,7 @@ def default_serialise_filter_spec(f: BinaryIO, x: Any) -> None:
         pass
 
 
-def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
+def default_deserialise_filter_spec(f: _SupportsReadSeek[bytes], x: Any) -> Any:
     """Default filter specification for deserialising saved data.
 
     **Arguments**
@@ -124,7 +139,7 @@ def default_deserialise_filter_spec(f: BinaryIO, x: Any) -> Any:
         ```
     """  # noqa: E501
     if isinstance(x, (jax.Array, jax.ShapeDtypeStruct)):
-        return jnp.load(f)
+        return jnp.load(f)  # pyright: ignore[reportArgumentType]
     elif isinstance(x, np.ndarray):
         # Important to use `np` here to avoid promoting NumPy arrays to JAX.
         return np.load(f)
@@ -149,7 +164,10 @@ def _with_suffix(path):
 
 
 @contextmanager
-def _maybe_open(path_or_file: str | pathlib.Path | BinaryIO, mode: str):
+def _maybe_open(
+    path_or_file: str | pathlib.Path | _SupportsWrite[bytes] | _SupportsReadSeek[bytes],
+    mode: str,
+):
     """A function that unifies handling of file objects and path-like objects
     by opening the latter."""
     if isinstance(path_or_file, (str, pathlib.Path)):
@@ -189,7 +207,7 @@ def _assert_same(array_impl_type):
 
 
 def tree_serialise_leaves(
-    path_or_file: str | pathlib.Path | BinaryIO,
+    path_or_file: str | pathlib.Path | _SupportsWrite[bytes],
     pytree: PyTree,
     filter_spec=default_serialise_filter_spec,
     is_leaf: Callable[[Any], bool] | None = None,
@@ -246,7 +264,7 @@ def tree_serialise_leaves(
 
 
 def tree_deserialise_leaves(
-    path_or_file: str | pathlib.Path | BinaryIO,
+    path_or_file: str | pathlib.Path | _SupportsReadSeek[bytes],
     like: PyTree,
     filter_spec=default_deserialise_filter_spec,
     is_leaf: Callable[[Any], bool] | None = None,
