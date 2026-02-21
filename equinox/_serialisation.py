@@ -1,5 +1,6 @@
 import functools as ft
 import pathlib
+import typing
 from collections.abc import Callable
 from contextlib import contextmanager
 from typing import Any, Protocol, runtime_checkable, TypeVar
@@ -22,14 +23,19 @@ class TreePathError(RuntimeError):
 
 
 @runtime_checkable
-class _SupportsWrite(Protocol[_T_contra]):
+class SupportsWrite(Protocol[_T_contra]):
     def write(self, s: _T_contra, /) -> object: ...
 
 
 @runtime_checkable
-class _SupportsReadSeek(Protocol[_T_co]):
+class SupportsReadSeek(Protocol[_T_co]):
     def seek(self, offset: int, whence: int, /) -> object: ...
     def read(self, length: int = ..., /) -> _T_co: ...
+
+
+if getattr(typing, "GENERATING_DOCUMENTATION", "") == "equinox":
+    SupportsWrite.__module__ = "builtins"
+    SupportsReadSeek.__module__ = "builtins"
 
 
 def _ordered_tree_map(
@@ -62,7 +68,7 @@ def _ordered_tree_map(
     return treedef.unflatten(_f(*xs) for xs in zip(*all_leaves))
 
 
-def default_serialise_filter_spec(f: _SupportsWrite[bytes], x: Any) -> None:
+def default_serialise_filter_spec(f: SupportsWrite[bytes], x: Any) -> None:
     """Default filter specification for serialising a leaf.
 
     **Arguments**
@@ -106,7 +112,7 @@ def default_serialise_filter_spec(f: _SupportsWrite[bytes], x: Any) -> None:
         pass
 
 
-def default_deserialise_filter_spec(f: _SupportsReadSeek[bytes], x: Any) -> Any:
+def default_deserialise_filter_spec(f: SupportsReadSeek[bytes], x: Any) -> Any:
     """Default filter specification for deserialising saved data.
 
     **Arguments**
@@ -165,7 +171,7 @@ def _with_suffix(path):
 
 @contextmanager
 def _maybe_open(
-    path_or_file: str | pathlib.Path | _SupportsWrite[bytes] | _SupportsReadSeek[bytes],
+    path_or_file: str | pathlib.Path | SupportsWrite[bytes] | SupportsReadSeek[bytes],
     mode: str,
 ):
     """A function that unifies handling of file objects and path-like objects
@@ -207,7 +213,7 @@ def _assert_same(array_impl_type):
 
 
 def tree_serialise_leaves(
-    path_or_file: str | pathlib.Path | _SupportsWrite[bytes],
+    path_or_file: str | pathlib.Path | SupportsWrite[bytes],
     pytree: PyTree,
     filter_spec=default_serialise_filter_spec,
     is_leaf: Callable[[Any], bool] | None = None,
@@ -264,7 +270,7 @@ def tree_serialise_leaves(
 
 
 def tree_deserialise_leaves(
-    path_or_file: str | pathlib.Path | _SupportsReadSeek[bytes],
+    path_or_file: str | pathlib.Path | SupportsReadSeek[bytes],
     like: PyTree,
     filter_spec=default_deserialise_filter_spec,
     is_leaf: Callable[[Any], bool] | None = None,
