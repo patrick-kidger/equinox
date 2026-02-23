@@ -101,3 +101,6 @@ Enhanced `beartype` run-time typechecking for `jaxtyping` annotated `equinox` Mo
 
 **Oncequinox**: [Github](https://github.com/GalacticDynamics/oncequinox)  
 Micro-library for making Equinox singletons.
+
+**Exponax**: [Github](https://github.com/Ceyron/exponax)  
+Fast & differentiable n-D PDE solvers in JAX.
