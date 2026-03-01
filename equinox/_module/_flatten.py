@@ -29,8 +29,13 @@ class _Missing:
     def __bool__(self):
         return False
 
+    def __repr__(self):
+        return "Missing"
+
 
 MISSING = _Missing()
+jtu.register_pytree_node(_Missing, lambda _: ((), None), lambda _, __: MISSING)
+
 
 # Code template for flattening the wrapper fields
 _GETTER = "get({k!r},MISSING)"  # get = obj.__dict__.get
