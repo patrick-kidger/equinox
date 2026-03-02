@@ -8,7 +8,7 @@ import pytest
 
 
 def _f_warn(x):
-    x = eqx.warn_if(x, x < 0, "x must be non-negative")
+    x = eqx.error_if(x, x < 0, "x must be non-negative", on_error="warn")
     return jax.nn.relu(x)
 
 
@@ -76,7 +76,7 @@ def test_grad2():
     @jax.grad
     def f(x, y, z):
         x = eqxi.nondifferentiable_backward(x)
-        x, y = eqx.warn_if((x, y), z, "oops")
+        x, y = eqx.error_if((x, y), z, "oops", on_error="warn")
         return y
 
     with pytest.warns(UserWarning, match="oops"):
@@ -86,17 +86,19 @@ def test_grad2():
 def test_tracetime():
     @jax.jit
     def f(x):
-        return eqx.warn_if(x, True, "hi")
+        return eqx.error_if(x, True, "hi", on_error="warn")
 
     with pytest.warns(UserWarning):
         f(1.0)
 
 
 def test_category():
-    """Test warn_if with custom warning category."""
+    """Test error_if with on_error='warn' and custom warning category."""
 
     def f_custom_warning(x):
-        x = eqx.warn_if(x, x < 0, "custom warning", category=RuntimeWarning)
+        x = eqx.error_if(
+            x, x < 0, "custom warning", on_error="warn", category=RuntimeWarning
+        )
         return x
 
     with pytest.warns(RuntimeWarning, match="custom warning"):
@@ -104,11 +106,13 @@ def test_category():
 
 
 def test_category_jit():
-    """Test warn_if with custom warning category under JIT."""
+    """Test error_if with on_error='warn' and custom warning category under JIT."""
 
     @jax.jit
     def f_custom_warning(x):
-        x = eqx.warn_if(x, x < 0, "custom warning", category=DeprecationWarning)
+        x = eqx.error_if(
+            x, x < 0, "custom warning", on_error="warn", category=DeprecationWarning
+        )
         return x
 
     with pytest.warns(DeprecationWarning, match="custom warning"):
@@ -116,11 +120,11 @@ def test_category_jit():
 
 
 def test_multiple_messages():
-    """Test warn_if with different messages based on condition."""
+    """Test error_if with on_error='warn' and different messages based on condition."""
 
     def f(x):
-        x = eqx.warn_if(x, x < 0, "x is negative")
-        x = eqx.warn_if(x, x > 10, "x is too large")
+        x = eqx.error_if(x, x < 0, "x is negative", on_error="warn")
+        x = eqx.error_if(x, x > 10, "x is too large", on_error="warn")
         return x
 
     with pytest.warns(UserWarning, match="x is negative"):
@@ -131,11 +135,11 @@ def test_multiple_messages():
 
 
 def test_unused_return():
-    """Test warn_if when return value is unused."""
+    """Test error_if with on_error='warn' when return value is unused."""
 
     @jax.jit
     def f(x):
-        eqx.warn_if(x, x < 0, "unused warning")
+        eqx.error_if(x, x < 0, "unused warning", on_error="warn")
         return x + 1
 
     with pytest.warns(UserWarning, match="unused warning"):
@@ -144,11 +148,11 @@ def test_unused_return():
 
 
 def test_used_return():
-    """Test warn_if when return value is used."""
+    """Test error_if with on_error='warn' when return value is used."""
 
     @jax.jit
     def f(x):
-        x = eqx.warn_if(x, x < 0, "used warning")
+        x = eqx.error_if(x, x < 0, "used warning", on_error="warn")
         return x + 1
 
     with pytest.warns(UserWarning, match="used warning"):
@@ -157,11 +161,13 @@ def test_used_return():
 
 
 def test_pytree():
-    """Test warn_if with PyTrees."""
+    """Test error_if with on_error='warn' and PyTrees."""
 
     def f(pytree):
         x, y = pytree
-        pytree = eqx.warn_if(pytree, (x**2 + y**2) > 1.0, "norm exceeded")
+        pytree = eqx.error_if(
+            pytree, (x**2 + y**2) > 1.0, "norm exceeded", on_error="warn"
+        )
         return pytree
 
     # Should not warn
@@ -176,11 +182,11 @@ def test_pytree():
 
 
 def test_array_predicate():
-    """Test warn_if with array predicates."""
+    """Test error_if with on_error='warn' and array predicates."""
 
     @jax.jit
     def f(x):
-        x = eqx.warn_if(x, x < 0, "negative value")
+        x = eqx.error_if(x, x < 0, "negative value", on_error="warn")
         return jax.nn.relu(x)
 
     batched_f = jax.vmap(f)
@@ -190,10 +196,10 @@ def test_array_predicate():
 
 
 def test_scalar_no_array():
-    """Test warn_if with scalar conditions (no arrays)."""
+    """Test error_if with on_error='warn' and scalar conditions (no arrays)."""
 
     def f(x):
-        x = eqx.warn_if(x, x < 0, "scalar negative")
+        x = eqx.error_if(x, x < 0, "scalar negative", on_error="warn")
         return x
 
     with pytest.warns(UserWarning, match="scalar negative"):

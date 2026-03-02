@@ -3,13 +3,14 @@ import warnings
 from typing import Literal
 
 
-EQX_ON_ERROR: Literal["raise", "breakpoint", "nan", "off"] = os.environ.get(
+EQX_ON_ERROR: Literal["raise", "breakpoint", "nan", "warn", "off"] = os.environ.get(
     "EQX_ON_ERROR", "raise"
 )  # pyright: ignore
-if EQX_ON_ERROR not in ("raise", "breakpoint", "nan", "off"):
+if EQX_ON_ERROR not in ("raise", "breakpoint", "nan", "warn", "off"):
     raise ValueError(
         "Unrecognised value for `EQX_ON_ERROR`. Valid values are `EQX_ON_ERROR=raise`, "
-        "`EQX_ON_ERROR=breakpoint`, `EQX_ON_ERROR=nan`, and `EQX_ON_ERROR=off`."
+        "`EQX_ON_ERROR=breakpoint`, `EQX_ON_ERROR=nan`, `EQX_ON_ERROR=warn`, and "
+        "`EQX_ON_ERROR=off`."
     )
 if EQX_ON_ERROR == "breakpoint":
     warnings.warn(
