@@ -38,6 +38,13 @@ def _nan_like(x: Array | np.ndarray) -> Array | np.ndarray:
         return x
 
 
+def _warn_and_return_token(
+    msg: str, category: type[Warning] | None, stacklevel: int
+) -> bool:
+    warnings.warn(msg, category=category, stacklevel=stacklevel)
+    return False
+
+
 _tpu_msg = """
 
 Computation halted with the above error message. No Python exception is being raised as
@@ -437,10 +444,11 @@ def _warn(
 
     def handle_warning():  # pyright: ignore
         msg = msgs[index.item() if isinstance(index, Array) else index]  # pyright: ignore[reportCallIssue, reportArgumentType]
-        jax.debug.callback(
-            warnings.warn, msg, category=category, stacklevel=stacklevel + 2
+        shape_dtypes = jax.ShapeDtypeStruct((), jnp.bool_)
+        token = jax.pure_callback(
+            _warn_and_return_token, shape_dtypes, msg, category, stacklevel + 2
         )
-        return x
+        return lax.cond(token, lambda: x, lambda: x)
 
     return lax.cond(pred, handle_warning, lambda: x)
 
