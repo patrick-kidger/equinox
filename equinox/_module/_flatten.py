@@ -34,7 +34,7 @@ class _Missing:
 
 
 MISSING = _Missing()
-jtu.register_pytree_node(_Missing, lambda _: ((), None), lambda _, __: MISSING)
+jtu.register_static(_Missing)
 
 
 # Code template for flattening the wrapper fields
