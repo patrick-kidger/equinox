@@ -1,3 +1,4 @@
+import abc
 import contextlib
 import dataclasses
 import doctest
@@ -771,8 +772,7 @@ def test_init_as_abstract(field):
 
     x = Concrete()
     leaves, treedef = jtu.tree_flatten(x)
-    # The init=False field will be present as a sentinel value in the leaves
-    assert len(leaves) == 1
+    assert len(leaves) == 0
     y = jtu.tree_unflatten(treedef, leaves)
     assert y.foo == 1
 
@@ -1203,3 +1203,29 @@ def test_vmap_scan_default():
         return carry, out
 
     jax.lax.scan(scan_fn, model, batch)
+
+
+# https://github.com/patrick-kidger/equinox/issues/1191
+def test_class_attribute_of_static_field_with_abstract_property():
+    class AbstractBase(eqx.Module):
+        config: list[str] = eqx.field(static=True)  # pyright: ignore
+
+        @property
+        @abc.abstractmethod
+        def config(self):  # noqa: F811
+            pass
+
+    class ConcreteChild(AbstractBase):
+        config = ["a", "b"]  # pyright: ignore
+
+        def __init__(self):
+            pass
+
+    def f(model):
+        if len(model.config) == 2:
+            return len(model.config)
+        else:
+            return 37
+
+    model = ConcreteChild()
+    assert jax.jit(f)(model) == 2
