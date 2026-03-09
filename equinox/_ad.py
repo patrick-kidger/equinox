@@ -151,7 +151,7 @@ def filter_value_and_grad(
 
     **Arguments:**
 
-    - `fun` is a pure function to differentiate.
+    - `fun`: is a pure function to differentiate.
     - `has_aux`: if `True` then `fun` should return a pair; the first element is the
         output to be differentiated and the second element is auxiliary data.
 
@@ -227,7 +227,7 @@ def filter_grad(fun=sentinel, *, has_aux: bool = False, **gradkwargs):
 
     **Arguments:**
 
-    - `fun` is a pure function to differentiate.
+    - `fun`: is a pure function to differentiate.
     - `has_aux`: if `True` then `fun` should return a pair; the first element is the
         output to be differentiated and the second element is auxiliary data.
 

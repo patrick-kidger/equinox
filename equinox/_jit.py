@@ -327,8 +327,8 @@ def filter_jit(
 
     **Arguments:**
 
-    - `fun` is a pure function to JIT compile.
-    - `donate` indicates whether the buffers of JAX arrays are donated or not. It
+    - `fun`: is a pure function to JIT compile.
+    - `donate`: indicates whether the buffers of JAX arrays are donated or not. It
         should either be:
         - `'all'`: donate all arrays and suppress all warnings about unused buffers;
         - `'all-except-first'`: donate all arrays except for those in the first

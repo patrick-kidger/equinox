@@ -14,3 +14,4 @@ examples/multipart_serialised.eqx
 .python-version
 .DS_Store
 uv.lock
+.vscode
