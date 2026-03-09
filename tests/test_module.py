@@ -994,6 +994,16 @@ def test_init_subclass_and_abstract_class_var():
     Child()  # pyright: ignore[reportCallIssue]
 
 
+def test_instance_overriding_abstract_class_var():
+    class AbstractParent(eqx.Module):
+        abs_cls_var: eqx.AbstractClassVar[str]
+
+    class Child(AbstractParent):
+        abs_cls_var: str
+
+    Child("hi")
+
+
 # https://github.com/patrick-kidger/equinox/issues/969
 def test_converter_subclass_post_init():
     xs = []

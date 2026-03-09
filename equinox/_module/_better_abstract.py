@@ -212,9 +212,9 @@ class BetterABCMeta(abc.ABCMeta):
                         if name not in abstract_class_vars:
                             abstract_vars.add(name)
                 else:
-                    abstract_vars.discard(name)  # not conditional on `is_class`
-                    if is_class:
-                        abstract_class_vars.discard(name)
+                    abstract_class_vars.discard(name)
+                    if not is_class:
+                        abstract_vars.discard(name)
             for name in kls.__dict__.keys():
                 abstract_vars.discard(name)
                 abstract_class_vars.discard(name)
