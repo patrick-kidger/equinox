@@ -240,8 +240,8 @@ def filter_vmap(
         2. a dictionary, in which case the named arguments use the specified indices
             to vectorise over, and all other arguments will have the default
             `eqx.if_array(0)`.
-    - `out_axes`: indicates which axis of the output arrays the mapped axis should appear
-        at. It should be a PyTree of `None`, `int`, or callables
+    - `out_axes`: indicates which axis of the output arrays the mapped axis
+        should appear at. It should be a PyTree of `None`, `int`, or callables
         `Leaf -> Union[None, int]`, and its tree structure should be a prefix of the
         output `fun(*args)`.
     - `axis_name`: is an optional hashable Python object used to identify the mapped
@@ -579,8 +579,8 @@ def filter_pmap(
         2. a dictionary, in which case the named arguments use the specified indices
             to parallelise over, and all other arguments will have the default
             `eqx.if_array(0)`.
-    - `out_axes`: indicates which axis of the output arrays the mapped axis should appear
-        at. It should be a PyTree of `None`, `int`, or callables
+    - `out_axes`: indicates which axis of the output arrays the mapped axis
+        should appear at. It should be a PyTree of `None`, `int`, or callables
         `Leaf -> Union[None, int]`, and its tree structure should be a prefix of the
         output `fun(*args)`.
     - `axis_name`: is an optional hashable Python object used to identify the mapped
