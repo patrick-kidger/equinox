@@ -231,22 +231,22 @@ def filter_vmap(
     over), and callables `Leaf -> Union[None, int]` are mapped and evaluated on every
     leaf of their subtree. `None` should be used for non-JAX-array arguments.
 
-    - `fun` is a pure function to vectorise. Should be of the form `fun(*args)`; that
+    - `fun`: is a pure function to vectorise. Should be of the form `fun(*args)`; that
         is to say it cannot accept keyword arguments.
-    - `in_axes` indicates which axes of the input arrays should be vectorised over.
+    - `in_axes`: indicates which axes of the input arrays should be vectorised over.
         It should be a PyTree of `None`, `int`, or callables `Leaf -> Union[None, int]`.
         Its tree structure should either be:
         1. a prefix of the input tuple of `args`.
         2. a dictionary, in which case the named arguments use the specified indices
             to vectorise over, and all other arguments will have the default
             `eqx.if_array(0)`.
-    - `out_axes` indicates which axis of the output arrays the mapped axis should appear
+    - `out_axes`: indicates which axis of the output arrays the mapped axis should appear
         at. It should be a PyTree of `None`, `int`, or callables
         `Leaf -> Union[None, int]`, and its tree structure should be a prefix of the
         output `fun(*args)`.
-    - `axis_name` is an optional hashable Python object used to identify the mapped
+    - `axis_name`: is an optional hashable Python object used to identify the mapped
         axis so that parallel collectives (e.g. `jax.lax.psum`) can be applied.
-    - `axis_size` is an optional `int` describing the size of the axis mapped. This
+    - `axis_size`: is an optional `int` describing the size of the axis mapped. This
         only needs to be passed if none of the input arguments are vectorised, as else
         it can be deduced by looking at the argument shapes.
 
@@ -570,25 +570,25 @@ def filter_pmap(
     over), and callables `Leaf -> Union[None, int]` are mapped and evaluated on every
     leaf of their subtree. `None` should be used for non-JAX-array arguments.
 
-    - `fun` is a pure function to parallelise. Should be of the form `fun(*args)`; that
+    - `fun`: is a pure function to parallelise. Should be of the form `fun(*args)`; that
         is to say it cannot accept keyword arguments.
-    - `in_axes` indicates which axes of the input arrays should be parallelised over.
+    - `in_axes`: indicates which axes of the input arrays should be parallelised over.
         It should be a PyTree of `None`, `int`, or callables `Leaf -> Union[None, int]`.
         Its tree structure should either be:
         1. a prefix of the input tuple of `args`.
         2. a dictionary, in which case the named arguments use the specified indices
             to parallelise over, and all other arguments will have the default
             `eqx.if_array(0)`.
-    - `out_axes` indicates which axis of the output arrays the mapped axis should appear
+    - `out_axes`: indicates which axis of the output arrays the mapped axis should appear
         at. It should be a PyTree of `None`, `int`, or callables
         `Leaf -> Union[None, int]`, and its tree structure should be a prefix of the
         output `fun(*args)`.
-    - `axis_name` is an optional hashable Python object used to identify the mapped
+    - `axis_name`: is an optional hashable Python object used to identify the mapped
         axis so that parallel collectives (e.g. `jax.lax.psum`) can be applied.
-    - `axis_size` is an optional `int` describing the size of the axis mapped. This
+    - `axis_size`: is an optional `int` describing the size of the axis mapped. This
         only needs to be passed if none of the input arguments are vectorised, as else
         it can be deduced by looking at the argument shapes.
-    - `donate` indicates whether the buffers of JAX arrays are donated or not, it
+    - `donate`: indicates whether the buffers of JAX arrays are donated or not, it
         should either be:
         - `'all'`: donate all arrays and suppress all warnings about
             unused buffers;

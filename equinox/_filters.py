@@ -134,16 +134,16 @@ def filter(
 
     **Arguments:**
 
-    - `pytree` is any PyTree.
-    - `filter_spec` is a PyTree whose structure should be a prefix of the structure of
+    - `pytree`: is any PyTree.
+    - `filter_spec`: is a PyTree whose structure should be a prefix of the structure of
         `pytree`. Each of its leaves should either be:
         - `True`, in which case the leaf or subtree is kept;
         - `False`, in which case the leaf or subtree is replaced with `replace`;
         - a callable `Leaf -> bool`, in which case this is evaluated on the leaf or
             mapped over the subtree, and the leaf kept or replaced as appropriate.
-    - `inverse` switches the truthy/falsey behaviour: falsey results are kept and
+    - `inverse`: switches the truthy/falsey behaviour: falsey results are kept and
         truthy results are replaced.
-    - `replace` is what to replace any falsey leaves with. Defaults to `None`.
+    - `replace`: is what to replace any falsey leaves with. Defaults to `None`.
     - `is_leaf`: Optional function called at each node of the PyTree. It should return
         a boolean. `True` indicates that the whole subtree should be treated as leaf;
         `False` indicates that the subtree should be traversed as a PyTree.
