@@ -882,8 +882,6 @@ def _none_to_zero(ct, x):
                 # rules.
                 # That changed in JAX 0.4.34.
                 aval = aval.to_tangent_aval()  # pyright: ignore
-            else:
-                aval = jax.core.raise_to_shaped(aval)  # pyright: ignore
             return jax.custom_derivatives.SymbolicZero(aval)
     else:
         return ct
