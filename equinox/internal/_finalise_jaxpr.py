@@ -92,7 +92,14 @@ def finalise_eval_jaxpr(jaxpr: jax.extend.core.Jaxpr, consts, *args):
     _safe_map(write, jaxpr.invars, args)
     for eqn in jaxpr.eqns:
         params = _finalise_jaxprs_in_params(eqn.params)
-        subfuns, bind_params = eqn.primitive.get_bind_params(params)
+        bind_result = eqn.primitive.get_bind_params(params)
+        if isinstance(bind_result, tuple):
+            # JAX < 0.9.2: returns (subfuns_list, params_dict)
+            subfuns, bind_params = bind_result
+        else:
+            # JAX >= 0.9.2: returns params dict; subfuns (if any) stay in dict
+            bind_params = bind_result
+            subfuns = []
         try:
             call = primitive_finalisations[eqn.primitive]
         except KeyError:
@@ -206,7 +213,14 @@ for prim in (
 # To make this also useful as debugging tool, we also inline some calls.
 
 
-def _jvp_call_p_finalisation(fun, jvp, *args, symbolic_zeros=None):
+def _jvp_call_p_finalisation(*args, subfuns=None, **kwargs):
+    if subfuns is not None:
+        # JAX >= 0.9.2: subfuns passed as keyword arg
+        fun = subfuns[0]
+    else:
+        # JAX < 0.9.2: subfuns passed as positional args
+        fun = args[0]
+        args = args[2:]
     return fun.call_wrapped(*args)
 
 
