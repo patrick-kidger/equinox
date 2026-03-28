@@ -1,6 +1,6 @@
 <h1 align='center'>Equinox</h1>
 
-Equinox is your one-stop [JAX](https://github.com/google/jax) library, for everything you need that isn't already in core JAX:
+Equinox is your one-stop [JAX](https://github.com/google/jax) library, for everything you need that isn't already in core JAX: 🚀
 
 - neural networks (or more generally any model), with easy-to-use PyTorch-like syntax;
 - filtered APIs for transformations;
