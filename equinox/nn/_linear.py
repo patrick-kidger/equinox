@@ -1,5 +1,6 @@
 import math
-from typing import Any, Literal, TypeVar
+from typing import Any, Generic, Literal, overload, TypeVar
+from typing_extensions import TypeVar as TypeVarExt
 
 import jax.numpy as jnp
 import jax.random as jrandom
@@ -10,14 +11,39 @@ from .._module import field, Module
 from ._misc import default_init, named_scope
 
 
-class Linear(Module):
+_B = TypeVarExt("_B", bound=Array | None, default=Array | None)
+
+
+class Linear(Module, Generic[_B]):
     """Performs a linear transformation."""
 
     weight: Array
-    bias: Array | None
+    bias: _B
     in_features: int | Literal["scalar"] = field(static=True)
     out_features: int | Literal["scalar"] = field(static=True)
     use_bias: bool = field(static=True)
+
+    @overload
+    def __init__(
+        self: "Linear[Array]",
+        in_features: int | Literal["scalar"],
+        out_features: int | Literal["scalar"],
+        use_bias: Literal[True] = ...,
+        dtype: Any = ...,
+        *,
+        key: PRNGKeyArray,
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self: "Linear[None]",
+        in_features: int | Literal["scalar"],
+        out_features: int | Literal["scalar"],
+        use_bias: Literal[False] = ...,
+        dtype: Any = ...,
+        *,
+        key: PRNGKeyArray,
+    ) -> None: ...
 
     def __init__(
         self,
@@ -58,7 +84,7 @@ class Linear(Module):
         wshape = (out_features_, in_features_)
         self.weight = default_init(wkey, wshape, dtype, lim)
         bshape = (out_features_,)
-        self.bias = default_init(bkey, bshape, dtype, lim) if use_bias else None
+        self.bias = default_init(bkey, bshape, dtype, lim) if use_bias else None  # pyright: ignore[reportAttributeAccessIssue]
 
         self.in_features = in_features
         self.out_features = out_features
