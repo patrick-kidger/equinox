@@ -42,7 +42,8 @@ docs = [
   "mkdocs-material==9.6.7",
   "mkdocstrings==0.28.3",
   "mkdocstrings-python==1.16.8",
-  "pymdown-extensions==10.14.3"
+  "pygments==2.20.0",
+  "pymdown-extensions==10.21.2"
 ]
 tests = [
   "beartype",
