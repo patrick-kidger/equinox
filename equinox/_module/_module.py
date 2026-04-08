@@ -15,7 +15,7 @@ from typing import (
     TYPE_CHECKING,
     TypeVar,
 )
-from typing_extensions import dataclass_transform
+from typing_extensions import dataclass_transform, Self
 
 import jax
 import jax.tree_util as jtu
@@ -537,7 +537,7 @@ class Module(Hashable, metaclass=_ModuleMeta):
         [`equinox.AbstractClassVar`][].
     """  # noqa: E501
 
-    def __new__(cls, *args: object, **kwargs: object) -> "Module":
+    def __new__(cls, *args: object, **kwargs: object) -> Self:
         del args, kwargs
         self = super().__new__(cls)
         # We record currently-initialising modules
