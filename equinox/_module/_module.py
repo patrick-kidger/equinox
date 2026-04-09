@@ -264,6 +264,9 @@ grads = call(Foo(jnp.array(3.0), jnp.array(4.0)), 5)
 """[1:]
 
 
+_ModuleT = TypeVar("_ModuleT", bound="Module")
+
+
 # This deliberately does not pass `frozen_default=True`, as that clashes with custom
 # `__init__` methods.
 @dataclass_transform(field_specifiers=(dataclasses.field, field))
@@ -537,9 +540,9 @@ class Module(Hashable, metaclass=_ModuleMeta):
         [`equinox.AbstractClassVar`][].
     """  # noqa: E501
 
-    def __new__(cls, *args: object, **kwargs: object) -> "Module":
+    def __new__(cls: "type[_ModuleT]", *args: object, **kwargs: object) -> "_ModuleT":
         del args, kwargs
-        self = super().__new__(cls)
+        self = super().__new__(cls)  # pyright: ignore[reportArgumentType]
         # We record currently-initialising modules
         _currently_initialising.add(self)
         return self
