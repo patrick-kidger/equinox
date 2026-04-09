@@ -104,3 +104,9 @@ Micro-library for making Equinox singletons.
 
 **Exponax**: [Github](https://github.com/Ceyron/exponax)  
 Fast & differentiable n-D PDE solvers in JAX.
+
+**Parax**: [Github](https://github.com/gvcallen/parax)  
+Parametric modeling in JAX + Equinox.
+
+**ParamRF**: [Github](https://github.com/gvcallen/paramrf)  
+Parametric radio frequency modeling, optimization and sampling.
