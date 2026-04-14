@@ -1,4 +1,4 @@
-<h1 align='center'>Equinox</h1>
+<h1 align='center'>Equinox 🔮</h1>
 
 Equinox is your one-stop [JAX](https://github.com/google/jax) library, for everything you need that isn't already in core JAX:
 
