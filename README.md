@@ -99,6 +99,7 @@ If you found this library to be useful in academic work, then please cite: ([arX
 [BlackJAX](https://github.com/blackjax-devs/blackjax): probabilistic+Bayesian sampling.  
 [sympy2jax](https://github.com/patrick-kidger/sympy2jax): SymPy<->JAX conversion; train symbolic expressions via gradient descent.  
 [PySR](https://github.com/milesCranmer/PySR): symbolic regression. (Non-JAX honourable mention!)  
+[GPjax](https://github.com/thomaspinder/gpjax): Gaussian processes models.
 
 **Awesome JAX**  
 [Awesome Equinox](https://docs.kidger.site/equinox/awesome-list/)  

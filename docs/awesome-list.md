@@ -113,3 +113,6 @@ Parametric radio frequency modeling, optimization and sampling.
 
 +**Peex**: [Github](https://github.com/sammccallum/peex)  
 +Runtime hooks for Equinox modules.
+
++**GPJax**: [Github](https://github.com/thomaspinder/gpjax)  
++Gaussian process models in JAX and Equinox.
