@@ -111,5 +111,8 @@ Parametric modeling in JAX + Equinox.
 **ParamRF**: [Github](https://github.com/gvcallen/paramrf)  
 Parametric radio frequency modeling, optimization and sampling.
 
-+**Peex**: [Github](https://github.com/sammccallum/peex)  
-+Runtime hooks for Equinox modules.
+**Peex**: [Github](https://github.com/sammccallum/peex)  
+Runtime hooks for Equinox modules.
+
+**GPJax**: [Github](https://github.com/thomaspinder/gpjax)  
+Gaussian process models in JAX and Equinox.
