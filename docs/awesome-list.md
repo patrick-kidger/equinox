@@ -34,6 +34,9 @@ The Boltz-1 protein structure prediction model.
 **nequip-eqx**: [GitHub](https://github.com/teddykoker/nequip-eqx)  
 The NequIP neural network interatomic potential model.
 
+**chronos2-jax**: [GitHub](https://github.com/theorashid/chronos2-jax)  
+Port of the Chronos-2 time series foundation model.
+
 ## Libraries
 
 **Levanter**: [GitHub](https://github.com/stanford-crfm/levanter)  
