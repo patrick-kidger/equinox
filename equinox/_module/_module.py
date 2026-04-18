@@ -385,7 +385,7 @@ class _ModuleMeta(BetterABCMeta):
 
         return cls
 
-    def __call__(cls, *args: object, **kwargs: object):  # noqa: N805
+    def __call__(cls: "type[_ModuleT]", *args: object, **kwargs: object) -> "_ModuleT":  # noqa: N805
         __tracebackhide__ = True
         if cls in _abstract_module_registry:
             # Any other is-abstract checks will be handled in super().__call__.
