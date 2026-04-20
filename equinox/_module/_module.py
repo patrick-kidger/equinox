@@ -371,9 +371,9 @@ class _ModuleMeta(BetterABCMeta):
         # Cache the field names and per-instantiation metadata for later use.
         names = tuple(f.name for f in fields)
         converter_fields = tuple(
-            (f.name, f.metadata["converter"])
+            (f.name, converter)
             for f in fields
-            if "converter" in f.metadata
+            if (converter := f.metadata.get("converter")) is not None
         )
         static_field_names = tuple(
             f.name for f in fields if f.metadata.get("static", False)
