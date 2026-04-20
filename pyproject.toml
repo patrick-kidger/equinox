@@ -4,7 +4,7 @@ requires = ["hatchling"]
 
 [dependency-groups]
 dev = [
-  "prek>=0.3.8",
+  "prek==0.3.9",
   "pyright==1.1.406",
   "ruff==0.13.0",
   "toml-sort==0.23.1"
@@ -70,10 +70,7 @@ filterwarnings = [
   "error",
   # JAX v0.9.0 deprecated jax_pmap_shmap_merge config, will be removed in
   # v0.10.0. Source: optax sets this config internally during import.
-  "ignore:Setting `jax_pmap_shmap_merge` is deprecated:DeprecationWarning",
-  # JAX v0.10.0 deprecated jax.core.find_top_trace in favour of
-  # jax.extend.core.find_top_trace.
-  "ignore:jax.core.find_top_trace is deprecated:DeprecationWarning"
+  "ignore:Setting `jax_pmap_shmap_merge` is deprecated:DeprecationWarning"
 ]
 
 [tool.ruff]
