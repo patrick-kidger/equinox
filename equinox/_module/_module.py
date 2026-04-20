@@ -48,6 +48,10 @@ class _ModuleInfo(NamedTuple):
 
     names_tuple: tuple[str, ...]
     names_set: frozenset[str]
+    converter_fields: tuple[tuple[str, Any], ...]  # (name, converter) pairs
+    static_field_names: tuple[str, ...]  # names of static=True fields
+    non_init_field_names: tuple[str, ...]  # names of init=False fields
+    check_init_methods: tuple[Any, ...]  # unbound __check_init__ funcs from MRO
 
 
 MSG_METHOD_IN_INIT: Final = """Cannot assign methods in __init__.
@@ -364,11 +368,29 @@ class _ModuleMeta(BetterABCMeta):
         if has_dataclass_init:
             cls.__init__.__doc__ = init_doc  # pyright: ignore[reportPossiblyUnboundVariable]
 
-        # Cache the field names for later use.
+        # Cache the field names and per-instantiation metadata for later use.
         names = tuple(f.name for f in fields)
+        converter_fields = tuple(
+            (f.name, f.metadata["converter"])
+            for f in fields
+            if "converter" in f.metadata
+        )
+        static_field_names = tuple(
+            f.name for f in fields if f.metadata.get("static", False)
+        )
+        non_init_field_names = tuple(f.name for f in fields if not f.init)
+        check_init_methods = tuple(
+            parent_cls.__dict__["__check_init__"]
+            for parent_cls in cls.__mro__  # pyright: ignore[reportGeneralTypeIssues]
+            if "__check_init__" in parent_cls.__dict__
+        )
         _module_info[cls] = _ModuleInfo(
             names_tuple=names,
             names_set=frozenset(names),
+            converter_fields=converter_fields,
+            static_field_names=static_field_names,
+            non_init_field_names=non_init_field_names,
+            check_init_methods=check_init_methods,
         )
 
         # Generate optimized flatten/unflatten functions
@@ -403,35 +425,36 @@ class _ModuleMeta(BetterABCMeta):
             del tryself
         assert not is_abstract_module(cls)  # pyright: ignore[reportArgumentType]
 
-        fields = dataclasses.fields(cls)  # pyright: ignore[reportArgumentType]
+        info = _module_info[cls]
 
-        for f in fields:
-            # Check the field was initialized.
+        # Check all fields were initialized.
+        for name in info.names_tuple:
             try:
-                val = getattr(self, f.name)
+                getattr(self, name)
             except AttributeError as err:
-                raise TypeError(f"Field {f.name!r} was not initialized.") from err
+                raise TypeError(f"Field {name!r} was not initialized.") from err
 
-            if (converter := f.metadata.get("converter")) is not None:
-                object.__setattr__(self, f.name, converter(getattr(self, f.name)))
-            if f.metadata.get("static", False):
-                if any(jtu.tree_map(is_array, jtu.tree_leaves(getattr(self, f.name)))):
-                    warnings.warn(
-                        "A JAX array is being set as static! This can result "
-                        "in unexpected behavior and is usually a mistake to do.",
-                        stacklevel=2,
-                    )
-            if not f.init:
-                if any(jtu.tree_map(is_inexact_array_like, jtu.tree_leaves(val))):
-                    warnings.warn(_MSG_FIELD_INIT_FALSE, stacklevel=2)
+        # Warn about init=False fields containing inexact arrays (pre-converter values).
+        for name in info.non_init_field_names:
+            val = getattr(self, name)
+            if any(jtu.tree_map(is_inexact_array_like, jtu.tree_leaves(val))):
+                warnings.warn(_MSG_FIELD_INIT_FALSE, stacklevel=2)
 
-        for parent_cls in cls.__mro__:
-            try:
-                check_init = parent_cls.__dict__["__check_init__"]
-            except KeyError:  # noqa: PERF203
-                pass
-            else:
-                check_init(self)
+        # Apply converters.
+        for name, converter in info.converter_fields:
+            object.__setattr__(self, name, converter(getattr(self, name)))
+
+        # Warn about static fields containing JAX arrays (post-converter values).
+        for name in info.static_field_names:
+            if any(jtu.tree_map(is_array, jtu.tree_leaves(getattr(self, name)))):
+                warnings.warn(
+                    "A JAX array is being set as static! This can result "
+                    "in unexpected behavior and is usually a mistake to do.",
+                    stacklevel=2,
+                )
+
+        for check_init in info.check_init_methods:
+            check_init(self)
 
         return self
 
