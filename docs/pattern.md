@@ -8,7 +8,7 @@ _This page is primarily a description of how this pattern can be used with Equin
 
     Every subclass of `eqx.Module` must be either
 
-    (a) abstract (it can be subclassed, but not instantiated); or  
+    (a) abstract (it can be subclassed, but not instantiated); or
     (b) final (it can be instantiated, but not subclassed).
 
     Only abstractmethods and abstract attributes can be overridden. (So once they've been implemented, then a subclass may not override them.)

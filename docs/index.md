@@ -72,23 +72,23 @@ If this quick start has got you interested, then have a read of [All of Equinox]
 
 ## See also: other libraries in the JAX ecosystem
 
-**Always useful**  
-[jaxtyping](https://github.com/patrick-kidger/jaxtyping): type annotations for shape/dtype of arrays.  
+**Always useful**
+[jaxtyping](https://github.com/patrick-kidger/jaxtyping): type annotations for shape/dtype of arrays.
 
-**Deep learning**  
-[Optax](https://github.com/deepmind/optax): first-order gradient (SGD, Adam, ...) optimisers.  
-[Orbax](https://github.com/google/orbax): checkpointing (async/multi-host/multi-device).  
-[Levanter](https://github.com/stanford-crfm/levanter): scalable+reliable training of foundation models (e.g. LLMs).  
+**Deep learning**
+[Optax](https://github.com/deepmind/optax): first-order gradient (SGD, Adam, ...) optimisers.
+[Orbax](https://github.com/google/orbax): checkpointing (async/multi-host/multi-device).
+[Levanter](https://github.com/stanford-crfm/levanter): scalable+reliable training of foundation models (e.g. LLMs).
 [paramax](https://github.com/danielward27/paramax): parameterizations and constraints for PyTrees.
 
-**Scientific computing**  
-[Diffrax](https://github.com/patrick-kidger/diffrax): numerical differential equation solvers.  
-[Optimistix](https://github.com/patrick-kidger/optimistix): root finding, minimisation, fixed points, and least squares.  
-[Lineax](https://github.com/patrick-kidger/lineax): linear solvers.  
-[BlackJAX](https://github.com/blackjax-devs/blackjax): probabilistic+Bayesian sampling.  
-[sympy2jax](https://github.com/patrick-kidger/sympy2jax): SymPy<->JAX conversion; train symbolic expressions via gradient descent.  
-[PySR](https://github.com/milesCranmer/PySR): symbolic regression. (Non-JAX honourable mention!)  
+**Scientific computing**
+[Diffrax](https://github.com/patrick-kidger/diffrax): numerical differential equation solvers.
+[Optimistix](https://github.com/patrick-kidger/optimistix): root finding, minimisation, fixed points, and least squares.
+[Lineax](https://github.com/patrick-kidger/lineax): linear solvers.
+[BlackJAX](https://github.com/blackjax-devs/blackjax): probabilistic+Bayesian sampling.
+[sympy2jax](https://github.com/patrick-kidger/sympy2jax): SymPy<->JAX conversion; train symbolic expressions via gradient descent.
+[PySR](https://github.com/milesCranmer/PySR): symbolic regression. (Non-JAX honourable mention!)
 
-**Awesome JAX**  
-[Awesome Equinox](https://docs.kidger.site/equinox/awesome-list/)  
-[Awesome JAX](https://github.com/lockwo/awesome-jax): a longer list of other JAX projects.  
+**Awesome JAX**
+[Awesome Equinox](https://docs.kidger.site/equinox/awesome-list/)
+[Awesome JAX](https://github.com/lockwo/awesome-jax): a longer list of other JAX projects.

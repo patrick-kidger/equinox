@@ -190,7 +190,7 @@ import jax.random as jr
 
 class TenMLPs(eqx.Module):
     mlps: eqx.nn.MLP
-  
+
     def __init__(self, size, key):
         keys = jr.split(key, 10)
         make_mlp = lambda k: eqx.nn.MLP(size, size, size, 1, key=k)
@@ -203,18 +203,18 @@ class TenMLPs(eqx.Module):
         #
         # `self.mlps` should not be called directly: it should only be
         # used inside a `vmap` or `scan`, to first unpeel the extra dimension.
-  
+
     def __call__(self, x):
         dynamic_mlps, static_mlps = eqx.partition(self.mlps, eqx.is_array)
         # `dynamic_mlps` has all the parameters, with their extra length-10
         # dimension.
         # `static_mlps` has all the non-parameters, e.g. activation functions,
         # which are shared across all layers.
-    
+
         def f(_x, _dynamic_mlp):
             mlp = eqx.combine(_dynamic_mlp, static_mlps)
             return mlp(_x), None
-    
+
         out, _ = lax.scan(f, x, dynamic_mlps)
         return out
 
