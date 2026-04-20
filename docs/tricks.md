@@ -22,6 +22,7 @@ You might want to initialise your parameters in some nonstandard way.
 This can be done as a special case of model surgery.
 
 For example, here is how to change the `weight` of a linear layer:
+
 ```python
 linear = eqx.nn.Linear(...)
 new_weight = jax.random.normal(...)
@@ -30,6 +31,7 @@ new_linear = eqx.tree_at(where, linear, new_weight)
 ```
 
 And here is how to replace the `weight` of every linear layer in some arbitrary model. In this example we draw samples from a truncated normal distribution.
+
 ```python
 def trunc_init(weight: jax.Array, key: jax.random.PRNGKey) -> jax.Array:
   out, in_ = weight.shape
@@ -61,6 +63,7 @@ For example, making a weight matrix be symmetric (similar to [`torch.nn.utils.pa
 This can be done by wrapping the parameter in a custom module that gives the desired behaviour, and then applying this behaviour after you've crossed your JIT and grad API boundaries. Once again we'll use `eqx.tree_at` to perform the relevant model surgery.
 
 For example, here is how to make every linear layer have a symmetric weight matrix:
+
 ```python
 # Library code
 
@@ -137,6 +140,7 @@ Note that as the weights in `mlp_ensemble` now have a leading batch dimension --
 ## Low-overhead training loops
 
 Quite a common pattern is to have a training loop that looks like this:
+
 ```python
 @eqx.filter_jit
 def make_step(model, opt_state, x, y):
@@ -155,6 +159,7 @@ for batch_x, batch_y in dataloader(...):
 Here, the PyTree structure of `model` and `opt_state` is flattened and unflattened when entering and exiting the JIT region, which incurs some small amount of overhead. This isn't actually necessary: we can "cancel out" the flattening done when entering the JIT region with unflattening done when exiting the JIT region.
 
 This can be done by rewriting the above loop as:
+
 ```python
 @eqx.filter_jit
 def make_step(flat_model, flat_opt_state, x, y):

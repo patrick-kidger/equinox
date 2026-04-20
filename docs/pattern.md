@@ -116,11 +116,13 @@ class CubicInterpolation(AbstractPolynomialInterpolation):
     def __init__(self, ts: Array, xs: Array):
         self.coeffs = ...  # some implementation
 ```
+
 in this case, the intermediate ABC `AbstractPolynomialInterpolation` implements the `__call__` method. However, it isn't yet a concrete (non-abstract) class, as it introduces a new abstract variable `coeffs` -- we need to wait until `CubicInterpolation` for that to be defined.
 
 Using an abstract attribute ([`equinox.AbstractVar`][]) here means that we can write `self.coeffs` inside `degree` and `__call__`, and know that this is safe. Unless all abstract attributes are defined then Equinox won't allow us to instantiate the class.
 
 Why didn't we just define `AbstractPolynomialInterpolation.coeffs` as a concrete field? (Just `coeffs: Array`.) Indeed we could have written this:
+
 ```python
 class AbstractPolynomialInterpolation(AbstractInterpolation)
     coeffs: Array
@@ -140,17 +142,20 @@ class CubicInterpolation(AbstractPolynomialInterpolation):
         coeffs = ...  # some implementation
         super().__init__(coeffs)
 ```
+
 but this is now much less readable: we've split up initialisation across two different classes. This is a reliable source of bugs. Thus we arrive at the rule that all fields, and the `__init__` method, should all be defined together.
 
 ## Level 3: implement methods precisely once, and concrete-means-final
 
-Our "`__init__` only once" rule means that `__init__` is defined precisely once, is never overridden, and we never call `super().__init__`. Why stop there: perhaps we should enforce that we never override *any* method?
+Our "`__init__` only once" rule means that `__init__` is defined precisely once, is never overridden, and we never call `super().__init__`. Why stop there: perhaps we should enforce that we never override _any_ method?
 
 In practice, we argue that's a good idea! This rule means that when you see code like:
+
 ```python
 def foo(interp: AbstractPolynomialInterpolation)
     ... = interp.degree()
 ```
+
 you know that it is calling precisely `AbstractPolynomialInterpolation.degree`, and not an override in some subclass. This is excellent for code readability. Thus we get the rule that no method should be overridden.
 
 If we assume this, then we now find ourselves arriving at a conclusion: concrete means final. That is, once we have a concrete class (every abstract method/attribute defined in our ABCs is now overridden with an implementation, so we can instantiate this class), then it is now final (we're not allowed to re-override things, so subclassing is pointless). This is how we arrive at the abstract-or-final rule itself!
@@ -160,6 +165,7 @@ What about when you have an existing concrete class that you want to tweak just-
 ## Level 4: `__check_init__`
 
 It's pretty common to want to validate that certain invariants hold, even in abstract base classes. For this, we have the `__check_init__` method:
+
 ```python
 class AbstractPolynomialInterpolation(AbstractInterpolation)
     coeffs: AbstractVar[Array]
@@ -170,6 +176,7 @@ class AbstractPolynomialInterpolation(AbstractInterpolation)
 
     ...
 ```
+
 This method is something that Equinox will look for, and if present it will be ran after initialisation. This is an Equinox-specific extension designed to support this design pattern.
 
 See [checking invariants](api/module/advanced_fields.md#checking-invariants) for more details.
@@ -179,6 +186,7 @@ See [checking invariants](api/module/advanced_fields.md#checking-invariants) for
 **Does this pattern work with multiple inheritance?**
 
 Yes. For example, here's a diamond inheritance pattern (for building a differential equation solver):
+
 ```python
 class AbstractSolver(eqx.Module):
     @abc.abstractmethod
@@ -214,6 +222,7 @@ No. This design pattern means that you should never need to write `super()` at a
 If you're a Python nerd, you'll now be wondering about co-operative multiple inheritance, which specifies using `super()` ubiquitously.
 
 The TL;DR of this is that almost no-one ever uses this properly, and the abstract+final pattern is intended as a direct alternative. One sees a lot of code that looks like this:
+
 ```python
 class A:
     def __init__(self, x):
@@ -230,6 +239,7 @@ class B(A, AA):
 
 B()  # AA.__init__ is not called.
 ```
+
 In this case `B()` calls `A.__init__` and this then fails to call `AA.__init__`. Co-operative multiple inheritance only works if everyone, well, co-operates.
 
 Even if everyone wants to do their best, there is another issue. When writing `super().__init__`, it isn't actually known what method is being called -- as above, `super()` could be pointing at almost any class at all. This actually means that it's not possible to know what arguments to pass to `super().__init__`! "Only use keyword arguments" is the closest to a resolution that this issue has, and it's still fragile.
@@ -239,6 +249,7 @@ In contrast, our no-overriding and abstract-or-final rules means that we never c
 **Hang on, I don't buy the abstract-or-concrete part. Can't a concrete subclass add a new method to a concrete superclass?**
 
 You're thinking of something like this this:
+
 ```python
 # This is clearly something we can instantiate: it has no abstract methods/attributes.
 class ConcreteArray(eqx.Module):
@@ -251,11 +262,14 @@ class ConcreteArrayTwo(ConcreteArray):
     def another_method(self):
         pass
 ```
+
 We didn't discuss it above, but we do ban things like this as well. The reason is to simplify things when writing something like:
+
 ```python
 def add(x: ConcreteArray, y: ConcreteArray) -> ConcreteArray:
     ...
 ```
+
 so that there are never any questions about what the return type should be. (If we passed in `ConcreteArrayTwo` in to `x` or `y`, maybe we should try to return a `ConcreteArrayTwo` instead? What if `x = ConcreteArrayTwo()` but `y = ConcreteArrayThree()`, and these two types don't know about each other? Better to avoid the question in the first place.)
 
 **These ideas have appeared in &lt;XYZ language&gt;?**
