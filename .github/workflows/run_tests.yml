@@ -7,7 +7,6 @@ jobs:
   run-test:
     strategy:
       matrix:
-        # must match the `language_version` in `.pre-commit-config.yaml`
         python-version: [ 3.11 ]
         os: [ ubuntu-latest ]
       fail-fast: false
@@ -16,24 +15,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install '.[dev,docs,tests]'
+          uv run echo done
 
       - name: Checks with pre-commit
         run: |
-          pre-commit run --all-files
+          uv run pre-commit run --all-files
 
       - name: Test with pytest
         run: |
-          pytest
+          uv run pytest
 
       - name: Check that documentation can be built.
         run: |
-          mkdocs build
+          uv run mkdocs build

@@ -1,32 +1,42 @@
+fail_fast: true
 repos:
+  - repo: meta
+    hooks:
+    - id: check-hooks-apply
+    - id: check-useless-excludes
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+    - id: trailing-whitespace
+    - id: check-toml
+    - id: mixed-line-ending
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.38.0
+    hooks:
+    - id: markdownlint-fix
+      args: ["--disable", "MD001", "MD007", "MD040", "MD046", "MD013", "MD028", "MD033", "MD052", "--"]
   - repo: local
     hooks:
-      - id: sort_pyproject
-        name: sort_pyproject
-        entry: toml-sort -i --sort-table-keys --sort-inline-tables
-        language: python
+      - id: sort-pyproject
+        name: sort pyproject
         files: ^pyproject\.toml$
-        additional_dependencies: ["toml-sort==0.23.1"]
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.13.0
-    hooks:
-      - id: ruff-format # formatter
+        language: system
+        entry: uv run --offline -- toml-sort -i --sort-table-keys --sort-inline-tables
+      - id: ruff-format
+        name: ruff format
         types_or: [python, pyi, jupyter, toml]
-      - id: ruff-check # linter
+        language: system
+        entry: uv run --offline -- ruff format --
+        require_serial: true
+      - id: ruff-lint
+        name: ruff lint
         types_or: [python, pyi, jupyter, toml]
-        args: [--fix]
-  - repo: https://github.com/RobertCraigie/pyright-python
-    rev: v1.1.406
-    hooks:
+        language: system
+        entry: uv run --offline -- ruff check --fix --
+        require_serial: true
       - id: pyright
-        additional_dependencies:
-          [
-            beartype,
-            einops,
-            jax,
-            jaxtyping,
-            optax,
-            pytest,
-            typing_extensions,
-            wadler_lindig,
-          ]
+        name: pyright
+        types_or: [python]
+        language: system
+        entry: uv run --offline -- pyright
+        require_serial: true
