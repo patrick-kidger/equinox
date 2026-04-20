@@ -875,7 +875,7 @@ def _none_to_zero(ct, x):
             if hasattr(jax, "typeof"):
                 aval = jax.typeof(x)
             else:
-                aval = jax.core.get_aval(x)
+                aval = jax.core.get_aval(x)  # pyright: ignore[reportAttributeAccessIssue]
             if hasattr(aval, "to_tangent_aval"):
                 # Earlier versions of JAX were internally inconsistent, and expected
                 # e.g. integer primals to have integer tangents from `custom_{jvp,vjp}`

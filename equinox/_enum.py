@@ -219,7 +219,7 @@ if TYPE_CHECKING:
     class Enumeration(enum.Enum, EnumerationItem, metaclass=_Sequence):  # pyright: ignore
         _name_to_item: ClassVar[dict[str, EnumerationItem]]  # pyright: ignore
         _index_to_message: ClassVar[list[str]]  # pyright: ignore
-        _base_offsets: ClassVar[dict["Enumeration", int]]
+        _base_offsets: ClassVar[dict["Enumeration", int]]  # pyright: ignore
 
         @classmethod
         def promote(cls, item: "Enumeration") -> Self: ...
