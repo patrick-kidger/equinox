@@ -245,13 +245,15 @@ def error_if(
 
     **Arguments:**
 
-    - `x`: will be returned unchanged. This is used to determine where the error
-      check happens in the overall computation: it will happen after `x` is
-      computed and before the return value is used. `x` can be any PyTree.
-    - `pred`: a boolean for whether to raise an error. Can be an array of bools;
-      an error will be raised if any of them are `True`. If vmap'd then an error
-      will be raised if any batch element has `True`.
-    - `msg`: the string to display as an error message.
+    - `x`: will be returned unchanged. This is used to determine where the error check
+        happens in the overall computation: it will happen after `x` is computed and
+        before the return value is used. `x` can be any PyTree, and it must contain at
+        least one array.
+    - `pred`: a boolean for whether to raise an error or warning.
+        Can be an array of bools; an error (/warning) will be raised if any of them
+        are `True`. If vmap'd then an error (/warning) will be raised if any batch
+        element has `True`.
+    - `msg`: the string to display as an error (/warning) message.
     - `category`: the warning category to use when `on_error="warn"` (defaults
       to `UserWarning` if `None`). Ignored for other modes.
     - `stacklevel`: the stack level for the warning when `on_error="warn"`
@@ -270,30 +272,31 @@ def error_if(
             permanently fixing this value is not recommended.
         - You will need to also pass the `-s` flag to `pytest`, if you are
             also using that.
-        - By default this only allows you to see a single frame in the debugger.
-          This is to work around JAX bug
-          [#16732](https://github.com/google/jax/issues/16732).  (Bugs whilst
-          debugging bugs, eek!) In practice you may like to set the
-          `EQX_ON_ERROR_BREAKPOINT_FRAMES` environment variable to a small
-          integer, which specifies how many frames upwards the debugger should
-          capture. The JAX bug is triggered when taking too many frames.
-    - `EQX_ON_ERROR=off` turns off all error checking. This is useful for
-      removing performance penalties incurred from use of `error_if`.
+        - By default this only allows you to see a single frame in the debugger. This is
+            to work around JAX bug [#16732](https://github.com/google/jax/issues/16732).
+            (Bugs whilst debugging bugs, eek!) In practice you may like to set the
+            `EQX_ON_ERROR_BREAKPOINT_FRAMES` environment variable to a small integer,
+            which specifies how many frames upwards the debugger should capture. The
+            JAX bug is triggered when taking too many frames.
+    - `EQX_ON_ERROR=off` turns off all error checking. This is useful for removing
+        performance penalties incurred from use of `error_if`.
 
-    After changing an environment variable, the Python process must be
-    restarted.
+    After changing an environment variable, the Python process must be restarted.
 
     **Returns:**
 
-    The original argument `x` unchanged. **If this return value is unused then
-    the error check will not be performed.** (It will be removed as part of dead
-    code elimination.)
+    The original argument `x` unchanged. **If this return value is unused then the error
+    check will not be performed.** (It will be removed as part of dead code
+    elimination.)
 
     !!! Example
 
-        ```python @jax.jit def f(x):
-            x = error_if(x, x < 0, "x must be >= 0") # ...use x in your
-            computation...  return x
+        ```python
+        @jax.jit
+        def f(x):
+            x = error_if(x, x < 0, "x must be >= 0")
+            # ...use x in your computation...
+            return x
 
         f(jax.numpy.array(-1))
         ```
