@@ -332,7 +332,10 @@ def filter_jvp(
     flat_tangents = jtu.tree_leaves(tangents)  # all non-None tangents are dynamic
 
     def _fn(*_flat_dynamic):
-        _top_trace = jax.core.find_top_trace(_flat_dynamic)
+        if hasattr(jax.extend.core, "find_top_trace"):
+            _top_trace = jax.extend.core.find_top_trace(_flat_dynamic)  # pyright: ignore[reportAttributeAccessIssue]
+        else:
+            _top_trace = jax.core.find_top_trace(_flat_dynamic)  # pyright: ignore[reportAttributeAccessIssue]
         assert _top_trace is not None
         _main = _top_trace.main
         _dynamic = jtu.tree_unflatten(treedef, _flat_dynamic)
@@ -875,7 +878,7 @@ def _none_to_zero(ct, x):
             if hasattr(jax, "typeof"):
                 aval = jax.typeof(x)
             else:
-                aval = jax.core.get_aval(x)
+                aval = jax.core.get_aval(x)  # pyright: ignore[reportAttributeAccessIssue]
             if hasattr(aval, "to_tangent_aval"):
                 # Earlier versions of JAX were internally inconsistent, and expected
                 # e.g. integer primals to have integer tangents from `custom_{jvp,vjp}`

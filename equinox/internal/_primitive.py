@@ -63,7 +63,7 @@ def _zero_from_primal(p):
     if hasattr(jax, "typeof"):
         aval = jax.typeof(p)
     else:
-        aval = jax.core.get_aval(p)
+        aval = jax.core.get_aval(p)  # pyright: ignore[reportAttributeAccessIssue]
     if hasattr(aval, "to_tangent_aval"):
         # JAX >=0.4.34
         aval = aval.to_tangent_aval()  # pyright: ignore
@@ -348,11 +348,11 @@ def _vprim_impl(*inputs, prim, __axis_size, __axis_name, __batch_axes, params):
 if hasattr(jax.extend.core, "mapped_aval"):
     _mapped_aval = jax.extend.core.mapped_aval  # pyright: ignore[reportAttributeAccessIssue]
 else:
-    _mapped_aval = jax.core.mapped_aval
+    _mapped_aval = jax.core.mapped_aval  # pyright: ignore[reportAttributeAccessIssue]
 if hasattr(jax.extend.core, "unmapped_aval"):
     _unmapped_aval = jax.extend.core.unmapped_aval  # pyright: ignore[reportAttributeAccessIssue,reportAssignmentType]
 else:
-    _unmapped_aval = jax.core.unmapped_aval  # pyright: ignore[reportAssignmentType]
+    _unmapped_aval = jax.core.unmapped_aval  # pyright: ignore[reportAttributeAccessIssue,reportAssignmentType]
 if jax.__version_info__ >= (0, 5, 1):
     _old_unmapped_aval = _unmapped_aval
 

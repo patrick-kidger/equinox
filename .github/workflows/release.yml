@@ -13,10 +13,12 @@ jobs:
         uses: patrick-kidger/action_update_python_project@v8
         with:
             python-version: "3.11"
+            # Uninstall and reinstall pytest to work around the fact that it doesn't get put into `bin` otherwise.
             test-script: |
                 cp -r ${{ github.workspace }}/tests ./tests
                 cp ${{ github.workspace }}/pyproject.toml ./pyproject.toml
-                uv sync --extra tests --no-install-project --inexact
+                uv pip uninstall pytest
+                uv sync --no-install-project --inexact
                 uv run --no-sync pytest
             pypi-token: ${{ secrets.pypi_token }}
             github-user: patrick-kidger
