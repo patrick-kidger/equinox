@@ -126,11 +126,11 @@ If your models only use JAX arrays, then `eqx.filter_{jit,grad,...}` will do exa
 
 Both approaches are equally valid. Some people prefer the shorter syntax of the filtered transformations. Some people prefer to explicitly see the `jax.{jit,grad,...}` operations directly.
 
-## 3. PyTree manipulation routines
+## 3. PyTree manipulation routines.
 
 Equinox clearly places a heavy focus on PyTrees! As such, it's quite common to need to perform operations on PyTrees. Whilst many common operations are already provided by JAX (for example, `jax.tree_util.tree_map` will apply an operation to every leaf of a PyTree), Equinox additionally offers some extra features. For example, `eqx.tree_at` mutates a particular leaf or leaves of a PyTree.
 
-## 4. Advanced goodies
+## 4. Advanced goodies.
 
 Finally, Equinox offers a number of more advanced goodies, like serialisation, debugging tools, and runtime errors. We won't discuss them here, but check out the API reference on the left.
 
@@ -148,7 +148,7 @@ Equinox is all just regular JAX: PyTrees and transformations. Together, these tw
 - Prebuilt neural network layers: [`equinox.nn.Linear`][], [`equinox.nn.Conv2d`][], etc.
 - Filtered transformations: [`equinox.filter_jit`][] etc.
 - Tools for PyTree manipulation: [`equinox.partition`][], etc.
-- Advanced goodies: serialisation, debugging tools, runtime errors, etc.
+- Advanced goodies: serialisation, debugging tools, runtime errors, etc. 
 
 See the API reference on the left.
 

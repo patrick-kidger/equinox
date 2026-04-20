@@ -56,11 +56,13 @@
 
 ---
 
+
 ::: equinox.nn.AdaptivePool
     options:
         members:
             - __init__
             - __call__
+
 
 ---
 
@@ -69,6 +71,7 @@
         members:
             - __init__
             - __call__
+
 
 ---
 
@@ -86,6 +89,7 @@
             - __init__
             - __call__
 
+
 ---
 
 ::: equinox.nn.AdaptiveMaxPool1d
@@ -93,6 +97,7 @@
         members:
             - __init__
             - __call__
+
 
 ---
 

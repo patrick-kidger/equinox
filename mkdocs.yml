@@ -43,7 +43,7 @@ edit_uri: ""
 
 strict: true  # Don't allow warnings during the build process
 
-extra_javascript:
+extra_javascript: 
     # The below two make MathJax work, see https://squidfunk.github.io/mkdocs-material/reference/mathjax/
     - _static/mathjax.js
     - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js

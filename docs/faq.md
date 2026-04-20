@@ -1,26 +1,21 @@
 # FAQ
 
-## Optax throwing a `TypeError`
+## Optax throwing a `TypeError`.
 
 Probably you're writing code that looks like
-
 ```python
 optim = optax.adam(learning_rate)
 optim.init(model)
 ```
-
 and getting an error that looks like
-
 ```
 TypeError: zeros_like requires ndarray or scalar arguments, got <class 'jax._src.custom_derivatives.custom_jvp'> at position 0.
 ```
 
 This can be fixed by doing
-
 ```python
 optim.init(eqx.filter(model, eqx.is_inexact_array))
 ```
-
 which after a little thought should make sense: Optax can only optimise floating-point JAX arrays. It's not meaningful to ask Optax to optimise whichever other arbitrary Python objects may be a part of your model. (e.g. the activation function of an `eqx.nn.MLP`).
 
 ## How are batch dimensions handled?
@@ -39,7 +34,6 @@ y = linear(x)
 ```
 
 is equivalent to the following Equinox code:
-
 ```python
 import jax
 import equinox as eqx
@@ -54,7 +48,6 @@ y = jax.vmap(linear)(x)
 Use [`equinox.nn.Shared`][] to tie together multiple nodes (layers, weights, ...) in a PyTree.
 
 In particular, *don't* do something like this:
-
 ```python
 # Buggy code!
 class Module(eqx.Module):
@@ -66,16 +59,15 @@ class Module(eqx.Module):
         self.linear1 = shared_linear
         self.linear2 = shared_linear
 ```
-
 as this is used to accomplish something different: this creates two separate layers, that are initialised with the same values for their parameters. After making some gradient updates, you'll find that `self.linear1` and `self.linear2` are now different.
 
 The reason for this is that in Equinox+JAX, models are Py*Trees*, not DAGs. (Directed acyclic graphs.) JAX follows a functional-programming-like style, in which the *identity* of an object (whether that be a layer, a weight, or whatever) doesn't matter. Only its *value* matters. (This is known as referential transparency.)
 
  See also the [`equinox.tree_check`][] function, which can be ran on a model to check if you have duplicate nodes.
 
-## My model is slow
+## My model is slow...
 
-#### ...to train
+#### ...to train.
 
 Make sure you have JIT covering all JAX operations.
 
@@ -85,10 +77,9 @@ See [the RNN example](https://docs.kidger.site/equinox/examples/train_rnn/) as a
 
 Common mistakes are to put `jax.jit`/`eqx.filter_jit` on just your loss function, and leave out either (a) computing gradients or (b) applying updates with `eqx.apply_updates`.
 
-#### ...to compile
+#### ...to compile.
 
 95% of the time, it's because you've done something like this:
-
 ```python
 @jax.jit
 def f(x):
@@ -96,28 +87,22 @@ def f(x):
         x = my_complicated_function(x)
     return x
 ```
-
 When JAX traces through this, it can't see the `for` loop. (`jax.jit` replaces the `x` argument with a tracer object that records everything that happens to it -- and this effectively unrolls the loop.) As a result you'll get 100 independent copies of `my_complicated_function`, which all get compiled separately.
 
 In this case, a `jax.lax.scan` is probably what you want. Likewise it's usually also preferable to rewrite even simple stuff like
-
 ```python
 x2 = f(x1)
 x3 = f(x2)
 ```
-
 as a little length-2 scan.
 
-## TypeError: not a valid JAX type
+## TypeError: not a valid JAX type.
 
 You might be getting an error like
-
 ```
 TypeError: Argument '<function ...>' of type <class 'function'> is not a valid JAX type.
 ```
-
 Example:
-
 ```python3
 import jax
 import equinox as eqx
@@ -146,7 +131,6 @@ Instead of [`jax.jit`](https://jax.readthedocs.io/en/latest/_autosummary/jax.jit
 ## How to mark arrays as non-trainable? (Like PyTorch's buffers?)
 
 This can be done by using `jax.lax.stop_gradient`:
-
 ```python
 class Model(eqx.Module):
     buffer: Array
@@ -203,28 +187,24 @@ def rollout(mlp, xs):
 
 What about if you want a module function to be the function being `scan`-ed over? If you just try to `jax.lax.scan(module, ...)` you will see a `TypeError: unhashable type: 'jaxlib.xla_extension.ArrayImpl'`. This is a [bug in jax](https://github.com/google/jax/issues/13554) that can be avoided by simply wrapping the module function in a lambda, e.g. `jax.lax.scan(lambda x, y: module(x, y), ...)`.
 
-## I think my function is being recompiled each time it is run
+## I think my function is being recompiled each time it is run.
 
 Use [`equinox.debug.assert_max_traces`][], for example
-
 ```python
 @eqx.filter_jit
 @eqx.debug.assert_max_traces(max_traces=1)
 def your_function(x, y, z):
     ...
 ```
-
 will raise an error if it is compiled more than once, and tell you which argument caused the recompilation. (A function will be recompiled every time the shape or dtype of one of its array-valued inputs change, or if any of its static (non-array) inputs change (as measured by `__eq__`).)
 
 As an alternative, a quick check for announcing each time your function is compiled can be achieved with a print statement:
-
 ```python
 @eqx.filter_jit
 def your_function(x, y, z):
     print("Compiling!")
     ...  # rest of your code here
 ```
-
 JAX calls your function each time it needs to compile it. Afterwards, it never actually calls it; indeed it doesn't use Python at all! (Instead, it just follows the computation graph of array operations that it has already traced and compiled -- doing this is the point of JIT compilation.) Thus, a print statement is an easy way to check each time JAX is compiling your function.
 
 ## How does Equinox compare to...?

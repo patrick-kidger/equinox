@@ -8,35 +8,31 @@ repos:
     rev: v4.4.0
     hooks:
     - id: trailing-whitespace
+      exclude: \.md$
     - id: check-toml
     - id: mixed-line-ending
-  - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.38.0
-    hooks:
-    - id: markdownlint-fix
-      args: ["--disable", "MD001", "MD007", "MD013", "MD028", "MD033", "MD036", "MD040", "MD041", "MD046", "MD052", "--"]
   - repo: local
     hooks:
       - id: sort-pyproject
         name: sort pyproject
         files: ^pyproject\.toml$
         language: system
-        entry: uv run --offline -- toml-sort -i --sort-table-keys --sort-inline-tables
+        entry: uv run -- toml-sort -i --sort-table-keys --sort-inline-tables
       - id: ruff-format
         name: ruff format
         types_or: [python, pyi, jupyter, toml]
         language: system
-        entry: uv run --offline -- ruff format --
+        entry: uv run -- ruff format --
         require_serial: true
       - id: ruff-lint
         name: ruff lint
         types_or: [python, pyi, jupyter, toml]
         language: system
-        entry: uv run --offline -- ruff check --fix --
+        entry: uv run -- ruff check --fix --
         require_serial: true
       - id: pyright
         name: pyright
         types_or: [python]
         language: system
-        entry: uv run --offline -- pyright
+        entry: uv run -- pyright
         require_serial: true
