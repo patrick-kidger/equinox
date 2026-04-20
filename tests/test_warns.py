@@ -79,8 +79,12 @@ def test_grad2():
         x, y = eqx.error_if((x, y), z, "oops", on_error="warn")
         return y
 
-    with pytest.warns(UserWarning, match="oops"):
-        f(1.0, 1.0, True)
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        out = f(1.0, 1.0, True)
+
+    assert len(record) == 0
+    assert jnp.isclose(out, 0.0)
 
 
 def test_tracetime():
@@ -142,8 +146,11 @@ def test_unused_return():
         eqx.error_if(x, x < 0, "unused warning", on_error="warn")
         return x + 1
 
-    with pytest.warns(UserWarning, match="unused warning"):
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
         result = f(jnp.array(-1.0))
+
+    assert len(record) == 0
     assert jnp.isclose(result, 0.0)
 
 

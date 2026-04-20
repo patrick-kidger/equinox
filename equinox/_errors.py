@@ -148,14 +148,30 @@ def _error(x, pred, index, *, msgs, on_error, stack, category=None, stacklevel=1
         return lax.cond(pred, ft.partial(jtu.tree_map, _nan_like), lambda y: y, x)
     elif on_error == "warn":
 
-        def handle_warning():  # pyright: ignore
-            def warn_callback(_index):
-                msg_index = _index.item() if isinstance(_index, Array) else _index
-                msg = cast(Any, msgs)[msg_index]  # pyright: ignore
+        def handle_warning() -> PyTree:
+            def warn_callback(_index: Array, /) -> int:
+                msg = msgs[_index.item()]
                 warnings.warn(msg, category=category, stacklevel=stacklevel + 3)
+                return 0
 
-            jax.debug.callback(warn_callback, index)
-            return x
+            # Thread a zero dependency through the output so this warning is
+            # dead-code-eliminated whenever the result is unused.
+            zero = jax.pure_callback(
+                warn_callback,
+                jax.ShapeDtypeStruct((), jnp.int32),
+                index,
+                vmap_method="sequential",
+            )
+
+            def add_dependency(xi: Array, /) -> Array:
+                typed_zero = zero.astype(xi.dtype)
+                return (
+                    xi | typed_zero
+                    if jnp.issubdtype(xi.dtype, jnp.bool_)
+                    else xi + typed_zero
+                )
+
+            return jtu.tree_map(add_dependency, x)
 
         return lax.cond(pred, handle_warning, lambda: x)
     elif on_error == "off":
@@ -279,7 +295,8 @@ def error_if(
             x = error_if(x, x < 0, "x must be >= 0") # ...use x in your
             computation...  return x
 
-        f(jax.numpy.array(-1)) ```
+        f(jax.numpy.array(-1))
+        ```
     """
     return branched_error_if(
         x, pred, 0, [msg], on_error=on_error, category=category, stacklevel=stacklevel
@@ -436,6 +453,3 @@ def assert_dce(
     else:
         # Don't run if not JIT'ing, as without the compiler nothing will be DCE'd.
         return x
-
-
-# ------------------------------------

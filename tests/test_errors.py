@@ -1,3 +1,5 @@
+import warnings
+
 import equinox as eqx
 import equinox.internal as eqxi
 import jax
@@ -121,6 +123,30 @@ def test_off():
         return eqx.error_if(x, pred, "hi", on_error="off")
 
     assert jnp.isclose(f(1.0, True), 1.0)
+
+
+def test_warn():
+    @jax.jit
+    def f(x, pred):
+        return eqx.error_if(x, pred, "hi", on_error="warn")
+
+    with pytest.warns(UserWarning, match="hi"):
+        y = f(1.0, True)
+    assert jnp.isclose(y, 1.0)
+
+
+def test_warn_dce():
+    @jax.jit
+    def f(x):
+        eqx.error_if(x, x > 0, "hi", on_error="warn")
+        return x + 1
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        y = f(jnp.array(1.0))
+
+    assert jnp.isclose(y, 2.0)
+    assert len(caught) == 0
 
 
 def test_assert_dce():
