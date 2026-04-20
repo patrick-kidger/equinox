@@ -11,7 +11,7 @@ Contributions (pull requests) are very welcome! Here's how to get started.
 ```bash
 git clone https://github.com/your-username-here/equinox.git
 cd equinox
-uv run pre-commit install  # Creates a local venv + installs dependencies + installs pre-commit hooks.
+uv run prek install  # Creates a local venv + installs dependencies + installs pre-commit hooks.
 ```
 
 ---
