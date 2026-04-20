@@ -14,7 +14,7 @@ repos:
     rev: v0.38.0
     hooks:
     - id: markdownlint-fix
-      args: ["--disable", "MD001", "MD007", "MD040", "MD046", "MD013", "MD028", "MD033", "MD052", "--"]
+      args: ["--disable", "MD001", "MD007", "MD013", "MD028", "MD033", "MD036", "MD040", "MD041", "MD046", "MD052", "--"]
   - repo: local
     hooks:
       - id: sort-pyproject
