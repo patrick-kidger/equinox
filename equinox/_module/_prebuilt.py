@@ -1,6 +1,5 @@
-import types
 from collections.abc import Callable
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Protocol, runtime_checkable, TypeVar
 
 import jax.tree_util as jtu
 from jaxtyping import PyTreeDef
@@ -10,14 +9,27 @@ from ._flatten import WRAPPER_FIELD_NAMES
 from ._module import Module
 
 
+_Return = TypeVar("_Return")
+_Return_co = TypeVar("_Return_co", covariant=True)
+
+
+@runtime_checkable
+class _FuncDescriptor(Protocol[_Return_co]):
+    """A callable that also supports the descriptor protocol (has ``__get__``)."""
+
+    def __call__(self, __self: Any, /, *args: Any, **kwargs: Any) -> _Return_co: ...
+
+    def __get__(self, obj: Any, objtype: Any = None) -> Callable[..., _Return_co]: ...
+
+
 # Not using `jax.tree_util.Partial` as it doesn't implement __eq__ very well. See #480.
-class BoundMethod(Module):
+class BoundMethod(Module, Generic[_Return]):
     """Just like a normal Python bound method... except that this one is a PyTree!
 
     This stores `__self__` as a subnode.
     """
 
-    __func__: types.FunctionType = field(static=True)
+    __func__: _FuncDescriptor[_Return] = field(static=True)
     __self__: Module
 
     def __post_init__(self):
@@ -29,16 +41,13 @@ class BoundMethod(Module):
             else:
                 setattr(self, field_name, value)
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args: Any, **kwargs: Any) -> _Return:
         __tracebackhide__ = True
         return self.__func__(self.__self__, *args, **kwargs)
 
     @property
-    def __wrapped__(self):
-        return self.__func__.__get__(self.__self__, type(self.__self__))  # pyright: ignore[reportAttributeAccessIssue]
-
-
-_Return = TypeVar("_Return")
+    def __wrapped__(self) -> Callable[..., _Return]:
+        return self.__func__.__get__(self.__self__, type(self.__self__))
 
 
 class Partial(Module, Generic[_Return]):
