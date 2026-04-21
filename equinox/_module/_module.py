@@ -274,7 +274,7 @@ _ModuleT = TypeVar("_ModuleT", bound="Module")
 # This deliberately does not pass `frozen_default=True`, as that clashes with custom
 # `__init__` methods.
 @dataclass_transform(field_specifiers=(dataclasses.field, field))
-class _ModuleMeta(BetterABCMeta):
+class _AbstractModuleMeta(BetterABCMeta):
     def __new__(
         mcs,
         name: str,
@@ -331,7 +331,7 @@ class _ModuleMeta(BetterABCMeta):
                 else:
                     break
             else:
-                assert name == "Module"
+                assert name in ("Module", "_AbstractModule")
                 has_dataclass_init = True  # eqx.Module itself
         _has_dataclass_init[cls] = has_dataclass_init
         # Check before `dataclass` adds an `__init__` method.
@@ -407,6 +407,26 @@ class _ModuleMeta(BetterABCMeta):
 
         return cls
 
+
+class _AbstractModule(Hashable, metaclass=_AbstractModuleMeta):
+    """Lower-level base class for modules, primarily for internal use."""
+
+    def __repr__(self) -> str:
+        return tree_pformat(self)
+
+    def __hash__(self) -> int:
+        return hash(
+            tuple((k, getattr(self, k)) for k in _module_info[type(self)].names_tuple)
+        )
+
+    def __eq__(self, other: object, /) -> bool | np.bool_ | Bool[Array, ""]:  # pyright: ignore
+        return tree_equal(self, other)
+
+
+# This deliberately does not pass `frozen_default=True`, as that clashes with custom
+# `__init__` methods.
+@dataclass_transform(field_specifiers=(dataclasses.field, field))
+class _ModuleMeta(_AbstractModuleMeta):
     def __call__(cls, *args: object, **kwargs: object):  # noqa: N805
         __tracebackhide__ = True
         if cls in _abstract_module_registry:
@@ -466,7 +486,7 @@ class _ModuleMeta(BetterABCMeta):
         return sig.replace(parameters=params)
 
 
-class Module(Hashable, metaclass=_ModuleMeta):
+class Module(_AbstractModule, metaclass=_ModuleMeta):
     """Base class. Create your model by inheriting from this.
 
     This will make your model a
@@ -569,17 +589,6 @@ class Module(Hashable, metaclass=_ModuleMeta):
         # We record currently-initialising modules
         _currently_initialising.add(self)
         return self
-
-    def __repr__(self) -> str:
-        return tree_pformat(self)
-
-    def __hash__(self) -> int:
-        return hash(
-            tuple((k, getattr(self, k)) for k in _module_info[type(self)].names_tuple)
-        )
-
-    def __eq__(self, other: object, /) -> bool | np.bool_ | Bool[Array, ""]:  # pyright: ignore
-        return tree_equal(self, other)
 
     if not TYPE_CHECKING:
 

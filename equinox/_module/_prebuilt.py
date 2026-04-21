@@ -7,18 +7,18 @@ from jaxtyping import PyTreeDef
 
 from ._field import field
 from ._flatten import WRAPPER_FIELD_NAMES
-from ._module import Module
+from ._module import _AbstractModule
 
 
 # Not using `jax.tree_util.Partial` as it doesn't implement __eq__ very well. See #480.
-class BoundMethod(Module):
+class BoundMethod(_AbstractModule):
     """Just like a normal Python bound method... except that this one is a PyTree!
 
     This stores `__self__` as a subnode.
     """
 
     __func__: types.FunctionType = field(static=True)
-    __self__: Module
+    __self__: _AbstractModule
 
     def __post_init__(self):
         for field_name in WRAPPER_FIELD_NAMES:
@@ -29,7 +29,7 @@ class BoundMethod(Module):
             else:
                 setattr(self, field_name, value)
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args: Any, **kwargs: Any):
         __tracebackhide__ = True
         return self.__func__(self.__self__, *args, **kwargs)
 
@@ -41,7 +41,7 @@ class BoundMethod(Module):
 _Return = TypeVar("_Return")
 
 
-class Partial(Module, Generic[_Return]):
+class Partial(_AbstractModule, Generic[_Return]):
     """Like `functools.partial`, but treats the wrapped function, and partially-applied
     args and kwargs, as a PyTree.
 
@@ -85,7 +85,7 @@ class Partial(Module, Generic[_Return]):
 _Value = TypeVar("_Value")
 
 
-class Static(Module, Generic[_Value]):
+class Static(_AbstractModule, Generic[_Value]):
     """Wraps a value into a `eqx.field(static=True)`.
 
     This is useful to treat something as just static metadata with respect to a JAX
