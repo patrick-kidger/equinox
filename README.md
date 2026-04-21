@@ -85,6 +85,7 @@ If you found this library to be useful in academic work, then please cite: ([arX
 
 **Always useful**  
 [jaxtyping](https://github.com/patrick-kidger/jaxtyping): type annotations for shape/dtype of arrays.  
+[quax](https://github.com/nstarman/quax): extending JAX to custom array-ish objects.  
 
 **Deep learning**  
 [Optax](https://github.com/deepmind/optax): first-order gradient (SGD, Adam, ...) optimisers.  
