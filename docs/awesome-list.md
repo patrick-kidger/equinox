@@ -119,3 +119,6 @@ Runtime hooks for Equinox modules.
 
 **GPJax**: [Github](https://github.com/thomaspinder/gpjax)  
 Gaussian process models in JAX and Equinox.
+
+**Banax**: [Github](https://github.com/RhizomeResearch/banax)  
+Deep Equilibrium Models (DEQs) in JAX and Equinox.
