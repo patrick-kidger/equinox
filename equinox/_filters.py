@@ -23,7 +23,7 @@ _NDARRAY_TYPES: Final = (np.ndarray, np.generic)
 _ARRAY_TYPES = (*_NDARRAY_TYPES, jax.Array)  # JAX < 0.7.2
 
 try:  # JAX 0.7.2
-    from jax._src.literals import (
+    from jax._src.literals import (  # pyright: ignore[reportMissingImports]
         LiteralArray,  # pyright: ignore[reportAttributeAccessIssue]
     )
 
@@ -32,7 +32,7 @@ except ImportError:
     pass
 
 try:  # JAX > 0.7.2
-    from jax._src.literals import (
+    from jax._src.literals import (  # pyright: ignore[reportMissingImports]
         TypedNdArray,  # pyright: ignore[reportAttributeAccessIssue]
     )
 

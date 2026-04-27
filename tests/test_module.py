@@ -414,7 +414,7 @@ def test_wrap_method():
             return self.a + b
 
     m = MyModule(13)
-    assert isinstance(m.f, eqx.Module)
+    assert isinstance(m.f, eqx._module._prebuilt.BoundMethod)  # TODO: better
     flat, treedef = jtu.tree_flatten(m.f)
     assert len(flat) == 1
     assert flat[0] == 13
