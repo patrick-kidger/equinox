@@ -77,7 +77,7 @@ class EquinoxTracetimeError(RuntimeError):
 
 
 @filter_custom_jvp
-def _error(x, pred, index, *, msgs, on_error, stack):
+def _error(x, pred, index, *, msgs, on_error, stack, category=None, stacklevel=1):
     if on_error == "raise":
 
         def raises(_index):
@@ -108,11 +108,13 @@ def _error(x, pred, index, *, msgs, on_error, stack):
             return jtu.tree_map(_nan_like, _out)
 
         def handle_error():  # pyright: ignore
-            out = jax.pure_callback(raises, struct, index)
+            out = jax.pure_callback(raises, struct, index, vmap_method="sequential")
             # If we make it this far then we're on the TPU, which squelches runtime
             # errors and returns dummy values instead.
             # Fortunately, we're able to outsmart it!
-            return jax.pure_callback(tpu_msg, struct, out, index)
+            return jax.pure_callback(
+                tpu_msg, struct, out, index, vmap_method="sequential"
+            )
 
         struct = jax.eval_shape(lambda: x)
         return lax.cond(pred, handle_error, lambda: x)
@@ -130,18 +132,48 @@ def _error(x, pred, index, *, msgs, on_error, stack):
 
         def handle_error():
             index_struct = jax.eval_shape(lambda: index)
-            _index = jax.pure_callback(display_msg, index_struct, index)
+            _index = jax.pure_callback(
+                display_msg, index_struct, index, vmap_method="sequential"
+            )
             _index = jax.debug.breakpoint(
                 token=_index, num_frames=EQX_ON_ERROR_BREAKPOINT_FRAMES
             )
             _index = unvmap_max(cast(Any, _index))
-            return jax.pure_callback(to_nan, struct, _index)
+            return jax.pure_callback(to_nan, struct, _index, vmap_method="sequential")
 
         struct = jax.eval_shape(lambda: x)
         return lax.cond(pred, handle_error, lambda: x)
 
     elif on_error == "nan":
         return lax.cond(pred, ft.partial(jtu.tree_map, _nan_like), lambda y: y, x)
+    elif on_error == "warn":
+
+        def handle_warning() -> PyTree:
+            def warn_callback(_index: Array, /) -> int:
+                msg = msgs[_index.item()]
+                warnings.warn(msg, category=category, stacklevel=stacklevel + 3)
+                return 0
+
+            # Thread a zero dependency through the output so this warning is
+            # dead-code-eliminated whenever the result is unused.
+            zero = jax.pure_callback(
+                warn_callback,
+                jax.ShapeDtypeStruct((), jnp.int32),
+                index,
+                vmap_method="sequential",
+            )
+
+            def add_dependency(xi: Array, /) -> Array:
+                typed_zero = zero.astype(xi.dtype)
+                return (
+                    xi | typed_zero
+                    if jnp.issubdtype(xi.dtype, jnp.bool_)
+                    else xi + typed_zero
+                )
+
+            return jtu.tree_map(add_dependency, x)
+
+        return lax.cond(pred, handle_warning, lambda: x)
     elif on_error == "off":
         return x
     else:
@@ -153,10 +185,21 @@ def _error(x, pred, index, *, msgs, on_error, stack):
 # zeros to non-symbolic-zeros, and we'd really like to avoid that, and (b) we need to
 # wrap our pure_callbacks in custom JVP rules.
 @_error.def_jvp
-def _error_jvp(primals, tangents, *, msgs, on_error, stack):
+def _error_jvp(
+    primals, tangents, *, msgs, on_error, stack, category=None, stacklevel=1
+):
     x, pred, index = primals
     tx, _, _ = tangents
-    return _error(x, pred, index, msgs=msgs, on_error=on_error, stack=stack), tx
+    return _error(
+        x,
+        pred,
+        index,
+        msgs=msgs,
+        on_error=on_error,
+        stack=stack,
+        category=category,
+        stacklevel=stacklevel,
+    ), tx
 
 
 if EQX_ON_ERROR == "breakpoint":
@@ -192,7 +235,11 @@ def error_if(
     pred: Bool[ArrayLike, "..."],
     msg: str,
     *,
-    on_error: Literal["default", "raise", "breakpoint", "nan", "off"] = "default",
+    on_error: Literal[
+        "default", "raise", "breakpoint", "nan", "warn", "off"
+    ] = "default",
+    category: type[Warning] | None = None,
+    stacklevel: int = 1,
 ) -> PyTree:
     """Throws an error based on runtime values. Works even under JIT.
 
@@ -202,17 +249,24 @@ def error_if(
         happens in the overall computation: it will happen after `x` is computed and
         before the return value is used. `x` can be any PyTree, and it must contain at
         least one array.
-    - `pred`: a boolean for whether to raise an error. Can be an array of bools; an
-        error will be raised if any of them are `True`. If vmap'd then an error will be
-        raised if any batch element has `True`.
-    - `msg`: the string to display as an error message.
+    - `pred`: a boolean for whether to raise an error or warning.
+        Can be an array of bools; an error (/warning) will be raised if any of them
+        are `True`. If vmap'd then an error (/warning) will be raised if any batch
+        element has `True`.
+    - `msg`: the string to display as an error (/warning) message.
+    - `category`: the warning category to use when `on_error="warn"` (defaults
+      to `UserWarning` if `None`). Ignored for other modes.
+    - `stacklevel`: the stack level for the warning when `on_error="warn"`
+      (defaults to `1`). Ignored for other modes.
 
-    In addition, the `EQX_ON_ERROR` environment variable is checked for how any runtime
-    errors should be handled. Possible values are:
+    In addition, the `EQX_ON_ERROR` environment variable is checked for how any
+    runtime errors should be handled. Possible values are:
 
     - `EQX_ON_ERROR=raise` will raise a runtime error.
     - `EQX_ON_ERROR=nan` will return `NaN` instead of `x`, and then continue the
         computation.
+    - `EQX_ON_ERROR=warn` will emit a warning at runtime and return `x`
+      unchanged.
     - `EQX_ON_ERROR=breakpoint` will open a debugger.
         - Note that this option may prevent certain compiler optimisations, so
             permanently fixing this value is not recommended.
@@ -247,7 +301,9 @@ def error_if(
         f(jax.numpy.array(-1))
         ```
     """
-    return branched_error_if(x, pred, 0, [msg], on_error=on_error)
+    return branched_error_if(
+        x, pred, 0, [msg], on_error=on_error, category=category, stacklevel=stacklevel
+    )
 
 
 @doc_remove_args("on_error")
@@ -257,7 +313,11 @@ def branched_error_if(
     index: Int[ArrayLike, "..."],
     msgs: Sequence[str],
     *,
-    on_error: Literal["default", "raise", "breakpoint", "nan", "off"] = "default",
+    on_error: Literal[
+        "default", "raise", "breakpoint", "nan", "warn", "off"
+    ] = "default",
+    category: type[Warning] | None = None,
+    stacklevel: int = 1,
 ) -> PyTree:
     """As [`equinox.error_if`][], but will raise one of
     several `msgs` depending on the value of `index`. If `index` is vmap'd, then the
@@ -268,9 +328,25 @@ def branched_error_if(
     # a bool and an int.
     # This ensures we can use `error_if` before init_google.
     if any(is_array(leaf) for leaf in leaves):
-        return branched_error_if_impl_jit(x, pred, index, msgs, on_error=on_error)
+        return branched_error_if_impl_jit(
+            x,
+            pred,
+            index,
+            msgs,
+            on_error=on_error,
+            category=category,
+            stacklevel=stacklevel,
+        )
     else:
-        return branched_error_if_impl(x, pred, index, msgs, on_error=on_error)
+        return branched_error_if_impl(
+            x,
+            pred,
+            index,
+            msgs,
+            on_error=on_error,
+            category=category,
+            stacklevel=stacklevel,
+        )
 
 
 def branched_error_if_impl(
@@ -279,11 +355,13 @@ def branched_error_if_impl(
     index: Int[ArrayLike, "..."],
     msgs: Sequence[str],
     *,
-    on_error: Literal["default", "raise", "breakpoint", "off", "nan"],
+    on_error: Literal["default", "raise", "breakpoint", "off", "nan", "warn"],
+    category: type[Warning] | None = None,
+    stacklevel: int = 1,
 ) -> PyTree:
     if on_error == "default":
         on_error = EQX_ON_ERROR
-    elif on_error not in ("raise", "breakpoint", "off", "nan"):
+    elif on_error not in ("raise", "breakpoint", "off", "nan", "warn"):
         raise RuntimeError("Unrecognised value for `on_error`.")
     with jax.ensure_compile_time_eval():
         # This carefully does not perform any JAX operations if `pred` and `index` are
@@ -314,6 +392,11 @@ def branched_error_if_impl(
                             "`on_error='nan'`)."
                         )
                         return jtu.tree_map(_nan_like, x)
+                    elif on_error == "warn":
+                        warnings.warn(
+                            msgs[index], category=category, stacklevel=stacklevel + 2
+                        )
+                        return x
                     elif on_error == "off":
                         return x
                     else:
@@ -340,7 +423,14 @@ def branched_error_if_impl(
     if len(flat) == 0:
         raise ValueError("No arrays to thread error on to.")
     dynamic_x = _error(
-        dynamic_x, pred, index, msgs=msgs, on_error=on_error, stack=stack
+        dynamic_x,
+        pred,
+        index,
+        msgs=msgs,
+        on_error=on_error,
+        stack=stack,
+        category=category,
+        stacklevel=stacklevel,
     )
     return combine(dynamic_x, static_x)
 
@@ -354,7 +444,9 @@ def assert_dce(
     x: PyTree,
     msg: str,
     *,
-    on_error: Literal["default", "raise", "breakpoint", "off", "nan"] = "default",
+    on_error: Literal[
+        "default", "raise", "breakpoint", "nan", "warn", "off"
+    ] = "default",
 ) -> PyTree:
     """Asserts that a particular array (or PyTree of arrays) is DCE'd."""
 
