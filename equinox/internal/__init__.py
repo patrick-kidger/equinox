@@ -88,4 +88,10 @@ from ._primitive import (
     filter_primitive_transpose as filter_primitive_transpose,
     materialise_zeros as materialise_zeros,
 )
+from ._progress_meter import (
+    AbstractProgressMeter as AbstractProgressMeter,
+    NoProgressMeter as NoProgressMeter,
+    TextProgressMeter as TextProgressMeter,
+    TqdmProgressMeter as TqdmProgressMeter,
+)
 from ._str2jax import str2jax as str2jax
