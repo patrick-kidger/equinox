@@ -434,15 +434,15 @@ class _ModuleMeta(BetterABCMeta):
             except AttributeError as err:
                 raise TypeError(f"Field {name!r} was not initialized.") from err
 
-        # Warn about init=False fields containing inexact arrays (pre-converter values).
+        # Apply converters.
+        for name, converter in info.converter_fields:
+            object.__setattr__(self, name, converter(getattr(self, name)))
+
+        # Warn about init=False fields containing inexact arrays.
         for name in info.non_init_field_names:
             val = getattr(self, name)
             if any(jtu.tree_map(is_inexact_array_like, jtu.tree_leaves(val))):
                 warnings.warn(_MSG_FIELD_INIT_FALSE, stacklevel=2)
-
-        # Apply converters.
-        for name, converter in info.converter_fields:
-            object.__setattr__(self, name, converter(getattr(self, name)))
 
         # Warn about static fields containing JAX arrays (post-converter values).
         for name in info.static_field_names:
