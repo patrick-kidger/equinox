@@ -32,15 +32,6 @@ class BoundMethod(Module, Generic[_Return]):
     __func__: _FuncDescriptor[_Return] = field(static=True)
     __self__: Module
 
-    def __post_init__(self):
-        for field_name in WRAPPER_FIELD_NAMES:
-            try:
-                value = getattr(self.__func__, field_name)
-            except AttributeError:
-                pass
-            else:
-                setattr(self, field_name, value)
-
     def __call__(self, *args: Any, **kwargs: Any) -> _Return:
         __tracebackhide__ = True
         return self.__func__(self.__self__, *args, **kwargs)
@@ -48,6 +39,13 @@ class BoundMethod(Module, Generic[_Return]):
     @property
     def __wrapped__(self) -> Callable[..., _Return]:
         return self.__func__.__get__(self.__self__, type(self.__self__))
+
+    def __getattr__(self, name: str) -> Any:
+        if name in WRAPPER_FIELD_NAMES:
+            return getattr(self.__func__, name)
+        raise AttributeError(
+            f"{type(self).__name__!r} object has no attribute {name!r}"
+        )
 
 
 class Partial(Module, Generic[_Return]):
