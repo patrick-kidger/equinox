@@ -9,9 +9,9 @@ import jax
 import jax._src.traceback_util as traceback_util
 import jax.core
 import jax.lax as lax
-import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
+import numpy.typing as npt
 from jaxtyping import Array, ArrayLike, Bool, Int, PyTree
 
 from . import _jit
@@ -72,18 +72,49 @@ class _EquinoxRuntimeError(RuntimeError):
     pass
 
 
-class EquinoxTracetimeError(RuntimeError):
-    pass
+def _get_message(
+    pred: Bool[npt.ArrayLike, "*shape"],
+    message_index: Int[npt.ArrayLike, "*shape"],
+    msgs: list[str],
+) -> str:
+    pred = np.asarray(pred)
+    message_index = np.asarray(message_index)
+    if pred.shape != message_index.shape:  # due to vmap_method="broadcast_all"
+        # Don't use an `assert`, we need to be able to report our errors out to JAX.
+        return "Internal error in Equinox."
+    if np.any(message_index < 0):
+        return (
+            "Got a negative value for `equinox.branched_error_if(..., index=...)`, "
+            "which is not supported."
+        )
+    if np.any(message_index >= len(msgs)):
+        maxval = np.max(message_index).item()
+        return (
+            f"Got value {maxval} for `equinox.branched_error_if(..., index=...)`, "
+            f"which is not a valid index given `len(msgs)={len(msgs)}`."
+        )
+    if message_index.shape == ():
+        # Common scalar case
+        return msgs[message_index.item()]
+    else:
+        # Batched case, report which batch element had the error + potentially report
+        # multiple errors.
+        output = []
+        for index in zip(*np.nonzero(pred)):
+            index = tuple(np.asarray(i).item() for i in index)
+            msg = msgs[message_index[index].item()]
+            output.append(f"Batch index {index} had error:\n{msg}")
+        return "\n\n".join(output)
 
 
 @filter_custom_jvp
 def _error(x, pred, index, *, msgs, on_error, stack):
     if on_error == "raise":
 
-        def raises(_index):
+        def raises(_pred, _message_index):
+            msg = _get_message(_pred, _message_index, msgs)
             # Sneakily smuggle out the information about the error. Inspired by
             # `sys.last_value`.
-            msg = msgs[_index.item()]
             _jit.last_error_info = (msg, stack)
             raise _EquinoxRuntimeError(
                 f"{msg}\n\n\n"
@@ -97,8 +128,8 @@ def _error(x, pred, index, *, msgs, on_error, stack):
                 "--------------------\n"
             )
 
-        def tpu_msg(_out, _index):
-            msg = msgs[_index.item()]
+        def tpu_msg(_out, _pred, _message_index):
+            msg = _get_message(_pred, _message_index, msgs)
             # `print` doesn't work; nor does `jax.debug.print`.
             # But both `input` and `jax.debug.breakpoint` do. The former allows us to
             # actually display something to the user.
@@ -108,14 +139,18 @@ def _error(x, pred, index, *, msgs, on_error, stack):
             return jtu.tree_map(_nan_like, _out)
 
         def handle_error():  # pyright: ignore
-            out = jax.pure_callback(raises, struct, index)
+            out = jax.pure_callback(
+                raises, struct, pred, index, vmap_method="broadcast_all"
+            )
             # If we make it this far then we're on the TPU, which squelches runtime
             # errors and returns dummy values instead.
             # Fortunately, we're able to outsmart it!
-            return jax.pure_callback(tpu_msg, struct, out, index)
+            return jax.pure_callback(
+                tpu_msg, struct, out, pred, index, vmap_method="broadcast_all"
+            )
 
         struct = jax.eval_shape(lambda: x)
-        return lax.cond(pred, handle_error, lambda: x)
+        return lax.cond(unvmap_any(pred), handle_error, lambda: x)
 
     elif on_error == "breakpoint":
 
@@ -138,10 +173,12 @@ def _error(x, pred, index, *, msgs, on_error, stack):
             return jax.pure_callback(to_nan, struct, _index)
 
         struct = jax.eval_shape(lambda: x)
-        return lax.cond(pred, handle_error, lambda: x)
+        return lax.cond(unvmap_any(pred), handle_error, lambda: x)
 
     elif on_error == "nan":
-        return lax.cond(pred, ft.partial(jtu.tree_map, _nan_like), lambda y: y, x)
+        return lax.cond(
+            unvmap_any(pred), ft.partial(jtu.tree_map, _nan_like), lambda y: y, x
+        )
     elif on_error == "off":
         return x
     else:
@@ -189,7 +226,7 @@ if EQX_ON_ERROR == "breakpoint":
 @doc_remove_args("on_error")
 def error_if(
     x: PyTree,
-    pred: Bool[ArrayLike, "..."],
+    pred: Bool[ArrayLike, ""],
     msg: str,
     *,
     on_error: Literal["default", "raise", "breakpoint", "nan", "off"] = "default",
@@ -202,13 +239,32 @@ def error_if(
         happens in the overall computation: it will happen after `x` is computed and
         before the return value is used. `x` can be any PyTree, and it must contain at
         least one array.
-    - `pred`: a boolean for whether to raise an error. Can be an array of bools; an
-        error will be raised if any of them are `True`. If vmap'd then an error will be
+    - `pred`: a boolean for whether to raise an error. If vmap'd then an error will be
         raised if any batch element has `True`.
     - `msg`: the string to display as an error message.
 
-    In addition, the `EQX_ON_ERROR` environment variable is checked for how any runtime
-    errors should be handled. Possible values are:
+    **Returns:**
+
+    The original argument `x` unchanged. **If this return value is unused then the error
+    check will not be performed.** (It will be removed as part of dead code
+    elimination.)
+
+    !!! Example
+
+        ```python
+        @jax.jit
+        def f(x):
+            x = error_if(x, x < 0, "x must be >= 0")
+            # ...use x in your computation...
+            return x
+
+        f(jax.numpy.array(-1))
+        ```
+
+    **Configuration:**
+
+    The `EQX_ON_ERROR` environment variable is checked for how any runtime errors should
+    be handled. Possible values are:
 
     - `EQX_ON_ERROR=raise` will raise a runtime error.
     - `EQX_ON_ERROR=nan` will return `NaN` instead of `x`, and then continue the
@@ -228,24 +284,6 @@ def error_if(
         performance penalties incurred from use of `error_if`.
 
     After changing an environment variable, the Python process must be restarted.
-
-    **Returns:**
-
-    The original argument `x` unchanged. **If this return value is unused then the error
-    check will not be performed.** (It will be removed as part of dead code
-    elimination.)
-
-    !!! Example
-
-        ```python
-        @jax.jit
-        def f(x):
-            x = error_if(x, x < 0, "x must be >= 0")
-            # ...use x in your computation...
-            return x
-
-        f(jax.numpy.array(-1))
-        ```
     """
     return branched_error_if(x, pred, 0, [msg], on_error=on_error)
 
@@ -253,15 +291,15 @@ def error_if(
 @doc_remove_args("on_error")
 def branched_error_if(
     x: PyTree,
-    pred: Bool[ArrayLike, "..."],
-    index: Int[ArrayLike, "..."],
+    pred: Bool[ArrayLike, ""],
+    index: Int[ArrayLike, ""],
     msgs: Sequence[str],
     *,
     on_error: Literal["default", "raise", "breakpoint", "nan", "off"] = "default",
 ) -> PyTree:
     """As [`equinox.error_if`][], but will raise one of
-    several `msgs` depending on the value of `index`. If `index` is vmap'd, then the
-    error message from the largest value (across the whole batch) will be used.
+    several `msgs` depending on the value of `index`. If `index` is vmap'd, then all
+    error messages (across the whole batch) will be shown.
     """
     leaves = jtu.tree_leaves((x, pred, index))
     # This carefully does not perform any JAX operations if `pred` and `index` are
@@ -275,53 +313,29 @@ def branched_error_if(
 
 def branched_error_if_impl(
     x: PyTree,
-    pred: Bool[ArrayLike, "..."],
-    index: Int[ArrayLike, "..."],
+    pred: Bool[ArrayLike, ""],
+    index: Int[ArrayLike, ""],
     msgs: Sequence[str],
     *,
     on_error: Literal["default", "raise", "breakpoint", "off", "nan"],
 ) -> PyTree:
     if on_error == "default":
         on_error = EQX_ON_ERROR
-    elif on_error not in ("raise", "breakpoint", "off", "nan"):
+    if on_error not in ("raise", "breakpoint", "off", "nan"):
         raise RuntimeError("Unrecognised value for `on_error`.")
+    # Short-circuit if the predicate is known-falsey at compile time, no need to include
+    # this in the graph.
     with jax.ensure_compile_time_eval():
-        # This carefully does not perform any JAX operations if `pred` and `index` are
-        # a bool and an int.
-        # This ensures we can use `error_if` before init_google.
-        if not isinstance(pred, bool):
-            pred = unvmap_any(pred)
-        if not isinstance(index, int):
-            index = unvmap_max(index)
-        if not isinstance(pred, jax.core.Tracer):
-            if isinstance(pred, Array):
-                pred = pred.item()
-            assert type(pred) is bool
-            if pred:
-                if not isinstance(index, jax.core.Tracer):
-                    if isinstance(index, Array):
-                        index = index.item()
-                    assert type(index) is int
-                    if on_error == "raise":
-                        raise EquinoxTracetimeError(msgs[index])
-                    elif on_error == "breakpoint":
-                        print(msgs[index])
-                        breakpoint()
-                    elif on_error == "nan":
-                        warnings.warn(
-                            "Resolving error at trace time (because the predicate is "
-                            "statically resolvable), by substituting NaNs (because "
-                            "`on_error='nan'`)."
-                        )
-                        return jtu.tree_map(_nan_like, x)
-                    elif on_error == "off":
-                        return x
-                    else:
-                        assert False
-                # else defer error to runtime, when the index is known.
-            else:
+        if isinstance(pred, bool):
+            tracepred = pred
+        else:
+            tracepred = unvmap_any(pred)
+        if not isinstance(tracepred, jax.core.Tracer):
+            if isinstance(tracepred, jax.Array):
+                tracepred = tracepred.item()
+            assert type(tracepred) is bool
+            if tracepred is False:
                 return x
-
     stack: list[bytes | str] = []
     for frame, lineno in traceback.walk_stack(None):
         frame_id = frame.f_locals.get("__equinox_jit_id__", None)
@@ -359,8 +373,7 @@ def assert_dce(
     """Asserts that a particular array (or PyTree of arrays) is DCE'd."""
 
     if currently_jitting():
-        pred = jnp.invert(False)  # Prevent the trace-time error-raising from running.
-        return error_if(x, pred, msg, on_error=on_error)
+        return error_if(x, True, msg, on_error=on_error)
     else:
         # Don't run if not JIT'ing, as without the compiler nothing will be DCE'd.
         return x
