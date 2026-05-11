@@ -6,3 +6,4 @@ from ._max_traces import (
     assert_max_traces as assert_max_traces,
     get_num_traces as get_num_traces,
 )
+from ._print import print as print

@@ -38,6 +38,10 @@ JAX itself provides the following tools:
 
 ---
 
+::: equinox.debug.print
+
+---
+
 ::: equinox.debug.store_dce
 
 ::: equinox.debug.inspect_dce
