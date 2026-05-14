@@ -9,11 +9,15 @@ from typing import (
     Any,
     cast,
     Final,
+    get_args,
+    get_origin,
+    get_type_hints,
     Literal,
     NamedTuple,
     ParamSpec,
     TYPE_CHECKING,
     TypeVar,
+    Union,
 )
 from typing_extensions import dataclass_transform
 
@@ -58,6 +62,36 @@ class _ModuleInfo(NamedTuple):
     # check these; for all other (init=True) fields the generated __init__
     # guarantees they are set.
     unchecked_init_false_names: tuple[str, ...]
+    # Fastpath: False when every init=True field is annotated with a type that
+    # can never hold a JAX-transformed callable. When False, the jtu.tree_leaves
+    # scan in __call__ is skipped entirely.
+    may_receive_callable_args: bool
+
+
+# ---------------------------------------------------------------------------
+# Callable-warning scan helpers
+# ---------------------------------------------------------------------------
+
+_SAFE_FROM_CALLABLE_TYPES: frozenset[type] = frozenset(
+    {int, float, str, bool, bytes, complex, type(None), np.ndarray, jax.Array}
+)
+
+# types.UnionType (``X | Y`` syntax) is available from Python 3.10 onwards.
+_UNION_TYPE: type | None = getattr(types, "UnionType", None)
+
+
+def _is_safe_from_callable_warning(annotation: object, /) -> bool:
+    """True only if no value with this annotation can be a JAX-transformed callable."""
+    if annotation is Any or annotation is object:
+        return False
+    if annotation in _SAFE_FROM_CALLABLE_TYPES:
+        return True
+    origin = get_origin(annotation)
+    if origin is Union or (
+        _UNION_TYPE is not None and isinstance(annotation, _UNION_TYPE)
+    ):
+        return all(_is_safe_from_callable_warning(a) for a in get_args(annotation))
+    return False
 
 
 MSG_METHOD_IN_INIT: Final = """Cannot assign methods in __init__.
@@ -401,6 +435,18 @@ class _ModuleMeta(BetterABCMeta):
             and f.default is dataclasses.MISSING
             and f.default_factory is dataclasses.MISSING  # pyright: ignore[reportAttributeAccessIssue]
         )
+        # Precompute whether any init=True field could hold a JAX-transformed
+        # callable. On failure (e.g. unresolvable forward refs) fall back to
+        # True so the scan is never incorrectly skipped.
+        try:
+            hints = get_type_hints(cls)
+        except Exception:
+            hints = {}
+        may_receive_callable_args = not all(
+            _is_safe_from_callable_warning(hints.get(f.name, Any))
+            for f in fields  # pyright: ignore[reportArgumentType]
+            if f.init
+        )
         _module_info[cls] = _ModuleInfo(
             names_tuple=names,
             names_set=frozenset(names),
@@ -409,6 +455,7 @@ class _ModuleMeta(BetterABCMeta):
             non_init_field_names=non_init_field_names,
             check_init_methods=check_init_methods,
             unchecked_init_false_names=unchecked_init_false_names,
+            may_receive_callable_args=may_receive_callable_args,
         )
 
         # Generate optimized flatten/unflatten functions
@@ -431,7 +478,9 @@ class _ModuleMeta(BetterABCMeta):
             # Any other is-abstract checks will be handled in super().__call__.
             raise TypeError("Cannot instantiate abstract `equinox.Module`.")
 
-        if has_dcls_init := _has_dataclass_init[cls]:
+        info = _module_info[cls]
+        has_dcls_init = _has_dataclass_init[cls]
+        if has_dcls_init and info.may_receive_callable_args:
             for x in jtu.tree_leaves((args, kwargs)):
                 _warn_jax_transformed_function(cls, x)
 
@@ -443,8 +492,6 @@ class _ModuleMeta(BetterABCMeta):
                 _currently_initialising.remove(tryself)
             del tryself
         assert not is_abstract_module(cls)  # pyright: ignore[reportArgumentType]
-
-        info = _module_info[cls]
 
         # Check all fields were initialized.
         # Fastpath: when using the dataclass-generated __init__ every init=True
