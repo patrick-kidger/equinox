@@ -66,6 +66,10 @@ class _ModuleInfo(NamedTuple):
     # can never hold a JAX-transformed callable. When False, the jtu.tree_leaves
     # scan in __call__ is skipped entirely.
     may_receive_callable_args: bool
+    # When True, _ModuleMeta.__call__ skips all checks/warnings (other than the
+    # abstract check) and only creates the instance, applies converters, and
+    # removes from _currently_initialising.
+    unchecked_init: bool
 
 
 # ---------------------------------------------------------------------------
@@ -323,6 +327,7 @@ class _ModuleMeta(BetterABCMeta):
         *,
         is_abstract: bool = False,
         strict: None | bool = False,
+        unchecked_init: bool = False,
         **kwargs: object,
     ):
         if strict is None:
@@ -456,6 +461,7 @@ class _ModuleMeta(BetterABCMeta):
             check_init_methods=check_init_methods,
             unchecked_init_false_names=unchecked_init_false_names,
             may_receive_callable_args=may_receive_callable_args,
+            unchecked_init=unchecked_init,
         )
 
         # Generate optimized flatten/unflatten functions
@@ -479,6 +485,19 @@ class _ModuleMeta(BetterABCMeta):
             raise TypeError("Cannot instantiate abstract `equinox.Module`.")
 
         info = _module_info[cls]
+
+        if info.unchecked_init:
+            tryself = None
+            try:
+                self = tryself = super().__call__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
+            finally:
+                if tryself is not None:
+                    _currently_initialising.remove(tryself)
+                del tryself
+            for name, converter in info.converter_fields:
+                object.__setattr__(self, name, converter(getattr(self, name)))
+            return self
+
         has_dcls_init = _has_dataclass_init[cls]
         if has_dcls_init and info.may_receive_callable_args:
             for x in jtu.tree_leaves((args, kwargs)):
