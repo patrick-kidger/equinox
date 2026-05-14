@@ -658,14 +658,17 @@ class Module(Hashable, metaclass=_ModuleMeta):
     if not TYPE_CHECKING:
 
         def __setattr__(self, name: str, value: Any) -> None:
-            if self in _currently_initialising and (
-                name in _module_info[type(self)].names_set
-                or name in WRAPPER_FIELD_NAMES
-            ):
-                _error_method_assignment(self, value)
-                _warn_jax_transformed_function(type(self), value)
-                object.__setattr__(self, name, value)
-                return
+            if self in _currently_initialising:
+                if name in _module_info[type(self)].names_set:
+                    _error_method_assignment(self, value)
+                    _warn_jax_transformed_function(type(self), value)
+                    object.__setattr__(self, name, value)
+                    return
+                elif name in WRAPPER_FIELD_NAMES:
+                    # Allow setting wrapper fields without warning, because they
+                    # are ignored by the PyTree machinery.
+                    object.__setattr__(self, name, value)
+                    return
             # Allow:
             # ```
             # class SomeModule(eqx.Module, Generic[T]): ...
