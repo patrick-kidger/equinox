@@ -66,6 +66,9 @@ class _ModuleInfo(NamedTuple):
     # can never hold a JAX-transformed callable. When False, the jtu.tree_leaves
     # scan in __call__ is skipped entirely.
     may_receive_callable_args: bool
+    # Mirrors _has_dataclass_init[cls]: cached here to avoid a second
+    # WeakKeyDictionary lookup in the hot __call__ path.
+    has_dataclass_init: bool
     # When True, _ModuleMeta.__call__ skips all checks/warnings (other than the
     # abstract check) and only creates the instance, applies converters, and
     # removes from _currently_initialising.
@@ -231,11 +234,11 @@ class _IdSet:
         self._dict: dict[int, Module] = {}
 
     def __contains__(self, key: "Module") -> bool:
-        return id(key) in self._dict.keys()
+        return id(key) in self._dict
 
     def add(self, key: "Module") -> None:
-        if key not in self:
-            id_key = id(key)
+        id_key = id(key)
+        if id_key not in self._dict:
             # Hold on to `key` to be sure that `id(key)` does not get reallocated.
             self._dict[id_key] = key
 
@@ -461,6 +464,7 @@ class _ModuleMeta(BetterABCMeta):
             check_init_methods=check_init_methods,
             unchecked_init_false_names=unchecked_init_false_names,
             may_receive_callable_args=may_receive_callable_args,
+            has_dataclass_init=has_dataclass_init,
             unchecked_init=unchecked_init,
         )
 
@@ -498,7 +502,7 @@ class _ModuleMeta(BetterABCMeta):
                 object.__setattr__(self, name, converter(getattr(self, name)))
             return self
 
-        has_dcls_init = _has_dataclass_init[cls]
+        has_dcls_init = info.has_dataclass_init
         if has_dcls_init and info.may_receive_callable_args:
             for x in jtu.tree_leaves((args, kwargs)):
                 _warn_jax_transformed_function(cls, x)
@@ -534,12 +538,12 @@ class _ModuleMeta(BetterABCMeta):
         # Warn about init=False fields containing inexact arrays.
         for name in info.non_init_field_names:
             val = getattr(self, name)
-            if any(jtu.tree_map(is_inexact_array_like, jtu.tree_leaves(val))):
+            if any(map(is_inexact_array_like, jtu.tree_leaves(val))):
                 warnings.warn(_MSG_FIELD_INIT_FALSE, stacklevel=2)
 
         # Warn about static fields containing JAX arrays (post-converter values).
         for name in info.static_field_names:
-            if any(jtu.tree_map(is_array, jtu.tree_leaves(getattr(self, name)))):
+            if any(map(is_array, jtu.tree_leaves(getattr(self, name)))):
                 warnings.warn(
                     "A JAX array is being set as static! This can result "
                     "in unexpected behavior and is usually a mistake to do.",
@@ -678,9 +682,10 @@ class Module(Hashable, metaclass=_ModuleMeta):
 
         def __setattr__(self, name: str, value: Any) -> None:
             if self in _currently_initialising:
-                if name in _module_info[type(self)].names_set:
+                cls = type(self)
+                if name in _module_info[cls].names_set:
                     _error_method_assignment(self, value)
-                    _warn_jax_transformed_function(type(self), value)
+                    _warn_jax_transformed_function(cls, value)
                     object.__setattr__(self, name, value)
                     return
                 elif name in WRAPPER_FIELD_NAMES:
@@ -713,9 +718,9 @@ class Module(Hashable, metaclass=_ModuleMeta):
             # ```
             # works.
             if (
-                not _is_magic(name)
-                and isinstance(out, types.MethodType)
+                isinstance(out, types.MethodType)
                 and out.__self__ is self
+                and not _is_magic(name)
             ):
                 out = BoundMethod(object.__getattribute__(out, "__func__"), self)
             return out
