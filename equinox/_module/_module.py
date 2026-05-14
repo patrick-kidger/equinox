@@ -52,6 +52,12 @@ class _ModuleInfo(NamedTuple):
     static_field_names: tuple[str, ...]  # names of static=True fields
     non_init_field_names: tuple[str, ...]  # names of init=False fields
     check_init_methods: tuple[Any, ...]  # unbound __check_init__ funcs from MRO
+    # Fastpath: init=False fields that have NO default/default_factory and
+    # therefore are not guaranteed to be set by the dataclass-generated
+    # __init__.  When the class uses the dataclass __init__ we only need to
+    # check these; for all other (init=True) fields the generated __init__
+    # guarantees they are set.
+    unchecked_init_false_names: tuple[str, ...]
 
 
 MSG_METHOD_IN_INIT: Final = """Cannot assign methods in __init__.
@@ -384,6 +390,17 @@ class _ModuleMeta(BetterABCMeta):
             for parent_cls in cls.__mro__  # pyright: ignore[reportGeneralTypeIssues]
             if "__check_init__" in parent_cls.__dict__
         )
+        # Precompute fastpath: init=False fields without a default or
+        # default_factory are the only ones NOT guaranteed to be set by the
+        # dataclass-generated __init__, so those are the ones we still have to
+        # check even on the fastpath.
+        unchecked_init_false_names = tuple(
+            f.name
+            for f in fields  # pyright: ignore[reportArgumentType]
+            if not f.init
+            and f.default is dataclasses.MISSING
+            and f.default_factory is dataclasses.MISSING  # pyright: ignore[reportAttributeAccessIssue]
+        )
         _module_info[cls] = _ModuleInfo(
             names_tuple=names,
             names_set=frozenset(names),
@@ -391,6 +408,7 @@ class _ModuleMeta(BetterABCMeta):
             static_field_names=static_field_names,
             non_init_field_names=non_init_field_names,
             check_init_methods=check_init_methods,
+            unchecked_init_false_names=unchecked_init_false_names,
         )
 
         # Generate optimized flatten/unflatten functions
@@ -412,7 +430,8 @@ class _ModuleMeta(BetterABCMeta):
         if cls in _abstract_module_registry:
             # Any other is-abstract checks will be handled in super().__call__.
             raise TypeError("Cannot instantiate abstract `equinox.Module`.")
-        if _has_dataclass_init[cls]:
+
+        if has_dcls_init := _has_dataclass_init[cls]:
             for x in jtu.tree_leaves((args, kwargs)):
                 _warn_jax_transformed_function(cls, x)
 
@@ -428,7 +447,15 @@ class _ModuleMeta(BetterABCMeta):
         info = _module_info[cls]
 
         # Check all fields were initialized.
-        for name in info.names_tuple:
+        # Fastpath: when using the dataclass-generated __init__ every init=True
+        # field is guaranteed to be set, and every init=False field that has a
+        # default/default_factory is also set.  Only init=False fields without
+        # any default can be missing, so we only iterate over those.
+        # With a custom __init__ we fall back to checking everything.
+        names_to_check = (
+            info.unchecked_init_false_names if has_dcls_init else info.names_tuple
+        )
+        for name in names_to_check:
             try:
                 getattr(self, name)
             except AttributeError as err:

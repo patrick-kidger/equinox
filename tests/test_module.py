@@ -756,6 +756,64 @@ def test_init_fields():
         C(flag=False)
 
 
+def test_init_fastpath_metadata():
+    """_ModuleInfo precomputes which init=False fields need checking (RED test)."""
+    from equinox._module._module import _module_info
+
+    class AllInitTrue(eqx.Module):
+        x: int
+        y: float
+
+    # No init=False fields → nothing to check with dataclass-generated __init__
+    assert _module_info[AllInitTrue].unchecked_init_false_names == ()
+
+    class InitFalseNoDefault(eqx.Module):
+        x: int = eqx.field(init=False)
+
+    # init=False without a default → dataclass __init__ does NOT set it; must check
+    assert _module_info[InitFalseNoDefault].unchecked_init_false_names == ("x",)
+
+    class InitFalseWithDefault(eqx.Module):
+        x: int = eqx.field(init=False, default=42)
+
+    # init=False WITH a default → dataclass __init__ sets it; no need to check
+    assert _module_info[InitFalseWithDefault].unchecked_init_false_names == ()
+
+    class InitFalseWithFactory(eqx.Module):
+        x: list = eqx.field(init=False, default_factory=list)
+
+    # init=False WITH a default_factory → also initialized; no need to check
+    assert _module_info[InitFalseWithFactory].unchecked_init_false_names == ()
+
+
+def test_init_fastpath_correctness():
+    """The fastpath still catches errors that custom __init__ leaves fields unset."""
+
+    # Custom __init__ that forgets to set a field → must still raise
+    class CustomForgetsX(eqx.Module):
+        x: int
+
+        def __init__(self):
+            pass  # deliberately forgets self.x
+
+    with pytest.raises(TypeError, match="Field 'x' was not initialized."):
+        CustomForgetsX()
+
+    # Dataclass init + init=False without default → must still raise
+    class DataclassInitFalseNoDefault(eqx.Module):
+        x: int = eqx.field(init=False)
+
+    with pytest.raises(TypeError, match="Field 'x' was not initialized."):
+        DataclassInitFalseNoDefault()
+
+    # Dataclass init + all init=True → no error (common fast path)
+    class DataclassAllInitTrue(eqx.Module):
+        x: int
+
+    m = DataclassAllInitTrue(42)
+    assert m.x == 42
+
+
 @pytest.mark.parametrize("field", (dataclasses.field, eqx.field))
 def test_init_as_abstract(field):
     # Before the introduction of AbstractVar, it was possible to sort-of get the same
