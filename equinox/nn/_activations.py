@@ -1,6 +1,6 @@
 import jax
 import jax.numpy as jnp
-from jaxtyping import Array
+from jaxtyping import Array, PRNGKeyArray
 
 from .._module import Module
 from ._misc import named_scope
@@ -30,10 +30,13 @@ class PReLU(Module):
         self.negative_slope = jnp.asarray(init_alpha)
 
     @named_scope("eqx.nn.PReLU")
-    def __call__(self, x: Array) -> Array:
+    def __call__(self, x: Array, *, key: PRNGKeyArray | None = None) -> Array:
         r"""**Arguments:**
 
         - `x`: The input.
+        - `key`: Ignored; provided for compatibility with the rest of the
+            Equinox API. (Note: this layer is now actually used by
+            [`equinox.nn.Sequential`][].)
 
         **Returns:**
 

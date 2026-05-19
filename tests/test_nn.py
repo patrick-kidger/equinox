@@ -1560,6 +1560,23 @@ def test_prelu(getkey):
     assert activation.negative_slope.shape == (x.shape[-1],)
     assert jnp.all(output == expected_multi_output)
 
+    # Test key argument is accepted and ignored
+    output = eqx.nn.PReLU()(jnp.array([1.0, -1.0]), key=jrandom.PRNGKey(0))
+    assert jnp.all(output == jnp.array([1.0, -0.25]))
+
+    # Test compatibility with Sequential, which forwards a key to each layer
+    net = eqx.nn.Sequential(
+        [
+            eqx.nn.Linear(2, 2, key=getkey()),
+            eqx.nn.PReLU(),
+        ]
+    )
+    x = jnp.ones(2)
+    output = net(x, key=None)
+    assert output.shape == (2,)
+    output = net(x, key=jrandom.PRNGKey(0))
+    assert output.shape == (2,)
+
 
 def test_rope_embeddings_shapes(getkey):
     embedding_size = 32
