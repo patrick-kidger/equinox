@@ -122,3 +122,6 @@ Gaussian process models in JAX and Equinox.
 
 **Banax**: [Github](https://github.com/RhizomeResearch/banax)  
 Deep Equilibrium Models (DEQs) in JAX and Equinox.
+
+**neojax**: [Github](https://github.com/paulgekeler/neojax)  
+Neural Operators in JAX and Equinox.
