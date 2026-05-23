@@ -95,7 +95,9 @@ def test_linear_matmul_order_equivalence(getkey, dtype, shape):
     actual = batch_call(linear)(x)
     explicit = x @ linear.weight.T
     if linear.bias is not None:
-        explicit = explicit + linear.bias
+        # Broadcast the bias to explicit's full shape so the test passes under
+        # jax_numpy_rank_promotion='raise' (which equinox's test config enables).
+        explicit = explicit + jnp.broadcast_to(linear.bias, explicit.shape)
     previous = batch_call(old_call)(x)
 
     assert jnp.allclose(actual, explicit)
