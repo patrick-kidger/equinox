@@ -137,4 +137,3 @@ Jump Processes in JAX
 
 **isax**: [Github](https://github.com/lockwo/isax)
 Ising (like) models in JAX
-
