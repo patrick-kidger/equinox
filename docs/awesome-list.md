@@ -130,7 +130,7 @@ Neural Operators in JAX and Equinox.
 Thermodynamic Hypergraphical Model Library in JAX
 
 **distreqx**: [Github](https://github.com/lockwo/distreqx)
-Distrax, but in equinox. Lightweight JAX library of probability distributions and bijectors.
+Distrax, but in Equinox. Lightweight JAX library of probability distributions and bijectors.
 
 **jumpax**: [Github](https://github.com/lockwo/jumpax)
 Jump Processes in JAX
