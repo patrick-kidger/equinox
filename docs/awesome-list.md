@@ -126,14 +126,14 @@ Deep Equilibrium Models (DEQs) in JAX and Equinox.
 **neojax**: [Github](https://github.com/paulgekeler/neojax)  
 Neural Operators in JAX and Equinox.
 
-**thrml**: [Github](https://github.com/extropic-ai/thrml)
+**thrml**: [Github](https://github.com/extropic-ai/thrml)  
 Thermodynamic Hypergraphical Model Library in JAX
 
-**distreqx**: [Github](https://github.com/lockwo/distreqx)
+**distreqx**: [Github](https://github.com/lockwo/distreqx)  
 Distrax, but in Equinox. Lightweight JAX library of probability distributions and bijectors.
 
-**jumpax**: [Github](https://github.com/lockwo/jumpax)
+**jumpax**: [Github](https://github.com/lockwo/jumpax)  
 Jump Processes in JAX
 
-**isax**: [Github](https://github.com/lockwo/isax)
+**isax**: [Github](https://github.com/lockwo/isax)  
 Ising (like) models in JAX
