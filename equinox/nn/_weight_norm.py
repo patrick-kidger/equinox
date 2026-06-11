@@ -21,6 +21,18 @@ def _norm_except_axis(v: Array, norm: Callable[[Array], Scalar], axis: int | Non
         return jax.vmap(norm, in_axes=axis, out_axes=axis)(v)
 
 
+@ft.cache
+def _make_norm(axis: int | None) -> Callable[[Array], Scalar]:
+    # Cached so that two `WeightNorm`s with the same `axis` share the same callable,
+    # and so compare equal under `eqx.tree_equal`.
+    # https://github.com/patrick-kidger/equinox/issues/965
+    return ft.partial(
+        _norm_except_axis,
+        norm=ft.partial(jnp.linalg.norm, keepdims=True),
+        axis=axis,
+    )
+
+
 class WeightNorm(Module, Generic[_Layer]):
     r"""Applies weight normalisation to a given parameter.
 
@@ -88,11 +100,7 @@ class WeightNorm(Module, Generic[_Layer]):
         self.weight_name = weight_name
         self.axis = axis
 
-        self._norm = ft.partial(
-            _norm_except_axis,
-            norm=ft.partial(jnp.linalg.norm, keepdims=True),
-            axis=axis,
-        )
+        self._norm = _make_norm(axis)
         self.g = self._norm(getattr(layer, weight_name))
 
     @named_scope("eqx.nn.WeightNorm")
