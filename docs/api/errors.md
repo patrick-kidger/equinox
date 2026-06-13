@@ -22,5 +22,3 @@ Equinox offers support for raising runtime errors.
     JAX's support for raising runtime errors is technically only experimental. In practice, this nonetheless seems to be stable enough that these are part of the public API for Equinox.
 
 ::: equinox.error_if
-
-::: equinox.branched_error_if
