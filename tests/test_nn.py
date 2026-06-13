@@ -1321,6 +1321,29 @@ def test_weight_norm(getkey):
     assert jnp.any(grads.g)
 
 
+# https://github.com/patrick-kidger/equinox/issues/965
+def test_weight_norm_equality(getkey):
+    linear = eqx.nn.Linear(4, 4, key=getkey())
+
+    for axis in (0, None):
+        m1 = eqx.nn.WeightNorm(layer=linear, weight_name="weight", axis=axis)
+        m2 = eqx.nn.WeightNorm(layer=linear, weight_name="weight", axis=axis)
+        assert eqx.tree_equal(m1, m2)
+
+    num_traces = 0
+
+    @eqx.filter_jit
+    def f(model, x):
+        nonlocal num_traces
+        num_traces += 1
+        return model(x)
+
+    x = jrandom.normal(getkey(), (4,))
+    f(eqx.nn.WeightNorm(layer=linear), x)
+    f(eqx.nn.WeightNorm(layer=linear), x)
+    assert num_traces == 1
+
+
 def test_maxpool1d():
     x = jnp.arange(14).reshape(1, 14)
     max_pool = eqx.nn.MaxPool1d(2, 3)
