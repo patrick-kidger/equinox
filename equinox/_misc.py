@@ -13,6 +13,10 @@ def currently_jitting():
     return isinstance(jnp.array(1) + 1, jax.core.Tracer)
 
 
+def complex_to_real_dtype(dtype):
+    return jnp.finfo(dtype).dtype
+
+
 def default_floating_dtype():
     if jax.config.jax_enable_x64:  # pyright: ignore
         return jnp.float64
