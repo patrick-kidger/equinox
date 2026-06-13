@@ -5,6 +5,7 @@ import doctest
 import functools as ft
 import inspect
 import pickle
+import warnings
 from collections.abc import Callable
 from dataclasses import InitVar
 from typing import Any, Generic, TypeVar
@@ -14,6 +15,7 @@ import equinox.internal as eqxi
 import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
+import numpy as np
 import pytest
 from jaxtyping import Array, Float
 
@@ -940,6 +942,19 @@ def test_no_jax_array_static():
         match="A JAX array is being set as static!",
     ):
         InvalidArr((), jnp.ones(10))
+
+    # NumPy arrays warn too...
+    with pytest.warns(
+        UserWarning,
+        match="A JAX array is being set as static!",
+    ):
+        InvalidTuple((np.ones(10),), jnp.ones(10))
+
+    # ...but NumPy scalars are hashable, so they're fine as static fields.
+    # https://github.com/patrick-kidger/equinox/issues/863
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        InvalidTuple(tuple(np.asarray((3, 2))), jnp.ones(10))
 
 
 # https://github.com/patrick-kidger/equinox/issues/832

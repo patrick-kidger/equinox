@@ -444,9 +444,13 @@ class _ModuleMeta(BetterABCMeta):
             if any(jtu.tree_map(is_inexact_array_like, jtu.tree_leaves(val))):
                 warnings.warn(_MSG_FIELD_INIT_FALSE, stacklevel=2)
 
-        # Warn about static fields containing JAX arrays (post-converter values).
+        # Warn about static fields containing JAX or NumPy arrays (post-converter
+        # values). NumPy scalars (`np.generic`) are excluded: unlike arrays they are
+        # hashable, and so are safe to use as static fields.
+        # https://github.com/patrick-kidger/equinox/issues/863
         for name in info.static_field_names:
-            if any(jtu.tree_map(is_array, jtu.tree_leaves(getattr(self, name)))):
+            leaves = jtu.tree_leaves(getattr(self, name))
+            if any(is_array(x) and not isinstance(x, np.generic) for x in leaves):
                 warnings.warn(
                     "A JAX array is being set as static! This can result "
                     "in unexpected behavior and is usually a mistake to do.",
