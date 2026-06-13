@@ -9,7 +9,7 @@ import wadler_lindig as wl
 from jaxtyping import Array, ArrayLike, Bool, Int
 
 from ._doc_utils import doc_repr
-from ._errors import branched_error_if
+from ._errors import error_if
 from ._module import field, Module
 
 
@@ -199,9 +199,14 @@ class EnumerationItem(Module):
 
         `token` is returned unchanged.
         """
-        return branched_error_if(
-            token, pred, self._value, self._enumeration._index_to_message
-        )
+
+        def msg(token__value):
+            _, value = token__value
+            return index_to_message[value.item()]
+
+        index_to_message = self._enumeration._index_to_message
+        token, _ = error_if((token, self._value), pred, msg=msg)
+        return token
 
     def is_traced(self) -> bool:
         return isinstance(self._value, jax.core.Tracer)

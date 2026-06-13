@@ -195,6 +195,103 @@ def test_traceback_runtime_custom():
         assert "EQX_ON_ERROR" not in str(e)
 
 
+def test_msg_callable():
+    def _msg(x):
+        return f"got bad value {x.item()}"
+
+    @jax.jit
+    def f(x):
+        return eqx.error_if(x, x < 0, msg=_msg)
+
+    f(jnp.array(1.0))
+    with pytest.raises(
+        (ValueError, RuntimeError), match=re.escape("got bad value -1.0")
+    ):
+        f(jnp.array(-1.0))
+
+
+def test_msg_callable_vmap():
+    def _msg(x):
+        return f"got bad value {x.item()}"
+
+    def f(x):
+        return eqx.error_if(x, x < 0, msg=_msg)
+
+    vf = jax.vmap(f)
+    jvf = jax.jit(vf)
+    good = jnp.array([1.0, 2.0])
+    bad = jnp.array([1.0, -3.0])
+
+    vf(good)
+    jvf(good)
+    with pytest.raises(
+        (ValueError, RuntimeError),
+        match=re.escape("Batch index (1,) had error:\ngot bad value -3.0"),
+    ):
+        vf(bad)
+    with pytest.raises(
+        (ValueError, RuntimeError),
+        match=re.escape("Batch index (1,) had error:\ngot bad value -3.0"),
+    ):
+        jvf(bad)
+
+
+def test_msg_callable_vmap_multiple_bad():
+    def _msg(x):
+        return f"got bad value {x.item()}"
+
+    def f(x):
+        return eqx.error_if(x, x < 0, msg=_msg)
+
+    vf = jax.vmap(f)
+    bad = jnp.array([-2.0, -3.0])
+
+    with pytest.raises(
+        (ValueError, RuntimeError),
+        match=re.escape(
+            "Batch index (0,) had error:\ngot bad value -2.0\n\n"
+            "Batch index (1,) had error:\ngot bad value -3.0"
+        ),
+    ):
+        vf(bad)
+
+
+def test_msg_callable_non_arrays():
+    def _msg(x):
+        arr, label = x
+        return f"{label}: got bad value {arr.item()}"
+
+    @eqx.filter_jit
+    def f(x):
+        return eqx.error_if((x, "my_label"), x < 0, msg=_msg)
+
+    val, label = f(jnp.array(1.0))
+    assert jnp.isclose(val, 1.0)
+    assert label == "my_label"
+    with pytest.raises(Exception, match=re.escape("my_label: got bad value -1.0")):
+        f(jnp.array(-1.0))
+
+
+def test_branched_error_if():
+    @eqx.filter_jit
+    def f(x, pred, index):
+        with pytest.warns(match="`equinox.branched_error_if` is deprecated"):
+            return eqx.branched_error_if(
+                x, pred, index, ["error zero", "error one", "error two"]
+            )
+
+    for idx in (0, jnp.array(0)):
+        f(jnp.array(1.0), False, idx)
+
+    for idx in (1, jnp.array(1)):
+        with pytest.raises(Exception, match="error one"):
+            f(jnp.array(1.0), True, idx)
+
+    for idx in (2, jnp.array(2)):
+        with pytest.raises(Exception, match="error two"):
+            f(jnp.array(1.0), True, idx)
+
+
 # https://github.com/patrick-kidger/equinox/issues/1156
 def test_error_after_success():
     @eqx.filter_jit

@@ -2,13 +2,14 @@ import functools as ft
 import traceback
 import types
 import warnings
-from collections.abc import Sequence
-from typing import Any, cast, Literal
+from collections.abc import Callable, Sequence
+from typing import Literal
 
 import jax
 import jax._src.traceback_util as traceback_util
 import jax.core
 import jax.lax as lax
+import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
 import numpy.typing as npt
@@ -20,7 +21,7 @@ from ._config import EQX_ON_ERROR, EQX_ON_ERROR_BREAKPOINT_FRAMES
 from ._doc_utils import doc_remove_args
 from ._filters import combine, is_array, partition
 from ._misc import currently_jitting
-from ._unvmap import unvmap_any, unvmap_max
+from ._unvmap import unvmap_any
 
 
 traceback_util.register_exclusion(__file__)
@@ -36,6 +37,10 @@ def _nan_like(x: Array | np.ndarray) -> Array | np.ndarray:
         return np.broadcast_to(np.array(True, dtype), x.shape)
     else:
         return x
+
+
+def _tree_nan_like(x: PyTree) -> PyTree:
+    return jtu.tree_map(_nan_like, x)
 
 
 _tpu_msg = """
@@ -73,51 +78,44 @@ class _EquinoxRuntimeError(RuntimeError):
 
 
 def _get_message(
+    dynamic_x: PyTree[npt.ArrayLike],
+    static_x: PyTree,
     pred: Bool[npt.ArrayLike, "*shape"],
-    message_index: Int[npt.ArrayLike, "*shape"],
-    msgs: list[str],
+    msg: Callable[[PyTree], str],
 ) -> str:
+    dynamic_x = jtu.tree_map(np.asarray, dynamic_x)
     pred = np.asarray(pred)
-    message_index = np.asarray(message_index)
-    if pred.shape != message_index.shape:  # due to vmap_method="broadcast_all"
-        # Don't use an `assert`, we need to be able to report our errors out to JAX.
-        return "Internal error in Equinox."
-    if np.any(message_index < 0):
-        return (
-            "Got a negative value for `equinox.branched_error_if(..., index=...)`, "
-            "which is not supported."
-        )
-    if np.any(message_index >= len(msgs)):
-        maxval = np.max(message_index).item()
-        return (
-            f"Got value {maxval} for `equinox.branched_error_if(..., index=...)`, "
-            f"which is not a valid index given `len(msgs)={len(msgs)}`."
-        )
-    if message_index.shape == ():
+    if pred.shape == ():
         # Common scalar case
-        return msgs[message_index.item()]
+        x = combine(dynamic_x, static_x)
+        return msg(x)
     else:
         # Batched case, report which batch element had the error + potentially report
         # multiple errors.
         output = []
         for index in zip(*np.nonzero(pred)):
             index = tuple(np.asarray(i).item() for i in index)
-            msg = msgs[message_index[index].item()]
-            output.append(f"Batch index {index} had error:\n{msg}")
+            x = combine(jtu.tree_map(lambda _x: _x[index], dynamic_x), static_x)
+            msg_string = msg(x)
+            output.append(f"Batch index {index} had error:\n{msg_string}")
         return "\n\n".join(output)
 
 
 @filter_custom_jvp
-def _error(x, pred, index, *, msgs, on_error, stack):
+def _error_inner(
+    dynamic_x, pred, *, static_x, msg: Callable[[PyTree], str], on_error, stack
+):
+    assert callable(msg)
+
     if on_error == "raise":
 
-        def raises(_pred, _message_index):
-            msg = _get_message(_pred, _message_index, msgs)
+        def raises(_dynamic_x, _pred):
+            msg_string = _get_message(_dynamic_x, static_x, _pred, msg)
             # Sneakily smuggle out the information about the error. Inspired by
             # `sys.last_value`.
-            _jit.last_error_info = (msg, stack)
+            _jit.last_error_info = (msg_string, stack)
             raise _EquinoxRuntimeError(
-                f"{msg}\n\n\n"
+                f"{msg_string}\n\n\n"
                 "--------------------\n"
                 "An error occurred during the runtime of your JAX program! "
                 "Unfortunately you do not appear to be using `equinox.filter_jit` "
@@ -128,59 +126,54 @@ def _error(x, pred, index, *, msgs, on_error, stack):
                 "--------------------\n"
             )
 
-        def tpu_msg(_out, _pred, _message_index):
-            msg = _get_message(_pred, _message_index, msgs)
+        def tpu_msg(_out, _pred):
+            msg_string = _get_message(_out, static_x, _pred, msg)
             # `print` doesn't work; nor does `jax.debug.print`.
             # But both `input` and `jax.debug.breakpoint` do. The former allows us to
             # actually display something to the user.
-            input(msg + _tpu_msg)
+            input(msg_string + _tpu_msg)
             # We do the tree_map inside the pure_callback, not outside, so that `out`
             # has a data dependency and doesn't get optimised out.
             return jtu.tree_map(_nan_like, _out)
 
         def handle_error():  # pyright: ignore
             out = jax.pure_callback(
-                raises, struct, pred, index, vmap_method="broadcast_all"
+                raises, dynamic_x, dynamic_x, pred, vmap_method="broadcast_all"
             )
             # If we make it this far then we're on the TPU, which squelches runtime
             # errors and returns dummy values instead.
             # Fortunately, we're able to outsmart it!
             return jax.pure_callback(
-                tpu_msg, struct, out, pred, index, vmap_method="broadcast_all"
+                tpu_msg, dynamic_x, out, pred, vmap_method="broadcast_all"
             )
 
-        struct = jax.eval_shape(lambda: x)
-        return lax.cond(unvmap_any(pred), handle_error, lambda: x)
+        return lax.cond(unvmap_any(pred), handle_error, lambda: dynamic_x)
 
     elif on_error == "breakpoint":
 
-        def display_msg(_index):
+        def display_msg(_dynamic_x, _pred):
             print(_frames_msg)
-            print("equinox.EquinoxRuntimeError: " + msgs[_index.item()])
-            return _index
-
-        def to_nan(_index):
-            del _index
-            return jtu.tree_map(_nan_like, struct)
+            msg_string = _get_message(_dynamic_x, static_x, _pred, msg)
+            print("equinox.EquinoxRuntimeError: " + msg_string)
+            return _dynamic_x
 
         def handle_error():
-            index_struct = jax.eval_shape(lambda: index)
-            _index = jax.pure_callback(display_msg, index_struct, index)
-            _index = jax.debug.breakpoint(
-                token=_index, num_frames=EQX_ON_ERROR_BREAKPOINT_FRAMES
+            out = jax.pure_callback(
+                display_msg, dynamic_x, dynamic_x, pred, vmap_method="broadcast_all"
             )
-            _index = unvmap_max(cast(Any, _index))
-            return jax.pure_callback(to_nan, struct, _index)
+            out = jax.debug.breakpoint(
+                token=out, num_frames=EQX_ON_ERROR_BREAKPOINT_FRAMES
+            )
+            return jax.pure_callback(
+                _tree_nan_like, dynamic_x, out, vmap_method="broadcast_all"
+            )
 
-        struct = jax.eval_shape(lambda: x)
-        return lax.cond(unvmap_any(pred), handle_error, lambda: x)
+        return lax.cond(unvmap_any(pred), handle_error, lambda: dynamic_x)
 
     elif on_error == "nan":
-        return lax.cond(
-            unvmap_any(pred), ft.partial(jtu.tree_map, _nan_like), lambda y: y, x
-        )
+        return lax.cond(unvmap_any(pred), _tree_nan_like, lambda y: y, dynamic_x)
     elif on_error == "off":
-        return x
+        return dynamic_x
     else:
         assert False
 
@@ -189,11 +182,86 @@ def _error(x, pred, index, *, msgs, on_error, stack):
 # This is needed as (a) lax.cond will unnecessarily promote symbolic
 # zeros to non-symbolic-zeros, and we'd really like to avoid that, and (b) we need to
 # wrap our pure_callbacks in custom JVP rules.
-@_error.def_jvp
-def _error_jvp(primals, tangents, *, msgs, on_error, stack):
-    x, pred, index = primals
-    tx, _, _ = tangents
-    return _error(x, pred, index, msgs=msgs, on_error=on_error, stack=stack), tx
+@_error_inner.def_jvp
+def _error_inner_jvp(primals, tangents, *, static_x, msg, on_error, stack):
+    x, pred = primals
+    tx, _ = tangents
+    return _error_inner(
+        x, pred, static_x=static_x, msg=msg, on_error=on_error, stack=stack
+    ), tx
+
+
+def _error_outer(
+    x: PyTree,
+    pred: Bool[ArrayLike, ""],
+    msg: Callable[[PyTree], str],
+    *,
+    on_error: Literal["default", "raise", "breakpoint", "off", "nan"],
+) -> PyTree:
+    if jnp.shape(pred) != ():
+        raise ValueError("`equinox.error_if(..., pred=...)` must be a scalar.")
+    if not jnp.issubdtype(jnp.result_type(pred), jnp.bool_):
+        raise ValueError("`equinox.error_if(..., pred=...)` must be a boolean.")
+    if on_error == "default":
+        on_error = EQX_ON_ERROR
+    if on_error not in ("raise", "breakpoint", "off", "nan"):
+        raise RuntimeError("Unrecognised value for `on_error`.")
+    # Short-circuit if the predicate is known-falsey at compile time, no need to include
+    # this in the graph.
+    with jax.ensure_compile_time_eval():
+        if isinstance(pred, bool):
+            tracepred = pred
+        else:
+            tracepred = unvmap_any(pred)
+        if not isinstance(tracepred, jax.core.Tracer):
+            if isinstance(tracepred, jax.Array):
+                tracepred = tracepred.item()
+            assert type(tracepred) is bool
+            if tracepred is False:
+                return x
+    stack: list[bytes | str] = []
+    for frame, lineno in traceback.walk_stack(None):
+        frame_id = frame.f_locals.get("__equinox_jit_id__", None)
+        if type(frame_id) is bytes:
+            stack.append(frame_id)
+        if traceback_util.include_frame(frame):
+            # This seems to be the simplest way to format a single frame?
+            frame_str: str = "".join(
+                traceback.format_tb(
+                    types.TracebackType(None, frame, frame.f_lasti, lineno)
+                )
+            )
+            stack.append(frame_str)
+    dynamic_x, static_x = partition(x, is_array)
+    flat = jtu.tree_leaves(dynamic_x)
+    if len(flat) == 0:
+        raise ValueError("No arrays to thread error on to.")
+    dynamic_x = _error_inner(
+        dynamic_x, pred, static_x=static_x, msg=msg, on_error=on_error, stack=stack
+    )
+    return combine(dynamic_x, static_x)
+
+
+# filter_jit does some work to produce nicer runtime error messages.
+# We also place it here to ensure a consistent experience when using JAX in eager mode.
+_error_outer_jit = _jit.filter_jit(_error_outer)
+
+
+def _error_impl(
+    x: PyTree,
+    pred: Bool[ArrayLike, ""],
+    msg: Callable[[PyTree], str],
+    *,
+    on_error: Literal["default", "raise", "breakpoint", "nan", "off"],
+) -> PyTree:
+    leaves = jtu.tree_leaves((x, pred))
+    # This carefully does not perform any JAX operations if `pred` and `index` are
+    # a bool and an int.
+    # This ensures we can use `error_if` before init_google.
+    if any(is_array(leaf) for leaf in leaves):
+        return _error_outer_jit(x, pred, msg, on_error=on_error)
+    else:
+        return _error_outer(x, pred, msg, on_error=on_error)
 
 
 if EQX_ON_ERROR == "breakpoint":
@@ -227,7 +295,7 @@ if EQX_ON_ERROR == "breakpoint":
 def error_if(
     x: PyTree,
     pred: Bool[ArrayLike, ""],
-    msg: str,
+    msg: str | Callable[[PyTree], str],
     *,
     on_error: Literal["default", "raise", "breakpoint", "nan", "off"] = "default",
 ) -> PyTree:
@@ -285,7 +353,10 @@ def error_if(
 
     After changing an environment variable, the Python process must be restarted.
     """
-    return branched_error_if(x, pred, 0, [msg], on_error=on_error)
+    if isinstance(msg, str):
+        old_msg = msg
+        msg = lambda _: old_msg
+    return _error_impl(x, pred, msg, on_error=on_error)
 
 
 @doc_remove_args("on_error")
@@ -297,71 +368,34 @@ def branched_error_if(
     *,
     on_error: Literal["default", "raise", "breakpoint", "nan", "off"] = "default",
 ) -> PyTree:
-    """As [`equinox.error_if`][], but will raise one of
-    several `msgs` depending on the value of `index`. If `index` is vmap'd, then all
-    error messages (across the whole batch) will be shown.
-    """
-    leaves = jtu.tree_leaves((x, pred, index))
-    # This carefully does not perform any JAX operations if `pred` and `index` are
-    # a bool and an int.
-    # This ensures we can use `error_if` before init_google.
-    if any(is_array(leaf) for leaf in leaves):
-        return branched_error_if_impl_jit(x, pred, index, msgs, on_error=on_error)
-    else:
-        return branched_error_if_impl(x, pred, index, msgs, on_error=on_error)
-
-
-def branched_error_if_impl(
-    x: PyTree,
-    pred: Bool[ArrayLike, ""],
-    index: Int[ArrayLike, ""],
-    msgs: Sequence[str],
-    *,
-    on_error: Literal["default", "raise", "breakpoint", "off", "nan"],
-) -> PyTree:
-    if on_error == "default":
-        on_error = EQX_ON_ERROR
-    if on_error not in ("raise", "breakpoint", "off", "nan"):
-        raise RuntimeError("Unrecognised value for `on_error`.")
-    # Short-circuit if the predicate is known-falsey at compile time, no need to include
-    # this in the graph.
-    with jax.ensure_compile_time_eval():
-        if isinstance(pred, bool):
-            tracepred = pred
-        else:
-            tracepred = unvmap_any(pred)
-        if not isinstance(tracepred, jax.core.Tracer):
-            if isinstance(tracepred, jax.Array):
-                tracepred = tracepred.item()
-            assert type(tracepred) is bool
-            if tracepred is False:
-                return x
-    stack: list[bytes | str] = []
-    for frame, lineno in traceback.walk_stack(None):
-        frame_id = frame.f_locals.get("__equinox_jit_id__", None)
-        if type(frame_id) is bytes:
-            stack.append(frame_id)
-        if traceback_util.include_frame(frame):
-            # This seems to be the simplest way to format a single frame?
-            frame_str: str = "".join(
-                traceback.format_tb(
-                    types.TracebackType(None, frame, frame.f_lasti, lineno)
-                )
+    def msg(x__index) -> str:
+        _, _index = x__index
+        _index = _index.item()
+        assert type(_index) is int
+        if _index < 0:
+            return (
+                f"Got a negative value `{_index}` for "
+                "`equinox.branched_error_if(..., index=...)`, which is not supported."
             )
-            stack.append(frame_str)
-    dynamic_x, static_x = partition(x, is_array)
-    flat = jtu.tree_leaves(dynamic_x)
-    if len(flat) == 0:
-        raise ValueError("No arrays to thread error on to.")
-    dynamic_x = _error(
-        dynamic_x, pred, index, msgs=msgs, on_error=on_error, stack=stack
+        if _index >= len(msgs):
+            return (
+                f"Got value `{_index}` for `equinox.branched_error_if(..., index=...)`,"
+                f" which is not a valid index given `len(msgs)={len(msgs)}`."
+            )
+        return msgs[_index]
+
+    warnings.warn(
+        "`equinox.branched_error_if` is deprecated in favour of passing a callable to "
+        "`equinox.error_if(..., msg=...)`.",
+        stacklevel=2,
     )
-    return combine(dynamic_x, static_x)
-
-
-# filter_jit does some work to produce nicer runtime error messages.
-# We also place it here to ensure a consistent experience when using JAX in eager mode.
-branched_error_if_impl_jit = _jit.filter_jit(branched_error_if_impl)
+    index = jnp.asarray(index)
+    if jnp.shape(index) != ():
+        raise ValueError("`branched_error_if(..., index=...)` must be a scalar.")
+    if not jnp.issubdtype(jnp.result_type(index), jnp.integer):
+        raise ValueError("`branched_error_if(..., index=...)` must have integer dtype.")
+    out, _ = _error_impl((x, index), pred, msg=msg, on_error=on_error)
+    return out
 
 
 def assert_dce(
