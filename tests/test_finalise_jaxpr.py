@@ -11,17 +11,11 @@ import jax.numpy as jnp
 from .helpers import tree_allclose
 
 
-def _safe_zip(*args):
-    length = len(args[0])
-    assert all(len(a) == length for a in args[1:])
-    return zip(*args)
-
-
 def _assert_vars_equal(obj1, obj2, varnames):
     for varname in varnames:
         vars1 = getattr(obj1, varname)
         vars2 = getattr(obj2, varname)
-        for a, b in _safe_zip(vars1, vars2):
+        for a, b in zip(vars1, vars2, strict=True):
             assert a.aval.strip_weak_type() == b.aval.strip_weak_type()
 
 
@@ -32,7 +26,7 @@ def _assert_jaxpr_equal(
     jaxpr1 = jaxpr1.jaxpr
     jaxpr2 = jaxpr2.jaxpr
     _assert_vars_equal(jaxpr1, jaxpr2, ("invars", "outvars", "constvars"))
-    for eqn1, eqn2 in _safe_zip(jaxpr1.eqns, jaxpr2.eqns):
+    for eqn1, eqn2 in zip(jaxpr1.eqns, jaxpr2.eqns, strict=True):
         assert eqn1.primitive == eqn2.primitive
         assert eqn1.effects == eqn2.effects
         assert eqn1.params == eqn2.params
