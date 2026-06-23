@@ -25,6 +25,7 @@ WRAPPER_FIELD_NAMES: Final = (
 _INDENT: Final = " " * 4
 
 
+@jtu.register_static
 class _Missing:
     def __bool__(self):
         return False
@@ -34,7 +35,6 @@ class _Missing:
 
 
 MISSING = _Missing()
-jtu.register_pytree_node(_Missing, lambda _: ((), None), lambda _, __: MISSING)
 
 
 # Code template for flattening the wrapper fields
