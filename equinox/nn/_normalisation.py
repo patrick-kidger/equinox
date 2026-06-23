@@ -295,12 +295,11 @@ class RMSNorm(Module):
     where $\Vert x \Vert^2_2 = \sum_{i=1}^n x_i^2$, $n = \dim(x)$, and $\gamma$ is a
     learned array with the same shape as $x$ if `use_weight=True`, or
     $\gamma = 1$ if `use_weight=False`, as proposed in
-    [this paper](https://browse.arxiv.org/abs/2307.14995). `\beta` is an optional bias
-    term.
+    [this paper](https://arxiv.org/abs/2307.14995). `\beta` is an optional bias term.
 
     ??? cite
 
-        [Root Mean Square Layer Normalization](https://browse.arxiv.org/abs/1910.07467)
+        [Root Mean Square Layer Normalization](https://arxiv.org/abs/1910.07467)
 
         ```bibtex
         @article{zhang2019root,
