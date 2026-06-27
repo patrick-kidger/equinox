@@ -23,7 +23,7 @@ class _FuncDescriptor(Protocol[_Return_co]):
 
 
 # Not using `jax.tree_util.Partial` as it doesn't implement __eq__ very well. See #480.
-class BoundMethod(Module, Generic[_Return]):
+class BoundMethod(Module, Generic[_Return], unchecked_init=True):
     """Just like a normal Python bound method... except that this one is a PyTree!
 
     This stores `__self__` as a subnode.
@@ -48,7 +48,7 @@ class BoundMethod(Module, Generic[_Return]):
         )
 
 
-class Partial(Module, Generic[_Return]):
+class Partial(Module, Generic[_Return], unchecked_init=True):
     """Like `functools.partial`, but treats the wrapped function, and partially-applied
     args and kwargs, as a PyTree.
 
@@ -92,7 +92,7 @@ class Partial(Module, Generic[_Return]):
 _Value = TypeVar("_Value")
 
 
-class Static(Module, Generic[_Value]):
+class Static(Module, Generic[_Value], unchecked_init=True):
     """Wraps a value into a `eqx.field(static=True)`.
 
     This is useful to treat something as just static metadata with respect to a JAX

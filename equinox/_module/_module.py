@@ -9,11 +9,15 @@ from typing import (
     Any,
     cast,
     Final,
+    get_args,
+    get_origin,
+    get_type_hints,
     Literal,
     NamedTuple,
     ParamSpec,
     TYPE_CHECKING,
     TypeVar,
+    Union,
 )
 from typing_extensions import dataclass_transform
 
@@ -52,6 +56,49 @@ class _ModuleInfo(NamedTuple):
     static_field_names: tuple[str, ...]  # names of static=True fields
     non_init_field_names: tuple[str, ...]  # names of init=False fields
     check_init_methods: tuple[Any, ...]  # unbound __check_init__ funcs from MRO
+    # Fastpath: init=False fields that have NO default/default_factory and
+    # therefore are not guaranteed to be set by the dataclass-generated
+    # __init__.  When the class uses the dataclass __init__ we only need to
+    # check these; for all other (init=True) fields the generated __init__
+    # guarantees they are set.
+    unchecked_init_false_names: tuple[str, ...]
+    # Fastpath: False when every init=True field is annotated with a type that
+    # can never hold a JAX-transformed callable. When False, the jtu.tree_leaves
+    # scan in __call__ is skipped entirely.
+    may_receive_callable_args: bool
+    # Mirrors _has_dataclass_init[cls]: cached here to avoid a second
+    # WeakKeyDictionary lookup in the hot __call__ path.
+    has_dataclass_init: bool
+    # When True, _ModuleMeta.__call__ skips all checks/warnings (other than the
+    # abstract check) and only creates the instance, applies converters, and
+    # removes from _currently_initialising.
+    unchecked_init: bool
+
+
+# ---------------------------------------------------------------------------
+# Callable-warning scan helpers
+# ---------------------------------------------------------------------------
+
+_SAFE_FROM_CALLABLE_TYPES: frozenset[type] = frozenset(
+    {int, float, str, bool, bytes, complex, type(None), np.ndarray, jax.Array}
+)
+
+# types.UnionType (``X | Y`` syntax) is available from Python 3.10 onwards.
+_UNION_TYPE: type | None = getattr(types, "UnionType", None)
+
+
+def _is_safe_from_callable_warning(annotation: object, /) -> bool:
+    """True only if no value with this annotation can be a JAX-transformed callable."""
+    if annotation is Any or annotation is object:
+        return False
+    if annotation in _SAFE_FROM_CALLABLE_TYPES:
+        return True
+    origin = get_origin(annotation)
+    if origin is Union or (
+        _UNION_TYPE is not None and isinstance(annotation, _UNION_TYPE)
+    ):
+        return all(_is_safe_from_callable_warning(a) for a in get_args(annotation))
+    return False
 
 
 MSG_METHOD_IN_INIT: Final = """Cannot assign methods in __init__.
@@ -187,11 +234,11 @@ class _IdSet:
         self._dict: dict[int, Module] = {}
 
     def __contains__(self, key: "Module") -> bool:
-        return id(key) in self._dict.keys()
+        return id(key) in self._dict
 
     def add(self, key: "Module") -> None:
-        if key not in self:
-            id_key = id(key)
+        id_key = id(key)
+        if id_key not in self._dict:
             # Hold on to `key` to be sure that `id(key)` does not get reallocated.
             self._dict[id_key] = key
 
@@ -283,6 +330,7 @@ class _ModuleMeta(BetterABCMeta):
         *,
         is_abstract: bool = False,
         strict: None | bool = False,
+        unchecked_init: bool = False,
         **kwargs: object,
     ):
         if strict is None:
@@ -384,6 +432,29 @@ class _ModuleMeta(BetterABCMeta):
             for parent_cls in cls.__mro__  # pyright: ignore[reportGeneralTypeIssues]
             if "__check_init__" in parent_cls.__dict__
         )
+        # Precompute fastpath: init=False fields without a default or
+        # default_factory are the only ones NOT guaranteed to be set by the
+        # dataclass-generated __init__, so those are the ones we still have to
+        # check even on the fastpath.
+        unchecked_init_false_names = tuple(
+            f.name
+            for f in fields  # pyright: ignore[reportArgumentType]
+            if not f.init
+            and f.default is dataclasses.MISSING
+            and f.default_factory is dataclasses.MISSING  # pyright: ignore[reportAttributeAccessIssue]
+        )
+        # Precompute whether any init=True field could hold a JAX-transformed
+        # callable. On failure (e.g. unresolvable forward refs) fall back to
+        # True so the scan is never incorrectly skipped.
+        try:
+            hints = get_type_hints(cls)
+        except Exception:
+            hints = {}
+        may_receive_callable_args = not all(
+            _is_safe_from_callable_warning(hints.get(f.name, Any))
+            for f in fields  # pyright: ignore[reportArgumentType]
+            if f.init
+        )
         _module_info[cls] = _ModuleInfo(
             names_tuple=names,
             names_set=frozenset(names),
@@ -391,6 +462,10 @@ class _ModuleMeta(BetterABCMeta):
             static_field_names=static_field_names,
             non_init_field_names=non_init_field_names,
             check_init_methods=check_init_methods,
+            unchecked_init_false_names=unchecked_init_false_names,
+            may_receive_callable_args=may_receive_callable_args,
+            has_dataclass_init=has_dataclass_init,
+            unchecked_init=unchecked_init,
         )
 
         # Generate optimized flatten/unflatten functions
@@ -412,7 +487,23 @@ class _ModuleMeta(BetterABCMeta):
         if cls in _abstract_module_registry:
             # Any other is-abstract checks will be handled in super().__call__.
             raise TypeError("Cannot instantiate abstract `equinox.Module`.")
-        if _has_dataclass_init[cls]:
+
+        info = _module_info[cls]
+
+        if info.unchecked_init:
+            tryself = None
+            try:
+                self = tryself = super().__call__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
+            finally:
+                if tryself is not None:
+                    _currently_initialising.remove(tryself)
+                del tryself
+            for name, converter in info.converter_fields:
+                object.__setattr__(self, name, converter(getattr(self, name)))
+            return self
+
+        has_dcls_init = info.has_dataclass_init
+        if has_dcls_init and info.may_receive_callable_args:
             for x in jtu.tree_leaves((args, kwargs)):
                 _warn_jax_transformed_function(cls, x)
 
@@ -425,10 +516,16 @@ class _ModuleMeta(BetterABCMeta):
             del tryself
         assert not is_abstract_module(cls)  # pyright: ignore[reportArgumentType]
 
-        info = _module_info[cls]
-
         # Check all fields were initialized.
-        for name in info.names_tuple:
+        # Fastpath: when using the dataclass-generated __init__ every init=True
+        # field is guaranteed to be set, and every init=False field that has a
+        # default/default_factory is also set.  Only init=False fields without
+        # any default can be missing, so we only iterate over those.
+        # With a custom __init__ we fall back to checking everything.
+        names_to_check = (
+            info.unchecked_init_false_names if has_dcls_init else info.names_tuple
+        )
+        for name in names_to_check:
             try:
                 getattr(self, name)
             except AttributeError as err:
@@ -441,12 +538,12 @@ class _ModuleMeta(BetterABCMeta):
         # Warn about init=False fields containing inexact arrays.
         for name in info.non_init_field_names:
             val = getattr(self, name)
-            if any(jtu.tree_map(is_inexact_array_like, jtu.tree_leaves(val))):
+            if any(map(is_inexact_array_like, jtu.tree_leaves(val))):
                 warnings.warn(_MSG_FIELD_INIT_FALSE, stacklevel=2)
 
         # Warn about static fields containing JAX arrays (post-converter values).
         for name in info.static_field_names:
-            if any(jtu.tree_map(is_array, jtu.tree_leaves(getattr(self, name)))):
+            if any(map(is_array, jtu.tree_leaves(getattr(self, name)))):
                 warnings.warn(
                     "A JAX array is being set as static! This can result "
                     "in unexpected behavior and is usually a mistake to do.",
@@ -584,14 +681,18 @@ class Module(Hashable, metaclass=_ModuleMeta):
     if not TYPE_CHECKING:
 
         def __setattr__(self, name: str, value: Any) -> None:
-            if self in _currently_initialising and (
-                name in _module_info[type(self)].names_set
-                or name in WRAPPER_FIELD_NAMES
-            ):
-                _error_method_assignment(self, value)
-                _warn_jax_transformed_function(type(self), value)
-                object.__setattr__(self, name, value)
-                return
+            if self in _currently_initialising:
+                cls = type(self)
+                if name in _module_info[cls].names_set:
+                    _error_method_assignment(self, value)
+                    _warn_jax_transformed_function(cls, value)
+                    object.__setattr__(self, name, value)
+                    return
+                elif name in WRAPPER_FIELD_NAMES:
+                    # Allow setting wrapper fields without warning, because they
+                    # are ignored by the PyTree machinery.
+                    object.__setattr__(self, name, value)
+                    return
             # Allow:
             # ```
             # class SomeModule(eqx.Module, Generic[T]): ...
@@ -617,9 +718,9 @@ class Module(Hashable, metaclass=_ModuleMeta):
             # ```
             # works.
             if (
-                not _is_magic(name)
-                and isinstance(out, types.MethodType)
+                isinstance(out, types.MethodType)
                 and out.__self__ is self
+                and not _is_magic(name)
             ):
                 out = BoundMethod(object.__getattribute__(out, "__func__"), self)
             return out

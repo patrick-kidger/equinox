@@ -756,6 +756,134 @@ def test_init_fields():
         C(flag=False)
 
 
+def test_init_fastpath_metadata():
+    """_ModuleInfo precomputes which init=False fields need checking (RED test)."""
+    from equinox._module._module import _module_info
+
+    class AllInitTrue(eqx.Module):
+        x: int
+        y: float
+
+    # No init=False fields → nothing to check with dataclass-generated __init__
+    assert _module_info[AllInitTrue].unchecked_init_false_names == ()
+
+    class InitFalseNoDefault(eqx.Module):
+        x: int = eqx.field(init=False)
+
+    # init=False without a default → dataclass __init__ does NOT set it; must check
+    assert _module_info[InitFalseNoDefault].unchecked_init_false_names == ("x",)
+
+    class InitFalseWithDefault(eqx.Module):
+        x: int = eqx.field(init=False, default=42)
+
+    # init=False WITH a default → dataclass __init__ sets it; no need to check
+    assert _module_info[InitFalseWithDefault].unchecked_init_false_names == ()
+
+    class InitFalseWithFactory(eqx.Module):
+        x: list = eqx.field(init=False, default_factory=list)
+
+    # init=False WITH a default_factory → also initialized; no need to check
+    assert _module_info[InitFalseWithFactory].unchecked_init_false_names == ()
+
+
+def test_init_fastpath_correctness():
+    """The fastpath still catches errors that custom __init__ leaves fields unset."""
+
+    # Custom __init__ that forgets to set a field → must still raise
+    class CustomForgetsX(eqx.Module):
+        x: int
+
+        def __init__(self):
+            pass  # deliberately forgets self.x
+
+    with pytest.raises(TypeError, match="Field 'x' was not initialized."):
+        CustomForgetsX()
+
+    # Dataclass init + init=False without default → must still raise
+    class DataclassInitFalseNoDefault(eqx.Module):
+        x: int = eqx.field(init=False)
+
+    with pytest.raises(TypeError, match="Field 'x' was not initialized."):
+        DataclassInitFalseNoDefault()
+
+    # Dataclass init + all init=True → no error (common fast path)
+    class DataclassAllInitTrue(eqx.Module):
+        x: int
+
+    m = DataclassAllInitTrue(42)
+    assert m.x == 42
+
+
+def test_callable_warning_scan_metadata():
+    """_ModuleInfo.may_receive_callable_args is False only when all init=True
+    fields have annotations that can never hold a JAX-transformed callable."""
+    from equinox._module._module import _module_info
+
+    class SafeAnnotations(eqx.Module):
+        a: int
+        b: float
+        c: str
+
+    assert _module_info[SafeAnnotations].may_receive_callable_args is False
+
+    class HasAny(eqx.Module):
+        x: Any
+
+    assert _module_info[HasAny].may_receive_callable_args is True
+
+    class HasCallable(eqx.Module):
+        fn: Callable
+
+    assert _module_info[HasCallable].may_receive_callable_args is True
+
+    class HasOptionalInt(eqx.Module):
+        x: int | None
+
+    assert _module_info[HasOptionalInt].may_receive_callable_args is False
+
+    class HasUnionInt(eqx.Module):
+        x: int | None
+
+    assert _module_info[HasUnionInt].may_receive_callable_args is False
+
+    class AllInitFalse(eqx.Module):
+        x: int = eqx.field(init=False, default=0)
+
+    # No init=True fields → nothing passed as constructor args → no scan needed
+    assert _module_info[AllInitFalse].may_receive_callable_args is False
+
+
+def test_callable_warning_scan_correctness(capsys):
+    """When may_receive_callable_args is True the scan still runs; when False it
+    is skipped without changing observable behaviour for correctly-typed modules."""
+    from equinox._module._module import _module_info
+
+    # Safe-typed module: flag must be False (scan is skipped)
+    class SafeModule(eqx.Module):
+        x: int
+        y: float
+
+    assert _module_info[SafeModule].may_receive_callable_args is False
+    # Constructing with correct types must not warn
+    import warnings as _warnings
+
+    with _warnings.catch_warnings():
+        _warnings.simplefilter("error")
+        m = SafeModule(1, 2.0)
+    assert m.x == 1
+
+    # Any-typed module: flag must be True (scan runs as before)
+    class AnyModule(eqx.Module):
+        fn: Any
+
+    assert _module_info[AnyModule].may_receive_callable_args is True
+    # Constructing with a plain int must not warn (scan runs, finds nothing bad)
+    with _warnings.catch_warnings():
+        _warnings.simplefilter("error")
+        m2 = AnyModule(42)
+    assert m2.fn == 42
+
+
 @pytest.mark.parametrize("field", (dataclasses.field, eqx.field))
 def test_init_as_abstract(field):
     # Before the introduction of AbstractVar, it was possible to sort-of get the same
