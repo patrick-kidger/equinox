@@ -96,9 +96,7 @@ def test_category():
     """Test error_if with on_error='warn' and custom warning category."""
 
     def f_custom_warning(x):
-        x = eqx.warn_if(
-            x, x < 0, "custom warning", category=RuntimeWarning
-        )
+        x = eqx.warn_if(x, x < 0, "custom warning", category=RuntimeWarning)
         return x
 
     with pytest.warns(RuntimeWarning, match="custom warning"):
@@ -110,9 +108,7 @@ def test_category_jit():
 
     @jax.jit
     def f_custom_warning(x):
-        x = eqx.warn_if(
-            x, x < 0, "custom warning", category=DeprecationWarning
-        )
+        x = eqx.warn_if(x, x < 0, "custom warning", category=DeprecationWarning)
         return x
 
     with pytest.warns(DeprecationWarning, match="custom warning"):
@@ -169,9 +165,7 @@ def test_pytree():
     @jax.jit
     def f(pytree):
         x, y = pytree
-        pytree = eqx.warn_if(
-            pytree, (x**2 + y**2) > 1.0, "norm exceeded"
-        )
+        pytree = eqx.warn_if(pytree, (x**2 + y**2) > 1.0, "norm exceeded")
         return pytree
 
     # Should not warn

@@ -173,6 +173,7 @@ def _error_inner(
                 pred,
                 vmap_method="broadcast_all",
             )
+
         return lax.cond(unvmap_any(pred), handle_warning, lambda: dynamic_x)
 
     elif on_error == "breakpoint":
