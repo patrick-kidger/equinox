@@ -148,7 +148,9 @@ nav:
         - 'api/debug.md'
         - 'api/enumerations.md'
         - 'api/errors.md'
+        - 'api/norms.md'
         - 'api/pretty-printing.md'
+        - 'api/progress-meter.md'
         - 'api/serialisation.md'
     - Misc:
         - 'faq.md'

@@ -10,10 +10,10 @@ import numpy as np
 from jax.experimental import io_callback
 from jaxtyping import Array, ArrayLike, Float, Int, PyTree, Real
 
-from .._filters import is_array
-from .._module import Module
-from .._unvmap import unvmap_all, unvmap_max, unvmap_max_p
-from ._nontraceable import nonbatchable
+from ._filters import is_array
+from ._module import Module
+from ._unvmap import unvmap_all, unvmap_max
+from .internal import nonbatchable
 
 
 if TYPE_CHECKING:
@@ -96,11 +96,8 @@ Nothing.
 """
 
 
-def _unvmap_min(x):  # No `unvmap_min` at the moment.
-    # Bind the primitive directly: the typed `unvmap_max` wrapper restricts to
-    # `Int[ArrayLike, "..."]`, but the underlying primitive is dtype-generic and
-    # `progress` here is a float.
-    return -unvmap_max_p.bind(-x)
+def _unvmap_min(x):
+    return -unvmap_max(-x)
 
 
 class _TextProgressMeterState(Module):

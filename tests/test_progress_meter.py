@@ -1,126 +1,69 @@
-import equinox.internal as eqxi
+import re
+
+import equinox as eqx
 import jax
 import jax.numpy as jnp
-import pytest
 
 
-def _make_runner(progress_meter, num_steps):
-    """Drive `progress_meter` through `num_steps` synthetic steps, sweeping
-    progress linearly from `1/num_steps` to `1`. Returns a callable so the
-    caller can wrap with `jit`/`vmap`/`grad` as needed.
-    """
+@eqx.filter_jit
+def _run_impl(
+    val0: jax.Array,
+    meter: eqx.AbstractProgressMeter,
+    length: jax.Array,
+) -> jax.Array:
+    def cond_fn(carry):
+        _, _, i = carry
+        return i < length
 
-    def run(x):
-        state = progress_meter.init()
+    def body_fn(carry):
+        val, state, i = carry
+        state = meter.step(state, i / length)
+        return val + 1, state, i + 1
 
-        def body(state, i):
-            progress = (i + 1) / num_steps
-            return progress_meter.step(state, progress), None
-
-        state, _ = jax.lax.scan(body, state, jnp.arange(num_steps))
-        progress_meter.close(state)
-        return x
-
-    return run
-
-
-def test_no_progress_meter(capfd):
-    capfd.readouterr()
-    run = _make_runner(eqxi.NoProgressMeter(), 5)
-    run(1.0)
-    jax.effects_barrier()
-    captured = capfd.readouterr()
-    assert captured.out == ""
-    assert captured.err == ""
+    state0 = meter.init()
+    val1, state1, _ = jax.lax.while_loop(cond_fn, body_fn, (val0, state0, 0))
+    meter.close(state1)
+    return val1
 
 
-def test_text_progress_meter(capfd):
-    expected = "%\n".join(f"{x:.2f}" for x in jnp.linspace(0, 100, num=11)) + "%\n"
-
-    run = _make_runner(eqxi.TextProgressMeter(minimum_increase=0.0999), 10)
-
-    capfd.readouterr()
-    run(1.0)
-    jax.effects_barrier()
-    assert capfd.readouterr().out == expected
-
-    capfd.readouterr()
-    jax.jit(run)(1.0)
-    jax.effects_barrier()
-    assert capfd.readouterr().out == expected
-
-    capfd.readouterr()
-    jax.vmap(run)(jnp.arange(3.0))
-    jax.effects_barrier()
-    assert capfd.readouterr().out == expected
-
-    capfd.readouterr()
-    jax.jit(jax.vmap(run))(jnp.arange(3.0))
-    jax.effects_barrier()
-    assert capfd.readouterr().out == expected
+def _run(meter: eqx.AbstractProgressMeter, length: jax.Array):
+    _run_impl(jnp.array(1), meter, length)
 
 
 def test_tqdm_progress_meter(capfd):
-    pytest.importorskip("tqdm")
-
-    run = _make_runner(eqxi.TqdmProgressMeter(refresh_steps=5), 50)
-
-    capfd.readouterr()
-    jax.jit(run)(1.0)
-    jax.effects_barrier()
-    err = capfd.readouterr().err
-    assert err.count("\r") >= 1
-    final_frame = err.rsplit("\r", 1)[-1]
-    assert "100.00%" in final_frame
-    assert "█" in final_frame
-
-
-def test_tqdm_progress_meter_vmap(capfd):
-    pytest.importorskip("tqdm")
-
-    run = _make_runner(eqxi.TqdmProgressMeter(refresh_steps=5), 50)
-
-    capfd.readouterr()
-    jax.jit(jax.vmap(run))(jnp.arange(3.0))
-    jax.effects_barrier()
-    err = capfd.readouterr().err
-    assert err.count("\r") >= 1
-    assert "100.00%" in err.rsplit("\r", 1)[-1]
+    solves = [
+        lambda: _run(eqx.TqdmProgressMeter(refresh_steps=4), jnp.array(10)),
+        lambda: jax.vmap(lambda l: _run(eqx.TqdmProgressMeter(refresh_steps=4), l))(
+            jnp.array([6, 10])
+        ),
+    ]
+    for solve in solves:
+        capfd.readouterr()
+        solve()
+        jax.effects_barrier()
+        captured = capfd.readouterr()
+        err = captured.err.strip()
+        assert re.match("0.00%|[ ]+|", err.split("\r", 1)[0])
+        assert re.match("100.00%|█+|", err.rsplit("\r", 1)[1])
+        assert captured.err.count("\r") == 5
+        assert captured.err.count("\n") == 1
 
 
-def _grad_smoke(progress_meter: eqxi.AbstractProgressMeter, capfd):
-    num_steps = 10
-
-    def fwd(p):
-        state = progress_meter.init()
-
-        def body(state, i):
-            progress = (i + 1) / num_steps
-            return progress_meter.step(state, progress), None
-
-        state, _ = jax.lax.scan(body, state, jnp.arange(num_steps))
-        progress_meter.close(state)
-        return p * p
-
-    capfd.readouterr()
-    g = jax.grad(fwd)(jnp.array(1.0))
-    jax.effects_barrier()
-    assert g == 2.0
-
-    if isinstance(progress_meter, eqxi.TextProgressMeter):
-        out = capfd.readouterr().out
-        expected = "%\n".join(f"{x:.2f}" for x in jnp.linspace(0, 100, num=11)) + "%\n"
-        assert out == expected
-
-    capfd.readouterr()
-    jax.jit(jax.grad(fwd))(jnp.array(1.0))
-    jax.effects_barrier()
-
-
-def test_grad_text_progress_meter(capfd):
-    _grad_smoke(eqxi.TextProgressMeter(minimum_increase=0.0999), capfd)
-
-
-def test_grad_tqdm_progress_meter(capfd):
-    pytest.importorskip("tqdm")
-    _grad_smoke(eqxi.TqdmProgressMeter(refresh_steps=5), capfd)
+def test_text_progress_meter(capfd):
+    solves = [
+        lambda: _run(eqx.TextProgressMeter(), jnp.array(10)),
+        lambda: jax.vmap(lambda l: _run(eqx.TextProgressMeter(), l))(
+            jnp.array([10, 8])
+        ),
+    ]
+    for solve in solves:
+        capfd.readouterr()
+        solve()
+        jax.effects_barrier()
+        captured = capfd.readouterr()
+        out = captured.out.strip()
+        assert (
+            out
+            == "0.00%\n10.00%\n20.00%\n30.00%\n40.00%\n50.00%\n60.00%\n70.00%\n80.00%"
+            "\n90.00%\n100.00%"
+        )

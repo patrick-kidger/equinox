@@ -40,7 +40,14 @@ from ._module import (
     static_field as static_field,  # deprecated
     StrictConfig as StrictConfig,  # deprecated
 )
+from ._norm import max_norm as max_norm, rms_norm as rms_norm, two_norm as two_norm
 from ._pretty_print import tree_pformat as tree_pformat, tree_pprint as tree_pprint
+from ._progress_meter import (
+    AbstractProgressMeter as AbstractProgressMeter,
+    NoProgressMeter as NoProgressMeter,
+    TextProgressMeter as TextProgressMeter,
+    TqdmProgressMeter as TqdmProgressMeter,
+)
 from ._serialisation import (
     default_deserialise_filter_spec as default_deserialise_filter_spec,
     default_serialise_filter_spec as default_serialise_filter_spec,

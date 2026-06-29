@@ -25,7 +25,8 @@ tests = [
   "beartype",
   "jaxlib",
   "optax",
-  "pytest"
+  "pytest",
+  "tqdm"
 ]
 
 [project]

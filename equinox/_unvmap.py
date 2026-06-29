@@ -6,7 +6,7 @@ import jax.extend.core
 import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
 import jax.numpy as jnp
-from jaxtyping import Array, ArrayLike, Bool, Int
+from jaxtyping import Array, ArrayLike, Bool, Real
 
 
 # unvmap_all
@@ -24,10 +24,12 @@ def _unvmap_all_impl(x):
 
 
 def _unvmap_all_abstract_eval(x):
+    del x
     return jax.core.ShapedArray(shape=(), dtype=jax.numpy.bool_.dtype)
 
 
 def _unvmap_all_batch(x, batch_axes):
+    del batch_axes
     (x,) = x
     return unvmap_all(x), None
 
@@ -55,10 +57,12 @@ def _unvmap_any_impl(x):
 
 
 def _unvmap_any_abstract_eval(x):
+    del x
     return jax.core.ShapedArray(shape=(), dtype=jax.numpy.bool_.dtype)
 
 
 def _unvmap_any_batch(x, batch_axes):
+    del batch_axes
     (x,) = x
     return unvmap_any(x), None
 
@@ -76,7 +80,7 @@ mlir.register_lowering(
 unvmap_max_p = jax.extend.core.Primitive("unvmap_max")
 
 
-def unvmap_max(x: Int[ArrayLike, "..."]) -> Int[Array, ""]:
+def unvmap_max(x: Real[ArrayLike, "..."]) -> Real[Array, ""]:
     """As `jnp.max`, but ignores batch dimensions."""
     return cast(Array, unvmap_max_p.bind(x))
 
@@ -90,6 +94,7 @@ def _unvmap_max_abstract_eval(x):
 
 
 def _unvmap_max_batch(x, batch_axes):
+    del batch_axes
     (x,) = x
     return unvmap_max(x), None
 
