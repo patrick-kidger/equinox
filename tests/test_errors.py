@@ -195,6 +195,44 @@ def test_traceback_runtime_custom():
         assert "EQX_ON_ERROR" not in str(e)
 
 
+# https://github.com/patrick-kidger/equinox/issues/1232
+def test_multi_device_eager():
+    # Without the fix, the error cases below deadlock at an XLA collective and then
+    # abort the whole process. `conftest.py` runs the suite with two CPU devices.
+    mesh = jax.sharding.Mesh(jax.devices("cpu"), ("x",))
+    replicated = jax.sharding.NamedSharding(mesh, jax.sharding.PartitionSpec())
+    x = jax.device_put(jnp.array(1.0), replicated)
+    true_pred = jax.device_put(jnp.array(True), replicated)
+    false_pred = jax.device_put(jnp.array(False), replicated)
+
+    # (x sharded, pred sharded), (only x sharded), (only pred sharded).
+    for x_i, pred_i in [(x, true_pred), (x, True), (jnp.array(1.0), true_pred)]:
+        with pytest.raises(eqx.EquinoxRuntimeError, match="oops"):
+            eqx.error_if(x_i, pred_i, "oops")
+
+    # Non-replicated shardings as well.
+    sharded = jax.sharding.NamedSharding(mesh, jax.sharding.PartitionSpec("x"))
+    y = jax.device_put(jnp.arange(4.0), sharded)
+    with pytest.raises(eqx.EquinoxRuntimeError, match="oops"):
+        eqx.error_if(y, jnp.all(y >= 0), "oops")
+
+    # No error: pass through unchanged, keeping the original sharding.
+    out = eqx.error_if(x, false_pred, "oops")
+    assert out.sharding == replicated
+    assert jnp.array_equal(out, jnp.array(1.0))
+
+    # Non-raising modes keep the original sharding too.
+    out = eqx.error_if(x, true_pred, "oops", on_error="nan")
+    assert out.sharding == replicated
+    assert jnp.isnan(out).all()
+    out = eqx.error_if(y, true_pred, "oops", on_error="nan")
+    assert out.sharding == sharded
+    assert jnp.isnan(out).all()
+    out = eqx.error_if(x, true_pred, "oops", on_error="off")
+    assert out.sharding == replicated
+    assert jnp.array_equal(out, jnp.array(1.0))
+
+
 def test_msg_callable():
     def _msg(x):
         return f"got bad value {x.item()}"
