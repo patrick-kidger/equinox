@@ -287,6 +287,39 @@ def _error_outer(
 _error_outer_jit = _jit.filter_jit(_error_outer)
 
 
+def _eager_single_device(leaf) -> jax.Device | None:
+    # The device to gather `leaf` onto for an eager error check, or `None` to leave it
+    # untouched. Only a fully-addressable array spread over more than one device needs
+    # moving; single-device inputs (the common case) are left untouched.
+    if isinstance(leaf, jax.core.Tracer):
+        return None
+    if isinstance(leaf, jax.Array) and leaf.is_fully_addressable:
+        devices: set[jax.Device] = leaf.sharding.device_set
+        if len(devices) > 1:
+            return min(devices, key=lambda d: d.id)
+    return None
+
+
+def _to_single_device(leaf):
+    device = _eager_single_device(leaf)
+    return leaf if device is None else jax.device_put(leaf, device)
+
+
+def _restore_sharding(out: PyTree, like: PyTree) -> PyTree:
+    def restore(out_leaf, like_leaf):
+        if (
+            isinstance(out_leaf, jax.Array)
+            and isinstance(like_leaf, jax.Array)
+            and not isinstance(out_leaf, jax.core.Tracer)
+            and not isinstance(like_leaf, jax.core.Tracer)
+            and out_leaf.sharding != like_leaf.sharding
+        ):
+            return jax.device_put(out_leaf, like_leaf.sharding)
+        return out_leaf
+
+    return jtu.tree_map(restore, out, like)
+
+
 def _error_impl(
     x: PyTree,
     pred: Bool[ArrayLike, ""],
@@ -300,7 +333,18 @@ def _error_impl(
     # a bool and an int.
     # This ensures we can use `error_if` before init_google.
     if any(is_array(leaf) for leaf in leaves):
-        return _error_outer_jit(x, pred, msg, on_error=on_error, category=category)
+        # In eager mode the error check below is jitted. If an input is sharded over
+        # multiple devices this compiles an SPMD program, and when the error fires the
+        # exception raised inside `pure_callback` tears down one device whilst its peers
+        # hang forever at the next collective, aborting the whole process.
+        # (https://github.com/patrick-kidger/equinox/issues/1232)
+        # Pin the eager check to a single device -- a no-op when the inputs already live
+        # on one -- then put each output leaf back onto its original sharding.
+        single_x, single_pred = jtu.tree_map(_to_single_device, (x, pred))
+        out = _error_outer_jit(
+            single_x, single_pred, msg, on_error=on_error, category=category
+        )
+        return _restore_sharding(out, x)
     else:
         return _error_outer(x, pred, msg, on_error=on_error, category=category)
 
