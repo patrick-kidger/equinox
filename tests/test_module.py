@@ -1367,3 +1367,113 @@ def test_class_attribute_of_static_field_with_abstract_property():
 
     model = ConcreteChild()
     assert jax.jit(f)(model) == 2
+
+
+def test_fast_module_meta_opt_in_is_not_inherited():
+    """Subclasses of a `_FastModuleMeta` class go through the normal codepath."""
+    from equinox._module._prebuilt import _FastModuleMeta, BoundMethod
+
+    assert BoundMethod.__fast_init__ is True
+
+    class Sub(BoundMethod):
+        pass
+
+    assert Sub.__fast_init__ is False
+    assert type(Sub) is _FastModuleMeta
+
+
+def test_fast_module_meta_subclass_still_checked():
+    """A subclass gets the full `_ModuleMeta.__call__` treatment."""
+    from equinox._module._prebuilt import _FastModuleMeta
+
+    class Fast(eqx.Module, metaclass=_FastModuleMeta):
+        x: int
+
+        def __init__(self, x):
+            self.x = x
+
+    called = []
+
+    class Sub(Fast):
+        y: int
+
+        def __init__(self):  # deliberately leaves `y` unset
+            self.x = 1
+
+        def __check_init__(self):
+            called.append(True)
+
+    # The opted-in class skips the missing-field check...
+    class FastMissing(eqx.Module, metaclass=_FastModuleMeta):
+        x: int
+
+        def __init__(self):
+            pass
+
+    FastMissing()  # no error
+
+    # ...but the subclass does not.
+    with pytest.raises(TypeError, match="Field 'y' was not initialized."):
+        Sub()
+    assert called == []  # __check_init__ runs after the field check
+
+
+def test_fast_module_meta_rejects_unsupported_fields():
+    """Opting in with anything the fastpath skips is an error at class creation."""
+    from equinox._module._prebuilt import _FastModuleMeta
+
+    with pytest.raises(TypeError, match="does not support converters"):
+
+        class WithCheckInit(eqx.Module, metaclass=_FastModuleMeta):
+            x: int
+
+            def __check_init__(self):
+                pass
+
+    with pytest.raises(TypeError, match="does not support converters"):
+
+        class WithConverter(eqx.Module, metaclass=_FastModuleMeta):
+            x: int = eqx.field(converter=int)
+
+    with pytest.raises(TypeError, match="does not support converters"):
+
+        class WithNonInitField(eqx.Module, metaclass=_FastModuleMeta):
+            x: int = eqx.field(init=False)
+
+
+def test_fast_module_meta_rejects_abstract():
+    """The fastpath does not consult `_abstract_module_registry`, so opting in
+    an abstract class must be rejected at class-creation time.
+    """
+    from equinox._module._prebuilt import _FastModuleMeta
+
+    with pytest.raises(TypeError, match="cannot be abstract"):
+
+        class Abstract(eqx.Module, metaclass=_FastModuleMeta, is_abstract=True):
+            x: int
+
+    # An abstract *subclass* is fine: it takes the normal codepath.
+    class Fast(eqx.Module, metaclass=_FastModuleMeta):
+        x: int
+
+    class AbstractSub(Fast, is_abstract=True):
+        pass
+
+    with pytest.raises(TypeError, match="Cannot instantiate abstract"):
+        AbstractSub(1)
+
+
+def test_fast_module_meta_clears_currently_initialising():
+    """The fastpath must still remove the instance from `_currently_initialising`,
+    so that post-`__init__` attribute assignment is rejected as usual.
+    """
+    from equinox._module._module import _currently_initialising
+    from equinox._module._prebuilt import _FastModuleMeta
+
+    class Fast(eqx.Module, metaclass=_FastModuleMeta):
+        x: int
+
+    obj = Fast(1)
+    assert obj not in _currently_initialising
+    with pytest.raises(AttributeError):
+        obj.x = 2
