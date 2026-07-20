@@ -185,6 +185,9 @@ class _IdSet(threading.local):
     # Thread-local: an instance is only ever initialised by one thread, so each thread
     # tracks its own. (This also keeps `discard_after` sound, as another thread can't
     # interleave its entries with ours.)
+    #
+    # No `__slots__`: under `threading.local`, slots are shared across threads, so a new
+    # thread's `__init__` would clobber another thread's in-progress `_dict`.
     def __init__(self):
         self._dict: dict[int, Module] = {}
 
