@@ -1,6 +1,7 @@
 import dataclasses
 import functools as ft
 import inspect
+import threading
 import types
 import warnings
 import weakref
@@ -180,9 +181,10 @@ def _warn_jax_transformed_function(cls: "_ModuleMeta", x: object) -> None:
                 break
 
 
-class _IdSet:
-    __slots__ = ("_dict",)
-
+class _IdSet(threading.local):
+    # Thread-local: an instance is only ever initialised by one thread, so each thread
+    # tracks its own. (This also keeps `discard_after` sound, as another thread can't
+    # interleave its entries with ours.)
     def __init__(self):
         self._dict: dict[int, Module] = {}
 
