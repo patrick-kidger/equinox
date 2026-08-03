@@ -262,3 +262,20 @@ def test_eval_shape(getkey, tmp_path):
     model3 = eqx.tree_deserialise_leaves(tmp_path, model2)
 
     assert eqx.tree_equal(model, model3, typematch=True)
+
+
+def test_eval_shape_deserialise_to_host(getkey, tmp_path):
+    # A `filter_spec` may leave the deserialised leaves on the host, in which
+    # case they are NumPy rather than JAX arrays. That should not be treated as
+    # a change of type relative to the `ShapeDtypeStruct`s in `like`.
+    model = eqx.nn.MLP(2, 2, 2, 2, key=getkey())
+    eqx.tree_serialise_leaves(tmp_path, model)
+
+    def filter_spec(f, x):
+        return jax.device_get(eqx.default_deserialise_filter_spec(f, x))
+
+    model2 = eqx.filter_eval_shape(eqx.nn.MLP, 2, 2, 2, 2, key=getkey())
+    model3 = eqx.tree_deserialise_leaves(tmp_path, model2, filter_spec=filter_spec)
+
+    assert isinstance(model3.layers[0].weight, np.ndarray)
+    assert eqx.tree_equal(model, model3)

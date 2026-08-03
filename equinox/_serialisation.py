@@ -186,13 +186,22 @@ def _maybe_open(
         yield path_or_file
 
 
+def _is_array_type(x) -> bool:
+    return isinstance(x, type) and issubclass(x, (np.ndarray, np.generic, jax.Array))
+
+
 def _assert_same(array_impl_type):
     def _assert_same_impl(path, new, old):
         typenew = type(new)
         typeold = type(old)
         if typeold is jax.ShapeDtypeStruct:
             typeold = array_impl_type
-        if typenew is not typeold:
+        # All kinds of JAX and NumPy array are interchangeable here: a
+        # `filter_spec` may legitimately leave a deserialised leaf on the host
+        # rather than on a device. The shape and dtype checks below still apply.
+        if typenew is not typeold and not (
+            _is_array_type(typenew) and _is_array_type(typeold)
+        ):
             raise RuntimeError(
                 f"Deserialised leaf at path '{jtu.keystr(path)}' has changed type from "
                 f"{type(old)} in `like` to {type(new)} on disk."
