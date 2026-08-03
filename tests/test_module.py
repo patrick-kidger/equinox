@@ -756,6 +756,134 @@ def test_init_fields():
         C(flag=False)
 
 
+def test_init_fastpath_metadata():
+    """_ModuleInfo precomputes which init=False fields need checking (RED test)."""
+    from equinox._module._module import _module_info
+
+    class AllInitTrue(eqx.Module):
+        x: int
+        y: float
+
+    # No init=False fields → nothing to check with dataclass-generated __init__
+    assert _module_info[AllInitTrue].unchecked_init_false_names == ()
+
+    class InitFalseNoDefault(eqx.Module):
+        x: int = eqx.field(init=False)
+
+    # init=False without a default → dataclass __init__ does NOT set it; must check
+    assert _module_info[InitFalseNoDefault].unchecked_init_false_names == ("x",)
+
+    class InitFalseWithDefault(eqx.Module):
+        x: int = eqx.field(init=False, default=42)
+
+    # init=False WITH a default → dataclass __init__ sets it; no need to check
+    assert _module_info[InitFalseWithDefault].unchecked_init_false_names == ()
+
+    class InitFalseWithFactory(eqx.Module):
+        x: list = eqx.field(init=False, default_factory=list)
+
+    # init=False WITH a default_factory → also initialized; no need to check
+    assert _module_info[InitFalseWithFactory].unchecked_init_false_names == ()
+
+
+def test_init_fastpath_correctness():
+    """The fastpath still catches errors that custom __init__ leaves fields unset."""
+
+    # Custom __init__ that forgets to set a field → must still raise
+    class CustomForgetsX(eqx.Module):
+        x: int
+
+        def __init__(self):
+            pass  # deliberately forgets self.x
+
+    with pytest.raises(TypeError, match="Field 'x' was not initialized."):
+        CustomForgetsX()
+
+    # Dataclass init + init=False without default → must still raise
+    class DataclassInitFalseNoDefault(eqx.Module):
+        x: int = eqx.field(init=False)
+
+    with pytest.raises(TypeError, match="Field 'x' was not initialized."):
+        DataclassInitFalseNoDefault()
+
+    # Dataclass init + all init=True → no error (common fast path)
+    class DataclassAllInitTrue(eqx.Module):
+        x: int
+
+    m = DataclassAllInitTrue(42)
+    assert m.x == 42
+
+
+def test_callable_warning_scan_metadata():
+    """_ModuleInfo.may_receive_callable_args is False only when all init=True
+    fields have annotations that can never hold a JAX-transformed callable."""
+    from equinox._module._module import _module_info
+
+    class SafeAnnotations(eqx.Module):
+        a: int
+        b: float
+        c: str
+
+    assert _module_info[SafeAnnotations].may_receive_callable_args is False
+
+    class HasAny(eqx.Module):
+        x: Any
+
+    assert _module_info[HasAny].may_receive_callable_args is True
+
+    class HasCallable(eqx.Module):
+        fn: Callable
+
+    assert _module_info[HasCallable].may_receive_callable_args is True
+
+    class HasOptionalInt(eqx.Module):
+        x: int | None
+
+    assert _module_info[HasOptionalInt].may_receive_callable_args is False
+
+    class HasUnionInt(eqx.Module):
+        x: int | None
+
+    assert _module_info[HasUnionInt].may_receive_callable_args is False
+
+    class AllInitFalse(eqx.Module):
+        x: int = eqx.field(init=False, default=0)
+
+    # No init=True fields → nothing passed as constructor args → no scan needed
+    assert _module_info[AllInitFalse].may_receive_callable_args is False
+
+
+def test_callable_warning_scan_correctness(capsys):
+    """When may_receive_callable_args is True the scan still runs; when False it
+    is skipped without changing observable behaviour for correctly-typed modules."""
+    from equinox._module._module import _module_info
+
+    # Safe-typed module: flag must be False (scan is skipped)
+    class SafeModule(eqx.Module):
+        x: int
+        y: float
+
+    assert _module_info[SafeModule].may_receive_callable_args is False
+    # Constructing with correct types must not warn
+    import warnings as _warnings
+
+    with _warnings.catch_warnings():
+        _warnings.simplefilter("error")
+        m = SafeModule(1, 2.0)
+    assert m.x == 1
+
+    # Any-typed module: flag must be True (scan runs as before)
+    class AnyModule(eqx.Module):
+        fn: Any
+
+    assert _module_info[AnyModule].may_receive_callable_args is True
+    # Constructing with a plain int must not warn (scan runs, finds nothing bad)
+    with _warnings.catch_warnings():
+        _warnings.simplefilter("error")
+        m2 = AnyModule(42)
+    assert m2.fn == 42
+
+
 @pytest.mark.parametrize("field", (dataclasses.field, eqx.field))
 def test_init_as_abstract(field):
     # Before the introduction of AbstractVar, it was possible to sort-of get the same
@@ -1239,3 +1367,113 @@ def test_class_attribute_of_static_field_with_abstract_property():
 
     model = ConcreteChild()
     assert jax.jit(f)(model) == 2
+
+
+def test_fast_module_meta_opt_in_is_not_inherited():
+    """Subclasses of a `_FastModuleMeta` class go through the normal codepath."""
+    from equinox._module._prebuilt import _FastModuleMeta, BoundMethod
+
+    assert BoundMethod.__fast_init__ is True
+
+    class Sub(BoundMethod):
+        pass
+
+    assert Sub.__fast_init__ is False
+    assert type(Sub) is _FastModuleMeta
+
+
+def test_fast_module_meta_subclass_still_checked():
+    """A subclass gets the full `_ModuleMeta.__call__` treatment."""
+    from equinox._module._prebuilt import _FastModuleMeta
+
+    class Fast(eqx.Module, metaclass=_FastModuleMeta):
+        x: int
+
+        def __init__(self, x):
+            self.x = x
+
+    called = []
+
+    class Sub(Fast):
+        y: int
+
+        def __init__(self):  # deliberately leaves `y` unset
+            self.x = 1
+
+        def __check_init__(self):
+            called.append(True)
+
+    # The opted-in class skips the missing-field check...
+    class FastMissing(eqx.Module, metaclass=_FastModuleMeta):
+        x: int
+
+        def __init__(self):
+            pass
+
+    FastMissing()  # no error
+
+    # ...but the subclass does not.
+    with pytest.raises(TypeError, match="Field 'y' was not initialized."):
+        Sub()
+    assert called == []  # __check_init__ runs after the field check
+
+
+def test_fast_module_meta_rejects_unsupported_fields():
+    """Opting in with anything the fastpath skips is an error at class creation."""
+    from equinox._module._prebuilt import _FastModuleMeta
+
+    with pytest.raises(TypeError, match="does not support converters"):
+
+        class WithCheckInit(eqx.Module, metaclass=_FastModuleMeta):
+            x: int
+
+            def __check_init__(self):
+                pass
+
+    with pytest.raises(TypeError, match="does not support converters"):
+
+        class WithConverter(eqx.Module, metaclass=_FastModuleMeta):
+            x: int = eqx.field(converter=int)
+
+    with pytest.raises(TypeError, match="does not support converters"):
+
+        class WithNonInitField(eqx.Module, metaclass=_FastModuleMeta):
+            x: int = eqx.field(init=False)
+
+
+def test_fast_module_meta_rejects_abstract():
+    """The fastpath does not consult `_abstract_module_registry`, so opting in
+    an abstract class must be rejected at class-creation time.
+    """
+    from equinox._module._prebuilt import _FastModuleMeta
+
+    with pytest.raises(TypeError, match="cannot be abstract"):
+
+        class Abstract(eqx.Module, metaclass=_FastModuleMeta, is_abstract=True):
+            x: int
+
+    # An abstract *subclass* is fine: it takes the normal codepath.
+    class Fast(eqx.Module, metaclass=_FastModuleMeta):
+        x: int
+
+    class AbstractSub(Fast, is_abstract=True):
+        pass
+
+    with pytest.raises(TypeError, match="Cannot instantiate abstract"):
+        AbstractSub(1)
+
+
+def test_fast_module_meta_clears_currently_initialising():
+    """The fastpath must still remove the instance from `_currently_initialising`,
+    so that post-`__init__` attribute assignment is rejected as usual.
+    """
+    from equinox._module._module import _currently_initialising
+    from equinox._module._prebuilt import _FastModuleMeta
+
+    class Fast(eqx.Module, metaclass=_FastModuleMeta):
+        x: int
+
+    obj = Fast(1)
+    assert obj not in _currently_initialising
+    with pytest.raises(AttributeError):
+        obj.x = 2

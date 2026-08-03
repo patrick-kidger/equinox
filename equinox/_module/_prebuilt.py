@@ -1,16 +1,84 @@
+import dataclasses
 from collections.abc import Callable
 from typing import Any, Generic, Protocol, runtime_checkable, TypeVar
+from typing_extensions import dataclass_transform
 
 import jax.tree_util as jtu
 from jaxtyping import PyTreeDef
 
 from ._field import field
 from ._flatten import WRAPPER_FIELD_NAMES
-from ._module import Module
+from ._module import (
+    _abstract_module_registry,
+    _currently_initialising,
+    _module_info,
+    _ModuleMeta,
+    Module,
+)
 
 
 _Return = TypeVar("_Return")
 _Return_co = TypeVar("_Return_co", covariant=True)
+
+
+@dataclass_transform(field_specifiers=(dataclasses.field, field))
+class _FastModuleMeta(_ModuleMeta):
+    """Metaclass for internal Modules created often enough that the
+    instantiation-time checks in `_ModuleMeta.__call__` are worth skipping.
+
+    Opting in is deliberately not inherited: a subclass of a class using this
+    metaclass goes through the usual `_ModuleMeta.__call__`, checks and all.
+    """
+
+    # Set on every class using this metaclass; True only for those opting in.
+    __fast_init__: bool
+
+    def __new__(
+        mcs,
+        name: str,
+        bases: tuple[type, ...],
+        namespace: dict[str, object],
+        **kwargs: Any,
+    ):
+        cls = super().__new__(mcs, name, bases, namespace, **kwargs)
+        # Only the class that explicitly asks for this metaclass gets the
+        # fastpath; anything inheriting from it does not.
+        cls.__fast_init__ = fast = not any(  # pyright: ignore[reportAttributeAccessIssue]
+            isinstance(b, _FastModuleMeta) for b in bases
+        )
+        if fast:
+            # These are the things the fastpath skips that would otherwise fail
+            # silently. Checked once, at class-creation time, so that a future
+            # edit to an opted-in class cannot quietly lose them.
+            info = _module_info[cls]
+            if (
+                info.converter_fields
+                or info.check_init_methods
+                or info.non_init_field_names
+            ):
+                raise TypeError(
+                    "`_FastModuleMeta` does not support converters, "
+                    "`__check_init__`, or `init=False` fields."
+                )
+            # The fastpath does not consult `_abstract_module_registry`, so an
+            # abstract class would silently become instantiable.
+            if cls in _abstract_module_registry:
+                raise TypeError("`_FastModuleMeta` classes cannot be abstract.")
+        return cls
+
+    def __call__(cls, *args: object, **kwargs: object):  # noqa: N805
+        __tracebackhide__ = True
+        if not cls.__fast_init__:
+            return super().__call__(*args, **kwargs)
+        tryself = None
+        try:
+            # Deliberately skipping `_ModuleMeta.__call__`.
+            self = tryself = super(_ModuleMeta, cls).__call__(*args, **kwargs)
+        finally:
+            if tryself is not None:
+                _currently_initialising.remove(tryself)
+            del tryself
+        return self
 
 
 @runtime_checkable
@@ -23,7 +91,7 @@ class _FuncDescriptor(Protocol[_Return_co]):
 
 
 # Not using `jax.tree_util.Partial` as it doesn't implement __eq__ very well. See #480.
-class BoundMethod(Module, Generic[_Return]):
+class BoundMethod(Module, Generic[_Return], metaclass=_FastModuleMeta):
     """Just like a normal Python bound method... except that this one is a PyTree!
 
     This stores `__self__` as a subnode.
