@@ -138,5 +138,8 @@ Jump Processes in JAX
 **isax**: [Github](https://github.com/lockwo/isax)  
 Ising (like) models in JAX
 
+**adv-jax-math**: [Github](https://github.com/unalmis/adv-jax-math)  
+Batching and sharding utilities for vectorization and differentiation in JAX.
+
 **SPDEax**: [Github](https://github.com/kamran-arora/SPDEax)  
 Composable spatial discretisations and operators for solving SPDEs with Diffrax
