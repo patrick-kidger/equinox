@@ -616,10 +616,14 @@ class Module(Hashable, metaclass=_ModuleMeta):
             # run(SomeModule().some_method)
             # ```
             # works.
+            #
+            # The type check goes first so that non-method accesses (the common
+            # case) short-circuit before the `_is_magic` string scan. Bound methods
+            # are always exactly `types.MethodType`, so `is` matches `isinstance`.
             if (
-                not _is_magic(name)
-                and isinstance(out, types.MethodType)
+                type(out) is types.MethodType
                 and out.__self__ is self
+                and not _is_magic(name)
             ):
                 out = BoundMethod(object.__getattribute__(out, "__func__"), self)
             return out
