@@ -605,13 +605,29 @@ class ConvTranspose(Module):
         if self.padding_mode == "CIRCULAR":
             x, padding_t = self._circular_pad(x, padding_t)
 
+        # Replace the lhs_dilation by applying the
+        # interior padding and output padding directly on the input
+        # This way, XLA can use cuDNN's backward-filter path
+        # and not the slow "convForward" path
+        padding_t = tuple(
+            (low, high - output_padding)
+            for (low, high), output_padding in zip(
+                padding_t, self.output_padding, strict=True
+            )
+        )
+        padding_config = ((0, 0, 0),) + tuple(
+            (0, output_padding, stride - 1)
+            for stride, output_padding in zip(
+                self.stride, self.output_padding, strict=True
+            )
+        )
+        x = lax.pad(x, jnp.array(0, dtype=x.dtype), padding_config)
         x = jnp.expand_dims(x, axis=0)
         x = lax.conv_general_dilated(
             lhs=x,
             rhs=self.weight,
             window_strides=(1,) * self.num_spatial_dims,
             padding=padding_t,
-            lhs_dilation=self.stride,
             rhs_dilation=self.dilation,
             feature_group_count=self.groups,
         )
