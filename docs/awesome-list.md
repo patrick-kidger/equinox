@@ -143,3 +143,9 @@ Batching and sharding utilities for vectorization and differentiation in JAX.
 
 **SPDEax**: [Github](https://github.com/kamran-arora/SPDEax)  
 Composable spatial discretisations and operators for solving SPDEs with Diffrax
+
+**jax-morph**: [GitHub](https://github.com/fmottes/jax-morph)  
+Differentiable simulation and optimization of proliferating and active particle clusters.
+
+**Stochastix**: [GitHub](https://github.com/fmottes/stochastix)  
+Differentiable and exact simulation of stochastic reaction networks and continuous-time Markov models.
