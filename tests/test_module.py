@@ -5,6 +5,7 @@ import doctest
 import functools as ft
 import inspect
 import pickle
+import threading
 from collections.abc import Callable
 from dataclasses import InitVar
 from typing import Any, Generic, TypeVar
@@ -1239,3 +1240,124 @@ def test_class_attribute_of_static_field_with_abstract_property():
 
     model = ConcreteChild()
     assert jax.jit(f)(model) == 2
+
+
+def test_no_leak_when_init_raises():
+    # https://github.com/patrick-kidger/equinox/issues/... : if `__init__` raised then
+    # the partially-constructed instance was left in `_currently_initialising` forever
+    # (which holds a strong reference to it), leaking one object per failed init.
+    from equinox._module._module import _currently_initialising
+
+    class MyModule(eqx.Module):
+        x: int
+
+        def __init__(self, x):
+            self.x = x
+            raise RuntimeError("oh no")
+
+    before = len(_currently_initialising)
+    for _ in range(3):
+        with pytest.raises(RuntimeError, match="oh no"):
+            MyModule(1)
+    assert len(_currently_initialising) == before
+
+
+def test_no_leak_when_nested_init_raises():
+    from equinox._module._module import _currently_initialising
+
+    class Inner(eqx.Module):
+        x: int
+
+        def __init__(self, x):
+            self.x = x
+            raise RuntimeError("oh no")
+
+    class Outer(eqx.Module):
+        inner: Inner
+
+        def __init__(self):
+            self.inner = Inner(1)
+
+    before = len(_currently_initialising)
+    with pytest.raises(RuntimeError, match="oh no"):
+        Outer()
+    assert len(_currently_initialising) == before
+
+
+def test_no_leak_when_abstract_var_not_overridden():
+    # `BetterABCMeta.__call__` raises *after* the instance has been constructed, so
+    # this is a second route to the same leak.
+    from equinox._module._module import _currently_initialising
+
+    class AbstractModule(eqx.Module):
+        x: eqx.AbstractVar[int]
+
+    class Concrete(AbstractModule):
+        pass
+
+    before = len(_currently_initialising)
+    with pytest.raises(TypeError, match="abstract"):
+        Concrete()  # pyright: ignore
+    assert len(_currently_initialising) == before
+
+
+def test_no_cross_thread_interference_when_init_raises():
+    # A failed `__init__` on one thread must not disturb a module that is concurrently
+    # being initialised on another thread. The interleaving we force here is:
+    #     A: take mark; register A
+    #     B: take mark; register B
+    #     A: `__init__` raises, and unwinds
+    #     B: assign a field  <- must still be allowed
+    a_registered = threading.Event()
+    b_registered = threading.Event()
+    a_unwound = threading.Event()
+    result = {}
+
+    class A(eqx.Module):
+        x: int
+
+        def __init__(self):
+            self.x = 1
+            a_registered.set()
+            b_registered.wait(10)
+            raise RuntimeError("oh no")
+
+    class B(eqx.Module):
+        x: int
+
+        def __init__(self):
+            b_registered.set()
+            a_unwound.wait(10)
+            self.x = 2
+
+    def run_a():
+        try:
+            A()
+        except RuntimeError:
+            result["a"] = "raised"
+        except BaseException as e:
+            result["a"] = e
+        else:
+            result["a"] = "did not raise"
+        finally:
+            a_unwound.set()
+
+    def run_b():
+        a_registered.wait(10)
+        try:
+            result["b"] = B()
+        except BaseException as e:
+            result["b"] = e
+
+    thread_a = threading.Thread(target=run_a)
+    thread_b = threading.Thread(target=run_b)
+    thread_a.start()
+    thread_b.start()
+    thread_a.join(30)
+    thread_b.join(30)
+    assert not thread_a.is_alive()
+    assert not thread_b.is_alive()
+
+    assert result["a"] == "raised"
+    assert isinstance(result["b"], B), result["b"]
+    assert result["b"].x == 2

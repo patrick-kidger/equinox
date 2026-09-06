@@ -1,6 +1,7 @@
 import dataclasses
 import functools as ft
 import inspect
+import threading
 import types
 import warnings
 import weakref
@@ -180,14 +181,21 @@ def _warn_jax_transformed_function(cls: "_ModuleMeta", x: object) -> None:
                 break
 
 
-class _IdSet:
-    __slots__ = ("_dict",)
-
+class _IdSet(threading.local):
+    # Thread-local: an instance is only ever initialised by one thread, so each thread
+    # tracks its own. (This also keeps `discard_after` sound, as another thread can't
+    # interleave its entries with ours.)
+    #
+    # No `__slots__`: under `threading.local`, slots are shared across threads, so a new
+    # thread's `__init__` would clobber another thread's in-progress `_dict`.
     def __init__(self):
         self._dict: dict[int, Module] = {}
 
     def __contains__(self, key: "Module") -> bool:
         return id(key) in self._dict.keys()
+
+    def __len__(self) -> int:
+        return len(self._dict)
 
     def add(self, key: "Module") -> None:
         if key not in self:
@@ -197,6 +205,13 @@ class _IdSet:
 
     def remove(self, key: "Module") -> None:
         del self._dict[id(key)]
+
+    def discard_after(self, mark: int) -> None:
+        # `dict`s are insertion-ordered, so `popitem` discards the most recently added
+        # entries. Used to unwind after an error, when we don't have the offending
+        # instance to hand to `remove` it directly.
+        while len(self._dict) > mark:
+            self._dict.popitem()
 
 
 _currently_initialising = _IdSet()
@@ -416,13 +431,21 @@ class _ModuleMeta(BetterABCMeta):
             for x in jtu.tree_leaves((args, kwargs)):
                 _warn_jax_transformed_function(cls, x)
 
-        tryself = None
+        # `Module.__new__` adds to `_currently_initialising`, and we remove it again
+        # here. On the error path we don't get the partially-constructed instance back
+        # from `super().__call__`, so we can't `remove` it directly -- instead we unwind
+        # everything added during this call. (Any nested `Module`s constructed during
+        # our `__init__` will have removed their own entries already, so anything left
+        # above `mark` was added on our behalf.) Without this, a failed `__init__` would
+        # leak its instance forever, as `_IdSet` holds a strong reference.
+        mark = len(_currently_initialising)
         try:
-            self = tryself = super().__call__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
-        finally:
-            if tryself is not None:
-                _currently_initialising.remove(tryself)
-            del tryself
+            self = super().__call__(*args, **kwargs)  # pyright: ignore[reportAttributeAccessIssue]
+        except BaseException:
+            _currently_initialising.discard_after(mark)
+            raise
+        else:
+            _currently_initialising.remove(self)
         assert not is_abstract_module(cls)  # pyright: ignore[reportArgumentType]
 
         info = _module_info[cls]
