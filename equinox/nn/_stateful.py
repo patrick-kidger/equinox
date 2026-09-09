@@ -1,5 +1,6 @@
 import types
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, Generic, TYPE_CHECKING, TypeVar
 from typing_extensions import ParamSpec
 
@@ -9,6 +10,7 @@ import jax.tree_util as jtu
 import wadler_lindig as wl
 from jaxtyping import PyTree
 
+from .._filters import partition
 from .._module import field, Module
 from .._pretty_print import tree_pformat
 from .._tree import tree_at, tree_equal
@@ -82,6 +84,18 @@ def _is_index(x: Any) -> bool:
     return isinstance(x, StateIndex)
 
 
+@jtu.register_dataclass
+@dataclass(frozen=True)
+class Intermediate(Generic[_Value]):
+    """A wrapper for tracking Intermediate values within a State."""
+
+    inner: _Value | None = None
+
+
+def _is_intermediate(x: Any) -> bool:
+    return isinstance(x, Intermediate)
+
+
 _state_error = """
 Attempted to use old state. Probably you have done something like:
 ```
@@ -132,7 +146,7 @@ class State:
                 state[leaf.marker] = jtu.tree_map(jnp.asarray, leaf.init)
         self._state: _Sentinel | dict[object | int, Any] = state
 
-    def get(self, item: StateIndex[_Value]) -> _Value:
+    def get(self, item: StateIndex[_Value]) -> _Value | None:
         """Given an [`equinox.nn.StateIndex`][], returns the value of its state.
 
         **Arguments:**
@@ -147,7 +161,10 @@ class State:
             raise ValueError(_state_error)
         if type(item) is not StateIndex:
             raise ValueError("Can only use `eqx.nn.StateIndex`s as state keys.")
-        return self._state[item.marker]
+        value = self._state[item.marker]
+        if isinstance(value, Intermediate):
+            return None
+        return value
 
     def set(self, item: StateIndex[_Value], value: _Value) -> "State":
         """Sets a new value for an [`equinox.nn.StateIndex`][], **and returns the
@@ -171,17 +188,27 @@ class State:
             raise ValueError("Can only use `eqx.nn.StateIndex`s as state keys.")
         old_value = self._state[item.marker]
         value = jtu.tree_map(jnp.asarray, value)
-        old_struct = jax.eval_shape(lambda: old_value)
-        new_struct = jax.eval_shape(lambda: value)
-        if tree_equal(old_struct, new_struct) is not True:
-            old_repr = tree_pformat(old_struct, struct_as_array=True)
-            new_repr = tree_pformat(new_struct, struct_as_array=True)
-            raise ValueError(
-                "Old and new values have different structures/shapes/dtypes. The old "
-                f"value is {old_repr} and the new value is {new_repr}."
-            )
+        if isinstance(old_value, Intermediate):
+            if old_value.inner is not None:
+                raise ValueError(
+                    "`eqx.nn.Intermediate` value already set."
+                    "Either `state.set` has been called multiple time on this `eqx.nn.State`,"
+                    "or has not been extracted via `state.extract_intermediate` after the forward."
+                )
+            new_value = Intermediate(value)
+        else:
+            new_value = value
+            old_struct = jax.eval_shape(lambda: old_value)
+            new_struct = jax.eval_shape(lambda: new_value)
+            if tree_equal(old_struct, new_struct) is not True:
+                old_repr = tree_pformat(old_struct, struct_as_array=True)
+                new_repr = tree_pformat(new_struct, struct_as_array=True)
+                raise ValueError(
+                    "Old and new values have different structures/shapes/dtypes. The old "
+                    f"value is {old_repr} and the new value is {new_repr}."
+                )
         state = self._state.copy()  # pyright: ignore
-        state[item.marker] = value
+        state[item.marker] = new_value
         new_self = object.__new__(State)
         new_self._state = state
         self._state = _sentinel
@@ -241,6 +268,37 @@ class State:
         new_self._state = state
         self._state = _sentinel
         return new_self
+
+    def extract_intermediate(self, which: type | None = None) -> "State":
+        """Creates a smaller `State` object, that tracks only the `Intermediate`s states
+        of type `which` (or all if `which is None`).
+        The extracted `Intermediate`s are replaced by `None` in the current state.
+
+        **Arguments:**
+
+        - `which`: the type of `Intermediate` to extract. `None` for extracting
+        all `Intermediate`s.
+
+        **Returns:**
+
+        A new [`equinox.nn.State`][] object, which tracks only the `Intermediate`s
+        states of type `which`.
+        """
+        filter_spec = (
+            _is_intermediate
+            if which is None
+            else lambda x: _is_intermediate(x) and isinstance(x.inner, which)
+        )
+        intermediate, state = partition(
+            self._state, filter_spec, is_leaf=_is_intermediate, replace=Intermediate()
+        )
+        intermediate = jtu.tree_map(
+            lambda x: x.inner, intermediate, is_leaf=_is_intermediate
+        )
+        state_intermediate = object.__new__(State)
+        state_intermediate._state = intermediate
+        self._state = state
+        return state_intermediate
 
     def __repr__(self):
         return tree_pformat(self)

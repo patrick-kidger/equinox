@@ -50,6 +50,7 @@ from ._shared import Shared as Shared
 from ._spectral_norm import SpectralNorm as SpectralNorm
 from ._stateful import (
     delete_init_state as delete_init_state,
+    Intermediate as Intermediate,
     make_with_state as make_with_state,
     State as State,
     StateIndex as StateIndex,
