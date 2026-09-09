@@ -94,7 +94,7 @@ class Linear(Module):
             if jnp.shape(x) != ():
                 raise ValueError("x must have scalar shape")
             x = jnp.broadcast_to(x, (1,))
-        x = self.weight @ x
+        x = x @ self.weight.T
         if self.bias is not None:
             x = x + self.bias
         if self.out_features == "scalar":
