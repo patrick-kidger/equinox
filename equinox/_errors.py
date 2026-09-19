@@ -27,6 +27,21 @@ from ._unvmap import unvmap_any
 traceback_util.register_exclusion(__file__)
 
 
+def _restore_manual_axes(result, original):
+    # Match each result leaf's varying axes to its input without copying data.
+    if not hasattr(jax.core.ShapedArray, "manual_axis_type"):
+        return result
+
+    def restore_leaf(output_leaf, input_leaf):
+        varying_axes = (
+            jax.typeof(input_leaf).manual_axis_type.varying
+            - jax.typeof(output_leaf).manual_axis_type.varying
+        )
+        return lax.pcast(output_leaf, tuple(varying_axes), to="varying")
+
+    return jtu.tree_map(restore_leaf, result, original)
+
+
 def _nan_like(x: Array | np.ndarray) -> Array | np.ndarray:
     dtype = np.result_type(x)
     if np.issubdtype(dtype, np.inexact):
@@ -113,6 +128,12 @@ def _error_inner(
     category,
 ):
     assert callable(msg)
+    # hasattr(jax.sharding, "get_abstract_mesh") keeps compatibility
+    # with older jax versions
+    if on_error != "off" and hasattr(jax.sharding, "get_abstract_mesh"):
+        axes = jax.sharding.get_abstract_mesh().manual_axes
+        if axes:
+            pred = lax.pmax(pred, axes)  # allreduce boolean or
 
     if on_error == "raise":
 
@@ -154,7 +175,11 @@ def _error_inner(
                 tpu_msg, dynamic_x, out, pred, vmap_method="broadcast_all"
             )
 
-        return lax.cond(unvmap_any(pred), handle_error, lambda: dynamic_x)
+        return lax.cond(
+            unvmap_any(pred),
+            lambda: _restore_manual_axes(handle_error(), dynamic_x),
+            lambda: dynamic_x,
+        )
 
     elif on_error == "warn":
 
@@ -174,7 +199,11 @@ def _error_inner(
                 vmap_method="broadcast_all",
             )
 
-        return lax.cond(unvmap_any(pred), handle_warning, lambda: dynamic_x)
+        return lax.cond(
+            unvmap_any(pred),
+            lambda: _restore_manual_axes(handle_warning(), dynamic_x),
+            lambda: dynamic_x,
+        )
 
     elif on_error == "breakpoint":
 
@@ -195,10 +224,19 @@ def _error_inner(
                 _tree_nan_like, dynamic_x, out, vmap_method="broadcast_all"
             )
 
-        return lax.cond(unvmap_any(pred), handle_error, lambda: dynamic_x)
+        return lax.cond(
+            unvmap_any(pred),
+            lambda: _restore_manual_axes(handle_error(), dynamic_x),
+            lambda: dynamic_x,
+        )
 
     elif on_error == "nan":
-        return lax.cond(unvmap_any(pred), _tree_nan_like, lambda y: y, dynamic_x)
+        return lax.cond(
+            unvmap_any(pred),
+            lambda x: _restore_manual_axes(_tree_nan_like(x), x),
+            lambda x: x,
+            dynamic_x,
+        )
     elif on_error == "off":
         return dynamic_x
     else:
@@ -348,8 +386,8 @@ def error_if(
         happens in the overall computation: it will happen after `x` is computed and
         before the return value is used. `x` can be any PyTree, and it must contain at
         least one array.
-    - `pred`: a boolean for whether to raise an error. If vmap'd then an error will be
-        raised if any batch element has `True`.
+    - `pred`: a boolean for whether to raise an error. If vmap'd or shard_map'd then an
+        error will be raised if any batch/shard element has `True`.
     - `msg`: the string to display as an error message. If passed as a string then it
         will be used directly. If passed as a callable then it will be called with `x`,
         and should return a string.

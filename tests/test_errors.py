@@ -1,8 +1,12 @@
+import os
 import re
+import subprocess
+import sys
 
 import equinox as eqx
 import equinox.internal as eqxi
 import jax
+import jax.core
 import jax.numpy as jnp
 import pytest
 
@@ -193,6 +197,88 @@ def test_traceback_runtime_custom():
     except Exception as e:
         assert "egads" in str(e)
         assert "EQX_ON_ERROR" not in str(e)
+
+
+@pytest.mark.parametrize("check_vma", [False, True])
+def test_shard_map_error_predicate(check_vma):
+    if not hasattr(jax, "shard_map") or not hasattr(jax.sharding, "get_abstract_mesh"):
+        pytest.skip("requires shard_map and get_abstract_mesh")
+    P = jax.sharding.PartitionSpec
+    mesh = jax.sharding.Mesh(jax.devices("cpu"), ("i",))
+
+    @jax.jit
+    @jax.shard_map(
+        mesh=mesh, in_specs=(P(), P("i")), out_specs=P("i"), check_vma=check_vma
+    )
+    def f(x, pred):
+        return eqx.error_if(x, pred[0], "invalid", on_error="nan")
+
+    x = jnp.ones(1)
+    assert jnp.array_equal(f(x, jnp.array([False, False])), jnp.ones(2))
+    # An error on one device must replace the output on both devices.
+    assert jnp.isnan(f(x, jnp.array([False, True]))).all()
+
+
+@pytest.mark.parametrize("on_error", ["raise", "warn", "breakpoint"])
+def test_shard_map_error_callback_manual_axes(on_error):
+    if not hasattr(jax.core.ShapedArray, "manual_axis_type"):
+        pytest.skip("requires manual axis type metadata")
+    P = jax.sharding.PartitionSpec
+    mesh = jax.sharding.Mesh(jax.devices("cpu"), ("i",))
+    specs = {"sharded": P("i"), "replicated": P()}
+
+    @jax.jit
+    @jax.shard_map(mesh=mesh, in_specs=(specs, P("i")), out_specs=specs)
+    def f(x, pred):
+        if on_error == "warn":
+            return eqx.warn_if(x, pred[0], "invalid")
+        return eqx.error_if(x, pred[0], "invalid", on_error=on_error)
+
+    x = {"sharded": jnp.arange(8.0), "replicated": jnp.ones(2)}
+    # Both branches must type-check even when the dynamic predicate is false.
+    out = f(x, jnp.array([False, False]))
+    for name in x:
+        assert jnp.array_equal(out[name], x[name])
+        expected = jax.sharding.NamedSharding(mesh, specs[name])
+        assert out[name].sharding.is_equivalent_to(expected, out[name].ndim)
+
+
+@pytest.mark.parametrize("num_devices", [2, 4])
+def test_shard_map_error_independent_of_device_count(num_devices):
+    if not hasattr(jax, "shard_map") or not hasattr(jax.sharding, "get_abstract_mesh"):
+        pytest.skip("requires shard_map and get_abstract_mesh")
+    # A fresh process allows four CPU devices without changing the two-device suite.
+    code = """
+import equinox as eqx
+import jax
+import jax.numpy as jnp
+
+P = jax.sharding.PartitionSpec
+mesh = jax.sharding.Mesh(jax.devices("cpu"), ("i",))
+
+@jax.jit
+@jax.shard_map(mesh=mesh, in_specs=P("i"), out_specs=P("i"))
+def f(x):
+    return eqx.error_if(x, jnp.any(x < 0), "negative value", on_error="nan")
+
+x = jnp.arange(8.0)
+assert jnp.array_equal(f(x), x)
+result = f(x.at[-1].set(-1))
+# Before pmax: only the last four values (two devices) or two values (four
+# devices) became NaN. An error must affect all eight values in either case.
+assert jnp.isnan(result).all(), result
+"""
+    subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=os.path.dirname(os.path.dirname(eqx.__file__)),
+        env={
+            **os.environ,
+            "JAX_PLATFORMS": "cpu",
+            "JAX_NUM_CPU_DEVICES": str(num_devices),
+        },
+        check=True,
+        timeout=60,
+    )
 
 
 def test_msg_callable():
