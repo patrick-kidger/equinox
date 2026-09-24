@@ -279,3 +279,37 @@ def test_eval_shape_deserialise_to_host(getkey, tmp_path):
 
     assert isinstance(model3.layers[0].weight, np.ndarray)
     assert eqx.tree_equal(model, model3)
+
+
+@pytest.mark.parametrize("impl", [None, "rbg"])
+def test_prng_key_serialisation(impl, tmp_path):
+    key = jax.random.key(0, impl=impl)
+    keys = jax.random.split(key, 3)
+    tree = (key, keys, jnp.array([1.0, 2.0]))
+    eqx.tree_serialise_leaves(tmp_path, tree)
+
+    like = (
+        jax.random.key(1, impl=impl),
+        jax.random.split(jax.random.key(1, impl=impl), 3),
+        jnp.zeros(2),
+    )
+    for like_tree in (like, jax.eval_shape(lambda: like)):
+        out = eqx.tree_deserialise_leaves(tmp_path, like_tree)
+        assert out[0].dtype == key.dtype
+        assert out[1].dtype == keys.dtype
+        assert out[1].shape == keys.shape
+        assert jnp.array_equal(jax.random.key_data(out[0]), jax.random.key_data(key))
+        assert jnp.array_equal(jax.random.key_data(out[1]), jax.random.key_data(keys))
+        assert jnp.array_equal(out[2], tree[2])
+
+
+def test_prng_key_in_module(tmp_path):
+    class HasKey(eqx.Module):
+        key: jax.Array
+
+    model = HasKey(jax.random.key(0))
+    eqx.tree_serialise_leaves(tmp_path, model)
+    model2 = eqx.tree_deserialise_leaves(tmp_path, HasKey(jax.random.key(1)))
+    assert jnp.array_equal(
+        jax.random.key_data(model2.key), jax.random.key_data(model.key)
+    )
