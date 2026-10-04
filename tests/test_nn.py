@@ -1,3 +1,4 @@
+import itertools
 import warnings
 
 import equinox as eqx
@@ -1709,4 +1710,36 @@ def test_rope_embeddings_values():
     assert (
         jnp.allclose(res.astype(jnp.float32), expected_values, rtol=1e-2)
         and res.dtype == jnp.float16
+    )
+
+
+@pytest.mark.parametrize("ndim", [1, 2, 3])
+@pytest.mark.parametrize("pool_type", ["Avg", "Max"])
+@pytest.mark.parametrize("kernel,stride", [(2, 3), (3, 2)])
+@pytest.mark.parametrize("use_jit", [False, True])
+def test_ceil_pool_minimal_padding(ndim, pool_type, kernel, stride, use_jit):
+    pool = getattr(eqx.nn, f"{pool_type}Pool{ndim}d")(
+        kernel_size=kernel, stride=stride, use_ceil=True
+    )
+    x = jnp.arange(1, 2 * 4**ndim + 1, dtype=jnp.float32).reshape((2,) + (4,) * ndim)
+
+    def reference(values):
+        fill = 0.0 if pool_type == "Avg" else -jnp.inf
+        padded = jnp.pad(values, ((0, 0),) + ((0, 1),) * ndim, constant_values=fill)
+        reduce = jnp.mean if pool_type == "Avg" else jnp.max
+        outputs = []
+        for starts in itertools.product(range(0, 4, stride), repeat=ndim):
+            window = padded[
+                (slice(None),) + tuple(slice(start, start + kernel) for start in starts)
+            ]
+            outputs.append(reduce(window, axis=tuple(range(1, ndim + 1))))
+        return jnp.stack(outputs, axis=1).reshape((2,) + (2,) * ndim)
+
+    apply = jax.jit(pool) if use_jit else pool
+    assert jnp.allclose(apply(x), reference(x))
+    differentiate = jax.grad(lambda values: jnp.sum(pool(values)))
+    if use_jit:
+        differentiate = jax.jit(differentiate)
+    assert jnp.allclose(
+        differentiate(x), jax.grad(lambda values: jnp.sum(reference(values)))(x)
     )
