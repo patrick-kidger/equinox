@@ -283,3 +283,15 @@ def test_out_axes_with_at_least_three_dimensions(out_axes):
     z = filter_pmap(foo, out_axes=out_axes)(x)
     assert y.shape == z.shape
     assert (np.array(y) == np.array(z)).all()
+
+
+@pytest.mark.parametrize("axis_size", [1, 2])
+@pytest.mark.parametrize("use_lower", [False, True])
+@pytest.mark.parametrize("enable_x64", [False, True])
+def test_explicit_axis_size_without_arrays(axis_size, use_lower, enable_x64):
+    with jax.enable_x64(enable_x64):
+        mapped = eqx.filter_pmap(
+            lambda value: value, in_axes=None, out_axes=None, axis_size=axis_size
+        )
+        evaluate = mapped.lower(3).compile() if use_lower else mapped
+        assert shaped_allclose(evaluate(3), 3)
