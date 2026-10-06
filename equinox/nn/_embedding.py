@@ -13,7 +13,7 @@ from .._module import field, Module
 from ._misc import named_scope
 
 
-internal_rope_embedding_cache: dict[tuple[int, Any], tuple[Array, Array]] = {}
+internal_rope_embedding_cache: dict[tuple[int, float, Any], tuple[Array, Array]] = {}
 cache_clears.append(internal_rope_embedding_cache.clear)
 
 
@@ -219,7 +219,7 @@ class RotaryPositionalEmbedding(Module):
             )
 
         with jax.ensure_compile_time_eval():
-            cache_key = (embedding_size, self.dtype)
+            cache_key = (embedding_size, self.theta, self.dtype)
             if cache_key not in internal_rope_embedding_cache:
                 internal_rope_embedding_cache[cache_key] = self.precompute_freqs_cis(
                     embedding_size, seq_len, self.theta, self.dtype
