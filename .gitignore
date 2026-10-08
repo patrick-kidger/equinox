@@ -13,5 +13,8 @@ examples/MNIST
 examples/multipart_serialised.eqx
 .python-version
 .DS_Store
+.ruff_cache
+.pytest_cache
+.venv
 uv.lock
 .vscode
