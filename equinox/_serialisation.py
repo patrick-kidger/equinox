@@ -3,7 +3,7 @@ import pathlib
 import typing
 from collections.abc import Callable
 from contextlib import contextmanager
-from typing import Any, Protocol, runtime_checkable, TypeVar
+from typing import Any, cast, Protocol, runtime_checkable, TypeVar
 
 import jax
 import jax.numpy as jnp
@@ -268,6 +268,10 @@ def tree_serialise_leaves(
     """
 
     with _maybe_open(path_or_file, "wb") as f:
+        # A closed handle fails in its own write. Raising here keeps that
+        # exception; the leaf walker would otherwise replace it with TreePathError.
+        if getattr(f, "closed", False):
+            cast(SupportsWrite[bytes], f).write(b"")
 
         def _serialise(spec, x):
             def __serialise(y):
