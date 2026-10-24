@@ -447,7 +447,7 @@ def _vprim_transpose(
     transpose = jax.vmap(
         _transpose,
         in_axes=(0, *batch_axes),
-        out_axes=__batch_axes,
+        out_axes=tuple(0 if b is None else b for b in __batch_axes),
         axis_size=__axis_size,
         axis_name=__axis_name,
     )
@@ -456,6 +456,10 @@ def _vprim_transpose(
     else:
         cts = None if type(cts) is ad.Zero else cts
     outputs = transpose(cts, *mapped_inputs)
+    outputs = tuple(
+        jnp.sum(o, axis=0) if b is None and o is not None else o
+        for o, b in zip(outputs, __batch_axes)
+    )
     assert len(inputs) == len(outputs)
     for i, o in zip(inputs, outputs):
         if o is not None:
