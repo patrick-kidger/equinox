@@ -10,6 +10,7 @@ import jax.interpreters.batching as batching
 import jax.interpreters.mlir as mlir
 import jax.numpy as jnp
 import jax.tree_util as jtu
+import pytest
 
 from .helpers import tree_allclose
 
@@ -198,3 +199,44 @@ def test_vprim():
 
     o8 = jnp.array([[3.0, 10.5], [6.0, 4.5], [0.0, 0.6]])
     assert tree_allclose(jax.linear_transpose(jax.vmap(bind), y2)(o4), (o8,))
+
+
+@pytest.mark.parametrize("batch_axis", [None, 0, 1])
+@pytest.mark.parametrize("jit", [False, True])
+@pytest.mark.parametrize("nested", [False, True])
+def test_vprim_transpose_broadcast_input(batch_axis, jit, nested):
+    def impl(scale, x):
+        return [scale * x]
+
+    def abstract(scale, x):
+        return [x]
+
+    def jvp(primals, tangents):
+        scale, x = primals
+        tscale, tx = tangents
+        assert type(tscale) is ad.Zero
+        return primitive.bind(scale, x), primitive.bind(scale, ad.instantiate_zeros(tx))
+
+    def transpose(cts, scale, x):
+        assert type(x) is ad.UndefinedPrimal
+        return [None, scale * cts[0]]
+
+    primitive = eqxi.create_vprim("broadcast_product", impl, abstract, jvp, transpose)
+    scales = jnp.arange(1.0, 7.0).reshape(2, 3)
+    x = jnp.array([1.0, 2.0])
+    if batch_axis is not None:
+        x = jnp.stack([x, x + 1, x + 2], axis=batch_axis)
+
+    def loss(bind, x):
+        mapped = jax.vmap(bind, in_axes=(0, batch_axis))
+        if nested:
+            result = jax.vmap(mapped, in_axes=(0, None))(scales, x)
+        else:
+            result = mapped(scales[0], x)
+        return jnp.sum(result[0])
+
+    actual = jax.grad(lambda x: loss(primitive.bind, x))
+    expected = jax.grad(lambda x: loss(impl, x))
+    if jit:
+        actual = jax.jit(actual)
+    assert tree_allclose(actual(x), expected(x))
