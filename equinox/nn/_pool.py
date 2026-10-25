@@ -96,10 +96,13 @@ class Pool(Module):
         for input_size, (left_padding, right_padding), kernel_size, stride in zip(
             input_shape[1:], self.padding, self.kernel_size, self.stride
         ):
-            if (input_size + left_padding + right_padding - kernel_size) % stride == 0:
+            remainder = (
+                input_size + left_padding + right_padding - kernel_size
+            ) % stride
+            if remainder == 0:
                 new_padding.append((left_padding, right_padding))
             else:
-                new_padding.append((left_padding, right_padding + stride))
+                new_padding.append((left_padding, right_padding + stride - remainder))
         return tuple(new_padding)
 
     def _check_is_padding_valid(self, padding):
