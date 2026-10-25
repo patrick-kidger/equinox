@@ -63,6 +63,82 @@ def test_linear(getkey):
     assert linear(x).dtype == jnp.complex64
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    (
+        jnp.float32,
+        pytest.param(
+            jnp.float64,
+            marks=pytest.mark.skipif(
+                not jax.config.jax_enable_x64,  # pyright: ignore
+                reason="float64 is disabled in this JAX configuration",
+            ),
+        ),
+    ),
+)
+@pytest.mark.parametrize("shape", ((3,), (5, 3), (2, 5, 3)))
+def test_linear_matmul_order_equivalence(getkey, dtype, shape):
+    linear = eqx.nn.Linear(3, 4, dtype=dtype, key=getkey())
+    x = jrandom.normal(getkey(), shape, dtype=dtype)
+
+    def old_call(x):
+        out = linear.weight @ x
+        if linear.bias is not None:
+            out = out + linear.bias
+        return out
+
+    def batch_call(fn):
+        for _ in shape[:-1]:
+            fn = jax.vmap(fn)
+        return fn
+
+    actual = batch_call(linear)(x)
+    explicit = x @ linear.weight.T
+    if linear.bias is not None:
+        # Broadcast the bias to explicit's full shape so the test passes under
+        # jax_numpy_rank_promotion='raise' (which equinox's test config enables).
+        explicit = explicit + jnp.broadcast_to(linear.bias, explicit.shape)
+    previous = batch_call(old_call)(x)
+
+    assert jnp.allclose(actual, explicit)
+    assert jnp.allclose(actual, previous)
+
+
+def _hlo_text(fn, *args):
+    return jax.jit(fn).lower(*args).as_text()
+
+
+def _count_nonconstant_transposes(hlo_text):
+    count = 0
+    for line in hlo_text.splitlines():
+        is_transpose = "stablehlo.transpose" in line or " transpose(" in line
+        is_constant_transpose = (
+            "stablehlo.transpose %cst" in line or "transpose(constant" in line
+        )
+        if is_transpose and not is_constant_transpose:
+            count += 1
+    return count
+
+
+def test_linear_vmap_hlo_has_fewer_transposes(getkey):
+    linear = eqx.nn.Linear(4, 3, key=getkey())
+    x = jrandom.normal(getkey(), (5, 4))
+
+    def previous(x):
+        out = linear.weight @ x
+        if linear.bias is not None:
+            out = out + linear.bias
+        return out
+
+    previous_hlo = _hlo_text(jax.vmap(previous), x)
+    current_hlo = _hlo_text(jax.vmap(linear), x)
+    previous_transposes = _count_nonconstant_transposes(previous_hlo)
+    current_transposes = _count_nonconstant_transposes(current_hlo)
+    if previous_transposes == 0:
+        pytest.skip("HLO text format does not expose vmapped transpose ops")
+    assert current_transposes < previous_transposes
+
+
 def test_identity(getkey):
     identity1 = eqx.nn.Identity()
     identity2 = eqx.nn.Identity(1)
