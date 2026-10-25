@@ -427,7 +427,7 @@ def _common_preprocess(axis_size, kwargs):
         return 0  # hashable non-array object
     else:
         # Work around JAX issue #9252
-        return np.broadcast_to(0, axis_size)
+        return np.broadcast_to(np.int32(0), axis_size)
 
 
 def _preprocess(info, args, kwargs):
