@@ -32,6 +32,7 @@ class Dropout(Module):
         """**Arguments:**
 
         - `p`: The fraction of entries to set to zero. (On average.)
+            At `p=1`, all entries are dropped with zero input gradients.
         - `inference`: Whether to actually apply dropout at all. If `True` then dropout
             is *not* applied. If `False` then dropout is applied. This may be toggled
             with [`equinox.nn.inference_mode`][] or overridden during
@@ -93,4 +94,6 @@ class Dropout(Module):
         else:
             q = 1 - lax.stop_gradient(self.p)
             mask = jrandom.bernoulli(key, q, x.shape)
-            return jnp.where(mask, x / q, 0)
+            # Avoid division by zero in the backward pass when every entry is dropped.
+            denominator = jnp.where(q == 0, 1, q)
+            return jnp.where(mask, x / denominator, 0)
