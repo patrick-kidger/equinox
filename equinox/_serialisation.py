@@ -101,6 +101,10 @@ def default_serialise_filter_spec(f: SupportsWrite[bytes], x: Any) -> None:
         ```
     """  # noqa: E501
     if isinstance(x, jax.Array):
+        if _is_prng_key(x):
+            # Key arrays cannot be converted to NumPy, so save the raw key data. It is
+            # wrapped back into a key on load, using the key type from `like`.
+            x = jax.random.key_data(x)
         jnp.save(f, x)
     elif isinstance(x, np.ndarray):
         # Important to use `np` here so that we don't cast NumPy arrays to JAX arrays.
@@ -145,7 +149,12 @@ def default_deserialise_filter_spec(f: SupportsReadSeek[bytes], x: Any) -> Any:
         ```
     """  # noqa: E501
     if isinstance(x, (jax.Array, jax.ShapeDtypeStruct)):
-        return jnp.load(f)  # pyright: ignore[reportArgumentType]
+        out = jnp.load(f)  # pyright: ignore[reportArgumentType]
+        if _is_prng_key(x):
+            # `key_impl` needs a key array, and `x` may be a `ShapeDtypeStruct`.
+            impl = jax.random.key_impl(jnp.zeros((), x.dtype))
+            out = jax.random.wrap_key_data(out, impl=impl)
+        return out
     elif isinstance(x, np.ndarray):
         # Important to use `np` here to avoid promoting NumPy arrays to JAX.
         return np.load(f)
@@ -159,6 +168,10 @@ def default_deserialise_filter_spec(f: SupportsReadSeek[bytes], x: Any) -> Any:
         return type(x)(out.item())  # pyright: ignore[reportCallIssue]
     else:
         return x
+
+
+def _is_prng_key(x: jax.Array | jax.ShapeDtypeStruct) -> bool:
+    return jnp.issubdtype(x.dtype, jax.dtypes.prng_key)
 
 
 def _with_suffix(path):
