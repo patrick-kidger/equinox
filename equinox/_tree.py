@@ -75,9 +75,11 @@ def tree_at(
         nodes that should be replaced. For example
         `where = lambda mlp: mlp.layers[-1].linear.weight`.
     - `pytree`: The PyTree to modify.
-    - `replace`: Either a single element, or a sequence of the same length as returned
-        by `where`. This specifies the replacements to make at the locations specified
-        by `where`. Mutually exclusive with `replace_fn`.
+    - `replace`: The replacement for a single node returned by `where`, or a sequence
+        of replacements of the same length when `where` returns a tuple of nodes.
+        A single replacement is not broadcast across multiple selected nodes. To use
+        the same replacement for every selected node, use `replace_fn=lambda _: value`.
+        Mutually exclusive with `replace_fn`.
     - `replace_fn`: A function `Node -> Any`. It will be called on every node specified
         by `where`. The return value from `replace_fn` will be used in its place.
         Mutually exclusive with `replace`.
@@ -106,6 +108,17 @@ def tree_at(
         new_tree = eqx.tree_at(get_leaf, tree, 5)
         # new_tree is [1, [2, {"a": 5, "b": 4}]]
         # The original tree is unchanged.
+        ```
+
+    !!! Example
+
+        To replace two selected nodes with the same value:
+        ```python
+        tree = [1, 2, 3]
+        get_nodes = lambda t: (t[0], t[1])
+        new_tree = eqx.tree_at(get_nodes, tree, replace=(0, 0))
+        # Equivalently: eqx.tree_at(get_nodes, tree, replace_fn=lambda _: 0)
+        # new_tree is [0, 0, 3]; the original tree is unchanged.
         ```
 
     !!! Example
