@@ -1358,6 +1358,12 @@ def test_maxpool1d():
     assert jnp.all(output == answer)
 
 
+def test_maxpool1d_ceil_padding():
+    x = jnp.array([[1.0, 2.0, 3.0, 4.0]])
+    max_pool = eqx.nn.MaxPool1d(kernel_size=2, stride=3, use_ceil=True)
+    assert jnp.array_equal(max_pool(x), jnp.array([[2.0, 4.0]]))
+
+
 def test_avgpool1d():
     x = jnp.arange(14).reshape(1, 14)
     avg_pool = eqx.nn.AvgPool1d(2, 3)
