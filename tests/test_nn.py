@@ -1710,3 +1710,14 @@ def test_rope_embeddings_values():
         jnp.allclose(res.astype(jnp.float32), expected_values, rtol=1e-2)
         and res.dtype == jnp.float16
     )
+
+
+def test_rope_embeddings_theta_cache():
+    x = jnp.ones((16, 8))
+    rope_a = eqx.nn.RotaryPositionalEmbedding(8, theta=10_000.0)
+    rope_b = eqx.nn.RotaryPositionalEmbedding(8, theta=100_000.0)
+    res_a = rope_a(x)
+    res_b = rope_b(x)
+    assert not jnp.allclose(res_a, res_b)
+    eqx.clear_caches()
+    assert jnp.allclose(res_b, rope_b(x))
