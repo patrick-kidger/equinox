@@ -117,6 +117,57 @@ def test_dropout_deterministic(getkey):
         assert jnp.any(x != dropout3(x, key=jrandom.PRNGKey(0)))
 
 
+@pytest.mark.parametrize("jit", [False, True])
+@pytest.mark.parametrize("array_probability", [False, True])
+def test_dropout_full_probability_gradient(getkey, jit, array_probability):
+    dropout = eqx.nn.Dropout(1.0)
+    if array_probability:
+        dropout = eqx.tree_at(lambda d: d.p, dropout, jnp.array(1.0))
+    x = jrandom.normal(getkey(), (3, 4))
+    key = getkey()
+
+    def apply(dropout, x):
+        return dropout(x, key=key)
+
+    if jit:
+        apply = eqx.filter_jit(apply)
+    output = apply(dropout, x)
+    grad = jax.grad(lambda x: apply(dropout, x).sum())(x)
+    _, tangent = jax.jvp(lambda x: apply(dropout, x), (x,), (jnp.ones_like(x),))
+    assert jnp.array_equal(output, jnp.zeros_like(x))
+    assert jnp.array_equal(grad, jnp.zeros_like(x))
+    assert jnp.array_equal(tangent, jnp.zeros_like(x))
+
+
+def test_dropout_full_probability_training_step(getkey):
+    model = eqx.nn.Sequential(
+        [
+            eqx.nn.Linear(3, 4, key=getkey()),
+            eqx.nn.Dropout(1.0),
+            eqx.nn.Linear(4, 2, key=getkey()),
+        ]
+    )
+    x = jrandom.normal(getkey(), (3,))
+    target = jrandom.normal(getkey(), (2,))
+    key = getkey()
+
+    @eqx.filter_jit
+    @eqx.filter_value_and_grad
+    def loss(model):
+        return jnp.square(model(x, key=key) - target).mean()
+
+    value, grads = loss(model)
+    assert jnp.isfinite(value)
+    assert jnp.array_equal(grads.layers[0].weight, jnp.zeros((4, 3)))
+    assert jnp.array_equal(grads.layers[0].bias, jnp.zeros(4))
+    assert jnp.array_equal(grads.layers[2].weight, jnp.zeros((2, 4)))
+    assert jnp.allclose(grads.layers[2].bias, model.layers[2].bias - target)
+    updates = jax.tree.map(lambda g: -0.01 * g, grads)
+    updated = eqx.apply_updates(model, updates)
+    resumed = eqx.tree_at(lambda m: m.layers[1].p, updated, 0.5)
+    assert jnp.all(jnp.isfinite(resumed(x, key=key)))
+
+
 def test_gru_cell(getkey):
     gru = eqx.nn.GRUCell(2, 8, key=getkey())
     h = jrandom.normal(getkey(), (8,))
