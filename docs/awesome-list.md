@@ -45,6 +45,9 @@ Deep learning library for training large language models.
 **Eqxvision**: [GitHub](https://github.com/paganpasta/eqxvision)  
 Computer vision library built on Equinox, inspired by torchvision.
 
+**eqx-zoo**: [GitHub](https://github.com/xquantize/eqx-zoo)  
+Pretrained language models (Llama, Qwen2, Qwen3) loaded from Hugging Face checkpoints and numerically verified against Hugging Face Transformers.
+
 **Haliax**: [GitHub](https://github.com/stanford-crfm/haliax)  
 Distributed multi-dimensional arrays, designed for large-scale machine learning.
 
