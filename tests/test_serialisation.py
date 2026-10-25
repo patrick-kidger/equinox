@@ -120,6 +120,23 @@ def test_helpful_errors(getkey, tmp_path):
         _ = eqx.tree_deserialise_leaves(tmp_path, bad_like_tree)
 
 
+def test_closed_file_error_is_not_a_leaf_path(tmp_path):
+    # https://github.com/patrick-kidger/equinox/issues/1270
+    path = tmp_path / "test.eqx"
+    path.write_bytes(b"")
+
+    # The report opens the handle in text mode, then closes it.
+    with open(path) as handle:
+        pass
+    with pytest.raises(TypeError, match=r"write\(\) argument must be str, not bytes"):
+        eqx.tree_serialise_leaves(handle, 42)  # pyright: ignore[reportArgumentType]
+
+    with open(path, "wb") as handle:
+        pass
+    with pytest.raises(ValueError, match="write to closed file"):
+        eqx.tree_serialise_leaves(handle, 42)
+
+
 def test_generic_dtype_serialisation(getkey, tmp_path):
     # Ensure we can round trip when we start with an array
     jax_array = jnp.array(bfloat16(1))  # pyright: ignore[reportCallIssue]
