@@ -240,3 +240,36 @@ def test_vprim_transpose_broadcast_input(batch_axis, jit, nested):
     if jit:
         actual = jax.jit(actual)
     assert tree_allclose(actual(x), expected(x))
+
+
+def test_vprim_transpose_independent_output():
+    def impl(a, x, y):
+        return [a * x, y]
+
+    def abstract(a, x, y):
+        return [x, y]
+
+    def jvp(primals, tangents):
+        a, x, y = primals
+        ta, tx, ty = tangents
+        assert type(ta) is ad.Zero
+        return primitive.bind(a, x, y), primitive.bind(
+            a, ad.instantiate_zeros(tx), ad.instantiate_zeros(ty)
+        )
+
+    def transpose(cts, a, x, y):
+        return [None, a * cts[0], cts[1]]
+
+    primitive = eqxi.create_vprim("independent_output", impl, abstract, jvp, transpose)
+    scales = jnp.arange(1.0, 6.0)
+    x = jnp.array([1.0, 2.0])
+    y = jnp.array([3.0, 4.0])
+
+    def loss(bind, x, y):
+        product, independent = jax.vmap(bind, in_axes=(0, None, None))(scales, x, y)
+        return jnp.sum(product) + jnp.sum(jnp.mean(independent, axis=0))
+
+    actual = jax.grad(ft.partial(loss, primitive.bind), argnums=(0, 1))(x, y)
+    expected = jax.grad(ft.partial(loss, impl), argnums=(0, 1))(x, y)
+    assert tree_allclose(actual, expected)
+    assert tree_allclose(actual[1], jnp.ones_like(y))
