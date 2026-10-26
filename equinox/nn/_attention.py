@@ -24,7 +24,10 @@ def dot_product_attention_weights(
     mask: Bool[Array, "q_seq kv_seq"] | None = None,
 ) -> Float[Array, "q_seq kv_seq"]:
     query = query / math.sqrt(query.shape[-1])
-    logits = jnp.einsum("sd,Sd->sS", query, key)
+    orig_dtype = jnp.result_type(query, key)
+    with jax.numpy_dtype_promotion("standard"):
+        dtype = jnp.result_type(orig_dtype, jnp.float32)
+    logits = jnp.einsum("sd,Sd->sS", query, key, preferred_element_type=dtype)
     if mask is not None:
         if mask.shape != logits.shape:
             raise ValueError(
@@ -35,9 +38,7 @@ def dot_product_attention_weights(
         logits = jnp.where(mask, logits, jnp.finfo(logits.dtype).min)
         logits = cast(Array, logits)
 
-    with jax.numpy_dtype_promotion("standard"):
-        dtype = jnp.result_type(logits.dtype, jnp.float32)
-    weights = jax.nn.softmax(logits.astype(dtype)).astype(logits.dtype)
+    weights = jax.nn.softmax(logits).astype(orig_dtype)
     if mask is not None:
         # An entirely masked row otherwise has a uniform softmax.
         weights = jnp.where(mask, weights, 0)

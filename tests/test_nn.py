@@ -969,6 +969,54 @@ def test_multihead_attention_padding_mask(getkey, per_head):
     assert jnp.array_equal(grad, jnp.zeros_like(x))
 
 
+@pytest.mark.parametrize("jit", [False, True])
+@pytest.mark.parametrize("masked", [False, True])
+def test_attention_half_precision_large_logits(jit, masked):
+    q = jnp.array([[400.0] * 4, [-400.0] * 4], dtype=jnp.float16)
+    k = jnp.full((3, 4), 400.0, dtype=jnp.float16)
+    v = jnp.arange(6.0, dtype=jnp.float16).reshape(3, 2)
+    mask = jnp.array([[True, True, True], [True, False, True]]) if masked else None
+    fn = eqx.nn._attention.dot_product_attention
+    if jit:
+        fn = eqx.filter_jit(fn)
+    expected = fn(
+        q.astype(jnp.float32), k.astype(jnp.float32), v.astype(jnp.float32), mask
+    )
+    actual = fn(q, k, v, mask)
+    assert actual.dtype == jnp.float16
+    assert jnp.all(jnp.isfinite(actual))
+    assert jnp.allclose(actual.astype(expected.dtype), expected, rtol=2e-3, atol=1e-3)
+    grad_fn = jax.grad(lambda q, k, v: fn(q, k, v, mask).sum(), (0, 1, 2))
+    grads = grad_fn(q, k, v)
+    reference = grad_fn(
+        q.astype(jnp.float32), k.astype(jnp.float32), v.astype(jnp.float32)
+    )
+    for grad, ref in zip(grads, reference):
+        assert jnp.all(jnp.isfinite(grad))
+        assert jnp.allclose(grad.astype(ref.dtype), ref, rtol=2e-3, atol=1e-3)
+
+
+def test_multihead_attention_half_precision_large_logits(getkey):
+    attn = eqx.nn.MultiheadAttention(num_heads=2, query_size=4, key=getkey())
+    attn = eqx.tree_at(
+        lambda m: (
+            m.query_proj.weight,
+            m.key_proj.weight,
+            m.value_proj.weight,
+            m.output_proj.weight,
+        ),
+        attn,
+        [jnp.eye(4, dtype=jnp.float16) for _ in range(4)],
+    )
+    x = jnp.full((2, 4), 400.0, dtype=jnp.float16)
+    apply = eqx.filter_jit(lambda x: attn(x, x, x))
+    output = apply(x)
+    grad = jax.grad(lambda x: apply(x).sum())(x)
+    assert output.dtype == x.dtype
+    assert jnp.array_equal(output, x)
+    assert jnp.array_equal(grad, jnp.ones_like(x))
+
+
 def test_multihead_attention(getkey):
     attn = eqx.nn.MultiheadAttention(
         num_heads=2,
