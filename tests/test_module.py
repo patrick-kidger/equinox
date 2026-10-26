@@ -756,6 +756,76 @@ def test_init_fields():
         C(flag=False)
 
 
+def test_fast_module_meta_skips_checks():
+    """`_FastModuleMeta` skips the missing-field check that `_ModuleMeta` runs."""
+    from equinox._module._prebuilt import _FastModuleMeta
+
+    class Fast(eqx.Module, metaclass=_FastModuleMeta):
+        x: int
+
+        def __init__(self):
+            pass  # deliberately leaves `x` unset
+
+    Fast()  # no error, unlike a normal `eqx.Module`
+
+
+def test_fast_module_meta_clears_currently_initialising():
+    """The fastpath must still remove the instance from `_currently_initialising`,
+    so that post-`__init__` attribute assignment is rejected as usual.
+    """
+    from equinox._module._module import _currently_initialising
+    from equinox._module._prebuilt import _FastModuleMeta
+
+    class Fast(eqx.Module, metaclass=_FastModuleMeta):
+        x: int
+
+    obj = Fast(1)
+    assert obj not in _currently_initialising
+    with pytest.raises(AttributeError):
+        obj.x = 2
+
+
+def test_fast_module_meta_rejects_unsupported_fields():
+    """Opting in with anything the fastpath skips is an error at class creation."""
+    from equinox._module._prebuilt import _FastModuleMeta
+
+    with pytest.raises(TypeError, match="does not support converters"):
+
+        class WithCheckInit(eqx.Module, metaclass=_FastModuleMeta):
+            x: int
+
+            def __check_init__(self):
+                pass
+
+    with pytest.raises(TypeError, match="does not support converters"):
+
+        class WithConverter(eqx.Module, metaclass=_FastModuleMeta):
+            x: int = eqx.field(converter=int)
+
+    with pytest.raises(TypeError, match="does not support converters"):
+
+        class WithNonInitField(eqx.Module, metaclass=_FastModuleMeta):
+            x: int = eqx.field(init=False)
+
+
+def test_fast_module_meta_rejects_abstract():
+    """The fastpath does not consult `_abstract_module_registry`, so opting in
+    an abstract class must be rejected at class-creation time.
+    """
+    from equinox._module._prebuilt import _FastModuleMeta
+
+    with pytest.raises(TypeError, match="cannot be abstract"):
+
+        class Abstract(eqx.Module, metaclass=_FastModuleMeta, is_abstract=True):
+            x: int
+
+
+def test_bound_method_is_final():
+    from equinox._module._prebuilt import BoundMethod
+
+    assert getattr(BoundMethod, "__final__", False) is True
+
+
 @pytest.mark.parametrize("field", (dataclasses.field, eqx.field))
 def test_init_as_abstract(field):
     # Before the introduction of AbstractVar, it was possible to sort-of get the same
