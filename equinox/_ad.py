@@ -543,13 +543,46 @@ def _strip_weak_dtype(
     )
 
 
+def _normalise_closure_convert_aval(aval):
+    aval = aval.strip_weak_type()
+    sharding = getattr(aval, "sharding", None)
+    mat = getattr(aval, "manual_axis_type", None)
+    # Older JAX versions called the manual-axis variance field `vma`.
+    invariant = (
+        mat.empty if mat is not None else getattr(aval, "vma", None) == frozenset()
+    )
+    if (
+        isinstance(aval, jax.core.ShapedArray)
+        and isinstance(sharding, jax.sharding.NamedSharding)
+        and invariant
+        and all(
+            axis is jax.sharding.AxisType.Manual for axis in sharding.mesh.axis_types
+        )
+    ):
+        aval = aval.update(sharding=None)
+    return aval
+
+
 def _check_closure_convert_input(self, args, kwargs):
     self_in_dynamic_struct = _unflatten(self.in_dynamic_struct)
     self_in_static = _unflatten(self.in_static)
     in_dynamic, in_static = partition((args, kwargs), is_array)
-    in_dynamic_struct = _strip_weak_dtype(jax.eval_shape(lambda: in_dynamic))
-    # `is` because `tree_equal` may return a tracer
-    if tree_equal(in_dynamic_struct, self_in_dynamic_struct) is not True:
+    if isinstance(self, _ClosureConvert):
+        in_leaves, in_treedef = jtu.tree_flatten(in_dynamic)
+        if hasattr(jax, "typeof"):
+            get_aval = jax.typeof
+        else:
+            get_aval = jax.core.get_aval  # pyright: ignore[reportAttributeAccessIssue]
+        matches = in_treedef == self.in_dynamic_struct[1] and all(
+            _normalise_closure_convert_aval(var.aval)
+            == _normalise_closure_convert_aval(get_aval(value))
+            for var, value in zip(self.jaxpr.invars, in_leaves, strict=True)
+        )
+    else:
+        in_dynamic_struct = _strip_weak_dtype(jax.eval_shape(lambda: in_dynamic))
+        # `is` because `tree_equal` may return a tracer
+        matches = tree_equal(in_dynamic_struct, self_in_dynamic_struct) is True
+    if not matches:
         raise ValueError(
             "Closure-converted function called with different dynamic arguments to "
             "the example arguments provided:\n\n"
