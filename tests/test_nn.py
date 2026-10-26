@@ -934,6 +934,41 @@ def test_dot_product_attention(getkey):
     assert attn == jnp.array([[1.0]])
 
 
+@pytest.mark.parametrize("dtype", [jnp.float16, jnp.float32])
+@pytest.mark.parametrize("jit", [False, True])
+def test_attention_fully_masked_rows(dtype, jit):
+    q = jnp.ones((2, 2), dtype=dtype)
+    k = jnp.array([[1, 0], [0, 1]], dtype=dtype)
+    v = jnp.array([[2, 4], [6, 8]], dtype=dtype)
+    mask = jnp.array([[False, False], [True, False]])
+    fn = eqx.nn._attention.dot_product_attention
+    if jit:
+        fn = eqx.filter_jit(fn)
+    output = fn(q, k, v, mask)
+    assert output.dtype == dtype
+    assert jnp.array_equal(output, jnp.array([[0, 0], [2, 4]], dtype=dtype))
+    grads = jax.grad(lambda q, k, v: fn(q, k, v, mask)[0].sum(), (0, 1, 2))(q, k, v)
+    for grad in grads:
+        assert jnp.array_equal(grad, jnp.zeros_like(grad))
+
+
+@pytest.mark.parametrize("per_head", [False, True])
+def test_multihead_attention_padding_mask(getkey, per_head):
+    attn = eqx.nn.MultiheadAttention(num_heads=2, query_size=4, key=getkey())
+    x = jrandom.normal(getkey(), (3, 4))
+    mask = jnp.array([[False, False, False], [True, False, False], [True, True, False]])
+    if per_head:
+        mask = jnp.broadcast_to(mask, (2, 3, 3))
+    apply = eqx.filter_jit(lambda q, k, v: attn(q, k, v, mask))
+    output = apply(x, x, x)
+    assert jnp.array_equal(output[0], jnp.zeros(4))
+    # A padded key/value must not influence even a fully masked query.
+    changed_padding = x.at[2].set(100)
+    assert jnp.array_equal(apply(x, x, changed_padding), output)
+    grad = jax.grad(lambda v: apply(x, x, v)[0].sum())(x)
+    assert jnp.array_equal(grad, jnp.zeros_like(x))
+
+
 def test_multihead_attention(getkey):
     attn = eqx.nn.MultiheadAttention(
         num_heads=2,

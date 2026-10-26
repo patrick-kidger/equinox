@@ -38,6 +38,9 @@ def dot_product_attention_weights(
     with jax.numpy_dtype_promotion("standard"):
         dtype = jnp.result_type(logits.dtype, jnp.float32)
     weights = jax.nn.softmax(logits.astype(dtype)).astype(logits.dtype)
+    if mask is not None:
+        # An entirely masked row otherwise has a uniform softmax.
+        weights = jnp.where(mask, weights, 0)
     return weights
 
 
