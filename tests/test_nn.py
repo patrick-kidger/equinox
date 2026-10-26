@@ -117,6 +117,51 @@ def test_dropout_deterministic(getkey):
         assert jnp.any(x != dropout3(x, key=jrandom.PRNGKey(0)))
 
 
+@pytest.mark.parametrize(
+    "pool_cls,shape",
+    [
+        (eqx.nn.AvgPool1d, (65536,)),
+        (eqx.nn.AvgPool2d, (256, 256)),
+        (eqx.nn.AvgPool3d, (32, 32, 64)),
+    ],
+)
+@pytest.mark.parametrize("dtype", [jnp.float16, jnp.bfloat16])
+@pytest.mark.parametrize("jit", [False, True])
+def test_average_pool_low_precision_global(pool_cls, shape, dtype, jit):
+    pool = pool_cls(shape)
+    x = jnp.ones((1, *shape), dtype=dtype)
+    apply = eqx.filter_jit(pool) if jit else pool
+    output = apply(x)
+    grad = jax.grad(lambda x: apply(x).sum())(x)
+    assert output.dtype == dtype
+    assert jnp.array_equal(output, jnp.ones_like(output))
+    assert jnp.array_equal(grad, jnp.full_like(x, 1 / x.size))
+
+
+def test_average_pool_half_precision_training_step(getkey):
+    linear = eqx.nn.Linear(1, 1, use_bias=False, dtype=jnp.float16, key=getkey())
+    linear = eqx.tree_at(
+        lambda m: m.weight, linear, jnp.full((1, 1), 2, dtype=jnp.float16)
+    )
+    model = eqx.nn.Sequential(
+        [eqx.nn.AvgPool2d((256, 256)), eqx.nn.Lambda(jnp.ravel), linear]
+    )
+    x = jnp.ones((1, 256, 256), dtype=jnp.float16)
+
+    @eqx.filter_jit
+    @eqx.filter_value_and_grad
+    def loss(model):
+        return jnp.square(model(x)).sum()
+
+    value, grads = loss(model)
+    assert value == 4
+    assert jnp.array_equal(grads.layers[2].weight, jnp.full((1, 1), 4, dtype=x.dtype))
+    input_grad = jax.grad(lambda x: jnp.square(model(x)).sum())(x)
+    assert jnp.array_equal(input_grad, jnp.full_like(x, 8 / x.size))
+    updated = eqx.apply_updates(model, jax.tree.map(lambda g: -0.1 * g, grads))
+    assert jnp.square(updated(x)).sum() < value
+
+
 def test_gru_cell(getkey):
     gru = eqx.nn.GRUCell(2, 8, key=getkey())
     h = jrandom.normal(getkey(), (8,))
