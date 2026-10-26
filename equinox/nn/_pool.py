@@ -157,6 +157,16 @@ class Pool(Module):
         return x
 
 
+def _avg_pool(pool: Pool, x: Array) -> Array:
+    """Compute low-precision averages in float32 before restoring the dtype."""
+    orig_dtype = x.dtype
+    low_precision = orig_dtype in (jnp.float16, jnp.bfloat16)
+    if low_precision:
+        x = x.astype(jnp.float32)
+    out = Pool.__call__(pool, x) / math.prod(pool.kernel_size)
+    return out.astype(orig_dtype) if low_precision else out
+
+
 class AvgPool1d(Pool):
     """One-dimensional downsample using an average over a sliding window."""
 
@@ -201,7 +211,7 @@ class AvgPool1d(Pool):
         A JAX array of shape `(channels, new_dim)`.
         """
 
-        return super().__call__(x) / math.prod(self.kernel_size)
+        return _avg_pool(self, x)
 
 
 class MaxPool1d(Pool):
@@ -296,7 +306,7 @@ class AvgPool2d(Pool):
         A JAX array of shape `(channels, new_dim_1, new_dim_2)`.
         """
 
-        return super().__call__(x) / math.prod(self.kernel_size)
+        return _avg_pool(self, x)
 
 
 class MaxPool2d(Pool):
@@ -392,7 +402,7 @@ class AvgPool3d(Pool):
         A JAX array of shape `(channels, new_dim_1, new_dim_2, new_dim_3)`.
         """
 
-        return super().__call__(x) / math.prod(self.kernel_size)
+        return _avg_pool(self, x)
 
 
 class MaxPool3d(Pool):
