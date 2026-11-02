@@ -3,6 +3,7 @@ import functools as ft
 import inspect
 import logging
 import os
+import typing
 import warnings
 from collections.abc import Callable
 from typing import Any, Literal, overload, TypeVar
@@ -143,13 +144,18 @@ else:
 
 # This is the class we use to raise runtime errors from `eqx.error_if`.
 class EquinoxRuntimeError(RuntimeError):
-    pass
+    """Runtime error raised by `equinox.error_if` and `equinox.branched_error_if`."""
 
 
 # Magic value that means error messages are displayed as `{__qualname__}: ...` rather
 # than `{__module__}.{__qualname__}`. (At least, I checked the default Python
 # interpreter, the default Python REPL, ptpython, ipython, pdb, and ipdb.)
-EquinoxRuntimeError.__module__ = "builtins"
+#
+# This rewrite is skipped when building the documentation, so that the class keeps its
+# true module and can be cross-referenced via mkdocstrings / intersphinx
+# (`objects.inv`). See https://github.com/patrick-kidger/equinox/issues/1265
+if not hasattr(typing, "GENERATING_DOCUMENTATION"):
+    EquinoxRuntimeError.__module__ = "builtins"
 # Note that we don't also override `__name__` or `__qualname__`. Suppressing the
 # `equinox._jit` module bit is useful for readability, but we don't want to go so far as
 # deleting the name altogether. (Or even e.g. setting it to the 'Above is the stack...'
