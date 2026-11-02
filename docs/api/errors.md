@@ -24,3 +24,5 @@ Equinox offers support for raising runtime errors.
 ::: equinox.error_if
 
 ::: equinox.branched_error_if
+
+::: equinox.EquinoxRuntimeError
