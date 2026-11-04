@@ -1,6 +1,7 @@
 from typing import Any
 
 import equinox as eqx
+import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
 import numpy as np
@@ -77,6 +78,16 @@ def test_is_inexact_array_like(getkey):
     results = [False, True, False, False, False, False, True, True, False, False]
     for o, r in zip(objs, results):
         assert eqx.is_inexact_array_like(o) == r
+
+
+@pytest.mark.parametrize("dtype", [jnp.bfloat16, jnp.float8_e4m3fn, jnp.float8_e5m2])
+@pytest.mark.parametrize("scalar", [False, True])
+def test_numpy_inexact_dtypes(dtype, scalar):
+    x = jax.device_get(jnp.array([1.0, 2.0], dtype=dtype))
+    if scalar:
+        x = x[0]
+    assert eqx.is_inexact_array(x)
+    assert eqx.is_inexact_array_like(x)
 
 
 def test_filter(getkey):
