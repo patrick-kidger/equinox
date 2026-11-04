@@ -63,7 +63,7 @@ def is_inexact_array(element: Any) -> bool:
     array.
     """
     if isinstance(element, _NDARRAY_TYPES):
-        return bool(np.issubdtype(element.dtype, np.inexact))
+        return bool(jnp.issubdtype(element.dtype, jnp.inexact))
     elif isinstance(element, jax.Array):
         return jnp.issubdtype(element.dtype, jnp.inexact)
     else:
@@ -77,7 +77,7 @@ def is_inexact_array_like(element: Any) -> bool:
     if hasattr(element, "__jax_array__"):
         element = element.__jax_array__()
     if isinstance(element, _NDARRAY_TYPES):
-        return bool(np.issubdtype(element.dtype, np.inexact))
+        return bool(jnp.issubdtype(element.dtype, jnp.inexact))
     elif isinstance(element, jax.Array):
         return jnp.issubdtype(element.dtype, jnp.inexact)
     else:

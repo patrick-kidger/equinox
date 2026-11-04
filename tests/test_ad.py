@@ -11,6 +11,54 @@ import pytest
 from .helpers import tree_allclose
 
 
+@pytest.mark.parametrize(
+    "dtype", [jnp.bfloat16, jnp.float8_e4m3fn, jnp.float8_e5m2, jnp.float32]
+)
+@pytest.mark.parametrize("scalar", [False, True])
+def test_filter_grad_numpy_inexact_dtypes(dtype, scalar):
+    x = jax.device_get(jnp.array([1.0, -2.0, 3.0], dtype=dtype))
+    if scalar:
+        x = x[0]
+
+    def loss(x):
+        return jnp.sum(jnp.asarray(x, dtype=jnp.float32) ** 2)
+
+    expected = 2 * np.asarray(x, dtype=np.float32)
+    for grad_fn in (eqx.filter_grad(loss), eqx.filter_jit(eqx.filter_grad(loss))):
+        grad = grad_fn(x)
+        assert grad is not None
+        assert grad.dtype == x.dtype
+        np.testing.assert_array_equal(np.asarray(grad, dtype=np.float32), expected)
+
+
+@pytest.mark.parametrize("dtype", [jnp.bfloat16, jnp.float16, jnp.float32])
+@pytest.mark.parametrize("jit", [False, True])
+def test_filter_grad_host_weights_update(dtype, jit, getkey):
+    layer = eqx.nn.Linear(2, 1, use_bias=False, dtype=dtype, key=getkey())
+    weight = jax.device_get(jnp.array([[1.0, -2.0]], dtype=dtype))
+    layer = eqx.tree_at(lambda model: model.weight, layer, weight)
+
+    def loss(model):
+        prediction = model(jnp.array([2.0, 1.0], dtype=dtype)).astype(jnp.float32)
+        return 0.5 * jnp.sum((prediction - 1) ** 2)
+
+    def step(model):
+        value, grad = eqx.filter_value_and_grad(loss)(model)
+        updates = jtu.tree_map(lambda g: -0.25 * g, grad)
+        return value, grad, eqx.apply_updates(model, updates)
+
+    if jit:
+        step = eqx.filter_jit(step)
+    value, grad, updated = step(layer)
+    assert grad.weight is not None
+    np.testing.assert_array_equal(np.asarray(grad.weight, dtype=np.float32), [[-2, -1]])
+    np.testing.assert_array_equal(
+        np.asarray(updated.weight, dtype=np.float32), [[1.5, -1.75]]
+    )
+    np.testing.assert_allclose(value, 0.5)
+    np.testing.assert_allclose(loss(updated), 0.03125)
+
+
 def test_filter_grad(getkey):
     a = jrandom.normal(getkey(), (2, 3))
     b = jrandom.normal(getkey(), (2, 3))
