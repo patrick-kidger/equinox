@@ -1364,6 +1364,16 @@ def test_maxpool1d_ceil_padding():
     assert jnp.array_equal(max_pool(x), jnp.array([[2.0, 4.0]]))
 
 
+def test_pool_ceil_no_window_in_padding():
+    # The extra `ceil` window must start inside the input (or its left padding).
+    # Otherwise it covers only padding, giving `-inf` for max and `0` for average.
+    x = jnp.arange(1.0, 10.0).reshape(1, 9)
+    max_pool = eqx.nn.MaxPool1d(kernel_size=2, stride=3, use_ceil=True)
+    assert jnp.array_equal(max_pool(x), jnp.array([[2.0, 5.0, 8.0]]))
+    avg_pool = eqx.nn.AvgPool1d(kernel_size=2, stride=3, use_ceil=True)
+    assert jnp.array_equal(avg_pool(x), jnp.array([[1.5, 4.5, 7.5]]))
+
+
 def test_avgpool1d():
     x = jnp.arange(14).reshape(1, 14)
     avg_pool = eqx.nn.AvgPool1d(2, 3)
