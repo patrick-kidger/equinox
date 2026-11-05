@@ -99,7 +99,14 @@ class Pool(Module):
             remainder = (
                 input_size + left_padding + right_padding - kernel_size
             ) % stride
-            if remainder == 0:
+            # The extra window starts at `extra_start`. If that is past the input and
+            # its left padding then it would cover only padding, so we drop it.
+            extra_start = (
+                (input_size + left_padding + right_padding - kernel_size)
+                - remainder
+                + stride
+            )
+            if remainder == 0 or extra_start >= input_size + left_padding:
                 new_padding.append((left_padding, right_padding))
             else:
                 new_padding.append((left_padding, right_padding + stride - remainder))
