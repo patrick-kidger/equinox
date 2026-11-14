@@ -1727,3 +1727,28 @@ def test_rope_embeddings_theta_cache():
     assert not jnp.allclose(res_a, res_b)
     eqx.clear_caches()
     assert jnp.allclose(res_b, rope_b(x))
+
+
+@pytest.mark.parametrize("dtype", [jnp.float16, jnp.bfloat16, jnp.float32])
+@pytest.mark.parametrize("inference", [False, True])
+@pytest.mark.parametrize("jit", [False, True])
+@pytest.mark.parametrize("scale", [1.0, 256.0])
+def test_spectral_norm_low_precision(getkey, dtype, inference, jit, scale):
+    # This rank-one matrix has singular value 256 * scale. Its normalized map
+    # sends the all-ones vector to itself; no numerical SVD oracle is needed.
+    size = 256
+    layer = eqx.nn.Linear(size, size, use_bias=False, dtype=dtype, key=getkey())
+    layer = eqx.tree_at(lambda l: l.weight, layer, jnp.full((size, size), scale, dtype))
+    spectral = eqx.nn.SpectralNorm(layer, "weight", inference=inference, key=getkey())
+    state = eqx.nn.State(spectral)
+    x = jnp.ones(size, dtype)
+    call = eqx.filter_jit(spectral) if jit else spectral
+    out, state = call(x, state)
+    assert out.dtype == x.dtype
+    assert jnp.all(jnp.isfinite(out))
+    assert jnp.allclose(out, x, atol=0.02, rtol=0.02)
+    u, v = state.get(spectral.uv_index)
+    assert u.dtype == dtype
+    assert v.dtype == dtype
+    assert jnp.all(jnp.isfinite(u))
+    assert jnp.all(jnp.isfinite(v))
