@@ -1,5 +1,6 @@
 from typing import Generic, TypeVar
 
+import jax
 import jax.lax as lax
 import jax.numpy as jnp
 import jax.random as jr
@@ -13,6 +14,11 @@ from ._stateful import State, StateIndex
 
 
 def _power_iteration(weight, u, v, eps):
+    orig_dtype = weight.dtype
+    with jax.numpy_dtype_promotion("standard"):
+        dtype = jnp.result_type(orig_dtype, jnp.float32)
+    # Accumulate in at least float32 to avoid overflow in half-precision norms.
+    weight, u, v = weight.astype(dtype), u.astype(dtype), v.astype(dtype)
     u = weight @ v
     u_norm = jnp.sqrt(jnp.sum(u**2))
     u = u / jnp.maximum(eps, u_norm)
@@ -21,7 +27,7 @@ def _power_iteration(weight, u, v, eps):
     v_norm = jnp.sqrt(jnp.sum(v**2))
     v = v / jnp.maximum(eps, v_norm)
 
-    return u, v
+    return u.astype(orig_dtype), v.astype(orig_dtype)
 
 
 _Layer = TypeVar("_Layer")
@@ -150,8 +156,11 @@ class SpectralNorm(StatefulLayer, Generic[_Layer]):
             for _ in range(self.num_power_iterations):
                 u, v = _power_iteration(stop_weight, u, v, self.eps)
             state = state.set(self.uv_index, (u, v))
-        σ = jnp.einsum("i,ij,j->", u, weight, v)
-        σ_weight = jnp.reshape(weight / σ, weight_shape)
+        with jax.numpy_dtype_promotion("standard"):
+            dtype = jnp.result_type(weight.dtype, jnp.float32)
+        compute_weight = weight.astype(dtype)
+        σ = jnp.einsum("i,ij,j->", u.astype(dtype), compute_weight, v.astype(dtype))
+        σ_weight = jnp.reshape(compute_weight / σ, weight_shape).astype(weight.dtype)
         layer = tree_at(lambda l: getattr(l, self.weight_name), self.layer, σ_weight)
         out = layer(x)
         return out, state
