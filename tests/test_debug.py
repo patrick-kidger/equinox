@@ -51,6 +51,22 @@ def test_check_dce(capfd):
     assert "(i32[], <DCE'd>, 'foobar')" in text
 
 
+def test_check_dce_multiple_calls(capfd):
+    @jax.jit
+    def f(x):
+        a, _ = eqx.debug.store_dce((x**2, x + 1), name="multiple")
+        _, b = eqx.debug.store_dce((a, a + 1), name="multiple")
+        return b
+
+    f(1)
+    capfd.readouterr()
+    eqx.debug.inspect_dce(name="multiple")
+    text, _ = capfd.readouterr()
+    assert "Found 2 calls" in text
+    assert "Entry 0:\n(i32[], <DCE'd>)" in text
+    assert "Entry 1:\n(<DCE'd>, i32[])" in text
+
+
 def test_max_traces():
     @jax.jit
     @eqx.debug.assert_max_traces(max_traces=1)
