@@ -96,10 +96,10 @@ def inspect_dce(name: Hashable = None):
     if isinstance(jnp.array(1) + 1, jax.core.Tracer):
         raise RuntimeError("`equinox.debug.inspect_dce` should be used outside of JIT.")
     tag_store = _dce_store.get(name, {})
-    new_leaves = []
     maybe_s = "" if len(tag_store) == 1 else "s"
     print(f"Found {len(tag_store)} call{maybe_s} to `equinox.debug.store_dce`.")
     for i, (leaves, treedef, static) in enumerate(tag_store.values()):
+        new_leaves = []
         for j in range(treedef.num_leaves):
             try:
                 shape, dtype = leaves[j]
